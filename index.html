@@ -7,6 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -158,6 +159,19 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .completed-search{margin-bottom:16px;max-width:320px}
 .completed-card{background:var(--panel);border:1px solid var(--success);border-left:4px solid var(--success);border-radius:10px;padding:14px 16px;margin-bottom:12px;cursor:pointer;transition:transform .1s}
 .completed-card:hover{transform:translateY(-1px)}
+
+.analiz-wrap{padding:20px 24px;overflow-y:auto;flex:1}
+.analiz-charts-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+.analiz-chart-box{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;min-width:280px}
+.analiz-gantt-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.analiz-gantt-label{width:70px;flex-shrink:0;font-size:12px;font-weight:700;color:var(--accent)}
+.analiz-gantt-track{position:relative;flex:1;height:22px;background:var(--panel-alt);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.analiz-gantt-seg{position:absolute;top:0;bottom:0;border-radius:2px}
+.analiz-gantt-cutoff{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--danger)}
+.analiz-mini-matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:12px}
+.analiz-mini-cell{border-radius:10px;padding:12px 12px;text-align:left;font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:#0a0a0a;cursor:pointer;border:2px solid transparent;transition:transform .1s;height:70px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+.analiz-mini-cell:hover{transform:translateY(-2px)}
+.analiz-mini-cell.selected{border-color:var(--text);box-shadow:0 0 0 2px var(--bg), 0 0 0 5px var(--accent)}
 .completed-header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px}
 .completed-id{font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--success);font-weight:700}
 .completed-meta{font-size:11.5px;color:var(--text-muted)}
@@ -201,26 +215,12 @@ const MACHINE_LIST = [
 const machineLabelFor = c => { const m = MACHINE_LIST.find(x=>x.code===c); return m ? `${m.code} · ${m.name}` : ""; };
 const ALL_MACHINE_CODES = MACHINE_LIST.map(m=>m.code);
 
-const SEED_OPERATORS = {
-  OPRT1:{displayName:"Ali BİLİCİ", password:"1234", defaultMachine:machineLabelFor("TES01")},
-  OPRT2:{displayName:"Barış GÜNEŞ", password:"1234", defaultMachine:""},
-  OPRT3:{displayName:"Ramazan KÖSE", password:"1234", defaultMachine:machineLabelFor("UF01")},
-  OPRT4:{displayName:"Taner ŞİMŞEK", password:"1234", defaultMachine:machineLabelFor("UT03")},
-  OPRT5:{displayName:"Ahmet TOK", password:"1234", defaultMachine:machineLabelFor("UT01")},
-  OPRT6:{displayName:"Kadir AKANCAK", password:"1234", defaultMachine:machineLabelFor("C02")},
-  OPRT7:{displayName:"Serkan KOL", password:"1234", defaultMachine:machineLabelFor("C01")},
-  OPRT8:{displayName:"Ceyhan KURTULMUŞ", password:"1234", defaultMachine:machineLabelFor("C02")},
-  OPRT9:{displayName:"Ahmet IŞIK", password:"1234", defaultMachine:machineLabelFor("TE01")},
-  OPRT11:{displayName:"Erol SOBACI", password:"1234", defaultMachine:machineLabelFor("ODT01")},
-  OPRT12:{displayName:"Fatih YILDIZ", password:"1234", defaultMachine:machineLabelFor("ODT02")},
-  OPRT13:{displayName:"Ferit GÜVEZ", password:"1234", defaultMachine:machineLabelFor("ODT03")},
-  OPRT14:{displayName:"Şeref KOLDAŞ", password:"1234", defaultMachine:machineLabelFor("UST02")},
-  OPRT15:{displayName:"Ali Emre AFACAN", password:"1234", defaultMachine:machineLabelFor("PT01")},
-  OPRT16:{displayName:"Muhammet KURT", password:"1234", defaultMachine:machineLabelFor("UT02")},
-  ADMIN:{displayName:"Yönetici", password:"caglarcaglar", isAdmin:true},
-};
+// NOT: Buradaki eski sabit operatör/şifre listesi kaldırıldı — Firebase'e bir kere
+// yazıldıktan sonra kaynak kodda durmasının hiçbir faydası yoktu, sadece herkesin
+// "Sayfa Kaynağını Görüntüle" ile şifreleri (ADMIN dahil) okuyabilmesine yol açıyordu.
+// Yeni operatörler artık Ayarlar → "+ Kullanıcı Ekle" panelinden eklenir.
 
-const DURUS_REASONS = ["Arıza / Bakım","Malzeme Bekleniyor","Kalıp/Takım Değişimi","Program/Ayar Değişimi","Kalite Kontrol Bekleniyor","Elektrik/Basınçlı Hava Kesintisi","Operatör Molası","Tuvalet","Diğer"];
+const DURUS_REASONS = ["Arıza / Bakım","Malzeme Bekleniyor","Kalıp/Takım Değişimi","Program/Ayar Değişimi","Kalite Kontrol Bekleniyor","Elektrik/Basınçlı Hava Kesintisi","Operatör Molası","Farklı İş Emrine Geçiş","Tuvalet","Diğer"];
 
 /* ===================== YARDIMCI FONKSİYONLAR ===================== */
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -235,16 +235,61 @@ function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){}
 function load(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
 
 /* ===================== DURUM (STATE) ===================== */
-let STATE = { operators: {}, entries: {} };
+let STATE = { operators: {}, entries: {}, messages: {} };
 let extraMachines = {}; // admin tarafından sonradan eklenen makineler (Firebase 'machines_extra')
-function allMachines(){ return MACHINE_LIST.concat(Object.entries(extraMachines).map(([code,v])=>({code, name:v.name}))); }
+let hiddenMachines = {}; // silinen dahili makineler (Firebase 'machines_hidden')
+function allMachines(){ return MACHINE_LIST.filter(m=>!hiddenMachines[m.code]).concat(Object.entries(extraMachines).map(([code,v])=>({code, name:v.name}))); }
 function allMachineCodes(){ return allMachines().map(m=>m.code); }
 function resolveMachineLabel(code){ const m = allMachines().find(x=>x.code===code); return m ? `${m.code} · ${m.name}` : ""; }
 let session = load('rota_remember', false) ? load('rota_session', null) : null;
 let theme = load('rota_theme', 'dark');
 let view = 'list';
 let nowTick = Date.now();
-let newForm = { isEmriNo:'', makine:'', malzemeCinsi:'', capBoy:'', not:'', sonOperasyon:false };
+let newForm = { isEmriNo:'', makine:'', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false };
+let activeDetailId = null; // görüntülenen aktif işin id'si (Makineler listesinden tıklanan)
+let editingActiveId = null; // düzenleme modunda olan aktif işin id'si
+let editForm = { isEmriNo:'', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false };
+function openEditActive(id){
+  const active = STATE.entries[id] || {};
+  editingActiveId = id;
+  editForm = { isEmriNo: active.isEmriNo||'', malzemeCinsi: active.malzemeCinsi||'', capBoy: active.capBoy||'', adet: active.adet||'', not: active.not||'', sonOperasyon: !!active.sonOperasyon };
+  render();
+}
+function cancelEditActive(){ editingActiveId = null; render(); }
+function saveEditActive(id){
+  const before = STATE.entries[id] || {};
+  const isEmriNo = (document.getElementById('edit-isemri').value||'').trim();
+  const malzemeCinsi = (document.getElementById('edit-malzeme-cinsi').value||'').trim();
+  const capBoy = (document.getElementById('edit-cap-boy').value||'').trim();
+  const adet = (document.getElementById('edit-adet').value||'').trim();
+  const not = (document.getElementById('edit-not').value||'').trim();
+  const sonOperasyon = !!document.getElementById('edit-son-operasyon')?.checked;
+  if(!isEmriNo){ toast('İş Emri No boş olamaz'); return; }
+  if(!adet){ toast('Adet boş olamaz'); return; }
+
+  const fieldLabels = { isEmriNo:'İş Emri No', malzemeCinsi:'Malzeme Cinsi', capBoy:'Çap ve Boy', adet:'Adet', not:'Not', sonOperasyon:'Son Operasyon' };
+  const after = { isEmriNo, malzemeCinsi, capBoy, adet, not, sonOperasyon };
+  const changes = [];
+  Object.keys(fieldLabels).forEach(f=>{
+    const oldV = f==='sonOperasyon' ? (before[f]?'Evet':'Hayır') : (before[f]||'');
+    const newV = f==='sonOperasyon' ? (after[f]?'Evet':'Hayır') : (after[f]||'');
+    if(oldV !== newV) changes.push({ field: fieldLabels[f], oldValue: oldV||'—', newValue: newV||'—' });
+  });
+
+  DB.ref('entries/'+id).update(after);
+
+  if(changes.length>0){
+    const mid = uid();
+    DB.ref('messages/'+mid).set({
+      type: 'edit', isEmriNo: before.isEmriNo, operatorUsername: session.username, operatorName: session.displayName,
+      makine: before.makine||'', changes, ts: Date.now(), read: false
+    });
+  }
+
+  toast('Güncellendi');
+  editingActiveId = null;
+  render();
+}
 let durusOpen = false, durusReasonSel = '', durusCustom = '';
 let pwForm = { current:'', next:'', confirm:'' };
 let loginForm = { username:'', password:'' };
@@ -253,12 +298,100 @@ let reportFilter = { operator:'', isEmriNo:'', makine:'', tarih:'' };
 let accessOperator = '';
 let settingsSubTab = 'default';
 let showMachineList = false;
+let matrixSort = 'alpha'; // 'alpha' | 'calisma'
+function setMatrixSort(v){ matrixSort = v; render(); }
 let machineModal = null; // açık modal'ın makine kodu
 let modalSelectedIds = new Set();
 let modalVisibleIds = [];
 let reportSelectedIds = new Set();
 let reportVisibleIds = [];
 let completedSearch = '';
+let analizFrom = new Date().toISOString().slice(0,10);
+let analizTo = analizFrom;
+let analizSubTab = 'genel';
+let sendMsgOpen = false;
+function openSendMessage(){ sendMsgOpen = true; render(); }
+function cancelSendMessage(){ sendMsgOpen = false; render(); }
+function submitSendMessage(){
+  const text = (document.getElementById('send-msg-text').value||'').trim();
+  if(!text){ toast('Mesaj boş olamaz'); return; }
+  const mid = uid();
+  DB.ref('messages/'+mid).set({
+    type: 'manual', operatorUsername: session.username, operatorName: session.displayName,
+    text, ts: Date.now(), read: false
+  });
+  toast('Mesaj gönderildi');
+  sendMsgOpen = false;
+  render();
+}
+let messagesModalOpen = false;
+function unreadMessageCount(){ return Object.values(STATE.messages||{}).filter(m=>!m.read).length; }
+function canViewMessages(){
+  if(!session) return false;
+  if(session.isSuperAdmin) return true;
+  return !!(STATE.operators[session.username]||{}).messagesAccess;
+}
+function openMessagesModal(){
+  messagesModalOpen = true;
+  // Açılınca tüm mesajları okundu say (rozet sıfırlansın)
+  Object.entries(STATE.messages||{}).forEach(([mid,m])=>{ if(!m.read) DB.ref('messages/'+mid+'/read').set(true); });
+  render();
+}
+function closeMessagesModal(){ messagesModalOpen = false; render(); }
+function renderMessagesModal(){
+  const list = Object.entries(STATE.messages||{}).map(([id,m])=>({id,...m})).sort((a,b)=>b.ts-a.ts);
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeMessagesModal()">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div><div class="modal-title">Mesajlar</div><div class="modal-sub">Değişiklik bildirimleri ve serbest mesajlar</div></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          ${session.isSuperAdmin && list.length>0 ? `<button class="btn-ghost" style="border-color:var(--danger);color:var(--danger);font-size:11.5px" onclick="deleteAllMessages()">🗑 Tümünü Sil</button>` : ''}
+          <button class="icon-btn" onclick="closeMessagesModal()">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        ${list.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:30px 0">Henüz mesaj yok.</div>` : list.map(m=>`
+          <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+              <div style="font-weight:700;color:var(--accent);font-size:13.5px;margin-bottom:2px">${m.type==='manual'?'✉ Serbest Mesaj':'✎ İş Üzerinde Değişiklik'}</div>
+              ${session.isSuperAdmin ? `<button class="del-btn" onclick="deleteMessage('${m.id}')" title="Sil">🗑</button></div>` : `</div>`}
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${fmtDT(m.ts)}</div>
+            ${m.type==='manual' ? `
+              <div class="mono" style="font-size:12.5px;color:var(--text-muted);margin-bottom:6px">${esc(m.operatorUsername)} · ${esc(m.operatorName)}</div>
+              <div style="font-size:13px;white-space:pre-wrap">${esc(m.text)}</div>
+            ` : `
+              <div class="mono" style="font-size:12.5px;color:var(--text-muted);margin-bottom:6px">${esc(m.operatorUsername)} · ${esc(m.operatorName)} · ${esc((m.makine||'').split(' · ')[0]||'—')}</div>
+              ${(m.changes||[]).map(c=>`<div style="font-size:12.5px;margin-top:4px"><b>${esc(c.field)}</b> değiştirildi — Eskiden: <span style="color:var(--danger)">${esc(c.oldValue)}</span> · Şimdi: <span style="color:var(--success)">${esc(c.newValue)}</span></div>`).join('')}
+            `}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+function deleteMessage(id){
+  if(!requireSuperAdmin()) return;
+  if(!confirm('Bu mesajı silmek istediğine emin misin?')) return;
+  DB.ref('messages/'+id).remove();
+}
+function deleteAllMessages(){
+  if(!requireSuperAdmin()) return;
+  if(!confirm('Tüm mesajları silmek istediğine emin misin? Bu işlem geri alınamaz.')) return;
+  DB.ref('messages').remove();
+}
+
+let analizSelectedMachines = new Set(); // Genel Analiz'deki mini matristen seçilen makine kodları (çoklu filtre)
+let analizMiniSort = 'alpha'; // 'alpha' | 'calisma' | 'renk'
+function setAnalizMiniSort(v){ analizMiniSort = v; render(); }
+function toggleAnalizMachineFilter(code){
+  if(analizSelectedMachines.has(code)) analizSelectedMachines.delete(code);
+  else analizSelectedMachines.add(code);
+  render();
+}
+function clearAnalizMachineFilter(){ analizSelectedMachines.clear(); render(); }
+function setAnalizSubTab(t){ analizSubTab = t; render(); }
+const WORKDAY_MINUTES = 540; // gün içi standart çalışma süresi (dk)
+const WORKDAY_END_MINUTE = 17*60+30; // 17:30 — bu saatten sonrası mesai sayılır
 let routeModal = null; // {isEmriNo, finishedAt}
 let modalDateFilter = '';
 let DB = null, FB_OK = false, connOK = false;
@@ -291,12 +424,20 @@ function initFirebase(){
       extraMachines = snap.val() || {};
       render();
     });
+    DB.ref('machines_hidden').on('value', snap=>{
+      hiddenMachines = snap.val() || {};
+      render();
+    });
+    DB.ref('messages').on('value', snap=>{
+      STATE.messages = snap.val() || {};
+      render();
+    });
     return true;
   }catch(e){ console.warn('Firebase init hatası', e); return false; }
 }
 function seedIfNeeded(){
   if(Object.keys(STATE.operators).length>0) return;
-  DB.ref('operators').set(SEED_OPERATORS);
+  console.warn('Firebase "operators" düğümü boş. Ayarlar → "+ Kullanıcı Ekle" panelinden operatörleri ve bir ADMIN hesabını manuel eklemen gerekiyor.');
 }
 function entriesArray(){ return Object.entries(STATE.entries).map(([id,e])=>({id, ...e})); }
 
@@ -313,7 +454,7 @@ function doLogin(){
     return;
   }
   loginError = '';
-  session = { username: uname, displayName: op.displayName, isAdmin: !!op.isAdmin };
+  session = { username: uname, displayName: op.displayName, isAdmin: !!op.isAdmin, isSuperAdmin: !!op.isSuperAdmin };
   if(remember){ save('rota_remember', true); save('rota_session', session); }
   else { save('rota_remember', false); save('rota_session', null); }
   view = session.isAdmin ? 'report' : 'list';
@@ -338,9 +479,9 @@ function changePassword(){
 }
 
 /* ===================== OPERASYON İŞLEMLERİ ===================== */
-function getActiveEntry(){
-  if(!session || session.isAdmin) return null;
-  return entriesArray().find(e => e.operatorUsername===session.username && (e.status==='devam'||e.status==='duruş'));
+function myActiveEntries(){
+  if(!session || session.isAdmin) return [];
+  return entriesArray().filter(e => e.operatorUsername===session.username && (e.status==='devam'||e.status==='duruş')).sort((a,b)=>a.startTs-b.startTs);
 }
 function getAllowedMachines(){
   if(!session || session.isAdmin) return allMachines().map(m=>`${m.code} · ${m.name}`);
@@ -348,22 +489,31 @@ function getAllowedMachines(){
   const allowedCodes = op.allowedMachines ? Object.keys(op.allowedMachines).filter(k=>op.allowedMachines[k]) : allMachineCodes();
   return allMachines().filter(m=>allowedCodes.includes(m.code)).map(m=>`${m.code} · ${m.name}`);
 }
+function openActiveDetail(id){ activeDetailId = id; render(); }
+function closeActiveDetail(){ activeDetailId = null; setView('list'); }
 function baslat(){
-  if(getActiveEntry()){ toast('Önce mevcut operasyonu bitirmelisin'); return; }
   const isEmriNo = (document.getElementById('nf-isemri').value||'').trim();
   const makine = document.getElementById('nf-makine').value||'';
   const malzemeCinsi = (document.getElementById('nf-malzeme-cinsi').value||'').trim();
   const capBoy = (document.getElementById('nf-cap-boy').value||'').trim();
+  const adet = (document.getElementById('nf-adet').value||'').trim();
   const not = (document.getElementById('nf-not').value||'').trim();
   const sonOperasyon = !!document.getElementById('nf-son-operasyon')?.checked;
+  const allowMulti = !!(STATE.operators[session.username]||{}).multiJob;
+  if(!allowMulti && myActiveEntries().length>0){ toast('Bu hesap aynı anda tek iş açabilir. Önce mevcut işi bitirmelisin.'); return; }
   if(!isEmriNo){ toast('İş Emri No girin'); return; }
   if(!getAllowedMachines().includes(makine)){ toast('Listeden geçerli bir makine seçin'); return; }
+  if(!adet){ toast('Adet girin'); return; }
+  const machineBusy = entriesArray().some(e => e.makine === makine && e.status === 'devam');
+  if(machineBusy){ toast('Bu makinede zaten aktif bir iş var. Önce o iş bitirilmeli ya da duraklatılmalı.'); return; }
   const id = uid();
-  const entry = { isEmriNo, makine, malzemeCinsi, capBoy, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0 };
+  const entry = { isEmriNo, makine, malzemeCinsi, capBoy, adet, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0 };
   DB.ref('entries/'+id).set(entry);
   toast('Operasyon başlatıldı');
-  newForm = { isEmriNo:'', makine: (STATE.operators[session.username]||{}).defaultMachine || '', malzemeCinsi:'', capBoy:'', not:'', sonOperasyon:false };
-  setView('list');
+  newForm = { isEmriNo:'', makine: (STATE.operators[session.username]||{}).defaultMachine || '', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false };
+  activeDetailId = id;
+  view = 'list';
+  render();
 }
 function bitir(id){
   const e = STATE.entries[id] || {};
@@ -372,9 +522,10 @@ function bitir(id){
   const duruşToplamMs = (e.duruşToplamMs||0) + extra;
   DB.ref('entries/'+id).update({ endTs: Date.now(), status:'tamamlandi', duruşToplamMs });
   toast('Operasyon tamamlandı');
+  if(activeDetailId===id){ activeDetailId=null; view='list'; }
 }
 function toggleDurus(open){ durusOpen=open; durusReasonSel=''; durusCustom=''; render(); }
-function pickDurusReason(r){ durusReasonSel=r; render(); }
+function pickDurusReason(i){ durusReasonSel = DURUS_REASONS[i]; render(); }
 function confirmDurus(id){
   const reason = durusReasonSel==='Diğer' ? (document.getElementById('durus-custom')?.value||'').trim() : durusReasonSel;
   if(!reason){ toast('Duruş nedeni seçmelisin'); return; }
@@ -384,6 +535,8 @@ function confirmDurus(id){
 }
 function devamEt(id){
   const e = STATE.entries[id] || {};
+  const machineBusy = entriesArray().some(o => o.id!==id && o.makine===e.makine && o.status==='devam');
+  if(machineBusy){ toast('Bu makinede zaten aktif başka bir iş var. Önce onu bitir ya da duraklat.'); return; }
   const extra = e.duruşTs ? (Date.now() - e.duruşTs) : 0;
   const duruşToplamMs = (e.duruşToplamMs||0) + extra;
   DB.ref('entries/'+id).update({ status:'devam', duruşNedeni:'', duruşToplamMs });
@@ -400,20 +553,32 @@ function toggleMachineAccess(code, machineCode){
   DB.ref('operators/'+code+'/allowedMachines').set(current);
 }
 function setAccessOperator(v){ accessOperator=v; render(); }
+function toggleMultiJob(code){
+  const op = STATE.operators[code] || {};
+  DB.ref('operators/'+code+'/multiJob').set(!op.multiJob);
+}
+function toggleMessagesAccess(code){
+  const op = STATE.operators[code] || {};
+  DB.ref('operators/'+code+'/messagesAccess').set(!op.messagesAccess);
+}
 function setSettingsSubTab(t){ settingsSubTab=t; render(); }
 
 function addOperator(){
   const code = (document.getElementById('new-op-code').value||'').trim().toUpperCase();
   const displayName = (document.getElementById('new-op-name').value||'').trim();
   const password = (document.getElementById('new-op-pass').value||'').replace(/\D/g,'').slice(0,8) || '1234';
-  if(!code){ toast('OPRT kodu girin'); return; }
+  const isManager = !!document.getElementById('new-op-manager')?.checked;
+  if(!code){ toast('Kullanıcı kodu girin'); return; }
   if(!displayName){ toast('Ad soyad girin'); return; }
   if(STATE.operators[code]){ toast(code+' zaten kayıtlı'); return; }
-  DB.ref('operators/'+code).set({ displayName, password, defaultMachine: '' });
-  toast(code+' eklendi');
+  const record = { displayName, password, defaultMachine: '' };
+  if(isManager) record.isAdmin = true;
+  DB.ref('operators/'+code).set(record);
+  toast(code+' eklendi'+(isManager?' (yönetici)':''));
   document.getElementById('new-op-code').value='';
   document.getElementById('new-op-name').value='';
   document.getElementById('new-op-pass').value='1234';
+  if(document.getElementById('new-op-manager')) document.getElementById('new-op-manager').checked=false;
 }
 function addMachine(){
   const code = (document.getElementById('new-mk-code').value||'').trim().toUpperCase();
@@ -425,6 +590,24 @@ function addMachine(){
   toast(code+' eklendi');
   document.getElementById('new-mk-code').value='';
   document.getElementById('new-mk-name').value='';
+}
+function requireSuperAdmin(){
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için süper admin yetkisi gerekli'); return false; }
+  return true;
+}
+function deleteMachine(code){
+  if(!requireSuperAdmin()) return;
+  if(!confirm(code+' makinesini silmek istediğine emin misin? Geçmiş kayıtlar etkilenmez, sadece yeni seçimlerde görünmez.')) return;
+  if(extraMachines[code]){ DB.ref('machines_extra/'+code).remove(); }
+  else { DB.ref('machines_hidden/'+code).set(true); }
+  toast(code+' silindi');
+}
+function deleteOperator(code){
+  if(!requireSuperAdmin()) return;
+  if(code===session.username){ toast('Kendi hesabını silemezsin'); return; }
+  if(!confirm(code+' hesabını silmek istediğine emin misin? Geçmiş kayıtları etkilenmez, sadece giriş yapamaz olur.')) return;
+  DB.ref('operators/'+code).remove();
+  toast(code+' silindi');
 }
 function setReportFilterField(field, val){ reportFilter[field]=val; reportSelectedIds = new Set(); render(); }
 function setCompletedSearch(v){ completedSearch = v; render(); }
@@ -439,12 +622,14 @@ function toggleReportSelectAll(){
   render();
 }
 function deleteReportRecord(id){
+  if(!requireSuperAdmin()) return;
   if(!confirm('Bu kaydı silmek istediğine emin misin? Bu işlem geri alınamaz.')) return;
   DB.ref('entries/'+id).remove();
   reportSelectedIds.delete(id);
   toast('Kayıt silindi');
 }
 function deleteReportSelected(){
+  if(!requireSuperAdmin()) return;
   if(reportSelectedIds.size===0) return;
   if(!confirm(`${reportSelectedIds.size} kaydı silmek istediğine emin misin? Bu işlem geri alınamaz.`)) return;
   reportSelectedIds.forEach(id=> DB.ref('entries/'+id).remove());
@@ -460,6 +645,154 @@ function seqMap(){
   Object.values(byIsEmri).forEach(ids=>ids.forEach((id,i)=>{ map[id]=i+1; }));
   return map;
 }
+// Aynı İş Emri No tekrar geldiğinde eski "tamamlandı" durumunun sızmaması için:
+// her İş Emri No'nun kayıtlarını kronolojik sırayla "tur"lara bölüyoruz. Bir tur,
+// sonOperasyon=true VE status='tamamlandi' olan kayıtla kapanır. Kapanan turdaki
+// tüm kayıtlar "tamamlanmış rota" sayılır; o turdan SONRA gelen yeni kayıtlar
+// otomatik olarak yepyeni, boş bir tur başlatır — eskisinden bağımsız kalır.
+function setAnalizFrom(v){ analizFrom = v; if(analizFrom>analizTo) analizTo=analizFrom; render(); }
+function setAnalizTo(v){ analizTo = v; if(analizTo<analizFrom) analizFrom=analizTo; render(); }
+function setAnalizPreset(days){
+  const today = new Date();
+  analizTo = today.toISOString().slice(0,10);
+  const from = new Date(today);
+  from.setDate(from.getDate() - (days-1));
+  analizFrom = from.toISOString().slice(0,10);
+  render();
+}
+
+function computeAnalizData(fromDate, toDate){
+  const rangeEntries = entriesArray().filter(e => { const dk = dateKey(e.startTs); return dk>=fromDate && dk<=toDate; });
+  const isSingleDay = fromDate===toDate;
+  const dayStartMs = isSingleDay ? new Date(fromDate+'T00:00:00').getTime() : null;
+
+  const byMachine = {};
+  rangeEntries.forEach(e=>{
+    const dk = dateKey(e.startTs);
+    if(!byMachine[e.makine]) byMachine[e.makine] = { entries: [], operators: new Set(), byDay: {} };
+    byMachine[e.makine].entries.push(e);
+    byMachine[e.makine].operators.add(`${e.operatorUsername} · ${e.operatorName}`);
+    (byMachine[e.makine].byDay[dk] ||= []).push(e);
+  });
+
+  const overtimeList = [];
+  const perMachine = Object.entries(byMachine).map(([label, data])=>{
+    let workMs = 0, durusMs = 0, overtimeMs = 0, availMs = 0;
+    Object.entries(data.byDay).forEach(([dk, dayList])=>{
+      const dStartMs = new Date(dk+'T00:00:00').getTime();
+      const cutoffMs = dStartMs + WORKDAY_END_MINUTE*60000;
+      let dayOvertimeMs = 0;
+      dayList.forEach(e=>{
+        const endClip = e.endTs || nowTick;
+        const wallMs = Math.max(0, endClip - e.startTs);
+        const eDurusMs = e.duruşToplamMs || 0;
+        workMs += Math.max(0, wallMs - eDurusMs);
+        durusMs += eDurusMs;
+        if(endClip > cutoffMs){
+          const otMs = endClip - Math.max(cutoffMs, e.startTs);
+          if(otMs > 0){
+            dayOvertimeMs += otMs;
+            overtimeList.push({ makine: label, operatorUsername: e.operatorUsername, operatorName: e.operatorName, isEmriNo: e.isEmriNo, overtimeMin: Math.round(otMs/60000), tarih: dk });
+          }
+        }
+      });
+      overtimeMs += dayOvertimeMs;
+      availMs += WORKDAY_MINUTES*60000 + dayOvertimeMs; // her kullanılan gün için 540 dk + o günün fazla mesaisi
+    });
+    const workMin = Math.round(workMs/60000);
+    const durusMin = Math.round(durusMs/60000);
+    const overtimeMin = Math.round(overtimeMs/60000);
+    const availMin = Math.round(availMs/60000);
+    const verimlilik = availMin>0 ? Math.min(100, Math.round((workMin/availMin)*100)) : 0;
+    return { label, code: label.split(' · ')[0], name: label.split(' · ')[1]||'', operators: [...data.operators], entries: data.entries, workMin, durusMin, overtimeMin, availMin, verimlilik, daysUsed: Object.keys(data.byDay).length };
+  }).sort((a,b)=>b.workMin-a.workMin);
+
+  const totals = perMachine.reduce((t,m)=>({
+    workMin: t.workMin+m.workMin, durusMin: t.durusMin+m.durusMin, overtimeMin: t.overtimeMin+m.overtimeMin, availMin: t.availMin+m.availMin
+  }), {workMin:0, durusMin:0, overtimeMin:0, availMin:0});
+  totals.verimlilik = totals.availMin>0 ? Math.min(100, Math.round((totals.workMin/totals.availMin)*100)) : 0;
+  totals.bostaMin = Math.max(0, totals.availMin - totals.workMin - totals.durusMin);
+
+  return { perMachine, totals, overtimeList, isSingleDay, dayStartMs, fromDate, toDate };
+}
+
+let analizCharts = {};
+function destroyAnalizCharts(){ Object.values(analizCharts).forEach(c=>{ if(c) c.destroy(); }); analizCharts = {}; }
+function initAnalizCharts(data){
+  if(typeof Chart === 'undefined') return;
+  destroyAnalizCharts();
+  const gridColor = theme==='light' ? '#dde1e5' : '#2a3138';
+  const textColor = theme==='light' ? '#6b7280' : '#8b939b';
+
+  const barCanvas = document.getElementById('analiz-bar-chart');
+  if(barCanvas && data.perMachine.length>0){
+    analizCharts.bar = new Chart(barCanvas, {
+      type: 'bar',
+      data: {
+        labels: data.perMachine.map(m=>m.code),
+        datasets: [
+          { label: 'Çalışma (dk)', data: data.perMachine.map(m=>m.workMin), backgroundColor: '#4ade80' },
+          { label: 'Duruş (dk)', data: data.perMachine.map(m=>m.durusMin), backgroundColor: '#facc15' },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { stacked: true, ticks:{color:textColor}, grid:{color:gridColor} },
+          y: { stacked: true, ticks:{color:textColor}, grid:{color:gridColor} }
+        },
+        plugins: { legend: { labels: { color: textColor } } }
+      }
+    });
+  }
+
+  const pieCanvas = document.getElementById('analiz-pie-chart');
+  if(pieCanvas){
+    const work = pieCanvas.dataset.work!=null ? Number(pieCanvas.dataset.work) : data.totals.workMin;
+    const durus = pieCanvas.dataset.durus!=null ? Number(pieCanvas.dataset.durus) : data.totals.durusMin;
+    const bosta = pieCanvas.dataset.bosta!=null ? Number(pieCanvas.dataset.bosta) : data.totals.bostaMin;
+    analizCharts.pie = new Chart(pieCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: ['Çalışma', 'Duruş', 'Boşta/Kullanılmayan'],
+        datasets: [{ data: [work, durus, bosta], backgroundColor: ['#4ade80','#facc15','#3a4148'], borderColor: theme==='light'?'#ffffff':'#1c2024', borderWidth: 3, hoverOffset: 8 }]
+      },
+      options: { responsive:true, maintainAspectRatio:false, cutout:'72%', plugins:{ legend:{ position:'bottom', labels:{color:textColor, padding:16, font:{size:13} } } } }
+    });
+  }
+
+  const durusCanvas = document.getElementById('analiz-durus-chart');
+  if(durusCanvas){
+    const byReason = {};
+    data.perMachine.forEach(m=>m.entries.forEach(e=>{
+      if((e.duruşToplamMs||0)<=0) return;
+      const r = e.duruşNedeni || 'Belirtilmemiş';
+      byReason[r] = (byReason[r]||0) + Math.round(e.duruşToplamMs/60000);
+    }));
+    const labels = Object.keys(byReason);
+    if(labels.length>0){
+      const palette = ['#facc15','#f87171','#fb923c','#a78bfa','#38bdf8','#4ade80','#f472b6','#94a3b8','#eab308'];
+      analizCharts.durus = new Chart(durusCanvas, {
+        type: 'pie',
+        data: { labels, datasets: [{ data: Object.values(byReason), backgroundColor: labels.map((_,i)=>palette[i%palette.length]) }] },
+        options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{color:textColor} } } }
+      });
+    }
+  }
+
+  const mesaiCanvas = document.getElementById('analiz-mesai-chart');
+  if(mesaiCanvas){
+    const withOt = data.perMachine.filter(m=>m.overtimeMin>0);
+    if(withOt.length>0){
+      analizCharts.mesai = new Chart(mesaiCanvas, {
+        type: 'bar',
+        data: { labels: withOt.map(m=>m.code), datasets: [{ label: 'Fazla Mesai (dk)', data: withOt.map(m=>m.overtimeMin), backgroundColor: '#f87171' }] },
+        options: { responsive:true, maintainAspectRatio:false, scales:{ x:{ticks:{color:textColor},grid:{color:gridColor}}, y:{ticks:{color:textColor},grid:{color:gridColor}} }, plugins:{ legend:{labels:{color:textColor}} } }
+      });
+    }
+  }
+}
+
 // Aynı İş Emri No tekrar geldiğinde eski "tamamlandı" durumunun sızmaması için:
 // her İş Emri No'nun kayıtlarını kronolojik sırayla "tur"lara bölüyoruz. Bir tur,
 // sonOperasyon=true VE status='tamamlandi' olan kayıtla kapanır. Kapanan turdaki
@@ -483,6 +816,22 @@ function computeCompletedRoutes(){
   routes.sort((a,b)=> b.finishedAt - a.finishedAt); // en son tamamlanan üstte
   return routes;
 }
+function renderDurusBreakdown(entries){
+  const byReason = {};
+  entries.forEach(e=>{
+    if((e.duruşToplamMs||0) <= 0) return;
+    const r = e.duruşNedeni || 'Belirtilmemiş';
+    byReason[r] = (byReason[r]||0) + e.duruşToplamMs;
+  });
+  const rows = Object.entries(byReason).sort((a,b)=>b[1]-a[1]);
+  if(rows.length===0) return '';
+  return `<div style="margin-bottom:16px">
+    <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Duruş Nedenlerine Göre Dağılım</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${rows.map(([reason,ms])=>`<div class="chip" style="color:var(--warn);border-color:var(--warn)55;background:#facc1518">${esc(reason)}: <b>${fmtDur(ms)}</b></div>`).join('')}
+    </div>
+  </div>`;
+}
 function computeCompletedRouteIds(){
   const ids = new Set();
   computeCompletedRoutes().forEach(r=>r.entries.forEach(e=>ids.add(e.id)));
@@ -501,7 +850,7 @@ function filteredEntries(){
 }
 function exportExcel(){
   const rows = filteredEntries().map(e=>({
-    "İş Emri No": e.isEmriNo, "Operasyon No": e._seq, "Malzeme Cinsi": e.malzemeCinsi, "Çap ve Boy": e.capBoy, "Makine": e.makine,
+    "İş Emri No": e.isEmriNo, "Operasyon No": e._seq, "Malzeme Cinsi": e.malzemeCinsi, "Çap ve Boy": e.capBoy, "Adet": e.adet, "Makine": e.makine,
     "Operatör Kodu": e.operatorUsername, "Operatör Adı": e.operatorName,
     "Başlangıç": fmtDT(e.startTs), "Bitiş": e.endTs?fmtDT(e.endTs):"",
     "Süre (dk)": e.endTs?Math.round((e.endTs-e.startTs)/60000):"",
@@ -526,12 +875,14 @@ function toggleModalSelectAll(){
   render();
 }
 function deleteModalRecord(id){
+  if(!requireSuperAdmin()) return;
   if(!confirm('Bu kaydı silmek istediğine emin misin? Bu işlem geri alınamaz.')) return;
   DB.ref('entries/'+id).remove();
   modalSelectedIds.delete(id);
   toast('Kayıt silindi');
 }
 function deleteModalSelected(){
+  if(!requireSuperAdmin()) return;
   if(modalSelectedIds.size===0) return;
   if(!confirm(`${modalSelectedIds.size} kaydı silmek istediğine emin misin? Bu işlem geri alınamaz.`)) return;
   modalSelectedIds.forEach(id=> DB.ref('entries/'+id).remove());
@@ -547,7 +898,7 @@ function exportMachineExcel(code){
   let rows = machineDetailEntries(code);
   if(modalDateFilter) rows = rows.filter(e=>dateKey(e.startTs)===modalDateFilter);
   const data = rows.map(e=>({
-    "Tarih": dateKey(e.startTs), "İş Emri No": e.isEmriNo, "Malzeme Cinsi": e.malzemeCinsi, "Çap ve Boy": e.capBoy,
+    "Tarih": dateKey(e.startTs), "İş Emri No": e.isEmriNo, "Malzeme Cinsi": e.malzemeCinsi, "Çap ve Boy": e.capBoy, "Adet": e.adet,
     "Operatör": `${e.operatorUsername} · ${e.operatorName}`,
     "Başlangıç": fmtDT(e.startTs), "Bitiş": e.endTs?fmtDT(e.endTs):"",
     "Süre (dk)": e.endTs?Math.round((e.endTs-e.startTs)/60000):"",
@@ -580,7 +931,7 @@ function renderMachineModal(){
     </div>
     ${allDays.map(d=>{
       const pct = Math.max(6, Math.round((byDayAll[d].ms/maxMs)*100));
-      const label = d.slice(5).replace('-','.'); // MM.DD
+      const [, mm, dd] = d.split('-'); const label = `${dd}.${mm}`; // DD.MM
       return `<div class="timeline-day ${modalDateFilter===d?'selected':''}" onclick="setModalDateFilter('${d}')" title="${d} · ${fmtDur(byDayAll[d].ms)} · ${byDayAll[d].jobs.size} iş">
         <div class="timeline-bar-track"><div class="timeline-bar-fill" style="height:${pct}%"></div></div>
         <div class="timeline-day-label">${label}</div>
@@ -593,6 +944,7 @@ function renderMachineModal(){
   modalVisibleIds = rows.map(e=>e.id);
 
   const totalMs = rows.reduce((sum,e)=> sum + (e.endTs ? (e.endTs-e.startTs) : (e.status==='devam' ? (nowTick-e.startTs) : 0)), 0);
+  const totalDurusMs = rows.reduce((sum,e)=> sum + (e.duruşToplamMs||0), 0);
   const jobCount = new Set(rows.map(e=>e.isEmriNo)).size;
   const recordCount = rows.length;
 
@@ -614,29 +966,31 @@ function renderMachineModal(){
       <div class="modal-body">
         ${timelineHtml}
         <div class="modal-filter-row">
-          ${modalSelectedIds.size>0 ? `<button class="btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="deleteModalSelected()">🗑 Seçilenleri Sil (${modalSelectedIds.size})</button>` : ''}
+          ${session.isSuperAdmin && modalSelectedIds.size>0 ? `<button class="btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="deleteModalSelected()">🗑 Seçilenleri Sil (${modalSelectedIds.size})</button>` : ''}
           <button class="btn-primary" style="width:auto;margin-left:auto;padding:8px 16px" onclick="exportMachineExcel('${machineModal}')">⬇ Excel'e Aktar (${rows.length})</button>
         </div>
         <div class="modal-stats">
           <div class="modal-stat-box"><div class="modal-stat-num">${recordCount}</div><div class="modal-stat-label">Kayıt</div></div>
           <div class="modal-stat-box"><div class="modal-stat-num">${jobCount}</div><div class="modal-stat-label">Farklı İş Emri</div></div>
           <div class="modal-stat-box"><div class="modal-stat-num">${fmtDur(totalMs)}</div><div class="modal-stat-label">Toplam Süre</div></div>
+          <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--warn)">${fmtDur(totalDurusMs)}</div><div class="modal-stat-label">Toplam Duruş</div></div>
         </div>
+        ${totalDurusMs>0 ? renderDurusBreakdown(rows) : ''}
         ${dailyTable}
         <div style="font-size:13px;font-weight:600;margin-bottom:8px">${modalDateFilter ? modalDateFilter+' — Detay' : 'Tüm Kayıtlar — Detay (eskiden yeniye)'}</div>
         <table><thead><tr>
-          <th style="width:26px"><input type="checkbox" ${modalVisibleIds.length>0 && modalVisibleIds.every(id=>modalSelectedIds.has(id))?'checked':''} onchange="toggleModalSelectAll()"></th>
-          <th>Tarih</th><th>İş Emri No</th><th>Operatör</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th>Durum</th><th style="width:36px"></th>
+          ${session.isSuperAdmin ? `<th style="width:26px"><input type="checkbox" ${modalVisibleIds.length>0 && modalVisibleIds.every(id=>modalSelectedIds.has(id))?'checked':''} onchange="toggleModalSelectAll()"></th>` : ''}
+          <th>Tarih</th><th>İş Emri No</th><th>Operatör</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th>Durum</th>${session.isSuperAdmin ? `<th style="width:36px"></th>` : ''}
         </tr></thead><tbody>
-        ${rows.length===0 ? `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : rows.map(e=>{
+        ${rows.length===0 ? `<tr><td colspan="${session.isSuperAdmin?9:7}" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : rows.map(e=>{
           const isDone = computeCompletedRouteIds().has(e.id);
           const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success)';
           const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
           const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : (e.status==='devam' ? fmtElapsed(nowTick-e.startTs)+' (sürüyor)' : '—');
           return `<tr style="${isDone?'background:#1a4d2e33':''}">
-            <td><input type="checkbox" ${modalSelectedIds.has(e.id)?'checked':''} onchange="toggleModalSelect('${e.id}')"></td>
+            ${session.isSuperAdmin ? `<td><input type="checkbox" ${modalSelectedIds.has(e.id)?'checked':''} onchange="toggleModalSelect('${e.id}')"></td>` : ''}
             <td>${dateKey(e.startTs)}</td><td class="mono" style="color:var(--accent)">${esc(e.isEmriNo)} ${isDone?'✓':''}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td>${fmtDT(e.startTs)}</td><td>${e.endTs?fmtDT(e.endTs):'—'}</td><td>${dur}</td><td><span style="color:${statusColor};font-weight:600">${isDone?'Rota Tamamlandı':statusLabel}</span></td>
-            <td><button class="del-btn" onclick="deleteModalRecord('${e.id}')" title="Sil">🗑</button></td>
+            ${session.isSuperAdmin ? `<td><button class="del-btn" onclick="deleteModalRecord('${e.id}')" title="Sil">🗑</button></td>` : ''}
           </tr>`;
         }).join('')}
         </tbody></table>
@@ -715,7 +1069,36 @@ function renderLockScreen(active){
     <div class="header">
       <div class="header-left">${connDot()}<span style="font-size:20px">🏭</span><div><div class="brand">ROTA TAKİP</div><div class="brand-sub">${esc(session.username)} · ${esc(session.displayName)}</div></div></div>
       <button class="icon-btn" onclick="doLogout()" title="Çıkış">⎋</button>
+    </div>
+    <div style="padding:14px 18px 0">
+      <button class="btn-ghost" onclick="closeActiveDetail()">← Makineler</button>
     </div>`;
+
+  const editBlock = editingActiveId===active.id ? `
+    <div class="modal-overlay" onclick="if(event.target===this) cancelEditActive()">
+      <div class="modal-box" style="max-width:400px">
+        <div class="modal-header">
+          <div><div class="modal-title">Bilgileri Düzenle</div><div class="modal-sub">${esc(active.makine)}</div></div>
+          <button class="icon-btn" onclick="cancelEditActive()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="field"><label>İş Emri No</label><input id="edit-isemri" class="mono" value="${esc(editForm.isEmriNo)}"></div>
+          <div class="field"><label>Malzeme Cinsi</label><input id="edit-malzeme-cinsi" value="${esc(editForm.malzemeCinsi)}"></div>
+          <div class="field"><label>Çap ve Boy</label><input id="edit-cap-boy" value="${esc(editForm.capBoy)}"></div>
+          <div class="field"><label>Adet</label><input id="edit-adet" inputmode="numeric" value="${esc(editForm.adet)}"></div>
+          <div class="field"><label>Not</label><textarea id="edit-not" style="min-height:60px">${esc(editForm.not)}</textarea></div>
+          <label style="display:flex;align-items:center;gap:8px;background:var(--panel-alt);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
+            <input id="edit-son-operasyon" type="checkbox" ${editForm.sonOperasyon?'checked':''} style="width:auto">
+            <span style="font-size:13px">Son Operasyon <span style="color:var(--text-muted);font-size:11.5px">(bu adım tamamlanınca iş rotası kapanır)</span></span>
+          </label>
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" onclick="saveEditActive('${active.id}')">✓ Kaydet</button>
+            <button class="btn-ghost" onclick="cancelEditActive()">✕ Vazgeç</button>
+          </div>
+        </div>
+      </div>
+    </div>` : '';
+  const editButton = `<button class="btn-ghost" style="margin-top:20px" onclick="openEditActive('${active.id}')">✎ Bilgileri Düzenle (Malzeme / Adet / Not)</button>`;
 
   if(active.status==='duruş'){
     return `<div class="root-mobile theme-${theme}">${header}
@@ -727,9 +1110,10 @@ function renderLockScreen(active){
         <div class="lock-meta">duruş süresi</div>
         <div class="durus-reason-box">"${esc(active.duruşNedeni)}"</div>
         <div style="display:flex;gap:10px;margin-top:28px">
-          <button class="btn-start" style="width:auto;padding:13px 22px" onclick="devamEt('${active.id}')">▶ Devam Et</button>
-          <button class="btn-primary" style="width:auto;padding:13px 22px" onclick="bitir('${active.id}')">■ Bitir</button>
+          <button class="btn-start" style="width:auto;padding:13px 26px" onclick="devamEt('${active.id}')">▶ Duraklatmayı Devam Ettir</button>
         </div>
+        ${editButton}
+        ${editBlock}
       </div></div>`;
   }
 
@@ -742,7 +1126,7 @@ function renderLockScreen(active){
   } else {
     durusBlock = `<div style="display:flex;flex-direction:column;gap:12px;margin-top:28px;width:100%;max-width:320px">
       <div class="durus-chip-row">
-        ${DURUS_REASONS.map(r=>`<button class="chip ${durusReasonSel===r?'active':''}" onclick="pickDurusReason('${r.replace(/'/g,"\\'")}')">${esc(r)}</button>`).join('')}
+        ${DURUS_REASONS.map((r,i)=>`<button class="chip ${durusReasonSel===r?'active':''}" onclick="pickDurusReason(${i})">${esc(r)}</button>`).join('')}
       </div>
       ${durusReasonSel==='Diğer' ? `<input id="durus-custom" placeholder="Nedeni yaz…" value="${esc(durusCustom)}" oninput="durusCustom=this.value">` : ''}
       <div style="display:flex;gap:10px">
@@ -759,27 +1143,33 @@ function renderLockScreen(active){
       <div class="lock-machine">${esc(active.makine)}</div>
       <div class="lock-timer">${fmtElapsed(nowTick-active.startTs)}</div>
       <div class="lock-meta">${fmtDT(active.startTs)} itibarıyla devam ediyor</div>
+      ${active.adet ? `<div class="lock-meta">Adet: ${esc(active.adet)}</div>` : ''}
       ${active.not ? `<div class="lock-note">"${esc(active.not)}"</div>` : ''}
       ${durusBlock}
-      <div class="lock-hint">Yeni kayıt açmak için önce bu operasyonu bitirmelisin.</div>
+      ${editButton}
+      ${editBlock}
     </div></div>`;
 }
 
 /* ===================== RENDER: OPERATÖR ANA UYGULAMA ===================== */
 function renderOperator(){
-  const active = getActiveEntry();
-  if(active) return renderLockScreen(active);
+  const detailEntry = activeDetailId ? entriesArray().find(e=>e.id===activeDetailId && (e.status==='devam'||e.status==='duruş')) : null;
+  if(detailEntry) return renderLockScreen(detailEntry);
 
   const header = `
     <div class="header">
       <div class="header-left">${connDot()}<span style="font-size:20px">🏭</span><div><div class="brand">ROTA TAKİP</div><div class="brand-sub">${esc(session.username)} · ${esc(session.displayName)}</div></div></div>
       <div style="display:flex;gap:6px">
+        ${canViewMessages() ? `<button class="icon-btn" style="position:relative" onclick="openMessagesModal()" title="Mesajlar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M2 6l10 7 10-7"></path></svg>
+          ${unreadMessageCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadMessageCount()}</span>` : ''}
+        </button>` : ''}
         <button class="icon-btn" onclick="setView('settings')" title="Ayarlar">⚙</button>
         <button class="icon-btn" onclick="doLogout()" title="Çıkış">⎋</button>
       </div>
     </div>
     <div class="tabs">
-      <button class="tab-btn ${view==='list'?'active':''}" onclick="setView('list')">☰ Rotalar</button>
+      <button class="tab-btn ${view==='list'?'active':''}" onclick="setView('list')">🏭 Makineler</button>
       <button class="tab-btn ${view==='new'?'active':''}" onclick="setView('new')">+ Yeni Kayıt</button>
     </div>`;
 
@@ -797,6 +1187,7 @@ function renderOperator(){
       </div>
       <div class="field"><label>Malzeme Cinsi (opsiyonel)</label><input id="nf-malzeme-cinsi" placeholder="ör. 4Mo1 ıslahlı" value="${esc(newForm.malzemeCinsi)}" oninput="newForm.malzemeCinsi=this.value"></div>
       <div class="field"><label>Çap ve Boy (opsiyonel)</label><input id="nf-cap-boy" placeholder="ör. Ø26 x 200" value="${esc(newForm.capBoy)}" oninput="newForm.capBoy=this.value"></div>
+      <div class="field"><label>Adet</label><input id="nf-adet" inputmode="numeric" placeholder="ör. 120" value="${esc(newForm.adet)}" oninput="newForm.adet=this.value"></div>
       <div class="field"><label>Not (opsiyonel)</label><textarea id="nf-not" style="min-height:60px" placeholder="Serbest not" oninput="newForm.not=this.value">${esc(newForm.not)}</textarea></div>
       <label style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
         <input id="nf-son-operasyon" type="checkbox" ${newForm.sonOperasyon?'checked':''} onchange="newForm.sonOperasyon=this.checked" style="width:auto">
@@ -818,34 +1209,31 @@ function renderOperator(){
       <div class="field"><label>Yeni Şifre (max 8 hane, sadece rakam)</label><input id="pw-next" type="password" inputmode="numeric" maxlength="8" placeholder="ör. 4821"></div>
       <div class="field"><label>Yeni Şifre (tekrar)</label><input id="pw-confirm" type="password" inputmode="numeric" maxlength="8" placeholder="ör. 4821"></div>
       <button class="btn-primary" onclick="changePassword()">✓ Şifreyi Güncelle</button>
+      <div style="height:1px;background:var(--border);margin:20px 0"></div>
+      ${!sendMsgOpen ? `<button class="btn-ghost" onclick="openSendMessage()">✉ Admin'e Mesaj Gönder</button>` : `
+        <div class="field"><label>Mesajın</label><textarea id="send-msg-text" style="min-height:90px" placeholder="Adminle paylaşmak istediğin herhangi bir şey yazabilirsin…"></textarea></div>
+        <div style="display:flex;gap:10px">
+          <button class="btn-primary" onclick="submitSendMessage()">✓ Gönder</button>
+          <button class="btn-ghost" onclick="cancelSendMessage()">✕ Vazgeç</button>
+        </div>`}
     </div>`;
   } else {
-    const mine = entriesArray().filter(e=>e.operatorUsername===session.username);
-    const groups = {};
-    mine.forEach(e=>{ (groups[e.isEmriNo] ||= []).push(e); });
-    const arr = Object.entries(groups).map(([isEmriNo,ops])=>{ ops.sort((a,b)=>a.startTs-b.startTs); return {isEmriNo,ops,first:ops[0].startTs}; }).sort((a,b)=>a.first-b.first);
+    const mine = myActiveEntries();
     body = `<div class="body-pad">`;
-    if(arr.length===0) body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Henüz kayıt yok.</div>`;
-    arr.forEach(({isEmriNo,ops})=>{
-      body += `<div class="card"><div class="card-header"><span class="card-id">${esc(isEmriNo)}</span><span class="card-meta">${esc([ops[0].malzemeCinsi, ops[0].capBoy].filter(Boolean).join(' · ')||'—')}</span></div>`;
-      ops.forEach((op,i)=>{
-        const dotColor = op.status==='tamamlandi'?'var(--success)':op.status==='duruş'?'var(--warn)':'var(--accent)';
-        body += `<div class="timeline-row"><div class="timeline-rail"><div class="dot" style="background:${dotColor}"></div>${i<ops.length-1?'<div class="line"></div>':''}</div>
-          <div class="op-content">
-            <div class="op-top"><span class="op-code">${esc(op.makine)}</span><button class="del-btn" onclick="silKayit('${op.id}')">🗑</button></div>
-            ${op.not?`<div class="op-note">${esc(op.not)}</div>`:''}
-            <div class="op-foot">🕐 ${fmtDT(op.startTs)} · ${esc(op.operatorUsername)}</div>
-            ${op.status==='tamamlandi'?`<div class="done-tag">✓ ${fmtDur(op.endTs-op.startTs)} sürdü</div>`
-              : op.status==='duruş'?`<div class="durus-tag">Duruşta: "${esc(op.duruşNedeni)}"</div>`
-              : `<button class="finish-btn" onclick="bitir('${op.id}')">■ Bitir</button>`}
-          </div></div>`;
-      });
-      body += `</div>`;
+    if(mine.length===0) body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Henüz aktif işlem yok.<br><span style="font-size:12px">"+ Yeni Kayıt" ile bir makine başlat.</span></div>`;
+    mine.forEach(e=>{
+      const dotColor = e.status==='duruş'?'var(--warn)':'var(--success)';
+      const subInfo = e.status==='duruş' ? `Duruşta: "${esc(e.duruşNedeni)}"` : `${fmtElapsed(nowTick-e.startTs)} çalışıyor`;
+      body += `<div class="card" style="cursor:pointer" onclick="openActiveDetail('${e.id}')">
+        <div class="card-header"><span class="card-id">${esc(e.isEmriNo)}</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
+        <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(e.makine)}</span></div>
+        <div class="op-foot">${subInfo}${e.adet?` · Adet: ${esc(e.adet)}`:''}</div>
+      </div>`;
     });
     body += `</div>`;
   }
 
-  return `<div class="root-mobile theme-${theme}">${header}${body}</div>`;
+  return `<div class="root-mobile theme-${theme}">${header}${body}${messagesModalOpen ? renderMessagesModal() : ''}</div>`;
 }
 
 /* ===================== RENDER: ADMİN ===================== */
@@ -855,23 +1243,32 @@ function renderAdmin(){
     <div class="admin-header">
       <div style="display:flex;align-items:center;gap:10px">${connDot()}<span style="font-size:20px">🏭</span><span class="brand">ROTA TAKİP · YÖNETİCİ RAPORU</span></div>
       <div style="display:flex;gap:10px">
-        <button class="icon-btn-labeled" onclick="setView('adminSettings')" style="${view==='adminSettings'?'border-color:var(--accent);color:var(--accent)':''}">⚙ Ayarlar</button>
+        ${canViewMessages() ? `<button class="icon-btn" style="position:relative" onclick="openMessagesModal()" title="Mesajlar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M2 6l10 7 10-7"></path></svg>
+          ${unreadMessageCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadMessageCount()}</span>` : ''}
+        </button>` : ''}
+        ${session.isSuperAdmin ? `<button class="icon-btn-labeled" onclick="setView('adminSettings')" style="${view==='adminSettings'?'border-color:var(--accent);color:var(--accent)':''}">⚙ Ayarlar</button>` : ''}
         <button class="icon-btn-labeled" onclick="doLogout()" style="padding:10px 20px;font-size:14px;font-weight:600">⎋ Çıkış</button>
       </div>
     </div>
+    ${messagesModalOpen ? renderMessagesModal() : ''}
     <div class="tabs" style="padding:12px 24px 0">
       <button class="tab-btn ${view==='report'?'active':''}" onclick="setView('report')">☰ Rapor</button>
       <button class="tab-btn ${view==='matrix'?'active':''}" onclick="setView('matrix')">🏭 Makine Matrisi</button>
       <button class="tab-btn ${view==='completed'?'active':''}" onclick="setView('completed')">✓ Tamamlanan Kodlar</button>
+      <button class="tab-btn ${view==='analiz'?'active':''}" onclick="setView('analiz')">📊 Analiz</button>
     </div>`;
 
   let body = '';
+  if(view==='adminSettings' && !session.isSuperAdmin){ view = 'report'; }
   if(view==='adminSettings'){
     body = `<div class="settings-wrap">
       <div class="sub-tabs">
         <button class="sub-tab-btn ${settingsSubTab==='default'?'active':''}" onclick="setSettingsSubTab('default')">Varsayılan Makineler</button>
         <button class="sub-tab-btn ${settingsSubTab==='access'?'active':''}" onclick="setSettingsSubTab('access')">Makine Erişimi</button>
-        <button class="sub-tab-btn ${settingsSubTab==='addOperator'?'active':''}" onclick="setSettingsSubTab('addOperator')">+ Operatör Ekle</button>
+        <button class="sub-tab-btn ${settingsSubTab==='multiJob'?'active':''}" onclick="setSettingsSubTab('multiJob')">Çoklu İş İzni</button>
+        <button class="sub-tab-btn ${settingsSubTab==='msgAccess'?'active':''}" onclick="setSettingsSubTab('msgAccess')">Mesaj Erişimi</button>
+        <button class="sub-tab-btn ${settingsSubTab==='addOperator'?'active':''}" onclick="setSettingsSubTab('addOperator')">+ Kullanıcı Ekle</button>
         <button class="sub-tab-btn ${settingsSubTab==='addMachine'?'active':''}" onclick="setSettingsSubTab('addMachine')">+ Makine Ekle</button>
       </div>`;
     if(settingsSubTab==='default'){
@@ -899,14 +1296,56 @@ function renderAdmin(){
           <label class="machine-check-row"><input type="checkbox" ${allowed.includes(m.code)?'checked':''} onchange="toggleMachineAccess('${accessOperator}','${m.code}')"><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</label>
         `).join('')}</div>`;
       }
+    } else if(settingsSubTab==='multiJob'){
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Çoklu İş İzni</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">İşaretli operatörler aynı anda birden fazla makinede iş açabilir (ör. EDM operatörü birkaç makineyi aynı anda çalıştırıp dolaşabilir). İşaretsiz operatörler, mevcut işini bitirmeden yeni iş açamaz.</div>
+        <div class="op-settings-table">
+          ${operatorEntries.map(([code,v])=>`
+            <label class="op-settings-row" style="cursor:pointer">
+              <input type="checkbox" ${v.multiJob?'checked':''} onchange="toggleMultiJob('${code}')" style="width:auto">
+              <div class="op-settings-id">${esc(code)}</div>
+              <div class="op-settings-name">${esc(v.displayName)}</div>
+              <span style="font-size:12px;color:${v.multiJob?'var(--success)':'var(--text-muted)'};font-weight:600">${v.multiJob?'Çoklu iş açabilir':'Tek iş (varsayılan)'}</span>
+            </label>
+          `).join('')}
+        </div>`;
+    } else if(settingsSubTab==='msgAccess'){
+      const allUsers = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Mesaj Erişimi</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">İşaretli kullanıcılar, operatörlerin yaptığı düzenleme mesajlarını görebilir (sadece okuma). Mesaj silme yetkisi her zaman yalnızca süper admin'de kalır.</div>
+        <div class="op-settings-table">
+          ${allUsers.map(([code,v])=>`
+            <label class="op-settings-row" style="cursor:pointer">
+              <input type="checkbox" ${v.messagesAccess?'checked':''} onchange="toggleMessagesAccess('${code}')" style="width:auto">
+              <div class="op-settings-id">${esc(code)}</div>
+              <div class="op-settings-name">${esc(v.displayName)}${v.isAdmin?' · <span style="color:var(--accent)">Yönetici</span>':''}</div>
+              <span style="font-size:12px;color:${v.messagesAccess?'var(--success)':'var(--text-muted)'};font-weight:600">${v.messagesAccess?'Mesajları görebilir':'Erişimi yok'}</span>
+            </label>
+          `).join('')}
+        </div>`;
     } else if(settingsSubTab==='addOperator'){
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Yeni Operatör Ekle</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:480px">Kullanıcı adı OPRT kodu olmalı (ör. OPRT17). Şifreyi operatör kendisi sonradan değiştirebilir.</div>
+      const allOps = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Yeni Kullanıcı Ekle</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:480px">Operatör için kullanıcı adı OPRT kodu olsun (ör. OPRT17). Yönetici ekliyorsan istediğin bir kullanıcı adı verebilirsin. Şifreyi kendisi sonradan değiştirebilir.</div>
         <div style="max-width:400px">
-          <div class="field"><label>OPRT Kodu</label><input id="new-op-code" placeholder="ör. OPRT17"></div>
+          <div class="field"><label>Kullanıcı Kodu</label><input id="new-op-code" placeholder="ör. OPRT17"></div>
           <div class="field"><label>Ad Soyad</label><input id="new-op-name" placeholder="ör. Mehmet YILMAZ"></div>
           <div class="field"><label>Şifre (max 8 hane, rakam)</label><input id="new-op-pass" inputmode="numeric" maxlength="8" value="1234"></div>
+          <label style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
+            <input id="new-op-manager" type="checkbox" style="width:auto">
+            <span style="font-size:13px">Yönetici <span style="color:var(--text-muted);font-size:11.5px">(Rapor/Makine Matrisi/Tamamlanan Kodlar'ı görebilir, Ayarlar'a giremez)</span></span>
+          </label>
           <button class="btn-primary" onclick="addOperator()">+ Operatörü Ekle</button>
+        </div>
+        <div style="margin-top:28px;font-size:13px;font-weight:600;margin-bottom:8px">Kayıtlı Kullanıcılar (${allOps.length})</div>
+        <div class="op-settings-table">
+          ${allOps.map(([code,v])=>`
+            <div class="op-settings-row">
+              <div class="op-settings-id">${esc(code)}</div>
+              <div class="op-settings-name">${esc(v.displayName)}${v.isSuperAdmin?' · <span style="color:var(--accent)">Süper Admin</span>':v.isAdmin?' · <span style="color:var(--accent)">Yönetici</span>':''}</div>
+              ${code===session.username ? `<span style="font-size:11.5px;color:var(--text-muted)">(bu hesap — silinemez)</span>` : `<button class="del-btn" onclick="deleteOperator('${code}')" title="Sil">🗑</button>`}
+            </div>
+          `).join('')}
         </div>` ;
     } else if(settingsSubTab==='addMachine'){
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Yeni Makine Ekle</div>
@@ -917,19 +1356,44 @@ function renderAdmin(){
           <button class="btn-primary" onclick="addMachine()">+ Makineyi Ekle</button>
         </div>
         <div style="margin-top:24px;font-size:13px;font-weight:600;margin-bottom:8px">Mevcut Makineler (${allMachines().length})</div>
-        <div class="machine-grid">${allMachines().map(m=>`<div class="machine-chip"><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</div>`).join('')}</div>`;
+        <div class="machine-grid">${allMachines().map(m=>`<div class="machine-chip" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</span><button class="del-btn" onclick="deleteMachine('${m.code}')" title="Sil">🗑</button></div>`).join('')}</div>`;
     }
     body += `</div>`;
   } else if(view==='matrix'){
     const entries = entriesArray();
+    const workMsFor = (code) => {
+      const label = resolveMachineLabel(code);
+      return entries.filter(e=>e.makine===label).reduce((s,e)=>{
+        const endClip = e.endTs || nowTick;
+        const wallMs = Math.max(0, endClip - e.startTs);
+        return s + Math.max(0, wallMs - (e.duruşToplamMs||0));
+      }, 0);
+    };
+    const statusPriority = (code) => {
+      const label = resolveMachineLabel(code);
+      const machineEntries = entries.filter(e=>e.makine===label);
+      if(machineEntries.some(e=>e.status==='devam')) return 0;
+      if(machineEntries.some(e=>e.status==='duruş')) return 1;
+      return 2;
+    };
+    const sortedMachines = allMachines().slice().sort((a,b)=>{
+      if(matrixSort==='calisma') return workMsFor(b.code) - workMsFor(a.code);
+      if(matrixSort==='renk') return statusPriority(a.code) - statusPriority(b.code) || a.code.localeCompare(b.code);
+      return a.code.localeCompare(b.code);
+    });
     body = `<div class="matrix-wrap">
       <div class="matrix-legend">
         <span><span class="legend-dot" style="background:var(--success)"></span>Çalışıyor</span>
         <span><span class="legend-dot" style="background:var(--warn)"></span>Duruşta</span>
         <span><span class="legend-dot" style="background:var(--danger)"></span>Boşta</span>
+        <span style="margin-left:auto;display:flex;gap:8px">
+          <button class="chip ${matrixSort==='alpha'?'active':''}" onclick="setMatrixSort('alpha')">Alfabetik</button>
+          <button class="chip ${matrixSort==='calisma'?'active':''}" onclick="setMatrixSort('calisma')">Çalışma Süresine Göre</button>
+          <button class="chip ${matrixSort==='renk'?'active':''}" onclick="setMatrixSort('renk')">Renge Göre</button>
+        </span>
       </div>
       <div class="matrix-grid">`;
-    allMachines().forEach(m=>{
+    sortedMachines.forEach(m=>{
       const label = `${m.code} · ${m.name}`;
       const machineEntries = entries.filter(e=>e.makine===label);
       const running = machineEntries.find(e=>e.status==='devam');
@@ -956,7 +1420,7 @@ function renderAdmin(){
   } else if(view==='completed'){
     const routes = computeCompletedRoutes().filter(r => !completedSearch || r.isEmriNo.toLowerCase().includes(completedSearch.toLowerCase()));
     body = `<div class="completed-wrap">
-      <input class="filter-input completed-search" placeholder="İş Emri No ara…" value="${esc(completedSearch)}" oninput="setCompletedSearch(this.value)">
+      <input id="completed-search-input" class="filter-input completed-search" placeholder="İş Emri No ara…" value="${esc(completedSearch)}" oninput="setCompletedSearch(this.value)">
       <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px">${routes.length} tamamlanmış rota</div>`;
     if(routes.length===0){ body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Henüz tamamlanan rota yok.</div>`; }
     routes.forEach(r=>{
@@ -973,6 +1437,189 @@ function renderAdmin(){
       </div>`;
     });
     body += `</div>${routeModal ? renderRouteModal() : ''}`;
+  } else if(view==='analiz'){
+    const data = computeAnalizData(analizFrom, analizTo);
+    const t = data.totals;
+    const durusReasonTotals = {};
+    data.perMachine.forEach(m=>m.entries.forEach(e=>{
+      if((e.duruşToplamMs||0)<=0) return;
+      const r = e.duruşNedeni || 'Belirtilmemiş';
+      durusReasonTotals[r] = (durusReasonTotals[r]||0) + e.duruşToplamMs;
+    }));
+    const durusEntries = data.perMachine.flatMap(m=>m.entries.filter(e=>(e.duruşToplamMs||0)>0));
+
+    body = `<div class="analiz-wrap">
+      <div class="filter-bar" style="border-bottom:none;padding-left:0;padding-right:0;flex-wrap:wrap">
+        <label style="font-size:11.5px;color:var(--text-muted)">Başlangıç</label>
+        <input type="date" class="filter-input" value="${esc(analizFrom)}" onchange="setAnalizFrom(this.value)">
+        <label style="font-size:11.5px;color:var(--text-muted)">Bitiş</label>
+        <input type="date" class="filter-input" value="${esc(analizTo)}" onchange="setAnalizTo(this.value)">
+        <button class="chip ${analizFrom===analizTo&&analizTo===new Date().toISOString().slice(0,10)?'active':''}" onclick="setAnalizPreset(1)">Bugün</button>
+        <button class="chip" onclick="setAnalizPreset(7)">Son 7 Gün</button>
+        <button class="chip" onclick="setAnalizPreset(30)">Son 30 Gün</button>
+        <button class="chip" onclick="setAnalizPreset(90)">Son 3 Ay</button>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Standart mesai: kullanılan her gün için 540 dk (09:00 ~17:30) · 17:30'dan sonrası fazla mesai sayılır</div>
+      <div class="sub-tabs">
+        <button class="sub-tab-btn ${analizSubTab==='genel'?'active':''}" onclick="setAnalizSubTab('genel')">Genel Analiz</button>
+        <button class="sub-tab-btn ${analizSubTab==='makine'?'active':''}" onclick="setAnalizSubTab('makine')">Makine Bazlı Analiz</button>
+        <button class="sub-tab-btn ${analizSubTab==='durus'?'active':''}" onclick="setAnalizSubTab('durus')">Duruş Analizi</button>
+        <button class="sub-tab-btn ${analizSubTab==='mesai'?'active':''}" onclick="setAnalizSubTab('mesai')">Mesai Analizi</button>
+      </div>
+
+      <div class="modal-stats" style="margin-bottom:20px">
+        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--success)">${fmtDur(t.workMin*60000)}</div><div class="modal-stat-label">Toplam Çalışma</div></div>
+        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--warn)">${fmtDur(t.durusMin*60000)}</div><div class="modal-stat-label">Toplam Duruş</div></div>
+        <div class="modal-stat-box"><div class="modal-stat-num">${t.availMin} dk</div><div class="modal-stat-label">Toplam Kullanılabilirlik</div></div>
+        <div class="modal-stat-box"><div class="modal-stat-num" style="color:${t.verimlilik>=70?'var(--success)':t.verimlilik>=40?'var(--warn)':'var(--danger)'}">%${t.verimlilik}</div><div class="modal-stat-label">Verimlilik KPI</div></div>
+        ${t.overtimeMin>0 ? `<div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--danger)">${t.overtimeMin} dk</div><div class="modal-stat-label">Toplam Fazla Mesai</div></div>` : ''}
+      </div>`;
+
+    if(data.perMachine.length===0){
+      body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Bu tarihte kayıt yok.</div></div>`;
+    } else if(analizSubTab==='genel'){
+      const liveEntries = entriesArray();
+      const hasFilter = analizSelectedMachines.size>0;
+      const filteredList = hasFilter ? data.perMachine.filter(m=>analizSelectedMachines.has(m.code)) : [];
+      const pieWork = hasFilter ? filteredList.reduce((s,m)=>s+m.workMin,0) : t.workMin;
+      const pieDurus = hasFilter ? filteredList.reduce((s,m)=>s+m.durusMin,0) : t.durusMin;
+      const pieAvail = hasFilter ? filteredList.reduce((s,m)=>s+m.availMin,0) : t.availMin;
+      const pieBosta = Math.max(0, pieAvail - pieWork - pieDurus);
+      const pieVerim = pieAvail>0 ? Math.min(100, Math.round((pieWork/pieAvail)*100)) : 0;
+      const ganttMachines = hasFilter ? data.perMachine.filter(m=>analizSelectedMachines.has(m.code)) : data.perMachine;
+      const filterLabel = hasFilter ? [...analizSelectedMachines].sort().join(', ') : '';
+
+      body += `
+      <div class="analiz-charts-row">
+        <div class="analiz-chart-box" style="flex:1;max-width:460px;position:relative">
+          <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px">${hasFilter?`${esc(filterLabel)} — Dağılım`:'Günün Genel Dağılımı'}</div>
+          <div style="height:340px;position:relative">
+            <canvas id="analiz-pie-chart" data-work="${pieWork}" data-durus="${pieDurus}" data-bosta="${pieBosta}"></canvas>
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;color:${pieVerim>=70?'var(--success)':pieVerim>=40?'var(--warn)':'var(--danger)'}">%${pieVerim}</div>
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Verimlilik</div>
+            </div>
+          </div>
+        </div>
+        <div class="analiz-chart-box" style="flex:1;min-width:280px">
+          <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <span>Makine Durumu (canlı) — filtrelemek için tıkla</span>
+            <span style="display:flex;gap:8px">
+              <button class="chip ${analizMiniSort==='alpha'?'active':''}" onclick="setAnalizMiniSort('alpha')">Alfabetik</button>
+              <button class="chip ${analizMiniSort==='calisma'?'active':''}" onclick="setAnalizMiniSort('calisma')">Çalışma Süresine Göre</button>
+              <button class="chip ${analizMiniSort==='renk'?'active':''}" onclick="setAnalizMiniSort('renk')">Renge Göre</button>
+              ${analizSelectedMachines.size>0 ? `<button class="btn-ghost" style="padding:4px 10px;font-size:11px" onclick="clearAnalizMachineFilter()">✕ Filtreyi Kaldır (${analizSelectedMachines.size})</button>` : ''}
+            </span>
+          </div>
+          <div class="analiz-mini-matrix">
+            ${allMachines().slice().sort((a,b)=>{
+              const statusOf = (code) => {
+                const running = liveEntries.some(e=>e.makine===resolveMachineLabel(code) && e.status==='devam');
+                if(running) return 0;
+                const stopped = liveEntries.some(e=>e.makine===resolveMachineLabel(code) && e.status==='duruş');
+                return stopped ? 1 : 2;
+              };
+              if(analizMiniSort==='calisma'){
+                const wa = (data.perMachine.find(x=>x.code===a.code)||{}).workMin||0;
+                const wb = (data.perMachine.find(x=>x.code===b.code)||{}).workMin||0;
+                return wb-wa;
+              }
+              if(analizMiniSort==='renk'){
+                return statusOf(a.code) - statusOf(b.code) || a.code.localeCompare(b.code);
+              }
+              return a.code.localeCompare(b.code);
+            }).map(m=>{
+              const running = liveEntries.some(e=>e.makine===`${m.code} · ${m.name}` && e.status==='devam');
+              const stopped = !running && liveEntries.some(e=>e.makine===`${m.code} · ${m.name}` && e.status==='duruş');
+              const bg = running ? 'var(--success)' : stopped ? 'var(--warn)' : 'var(--danger)';
+              const dotColor = running ? '#15803d' : stopped ? '#a16207' : '#b91c1c';
+              const selected = analizSelectedMachines.has(m.code);
+              const md = data.perMachine.find(x=>x.code===m.code);
+              const workText = md ? fmtDur(md.workMin*60000) : '0 dk';
+              return `<div class="analiz-mini-cell ${selected?'selected':''}" style="background:${bg}" onclick="toggleAnalizMachineFilter('${m.code}')" title="${m.code} · ${esc(m.name)}">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between">
+                  <span>${m.code}</span>
+                  <span style="width:10px;height:10px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
+                </div>
+                <div style="font-family:'Inter',sans-serif;font-weight:600;font-size:11px;margin-top:6px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${workText}</div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+      <div style="font-size:13px;font-weight:600;margin:22px 0 10px">Makine Zaman Çizelgesi (Gantt)${analizSelectedMachines.size>0?` — ${esc([...analizSelectedMachines].sort().join(', '))}`:''}</div>
+      ${!data.isSingleDay ? `<div style="color:var(--text-muted);padding:14px 0;font-size:13px">Gantt zaman çizelgesi sadece tek bir gün seçiliyken gösterilir. ("Bugün"e basarak ya da Başlangıç = Bitiş yaparak tek güne dönebilirsin.)</div>` : `
+      <div style="margin-bottom:12px">
+        <div class="analiz-gantt-row" style="margin-bottom:6px">
+          <div class="analiz-gantt-label"></div>
+          <div style="position:relative;flex:1;height:16px">
+            ${[0,2,4,6,8,10,12,14,16,18,20,22].map(h=>`<span style="position:absolute;left:${(h*60/1440)*100}%;font-size:10px;color:var(--text-muted);transform:translateX(-50%)">${String(h).padStart(2,'0')}:00</span>`).join('')}
+          </div>
+        </div>
+        ${ganttMachines.length===0 ? `<div style="color:var(--text-muted);padding:10px 0">Bu makine bu tarihte kullanılmamış.</div>` : ganttMachines.map(m=>{
+          const cutoffPct = (WORKDAY_END_MINUTE/1440)*100;
+          const segs = m.entries.map(e=>{
+            const endClip = e.endTs || nowTick;
+            const startMin = (e.startTs - data.dayStartMs)/60000;
+            const durMin = Math.max(1,(endClip - e.startTs)/60000);
+            const leftPct = Math.max(0,(startMin/1440)*100);
+            const widthPct = Math.min(100-leftPct,(durMin/1440)*100);
+            const netRatio = durMin>0 ? Math.max(0, Math.min(1, 1 - (e.duruşToplamMs||0)/(durMin*60000))) : 1;
+            const netPct = Math.round(netRatio*100);
+            const bg = netPct>=99 ? 'var(--success)' : netPct<=1 ? 'var(--warn)' : `linear-gradient(to right, var(--success) ${netPct}%, var(--warn) ${netPct}% 100%)`;
+            return `<div class="analiz-gantt-seg" style="left:${leftPct}%;width:${widthPct}%;background:${bg}" title="${esc(e.isEmriNo)} · ${esc(e.operatorUsername)} · ${fmtDT(e.startTs)}–${e.endTs?fmtDT(e.endTs):'şu an'}"></div>`;
+          }).join('');
+          return `<div class="analiz-gantt-row">
+            <div class="analiz-gantt-label mono">${m.code}<div style="font-size:10px;color:var(--text-muted);font-family:'Inter',sans-serif">%${m.verimlilik}</div></div>
+            <div class="analiz-gantt-track">${segs}<div class="analiz-gantt-cutoff" style="left:${cutoffPct}%"></div></div>
+          </div>`;
+        }).join('')}
+      </div>
+      `}
+      </div>`;
+    } else if(analizSubTab==='makine'){
+      body += `
+      <div class="analiz-charts-row">
+        <div class="analiz-chart-box" style="flex:1"><div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px">Makine Bazlı Çalışma / Duruş (dk)</div><div style="height:280px"><canvas id="analiz-bar-chart"></canvas></div></div>
+      </div>
+      <div style="font-size:13px;font-weight:600;margin:18px 0 10px">Makine Bazlı Verimlilik Tablosu</div>
+      <div class="table-wrap" style="padding:0"><table><thead><tr>
+        <th>Makine</th><th>Operatör(ler)</th><th>Çalışma</th><th>Duruş</th><th>Kullanılabilirlik</th><th>Verimlilik</th><th>Fazla Mesai</th>
+      </tr></thead><tbody>
+        ${data.perMachine.map(m=>`<tr>
+          <td class="mono" style="color:var(--accent)">${m.code}<div style="font-size:11px;color:var(--text-muted);font-family:'Inter',sans-serif">${esc(m.name)}</div></td>
+          <td style="font-size:12px">${m.operators.map(esc).join('<br>')}</td>
+          <td>${fmtDur(m.workMin*60000)}</td>
+          <td style="color:${m.durusMin>0?'var(--warn)':'inherit'}">${fmtDur(m.durusMin*60000)}</td>
+          <td>${m.availMin} dk</td>
+          <td><span style="color:${m.verimlilik>=70?'var(--success)':m.verimlilik>=40?'var(--warn)':'var(--danger)'};font-weight:700">%${m.verimlilik}</span></td>
+          <td>${m.overtimeMin>0?`<span style="color:var(--danger);font-weight:600">${m.overtimeMin} dk</span>`:'—'}</td>
+        </tr>`).join('')}
+      </tbody></table></div>
+      </div>`;
+    } else if(analizSubTab==='durus'){
+      body += `
+      <div class="analiz-charts-row">
+        <div class="analiz-chart-box" style="flex:1;max-width:420px"><div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px">Duruş Nedenlerine Göre Dağılım</div><div style="height:260px"><canvas id="analiz-durus-chart"></canvas></div></div>
+      </div>
+      <div style="font-size:13px;font-weight:600;margin:18px 0 10px">Duruş Kayıtları</div>
+      ${durusEntries.length===0 ? `<div style="color:var(--text-muted);padding:20px 0">Bu tarihte duruş kaydı yok.</div>` : `
+      <div class="table-wrap" style="padding:0"><table><thead><tr><th>Makine</th><th>Operatör</th><th>İş Emri No</th><th>Neden</th><th>Duruş Süresi</th></tr></thead><tbody>
+        ${durusEntries.map(e=>`<tr><td class="mono" style="color:var(--accent)">${esc((e.makine||'').split(' · ')[0])}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td class="mono">${esc(e.isEmriNo)}</td><td style="color:var(--warn)">${esc(e.duruşNedeni||'—')}</td><td style="font-weight:600">${fmtDur(e.duruşToplamMs)}</td></tr>`).join('')}
+      </tbody></table></div>`}
+      </div>`;
+    } else if(analizSubTab==='mesai'){
+      body += `
+      ${data.overtimeList.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Bu tarihte fazla mesai yok.</div>` : `
+      <div class="analiz-charts-row">
+        <div class="analiz-chart-box" style="flex:1"><div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px">Makine Bazlı Fazla Mesai (dk)</div><div style="height:240px"><canvas id="analiz-mesai-chart"></canvas></div></div>
+      </div>
+      <div style="font-size:13px;font-weight:600;margin:18px 0 10px;color:var(--danger)">⚠ Fazla Mesai Raporu (17:30 sonrası)</div>
+      <div class="table-wrap" style="padding:0"><table><thead><tr><th>Makine</th><th>Operatör</th><th>İş Emri No</th><th>Fazla Mesai</th></tr></thead><tbody>
+        ${data.overtimeList.map(o=>`<tr><td class="mono" style="color:var(--accent)">${esc(o.makine.split(' · ')[0])}</td><td>${esc(o.operatorUsername)} · ${esc(o.operatorName)}</td><td class="mono">${esc(o.isEmriNo)}</td><td style="color:var(--danger);font-weight:600">${o.overtimeMin} dk</td></tr>`).join('')}
+      </tbody></table></div>`}
+      </div>`;
+    }
   } else {
     const entries = entriesArray();
     const statOperator = new Set(entries.map(e=>e.operatorUsername)).size;
@@ -980,46 +1627,51 @@ function renderAdmin(){
     const fe = filteredEntries();
     reportVisibleIds = fe.map(e=>e.id);
     const completedRoutes = computeCompletedRouteIds();
+    const toplamDurusMs = fe.reduce((s,e)=>s+(e.duruşToplamMs||0),0);
     body = `
       <div class="admin-stats">
         <span><b style="color:var(--accent)">${statOperator}</b> operatör kayıt girmiş</span>
         <span><b style="color:var(--accent)">${statMakine}</b> / ${allMachines().length} makine kullanılmış</span>
         <span><b style="color:var(--accent)">${entries.length}</b> toplam kayıt</span>
+        <span><b style="color:var(--warn)">${fmtDur(toplamDurusMs)}</b> toplam duruş (filtreye göre)</span>
         <button class="btn-ghost" style="margin-left:auto" onclick="toggleMachineListView()">${showMachineList?'Makine Kodlarını Gizle':'Makine Kodlarını Göster'}</button>
       </div>
+      ${toplamDurusMs>0 ? `<div style="padding:12px 24px;border-bottom:1px solid var(--border)">${renderDurusBreakdown(fe)}</div>` : ''}
       ${showMachineList ? `<div class="machine-grid" style="padding:12px 24px;border-bottom:1px solid var(--border)">${allMachines().map(m=>`<div class="machine-chip"><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</div>`).join('')}</div>` : ''}
       <div class="filter-bar">
         <select class="filter-input" onchange="setReportFilterField('operator', this.value)">
           <option value="">Tüm Operatörler</option>
           ${operatorEntries.map(([code,v])=>`<option value="${code}" ${reportFilter.operator===code?'selected':''}>${code} · ${esc(v.displayName)}</option>`).join('')}
         </select>
-        <input class="filter-input" placeholder="İş Emri No ara…" value="${esc(reportFilter.isEmriNo)}" oninput="setReportFilterFieldLight('isEmriNo', this.value)">
+        <input id="report-search-isemri" class="filter-input" placeholder="İş Emri No ara…" value="${esc(reportFilter.isEmriNo)}" oninput="setReportFilterFieldLight('isEmriNo', this.value)">
         <select class="filter-input" onchange="setReportFilterField('makine', this.value)">
           <option value="">Tüm Makineler</option>
           ${allMachines().map(m=>{ const label=`${m.code} · ${m.name}`; return `<option value="${esc(label)}" ${reportFilter.makine===label?'selected':''}>${esc(label)}</option>`; }).join('')}
         </select>
         <input type="date" class="filter-input" value="${esc(reportFilter.tarih)}" onchange="setReportFilterField('tarih', this.value)">
         ${(reportFilter.operator||reportFilter.isEmriNo||reportFilter.makine||reportFilter.tarih) ? `<button class="btn-ghost" onclick="clearReportFilter()">✕ Temizle</button>` : ''}
-        ${reportSelectedIds.size>0 ? `<button class="btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="deleteReportSelected()">🗑 Seçilenleri Sil (${reportSelectedIds.size})</button>` : ''}
+        ${session.isSuperAdmin && reportSelectedIds.size>0 ? `<button class="btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="deleteReportSelected()">🗑 Seçilenleri Sil (${reportSelectedIds.size})</button>` : ''}
         <button class="btn-primary" style="width:auto;margin-left:auto;padding:8px 16px" onclick="exportExcel()">⬇ Excel'e Aktar (${fe.length})</button>
       </div>
       <div class="table-wrap"><table><thead><tr>
-        <th style="width:26px"><input type="checkbox" ${reportVisibleIds.length>0 && reportVisibleIds.every(id=>reportSelectedIds.has(id))?'checked':''} onchange="toggleReportSelectAll()"></th>
-        ${["İş Emri No","Operasyon No","Malzeme Cinsi","Çap ve Boy","Makine","Operatör","Başlangıç","Bitiş","Süre","Durum","Not"].map(h=>`<th>${h}</th>`).join('')}
-        <th style="width:36px"></th>
+        ${session.isSuperAdmin ? `<th style="width:26px"><input type="checkbox" ${reportVisibleIds.length>0 && reportVisibleIds.every(id=>reportSelectedIds.has(id))?'checked':''} onchange="toggleReportSelectAll()"></th>` : ''}
+        ${["İş Emri No","Operasyon No","Malzeme Cinsi","Çap ve Boy","Adet","Makine","Operatör","Başlangıç","Bitiş","Süre","Durum","Not"].map(h=>`<th>${h}</th>`).join('')}
+        ${session.isSuperAdmin ? `<th style="width:36px"></th>` : ''}
       </tr></thead><tbody>`;
-    if(fe.length===0){ body += `<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:30px">Filtreyle eşleşen kayıt yok.</td></tr>`; }
+    const reportColCount = 12 + (session.isSuperAdmin?2:0);
+    if(fe.length===0){ body += `<tr><td colspan="${reportColCount}" style="text-align:center;color:var(--text-muted);padding:30px">Filtreyle eşleşen kayıt yok.</td></tr>`; }
     fe.forEach(e=>{
       const isDone = completedRoutes.has(e.id);
       const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success)';
       const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
       const rowStyle = isDone ? 'background:#1a4d2e33' : '';
       body += `<tr style="${rowStyle}">
-        <td><input type="checkbox" ${reportSelectedIds.has(e.id)?'checked':''} onchange="toggleReportSelect('${e.id}')"></td>
+        ${session.isSuperAdmin ? `<td><input type="checkbox" ${reportSelectedIds.has(e.id)?'checked':''} onchange="toggleReportSelect('${e.id}')"></td>` : ''}
         <td class="mono" style="color:var(--accent)">${esc(e.isEmriNo)} ${isDone?'✓':''}</td>
         <td style="font-weight:700">${e._seq||'—'}</td>
         <td>${esc(e.malzemeCinsi||'—')}</td>
         <td>${esc(e.capBoy||'—')}</td>
+        <td>${esc(e.adet||'—')}</td>
         <td>${esc(e.makine||'—')}</td>
         <td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td>
         <td>${fmtDT(e.startTs)}</td>
@@ -1027,7 +1679,7 @@ function renderAdmin(){
         <td>${e.endTs?fmtDur(e.endTs-e.startTs):'—'}</td>
         <td><span style="color:${statusColor};font-weight:600">${isDone?'Rota Tamamlandı':statusLabel}</span></td>
         <td style="color:var(--text-muted);font-style:italic">${esc(e.not||'')}</td>
-        <td><button class="del-btn" onclick="deleteReportRecord('${e.id}')" title="Sil">🗑</button></td>
+        ${session.isSuperAdmin ? `<td><button class="del-btn" onclick="deleteReportRecord('${e.id}')" title="Sil">🗑</button></td>` : ''}
       </tr>`;
     });
     body += `</tbody></table></div>`;
@@ -1041,12 +1693,41 @@ function renderTableOnly(){ render(); } // basit yaklaşım: filtre değişince 
 /* ===================== ANA RENDER ===================== */
 function render(){
   const app = document.getElementById('app');
+  // Periyodik (saniyelik) yeniden çizim, açık bir modal veya tablo varsa kaydırma
+  // konumunu sıfırlamasın diye önce mevcut scroll konumlarını kaydediyoruz.
+  const scrollSel = ['.modal-body', '.table-wrap', '.body-pad', '.completed-wrap', '.matrix-wrap', '.settings-wrap'];
+  const savedScroll = scrollSel.map(sel => { const el = document.querySelector(sel); return el ? el.scrollTop : null; });
+
+  // Odak koruması: bir input/textarea'da yazarken herhangi bir yeniden çizim
+  // o kutuyu sıfırdan oluşturup imleci/odağı kaybettirmesin diye, hangi kutuda
+  // olduğumuzu ve imlecin nerede durduğunu kaydedip render sonrası geri koyuyoruz.
+  const activeEl = document.activeElement;
+  let focusId = null, selStart = null, selEnd = null;
+  if(activeEl && (activeEl.tagName==='INPUT' || activeEl.tagName==='TEXTAREA') && activeEl.id){
+    focusId = activeEl.id;
+    try { selStart = activeEl.selectionStart; selEnd = activeEl.selectionEnd; } catch(e){}
+  }
+
   if(!session){ app.innerHTML = renderLogin(); return; }
   app.innerHTML = session.isAdmin ? renderAdmin() : renderOperator();
+  scrollSel.forEach((sel,i) => { if(savedScroll[i]!=null){ const el = document.querySelector(sel); if(el) el.scrollTop = savedScroll[i]; } });
+
+  if(focusId){
+    const el = document.getElementById(focusId);
+    if(el){
+      el.focus();
+      if(selStart!=null && el.setSelectionRange){ try{ el.setSelectionRange(selStart, selEnd); }catch(e){} }
+    }
+  }
+
+  if(session && session.isAdmin && view==='analiz'){ initAnalizCharts(computeAnalizData(analizFrom, analizTo)); }
 }
 function renderLiveBits(){
   // Sadece kilit ekranındaki / matristeki canlı sayaçları güncellemek için tam render yeterli (veri seti küçük).
-  if(getActiveEntry() || (session && session.isAdmin && view==='matrix')) render();
+  // Ama bir form açıkken (düzenleme, duruş nedeni yazma, serbest mesaj) tam render odağı (focus) kaybettiriyor — o an atla.
+  const editingSomething = !!editingActiveId || (durusOpen && durusReasonSel==='Diğer') || sendMsgOpen;
+  if(editingSomething) return;
+  if(activeDetailId || (session && session.isAdmin && view==='matrix')) render();
 }
 
 /* ===================== BAŞLAT ===================== */
