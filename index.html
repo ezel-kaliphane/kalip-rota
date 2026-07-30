@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ezel Cıvata — Atölye Rota Takip</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
+
+/* =============== FIREBASE BULUT AYARI — SADECE BU KISMI DOLDURUN =============== */
+/* KURULUM_BULUT.md dosyasındaki adımları izleyin. Realtime Database'i aktif edip
+   aldığınız databaseURL'i aşağıya yapıştırın. Başka hiçbir yere dokunmayın. */
+</style>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAYRQVtJt3sMTo8spx7AVa5EeS_bKXNrGI",
+  authDomain: "ezel-kaliphane.firebaseapp.com",
+  databaseURL: "https://ezel-kaliphane-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "ezel-kaliphane",
+  storageBucket: "ezel-kaliphane.firebasestorage.app",
+  messagingSenderId: "525611507963",
+  appId: "1:525611507963:web:4428d1487e66acdfcf905e",
+  measurementId: "G-9TZ1JRTD7N"
+};
+</script>
+<style>
+:root{
+  --bg:#14171a; --panel:#1c2024; --panel-alt:#20262b; --border:#2a3138;
+  --text:#eef1f3; --text-muted:#8b939b;
+  --accent:#ff8a3d; --accent-dim:#ff8a3d22; --success:#4ade80; --warn:#facc15; --danger:#f87171;
+}
+.theme-light{
+  --bg:#f4f5f6; --panel:#ffffff; --panel-alt:#eef0f2; --border:#dde1e5;
+  --text:#1a1d20; --text-muted:#6b7280;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px}
+button{cursor:pointer;font-family:'Inter',sans-serif}
+input,select,textarea{font-family:'Inter',sans-serif;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;outline:none;width:100%}
+::placeholder{color:var(--text-muted)}
+table{border-collapse:collapse;width:100%}
+.mono{font-family:'JetBrains Mono',monospace}
+.brand{font-family:'Oswald',sans-serif;font-size:17px;letter-spacing:1.5px;font-weight:600}
+
+.root-mobile{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;position:relative}
+.root-wide{width:100%;min-height:100vh;display:flex;flex-direction:column;position:relative}
+
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;border-bottom:1px solid var(--border)}
+.header-left{display:flex;align-items:center;gap:10px}
+.brand-sub{font-size:11px;color:var(--text-muted);margin-top:1px}
+.icon-btn{background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:15px}
+.icon-btn-labeled{display:flex;align-items:center;gap:6px;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 14px;color:var(--text-muted);font-size:13px}
+
+.tabs{display:flex;gap:6px;padding:12px 18px 0}
+.tab-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px 0;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:12.5px;font-weight:500}
+.tab-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+
+.body-pad{flex:1;padding:18px;overflow-y:auto}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.field label{font-size:11.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.row{display:flex;gap:10px}
+.btn-primary{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:#1a1408;font-weight:700;font-size:14px;border:none;border-radius:10px;padding:12px 0;width:100%}
+.btn-start{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--success);color:#062910;font-weight:700;font-size:14px;border:none;border-radius:10px;padding:13px 0;width:100%}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:8px;padding:7px 12px;font-size:12.5px}
+.chip{font-size:12.5px;color:var(--text-muted);background:var(--panel-alt);border:1px solid var(--border);border-radius:20px;padding:8px 14px}
+.chip.active{background:#facc1522;border-color:var(--warn);color:var(--warn);font-weight:600}
+.badge{font-size:12.5px;color:var(--accent);background:var(--accent-dim);border:1px solid #ff8a3d55;border-radius:8px;padding:8px 10px}
+
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
+.card-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.card-id{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--accent);font-weight:600}
+.card-meta{font-size:12px;color:var(--text-muted)}
+.timeline-row{display:flex;gap:12px}
+.timeline-rail{display:flex;flex-direction:column;align-items:center;width:14px}
+.dot{width:9px;height:9px;border-radius:50%;margin-top:4px;flex-shrink:0}
+.line{width:2px;flex:1;background:var(--border);min-height:30px}
+.op-content{flex:1;padding-bottom:14px}
+.op-top{display:flex;align-items:center;gap:8px}
+.op-code{font-size:13px;color:var(--accent);font-weight:600}
+.del-btn{margin-left:auto;background:transparent;border:none;padding:2px;color:var(--text-muted)}
+.op-note{font-size:12px;color:var(--text-muted);margin-top:2px;font-style:italic}
+.op-foot{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:11.5px;color:var(--text-muted)}
+.done-tag{display:flex;align-items:center;gap:5px;margin-top:6px;font-size:12px;color:var(--success);font-weight:600}
+.durus-tag{margin-top:6px;font-size:12px;color:var(--warn);font-style:italic}
+.finish-btn{margin-top:8px;display:flex;align-items:center;gap:6px;background:transparent;border:1px solid var(--border);color:var(--text);font-size:12px;border-radius:8px;padding:6px 10px}
+
+.lock-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px 24px;gap:6px}
+.lock-label{font-size:12px;letter-spacing:2px;color:var(--accent);font-weight:700}
+.lock-id{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;margin-top:10px}
+.lock-machine{font-size:18px;color:var(--accent);font-weight:600;margin-top:4px}
+.lock-timer{font-family:'JetBrains Mono',monospace;font-size:44px;font-weight:700;margin-top:22px;letter-spacing:1px}
+.lock-meta{font-size:12.5px;color:var(--text-muted);margin-top:6px}
+.lock-note{font-size:13px;color:var(--text-muted);font-style:italic;margin-top:14px;max-width:320px}
+.durus-reason-box{font-size:13px;color:var(--warn);font-style:italic;margin-top:16px;max-width:320px;background:#facc1518;border:1px solid #facc1540;border-radius:8px;padding:10px 14px}
+.lock-hint{font-size:11.5px;color:var(--text-muted);margin-top:18px;max-width:260px;line-height:1.5}
+.durus-chip-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:340px}
+
+.admin-header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border)}
+.admin-stats{display:flex;gap:24px;padding:12px 24px;font-size:13px;color:var(--text-muted);border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap}
+.filter-bar{display:flex;gap:10px;align-items:center;padding:14px 24px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.filter-input{background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;width:auto}
+.table-wrap{flex:1;overflow:auto;padding:0 24px 24px}
+th{text-align:left;padding:10px 12px;color:var(--text-muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg)}
+td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px solid var(--border)}
+
+.matrix-wrap{padding:20px 24px;overflow-y:auto;flex:1}
+.matrix-legend{display:flex;gap:20px;margin-bottom:18px;font-size:12.5px;color:var(--text-muted);flex-wrap:wrap}
+.legend-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.matrix-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.matrix-card{border:1px solid;border-radius:12px;padding:12px 14px;min-height:92px;cursor:pointer;transition:transform .1s}
+.matrix-card:hover{transform:translateY(-1px)}
+.matrix-card-top{display:flex;align-items:center;justify-content:space-between}
+.matrix-code{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px}
+.matrix-dot{width:10px;height:10px;border-radius:50%}
+.matrix-name{font-size:12px;color:var(--text-muted);margin-top:2px;margin-bottom:8px}
+.matrix-sub{font-size:11.5px;opacity:.9;margin-top:2px}
+
+.modal-overlay{position:fixed;inset:0;background:#000000a0;display:flex;align-items:center;justify-content:center;z-index:500;padding:20px}
+.modal-box{background:var(--bg);border:1px solid var(--border);border-radius:14px;width:100%;max-width:840px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border)}
+.modal-title{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--accent)}
+.modal-sub{font-size:12.5px;color:var(--text-muted);margin-top:2px}
+.modal-body{padding:18px 22px;overflow-y:auto;overflow-x:auto;flex:1}
+.modal-filter-row{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.modal-stats{display:flex;gap:20px;margin-bottom:18px;flex-wrap:wrap}
+.modal-stat-box{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 16px;min-width:120px}
+.modal-stat-num{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--accent)}
+.modal-stat-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+
+.timeline-strip{display:flex;gap:6px;align-items:flex-end;overflow-x:auto;padding:10px 4px 4px;margin-bottom:18px;border-bottom:1px solid var(--border)}
+.timeline-day{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;flex-shrink:0;width:44px}
+.timeline-bar-track{height:80px;width:22px;display:flex;align-items:flex-end;background:var(--panel-alt);border-radius:4px;border:1px solid var(--border)}
+.timeline-bar-fill{width:100%;border-radius:3px;background:var(--accent);min-height:3px;transition:background .15s}
+.timeline-day.selected .timeline-bar-fill{background:var(--success)}
+.timeline-day.selected .timeline-bar-track{border-color:var(--success)}
+.timeline-day-label{font-size:9.5px;color:var(--text-muted);white-space:nowrap;transform:rotate(0deg)}
+.timeline-day.selected .timeline-day-label{color:var(--success);font-weight:700}
+.timeline-all{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;flex-shrink:0;width:44px;border-right:1px solid var(--border);padding-right:10px;margin-right:4px}
+.timeline-all-icon{height:80px;width:22px;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text-muted)}
+.timeline-all.selected .timeline-all-icon{color:var(--accent)}
+.timeline-all.selected .timeline-day-label{color:var(--accent);font-weight:700}
+
+.settings-wrap{padding:20px 24px;overflow-y:auto;flex:1}
+.sub-tabs{display:flex;gap:8px;margin-bottom:18px}
+.sub-tab-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:12.5px;font-weight:500}
+.sub-tab-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.op-settings-row{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;max-width:640px}
+.op-settings-id{font-family:'JetBrains Mono',monospace;color:var(--accent);font-weight:700;font-size:13px;width:60px;flex-shrink:0}
+.op-settings-name{font-size:13.5px;flex:1}
+.machine-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;padding:12px 0}
+.machine-chip{background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12.5px}
+.machine-check-row{display:flex;align-items:center;gap:8px;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12.5px;cursor:pointer}
+
+.completed-wrap{padding:20px 24px;overflow-y:auto;flex:1}
+.completed-search{margin-bottom:16px;max-width:320px}
+.completed-card{background:var(--panel);border:1px solid var(--success);border-left:4px solid var(--success);border-radius:10px;padding:14px 16px;margin-bottom:12px;cursor:pointer;transition:transform .1s}
+.completed-card:hover{transform:translateY(-1px)}
+.completed-header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.completed-id{font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--success);font-weight:700}
+.completed-meta{font-size:11.5px;color:var(--text-muted)}
+.route-chain{display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:12.5px}
+.route-chip{background:var(--panel-alt);border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--text)}
+.route-arrow{color:var(--text-muted)}
+
+.auth-wrap{padding:40px 24px;display:flex;flex-direction:column;gap:24px}
+.auth-header{display:flex;align-items:center;gap:10px;justify-content:center}
+.auth-form{display:flex;flex-direction:column;gap:14px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:340px;margin:0 auto;width:100%}
+.error-text{font-size:12.5px;color:var(--danger);background:#f8717122;border:1px solid #f8717155;border-radius:8px;padding:8px 10px}
+.hint{font-size:11.5px;color:var(--text-muted);text-align:center;line-height:1.5}
+
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel-alt);border:1px solid var(--border);padding:9px 16px;border-radius:20px;font-size:13px;color:var(--text);z-index:999;display:none}
+.toast.show{display:block}
+.conn-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.conn-dot.on{background:var(--success)} .conn-dot.off{background:var(--danger)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+/* ===================== SABİT VERİLER ===================== */
+const MACHINE_LIST = [
+  { code:"UF01", name:"Freze" }, { code:"SM01", name:"Sütun Matkap" },
+  { code:"TE01", name:"Tel Erezyon Sodick" }, { code:"TE02", name:"Tel Erezyon Sammlite" },
+  { code:"TES01", name:"Testere" }, { code:"DDTE01", name:"Delik Delme Tel Erozyon" },
+  { code:"KM01", name:"Kumlama Makinası" }, { code:"PT01", name:"Parlatma Tezgahı" },
+  { code:"PT02", name:"Parlatma Tezgahı" }, { code:"KCM01", name:"Kılavuz Makinesi" },
+  { code:"ODT01", name:"Silindirik Taşlama" }, { code:"ODT02", name:"Silindirik Taşlama" },
+  { code:"ODT03", name:"Silindirik Taşlama" }, { code:"P01", name:"Pres" },
+  { code:"DE01", name:"Dalma Erezyon" }, { code:"DE02", name:"Dalma Erezyon" },
+  { code:"DE03", name:"Dalma Erezyon" }, { code:"F01", name:"Fırın" }, { code:"F02", name:"Fırın" },
+  { code:"C02", name:"CNC Dik İşleme Merkezi" }, { code:"C01", name:"CNC Torna" },
+  { code:"UST01", name:"Satıh Taşlama" }, { code:"UST02", name:"Satıh Taşlama" },
+  { code:"UT01", name:"Torna" }, { code:"UT02", name:"Torna" }, { code:"UT03", name:"Torna" },
+  { code:"FII01", name:"Fason Isıl İşlem" }, { code:"SAL01", name:"Şaloma" },
+];
+const machineLabelFor = c => { const m = MACHINE_LIST.find(x=>x.code===c); return m ? `${m.code} · ${m.name}` : ""; };
+const ALL_MACHINE_CODES = MACHINE_LIST.map(m=>m.code);
+
+const SEED_OPERATORS = {
+  OPRT1:{displayName:"Ali BİLİCİ", password:"1234", defaultMachine:machineLabelFor("TES01")},
+  OPRT2:{displayName:"Barış GÜNEŞ", password:"1234", defaultMachine:""},
+  OPRT3:{displayName:"Ramazan KÖSE", password:"1234", defaultMachine:machineLabelFor("UF01")},
+  OPRT4:{displayName:"Taner ŞİMŞEK", password:"1234", defaultMachine:machineLabelFor("UT03")},
+  OPRT5:{displayName:"Ahmet TOK", password:"1234", defaultMachine:machineLabelFor("UT01")},
+  OPRT6:{displayName:"Kadir AKANCAK", password:"1234", defaultMachine:machineLabelFor("C02")},
+  OPRT7:{displayName:"Serkan KOL", password:"1234", defaultMachine:machineLabelFor("C01")},
+  OPRT8:{displayName:"Ceyhan KURTULMUŞ", password:"1234", defaultMachine:machineLabelFor("C02")},
+  OPRT9:{displayName:"Ahmet IŞIK", password:"1234", defaultMachine:machineLabelFor("TE01")},
+  OPRT11:{displayName:"Erol SOBACI", password:"1234", defaultMachine:machineLabelFor("ODT01")},
+  OPRT12:{displayName:"Fatih YILDIZ", password:"1234", defaultMachine:machineLabelFor("ODT02")},
+  OPRT13:{displayName:"Ferit GÜVEZ", password:"1234", defaultMachine:machineLabelFor("ODT03")},
+  OPRT14:{displayName:"Şeref KOLDAŞ", password:"1234", defaultMachine:machineLabelFor("UST02")},
+  OPRT15:{displayName:"Ali Emre AFACAN", password:"1234", defaultMachine:machineLabelFor("PT01")},
+  OPRT16:{displayName:"Muhammet KURT", password:"1234", defaultMachine:machineLabelFor("UT02")},
+  ADMIN:{displayName:"Yönetici", password:"caglarcaglar", isAdmin:true},
+};
+
+const DURUS_REASONS = ["Arıza / Bakım","Malzeme Bekleniyor","Kalıp/Takım Değişimi","Program/Ayar Değişimi","Kalite Kontrol Bekleniyor","Elektrik/Basınçlı Hava Kesintisi","Operatör Molası","Tuvalet","Diğer"];
+
+/* ===================== YARDIMCI FONKSİYONLAR ===================== */
+const uid = () => Math.random().toString(36).slice(2,10);
+const esc = s => (s==null?"":String(s)).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtDT = ts => new Date(ts).toLocaleString("tr-TR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"});
+const fmtDur = ms => { const m=Math.round(ms/60000); return m<60?`${m} dk`:`${Math.floor(m/60)} sa ${m%60} dk`; };
+const fmtElapsed = ms => { const s=Math.max(0,Math.floor(ms/1000)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60; const p=n=>String(n).padStart(2,"0"); return h>0?`${p(h)}:${p(m)}:${p(sec)}`:`${p(m)}:${p(sec)}`; };
+const dateKey = ts => new Date(ts).toISOString().slice(0,10);
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.className='toast show'; clearTimeout(t._t); t._t=setTimeout(()=>t.className='toast',2200); }
+function connDot(){ return `<span class="conn-dot ${connOK?'on':'off'}" title="${connOK?'Buluta bağlı (senkron)':'Bağlantı yok — internet kontrol edin'}"></span>`; }
+function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function load(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
+
+/* ===================== DURUM (STATE) ===================== */
+let STATE = { operators: {}, entries: {} };
+let extraMachines = {}; // admin tarafından sonradan eklenen makineler (Firebase 'machines_extra')
+function allMachines(){ return MACHINE_LIST.concat(Object.entries(extraMachines).map(([code,v])=>({code, name:v.name}))); }
+function allMachineCodes(){ return allMachines().map(m=>m.code); }
+function resolveMachineLabel(code){ const m = allMachines().find(x=>x.code===code); return m ? `${m.code} · ${m.name}` : ""; }
+let session = load('rota_remember', false) ? load('rota_session', null) : null;
+let theme = load('rota_theme', 'dark');
+let view = 'list';
+let nowTick = Date.now();
+let newForm = { isEmriNo:'', makine:'', malzemeCinsi:'', capBoy:'', not:'', sonOperasyon:false };
+let durusOpen = false, durusReasonSel = '', durusCustom = '';
+let pwForm = { current:'', next:'', confirm:'' };
+let loginForm = { username:'', password:'' };
+let loginError = '';
+let reportFilter = { operator:'', isEmriNo:'', makine:'', tarih:'' };
+let accessOperator = '';
+let settingsSubTab = 'default';
+let showMachineList = false;
+let machineModal = null; // açık modal'ın makine kodu
+let modalSelectedIds = new Set();
+let modalVisibleIds = [];
+let reportSelectedIds = new Set();
+let reportVisibleIds = [];
+let completedSearch = '';
+let routeModal = null; // {isEmriNo, finishedAt}
+let modalDateFilter = '';
+let DB = null, FB_OK = false, connOK = false;
+
+setInterval(()=>{ nowTick = Date.now(); if(session) renderLiveBits(); }, 1000);
+
+/* ===================== FIREBASE ===================== */
+function fbConfigured(){ return FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.databaseURL.indexOf('BURAYA')<0; }
+function initFirebase(){
+  if(typeof firebase==='undefined'){ console.warn('Firebase SDK yüklenemedi (internet yok mu?)'); return false; }
+  if(!fbConfigured()){ console.warn('Firebase databaseURL girilmemiş'); return false; }
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    DB = firebase.database();
+    FB_OK = true;
+    DB.ref('.info/connected').on('value', snap=>{
+      connOK = snap.val() === true;
+      render();
+    });
+    DB.ref('operators').on('value', snap=>{
+      STATE.operators = snap.val() || {};
+      seedIfNeeded();
+      render();
+    });
+    DB.ref('entries').on('value', snap=>{
+      STATE.entries = snap.val() || {};
+      render();
+    });
+    DB.ref('machines_extra').on('value', snap=>{
+      extraMachines = snap.val() || {};
+      render();
+    });
+    return true;
+  }catch(e){ console.warn('Firebase init hatası', e); return false; }
+}
+function seedIfNeeded(){
+  if(Object.keys(STATE.operators).length>0) return;
+  DB.ref('operators').set(SEED_OPERATORS);
+}
+function entriesArray(){ return Object.entries(STATE.entries).map(([id,e])=>({id, ...e})); }
+
+/* ===================== KİMLİK / GİRİŞ ===================== */
+function doLogin(){
+  const uname = (document.getElementById('login-username').value||'').trim().toUpperCase();
+  const pass = document.getElementById('login-password').value||'';
+  const remember = !!document.getElementById('login-remember')?.checked;
+  const op = STATE.operators[uname];
+  if(!op || op.password !== pass){
+    loginError = 'Kullanıcı adı veya şifre hatalı';
+    toast(loginError);
+    render();
+    return;
+  }
+  loginError = '';
+  session = { username: uname, displayName: op.displayName, isAdmin: !!op.isAdmin };
+  if(remember){ save('rota_remember', true); save('rota_session', session); }
+  else { save('rota_remember', false); save('rota_session', null); }
+  view = session.isAdmin ? 'report' : 'list';
+  if(!session.isAdmin) newForm.makine = op.defaultMachine || '';
+  render();
+}
+function doLogout(){ session=null; save('rota_session', null); save('rota_remember', false); view='list'; render(); }
+function setView(v){ view=v; render(); }
+function setTheme(t){ theme=t; save('rota_theme', t); render(); }
+
+function changePassword(){
+  const cur = document.getElementById('pw-current').value||'';
+  const next = (document.getElementById('pw-next').value||'').replace(/\D/g,'').slice(0,8);
+  const conf = (document.getElementById('pw-confirm').value||'').replace(/\D/g,'').slice(0,8);
+  if(!/^\d{1,8}$/.test(next)){ toast('Yeni şifre en fazla 8 haneli rakam olmalı'); return; }
+  if(next!==conf){ toast('Yeni şifreler eşleşmiyor'); return; }
+  const op = STATE.operators[session.username];
+  if(!op || op.password !== cur){ toast('Mevcut şifre yanlış'); return; }
+  DB.ref('operators/'+session.username+'/password').set(next);
+  toast('Şifre güncellendi');
+  setView('list');
+}
+
+/* ===================== OPERASYON İŞLEMLERİ ===================== */
+function getActiveEntry(){
+  if(!session || session.isAdmin) return null;
+  return entriesArray().find(e => e.operatorUsername===session.username && (e.status==='devam'||e.status==='duruş'));
+}
+function getAllowedMachines(){
+  if(!session || session.isAdmin) return allMachines().map(m=>`${m.code} · ${m.name}`);
+  const op = STATE.operators[session.username] || {};
+  const allowedCodes = op.allowedMachines ? Object.keys(op.allowedMachines).filter(k=>op.allowedMachines[k]) : allMachineCodes();
+  return allMachines().filter(m=>allowedCodes.includes(m.code)).map(m=>`${m.code} · ${m.name}`);
+}
+function baslat(){
+  if(getActiveEntry()){ toast('Önce mevcut operasyonu bitirmelisin'); return; }
+  const isEmriNo = (document.getElementById('nf-isemri').value||'').trim();
+  const makine = document.getElementById('nf-makine').value||'';
+  const malzemeCinsi = (document.getElementById('nf-malzeme-cinsi').value||'').trim();
+  const capBoy = (document.getElementById('nf-cap-boy').value||'').trim();
+  const not = (document.getElementById('nf-not').value||'').trim();
+  const sonOperasyon = !!document.getElementById('nf-son-operasyon')?.checked;
+  if(!isEmriNo){ toast('İş Emri No girin'); return; }
+  if(!getAllowedMachines().includes(makine)){ toast('Listeden geçerli bir makine seçin'); return; }
+  const id = uid();
+  const entry = { isEmriNo, makine, malzemeCinsi, capBoy, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0 };
+  DB.ref('entries/'+id).set(entry);
+  toast('Operasyon başlatıldı');
+  newForm = { isEmriNo:'', makine: (STATE.operators[session.username]||{}).defaultMachine || '', malzemeCinsi:'', capBoy:'', not:'', sonOperasyon:false };
+  setView('list');
+}
+function bitir(id){
+  const e = STATE.entries[id] || {};
+  let extra = 0;
+  if(e.status==='duruş' && e.duruşTs) extra = Date.now() - e.duruşTs;
+  const duruşToplamMs = (e.duruşToplamMs||0) + extra;
+  DB.ref('entries/'+id).update({ endTs: Date.now(), status:'tamamlandi', duruşToplamMs });
+  toast('Operasyon tamamlandı');
+}
+function toggleDurus(open){ durusOpen=open; durusReasonSel=''; durusCustom=''; render(); }
+function pickDurusReason(r){ durusReasonSel=r; render(); }
+function confirmDurus(id){
+  const reason = durusReasonSel==='Diğer' ? (document.getElementById('durus-custom')?.value||'').trim() : durusReasonSel;
+  if(!reason){ toast('Duruş nedeni seçmelisin'); return; }
+  DB.ref('entries/'+id).update({ status:'duruş', duruşNedeni: reason, duruşTs: Date.now() });
+  toast('Duruş kaydedildi');
+  durusOpen=false; durusReasonSel=''; durusCustom='';
+}
+function devamEt(id){
+  const e = STATE.entries[id] || {};
+  const extra = e.duruşTs ? (Date.now() - e.duruşTs) : 0;
+  const duruşToplamMs = (e.duruşToplamMs||0) + extra;
+  DB.ref('entries/'+id).update({ status:'devam', duruşNedeni:'', duruşToplamMs });
+  toast('Operasyona devam ediliyor');
+}
+function silKayit(id){ DB.ref('entries/'+id).remove(); }
+
+/* ===================== ADMİN İŞLEMLERİ ===================== */
+function updateDefaultMachine(code, val){ DB.ref('operators/'+code+'/defaultMachine').set(val); toast(code+' için varsayılan makine güncellendi'); }
+function toggleMachineAccess(code, machineCode){
+  const op = STATE.operators[code] || {};
+  const current = op.allowedMachines ? {...op.allowedMachines} : Object.fromEntries(allMachineCodes().map(c=>[c,true]));
+  current[machineCode] = !current[machineCode];
+  DB.ref('operators/'+code+'/allowedMachines').set(current);
+}
+function setAccessOperator(v){ accessOperator=v; render(); }
+function setSettingsSubTab(t){ settingsSubTab=t; render(); }
+
+function addOperator(){
+  const code = (document.getElementById('new-op-code').value||'').trim().toUpperCase();
+  const displayName = (document.getElementById('new-op-name').value||'').trim();
+  const password = (document.getElementById('new-op-pass').value||'').replace(/\D/g,'').slice(0,8) || '1234';
+  if(!code){ toast('OPRT kodu girin'); return; }
+  if(!displayName){ toast('Ad soyad girin'); return; }
+  if(STATE.operators[code]){ toast(code+' zaten kayıtlı'); return; }
+  DB.ref('operators/'+code).set({ displayName, password, defaultMachine: '' });
+  toast(code+' eklendi');
+  document.getElementById('new-op-code').value='';
+  document.getElementById('new-op-name').value='';
+  document.getElementById('new-op-pass').value='1234';
+}
+function addMachine(){
+  const code = (document.getElementById('new-mk-code').value||'').trim().toUpperCase();
+  const name = (document.getElementById('new-mk-name').value||'').trim();
+  if(!code){ toast('Makine kodu girin'); return; }
+  if(!name){ toast('Makine adı girin'); return; }
+  if(allMachines().some(m=>m.code===code)){ toast(code+' zaten kayıtlı'); return; }
+  DB.ref('machines_extra/'+code).set({ name });
+  toast(code+' eklendi');
+  document.getElementById('new-mk-code').value='';
+  document.getElementById('new-mk-name').value='';
+}
+function setReportFilterField(field, val){ reportFilter[field]=val; reportSelectedIds = new Set(); render(); }
+function setCompletedSearch(v){ completedSearch = v; render(); }
+function openRouteDetail(isEmriNo, finishedAt){ routeModal = { isEmriNo, finishedAt: Number(finishedAt) }; render(); }
+function closeRouteDetail(){ routeModal = null; render(); }
+function clearReportFilter(){ reportFilter={operator:'',isEmriNo:'',makine:'',tarih:''}; reportSelectedIds = new Set(); render(); }
+function toggleReportSelect(id){ if(reportSelectedIds.has(id)) reportSelectedIds.delete(id); else reportSelectedIds.add(id); render(); }
+function toggleReportSelectAll(){
+  const allSelected = reportVisibleIds.length>0 && reportVisibleIds.every(id=>reportSelectedIds.has(id));
+  if(allSelected){ reportVisibleIds.forEach(id=>reportSelectedIds.delete(id)); }
+  else { reportVisibleIds.forEach(id=>reportSelectedIds.add(id)); }
+  render();
+}
+function deleteReportRecord(id){
+  if(!confirm('Bu kaydı silmek istediğine emin misin? Bu işlem geri alınamaz.')) return;
+  DB.ref('entries/'+id).remove();
+  reportSelectedIds.delete(id);
+  toast('Kayıt silindi');
+}
+function deleteReportSelected(){
+  if(reportSelectedIds.size===0) return;
+  if(!confirm(`${reportSelectedIds.size} kaydı silmek istediğine emin misin? Bu işlem geri alınamaz.`)) return;
+  reportSelectedIds.forEach(id=> DB.ref('entries/'+id).remove());
+  toast('Seçilen kayıtlar silindi');
+  reportSelectedIds = new Set();
+}
+function toggleMachineListView(){ showMachineList=!showMachineList; render(); }
+
+function seqMap(){
+  const byIsEmri = {};
+  entriesArray().slice().sort((a,b)=>a.startTs-b.startTs).forEach(e=>{ (byIsEmri[e.isEmriNo] ||= []).push(e.id); });
+  const map = {};
+  Object.values(byIsEmri).forEach(ids=>ids.forEach((id,i)=>{ map[id]=i+1; }));
+  return map;
+}
+// Aynı İş Emri No tekrar geldiğinde eski "tamamlandı" durumunun sızmaması için:
+// her İş Emri No'nun kayıtlarını kronolojik sırayla "tur"lara bölüyoruz. Bir tur,
+// sonOperasyon=true VE status='tamamlandi' olan kayıtla kapanır. Kapanan turdaki
+// tüm kayıtlar "tamamlanmış rota" sayılır; o turdan SONRA gelen yeni kayıtlar
+// otomatik olarak yepyeni, boş bir tur başlatır — eskisinden bağımsız kalır.
+function computeCompletedRoutes(){
+  const byIsEmri = {};
+  entriesArray().forEach(e=>{ (byIsEmri[e.isEmriNo] ||= []).push(e); });
+  const routes = [];
+  Object.entries(byIsEmri).forEach(([isEmriNo,list])=>{
+    list.sort((a,b)=>a.startTs-b.startTs);
+    let segment = [];
+    list.forEach(e=>{
+      segment.push(e);
+      if(e.sonOperasyon && e.status==='tamamlandi'){
+        routes.push({ isEmriNo, entries: segment.slice(), finishedAt: e.endTs, startedAt: segment[0].startTs });
+        segment = [];
+      }
+    });
+  });
+  routes.sort((a,b)=> b.finishedAt - a.finishedAt); // en son tamamlanan üstte
+  return routes;
+}
+function computeCompletedRouteIds(){
+  const ids = new Set();
+  computeCompletedRoutes().forEach(r=>r.entries.forEach(e=>ids.add(e.id)));
+  return ids;
+}
+
+function filteredEntries(){
+  const sm = seqMap();
+  return entriesArray().filter(e=>{
+    if(reportFilter.operator && e.operatorUsername!==reportFilter.operator) return false;
+    if(reportFilter.isEmriNo && !e.isEmriNo.toLowerCase().includes(reportFilter.isEmriNo.toLowerCase())) return false;
+    if(reportFilter.makine && e.makine!==reportFilter.makine) return false;
+    if(reportFilter.tarih && dateKey(e.startTs)!==reportFilter.tarih) return false;
+    return true;
+  }).map(e=>({...e, _seq: sm[e.id]||''})).sort((a,b)=>b.startTs-a.startTs);
+}
+function exportExcel(){
+  const rows = filteredEntries().map(e=>({
+    "İş Emri No": e.isEmriNo, "Operasyon No": e._seq, "Malzeme Cinsi": e.malzemeCinsi, "Çap ve Boy": e.capBoy, "Makine": e.makine,
+    "Operatör Kodu": e.operatorUsername, "Operatör Adı": e.operatorName,
+    "Başlangıç": fmtDT(e.startTs), "Bitiş": e.endTs?fmtDT(e.endTs):"",
+    "Süre (dk)": e.endTs?Math.round((e.endTs-e.startTs)/60000):"",
+    "Durum": e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı',
+    "Duruş Nedeni": e.duruşNedeni||"", "Not": e.not,
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Rota");
+  XLSX.writeFile(wb, `rota_disaaktarim_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+/* ===================== MAKİNE DETAY MODAL ===================== */
+function openMachineDetail(code){ machineModal = code; modalDateFilter=''; modalSelectedIds = new Set(); render(); }
+function closeMachineDetail(){ machineModal = null; modalSelectedIds = new Set(); render(); }
+function setModalDateFilter(v){ modalDateFilter = v; modalSelectedIds = new Set(); render(); }
+function toggleModalSelect(id){ if(modalSelectedIds.has(id)) modalSelectedIds.delete(id); else modalSelectedIds.add(id); render(); }
+function toggleModalSelectAll(){
+  const allSelected = modalVisibleIds.length>0 && modalVisibleIds.every(id=>modalSelectedIds.has(id));
+  if(allSelected){ modalVisibleIds.forEach(id=>modalSelectedIds.delete(id)); }
+  else { modalVisibleIds.forEach(id=>modalSelectedIds.add(id)); }
+  render();
+}
+function deleteModalRecord(id){
+  if(!confirm('Bu kaydı silmek istediğine emin misin? Bu işlem geri alınamaz.')) return;
+  DB.ref('entries/'+id).remove();
+  modalSelectedIds.delete(id);
+  toast('Kayıt silindi');
+}
+function deleteModalSelected(){
+  if(modalSelectedIds.size===0) return;
+  if(!confirm(`${modalSelectedIds.size} kaydı silmek istediğine emin misin? Bu işlem geri alınamaz.`)) return;
+  modalSelectedIds.forEach(id=> DB.ref('entries/'+id).remove());
+  toast('Seçilen kayıtlar silindi');
+  modalSelectedIds = new Set();
+}
+function machineDetailEntries(code){
+  const label = resolveMachineLabel(code);
+  return entriesArray().filter(e=>e.makine===label).sort((a,b)=>a.startTs-b.startTs);
+}
+function exportMachineExcel(code){
+  const m = allMachines().find(x=>x.code===code);
+  let rows = machineDetailEntries(code);
+  if(modalDateFilter) rows = rows.filter(e=>dateKey(e.startTs)===modalDateFilter);
+  const data = rows.map(e=>({
+    "Tarih": dateKey(e.startTs), "İş Emri No": e.isEmriNo, "Malzeme Cinsi": e.malzemeCinsi, "Çap ve Boy": e.capBoy,
+    "Operatör": `${e.operatorUsername} · ${e.operatorName}`,
+    "Başlangıç": fmtDT(e.startTs), "Bitiş": e.endTs?fmtDT(e.endTs):"",
+    "Süre (dk)": e.endTs?Math.round((e.endTs-e.startTs)/60000):"",
+    "Durum": e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı',
+    "Duruş Nedeni": e.duruşNedeni||"", "Not": e.not,
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, m.code);
+  XLSX.writeFile(wb, `${m.code}_${modalDateFilter||'tumu'}.xlsx`);
+}
+function renderMachineModal(){
+  const m = allMachines().find(x=>x.code===machineModal);
+  const allRows = machineDetailEntries(machineModal);
+
+  // Tüm günler için toplam süre/iş sayısı (zaman çizelgesi bunun üzerine kurulur)
+  const byDayAll = {};
+  allRows.forEach(e=>{
+    const dk = dateKey(e.startTs);
+    const dur = e.endTs ? (e.endTs-e.startTs) : (e.status==='devam' ? (nowTick-e.startTs) : 0);
+    if(!byDayAll[dk]) byDayAll[dk] = {count:0, ms:0, jobs:new Set()};
+    byDayAll[dk].count++; byDayAll[dk].ms += dur; byDayAll[dk].jobs.add(e.isEmriNo);
+  });
+  const allDays = Object.keys(byDayAll).sort(); // eskiden yeniye, timeline soldan sağa akar
+  const maxMs = Math.max(1, ...allDays.map(d=>byDayAll[d].ms));
+
+  const timelineHtml = `<div class="timeline-strip">
+    <div class="timeline-all ${!modalDateFilter?'selected':''}" onclick="setModalDateFilter('')" title="Tüm tarihler">
+      <div class="timeline-all-icon">⟷</div><div class="timeline-day-label">Tümü</div>
+    </div>
+    ${allDays.map(d=>{
+      const pct = Math.max(6, Math.round((byDayAll[d].ms/maxMs)*100));
+      const label = d.slice(5).replace('-','.'); // MM.DD
+      return `<div class="timeline-day ${modalDateFilter===d?'selected':''}" onclick="setModalDateFilter('${d}')" title="${d} · ${fmtDur(byDayAll[d].ms)} · ${byDayAll[d].jobs.size} iş">
+        <div class="timeline-bar-track"><div class="timeline-bar-fill" style="height:${pct}%"></div></div>
+        <div class="timeline-day-label">${label}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  let rows = allRows;
+  if(modalDateFilter) rows = rows.filter(e=>dateKey(e.startTs)===modalDateFilter);
+  modalVisibleIds = rows.map(e=>e.id);
+
+  const totalMs = rows.reduce((sum,e)=> sum + (e.endTs ? (e.endTs-e.startTs) : (e.status==='devam' ? (nowTick-e.startTs) : 0)), 0);
+  const jobCount = new Set(rows.map(e=>e.isEmriNo)).size;
+  const recordCount = rows.length;
+
+  let dailyTable = '';
+  if(!modalDateFilter){
+    const days = allDays.slice().reverse();
+    dailyTable = `<div style="font-size:13px;font-weight:600;margin-bottom:8px">Günlere Göre Özet</div>
+      <table style="margin-bottom:20px"><thead><tr><th>Tarih</th><th>Kayıt Sayısı</th><th>İş Sayısı</th><th>Toplam Süre</th></tr></thead><tbody>
+      ${days.map(d=>`<tr><td>${d}</td><td>${byDayAll[d].count}</td><td>${byDayAll[d].jobs.size}</td><td>${fmtDur(byDayAll[d].ms)}</td></tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeMachineDetail()">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div><div class="modal-title">${m.code}</div><div class="modal-sub">${esc(m.name)}</div></div>
+        <button class="icon-btn" onclick="closeMachineDetail()">✕</button>
+      </div>
+      <div class="modal-body">
+        ${timelineHtml}
+        <div class="modal-filter-row">
+          ${modalSelectedIds.size>0 ? `<button class="btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="deleteModalSelected()">🗑 Seçilenleri Sil (${modalSelectedIds.size})</button>` : ''}
+          <button class="btn-primary" style="width:auto;margin-left:auto;padding:8px 16px" onclick="exportMachineExcel('${machineModal}')">⬇ Excel'e Aktar (${rows.length})</button>
+        </div>
+        <div class="modal-stats">
+          <div class="modal-stat-box"><div class="modal-stat-num">${recordCount}</div><div class="modal-stat-label">Kayıt</div></div>
+          <div class="modal-stat-box"><div class="modal-stat-num">${jobCount}</div><div class="modal-stat-label">Farklı İş Emri</div></div>
+          <div class="modal-stat-box"><div class="modal-stat-num">${fmtDur(totalMs)}</div><div class="modal-stat-label">Toplam Süre</div></div>
+        </div>
+        ${dailyTable}
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">${modalDateFilter ? modalDateFilter+' — Detay' : 'Tüm Kayıtlar — Detay (eskiden yeniye)'}</div>
+        <table><thead><tr>
+          <th style="width:26px"><input type="checkbox" ${modalVisibleIds.length>0 && modalVisibleIds.every(id=>modalSelectedIds.has(id))?'checked':''} onchange="toggleModalSelectAll()"></th>
+          <th>Tarih</th><th>İş Emri No</th><th>Operatör</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th>Durum</th><th style="width:36px"></th>
+        </tr></thead><tbody>
+        ${rows.length===0 ? `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : rows.map(e=>{
+          const isDone = computeCompletedRouteIds().has(e.id);
+          const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success)';
+          const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
+          const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : (e.status==='devam' ? fmtElapsed(nowTick-e.startTs)+' (sürüyor)' : '—');
+          return `<tr style="${isDone?'background:#1a4d2e33':''}">
+            <td><input type="checkbox" ${modalSelectedIds.has(e.id)?'checked':''} onchange="toggleModalSelect('${e.id}')"></td>
+            <td>${dateKey(e.startTs)}</td><td class="mono" style="color:var(--accent)">${esc(e.isEmriNo)} ${isDone?'✓':''}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td>${fmtDT(e.startTs)}</td><td>${e.endTs?fmtDT(e.endTs):'—'}</td><td>${dur}</td><td><span style="color:${statusColor};font-weight:600">${isDone?'Rota Tamamlandı':statusLabel}</span></td>
+            <td><button class="del-btn" onclick="deleteModalRecord('${e.id}')" title="Sil">🗑</button></td>
+          </tr>`;
+        }).join('')}
+        </tbody></table>
+      </div>
+    </div>
+  </div>`;
+}
+function renderRouteModal(){
+  const route = computeCompletedRoutes().find(r => r.isEmriNo===routeModal.isEmriNo && r.finishedAt===routeModal.finishedAt);
+  if(!route) { routeModal=null; return ''; }
+  const malz = route.entries.find(e=>e.malzemeCinsi||e.capBoy) || {};
+  const malzText = [malz.malzemeCinsi, malz.capBoy].filter(Boolean).join(' · ');
+
+  const grandTotalMs = route.entries.reduce((s,e)=>s+(e.endTs?(e.endTs-e.startTs):0),0);
+  const grandDurusMs = route.entries.reduce((s,e)=>s+(e.duruşToplamMs||0),0);
+  const grandNetMs = grandTotalMs - grandDurusMs;
+
+  const stepsHtml = route.entries.map((e,i)=>{
+    const wallMs = e.endTs ? (e.endTs-e.startTs) : 0;
+    const durusMs = e.duruşToplamMs||0;
+    const netMs = Math.max(0, wallMs - durusMs);
+    return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-family:'JetBrains Mono',monospace;color:var(--accent);font-weight:700;font-size:13px">${i+1}. ${esc((e.makine||'').split(' · ')[0]||'—')}</span>
+        <span style="color:var(--text-muted);font-size:12px">${esc((e.makine||'').split(' · ')[1]||'')}</span>
+      </div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px">${esc(e.operatorUsername)} · ${esc(e.operatorName)} &nbsp;·&nbsp; ${fmtDT(e.startTs)} → ${e.endTs?fmtDT(e.endTs):'—'}</div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap">
+        <div><span style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Üretim Süresi</span><div style="font-family:'JetBrains Mono',monospace;font-weight:700">${fmtDur(netMs)}</div></div>
+        <div><span style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Duruş Süresi</span><div style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${durusMs>0?'var(--warn)':'var(--text-muted)'}">${fmtDur(durusMs)}</div></div>
+        <div><span style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Toplam (Geçen Zaman)</span><div style="font-family:'JetBrains Mono',monospace;font-weight:700">${fmtDur(wallMs)}</div></div>
+      </div>
+      ${e.not?`<div style="font-size:12px;color:var(--text-muted);font-style:italic;margin-top:8px">"${esc(e.not)}"</div>`:''}
+    </div>`;
+  }).join('');
+
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeRouteDetail()">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div><div class="modal-title">${esc(route.isEmriNo)}</div><div class="modal-sub">${malzText?esc(malzText)+' · ':''}Tamamlandı: ${fmtDT(route.finishedAt)}</div></div>
+        <button class="icon-btn" onclick="closeRouteDetail()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-stats">
+          <div class="modal-stat-box"><div class="modal-stat-num">${fmtDur(grandNetMs)}</div><div class="modal-stat-label">Toplam Üretim Süresi</div></div>
+          <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--warn)">${fmtDur(grandDurusMs)}</div><div class="modal-stat-label">Toplam Duruş</div></div>
+          <div class="modal-stat-box"><div class="modal-stat-num">${route.entries.length}</div><div class="modal-stat-label">Adım</div></div>
+        </div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Operasyon Operasyon Detay</div>
+        ${stepsHtml}
+      </div>
+    </div>
+  </div>`;
+}
+function renderLogin(){
+  return `
+  <div class="root-mobile theme-${theme}">
+    <div class="auth-wrap">
+      <div class="auth-header">${connDot()}<span style="font-size:22px">🏭</span><span class="brand">ROTA TAKİP</span></div>
+      <div class="auth-form">
+        <div class="field"><label>Kullanıcı Adı (OPRT No)</label><input id="login-username" placeholder="ör. OPRT7" value="${esc(loginForm.username)}" oninput="loginForm.username=this.value"></div>
+        <div class="field"><label>Şifre</label><input id="login-password" type="password" placeholder="1234" value="${esc(loginForm.password)}" oninput="loginForm.password=this.value"></div>
+        ${loginError ? `<div class="error-text">${esc(loginError)}</div>` : ''}
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input id="login-remember" type="checkbox" style="width:auto"> Beni Hatırla (bu cihazda kalıcı giriş kalsın)
+        </label>
+        <button class="btn-primary" onclick="doLogin()">✓ Giriş Yap</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ===================== RENDER: KİLİT EKRANI (aktif operasyon) ===================== */
+function renderLockScreen(active){
+  const header = `
+    <div class="header">
+      <div class="header-left">${connDot()}<span style="font-size:20px">🏭</span><div><div class="brand">ROTA TAKİP</div><div class="brand-sub">${esc(session.username)} · ${esc(session.displayName)}</div></div></div>
+      <button class="icon-btn" onclick="doLogout()" title="Çıkış">⎋</button>
+    </div>`;
+
+  if(active.status==='duruş'){
+    return `<div class="root-mobile theme-${theme}">${header}
+      <div class="lock-screen">
+        <div class="lock-label" style="color:var(--warn)">DURUŞTA</div>
+        <div class="lock-id">${esc(active.isEmriNo)}</div>
+        <div class="lock-machine">${esc(active.makine)}</div>
+        <div class="lock-timer" style="color:var(--warn)">${fmtElapsed(nowTick-active.duruşTs)}</div>
+        <div class="lock-meta">duruş süresi</div>
+        <div class="durus-reason-box">"${esc(active.duruşNedeni)}"</div>
+        <div style="display:flex;gap:10px;margin-top:28px">
+          <button class="btn-start" style="width:auto;padding:13px 22px" onclick="devamEt('${active.id}')">▶ Devam Et</button>
+          <button class="btn-primary" style="width:auto;padding:13px 22px" onclick="bitir('${active.id}')">■ Bitir</button>
+        </div>
+      </div></div>`;
+  }
+
+  let durusBlock;
+  if(!durusOpen){
+    durusBlock = `<div style="display:flex;gap:10px;margin-top:28px">
+      <button class="chip" style="padding:13px 22px" onclick="toggleDurus(true)">⏱ Duruşa Al</button>
+      <button class="btn-primary" style="width:auto;padding:13px 22px" onclick="bitir('${active.id}')">■ Bitir</button>
+    </div>`;
+  } else {
+    durusBlock = `<div style="display:flex;flex-direction:column;gap:12px;margin-top:28px;width:100%;max-width:320px">
+      <div class="durus-chip-row">
+        ${DURUS_REASONS.map(r=>`<button class="chip ${durusReasonSel===r?'active':''}" onclick="pickDurusReason('${r.replace(/'/g,"\\'")}')">${esc(r)}</button>`).join('')}
+      </div>
+      ${durusReasonSel==='Diğer' ? `<input id="durus-custom" placeholder="Nedeni yaz…" value="${esc(durusCustom)}" oninput="durusCustom=this.value">` : ''}
+      <div style="display:flex;gap:10px">
+        <button class="chip" style="border-color:var(--warn);color:var(--warn)" onclick="confirmDurus('${active.id}')">✓ Duruşu Onayla</button>
+        <button class="btn-ghost" onclick="toggleDurus(false)">✕ Vazgeç</button>
+      </div>
+    </div>`;
+  }
+
+  return `<div class="root-mobile theme-${theme}">${header}
+    <div class="lock-screen">
+      <div class="lock-label">AKTİF OPERASYON</div>
+      <div class="lock-id">${esc(active.isEmriNo)}</div>
+      <div class="lock-machine">${esc(active.makine)}</div>
+      <div class="lock-timer">${fmtElapsed(nowTick-active.startTs)}</div>
+      <div class="lock-meta">${fmtDT(active.startTs)} itibarıyla devam ediyor</div>
+      ${active.not ? `<div class="lock-note">"${esc(active.not)}"</div>` : ''}
+      ${durusBlock}
+      <div class="lock-hint">Yeni kayıt açmak için önce bu operasyonu bitirmelisin.</div>
+    </div></div>`;
+}
+
+/* ===================== RENDER: OPERATÖR ANA UYGULAMA ===================== */
+function renderOperator(){
+  const active = getActiveEntry();
+  if(active) return renderLockScreen(active);
+
+  const header = `
+    <div class="header">
+      <div class="header-left">${connDot()}<span style="font-size:20px">🏭</span><div><div class="brand">ROTA TAKİP</div><div class="brand-sub">${esc(session.username)} · ${esc(session.displayName)}</div></div></div>
+      <div style="display:flex;gap:6px">
+        <button class="icon-btn" onclick="setView('settings')" title="Ayarlar">⚙</button>
+        <button class="icon-btn" onclick="doLogout()" title="Çıkış">⎋</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn ${view==='list'?'active':''}" onclick="setView('list')">☰ Rotalar</button>
+      <button class="tab-btn ${view==='new'?'active':''}" onclick="setView('new')">+ Yeni Kayıt</button>
+    </div>`;
+
+  let body = '';
+  if(view==='new'){
+    const allowed = getAllowedMachines();
+    body = `<div class="body-pad">
+      <div class="field"><label>İş Emri No</label><input id="nf-isemri" class="mono" placeholder="ör. U0009569" value="${esc(newForm.isEmriNo)}" oninput="newForm.isEmriNo=this.value"></div>
+      <div class="field"><label>Çalışılan Makine</label>
+        <div style="display:flex;gap:8px">
+          <input id="nf-makine" list="makine-options" placeholder="Yazmaya başla… ör. TES" value="${esc(newForm.makine)}" oninput="newForm.makine=this.value" onfocus="this.select()" style="flex:1">
+          <button type="button" class="btn-ghost" title="Temizle" onclick="newForm.makine=''; const el=document.getElementById('nf-makine'); if(el){el.value=''; el.focus();}">✕</button>
+        </div>
+        <datalist id="makine-options">${allowed.map(m=>`<option value="${esc(m)}">`).join('')}</datalist>
+      </div>
+      <div class="field"><label>Malzeme Cinsi (opsiyonel)</label><input id="nf-malzeme-cinsi" placeholder="ör. 4Mo1 ıslahlı" value="${esc(newForm.malzemeCinsi)}" oninput="newForm.malzemeCinsi=this.value"></div>
+      <div class="field"><label>Çap ve Boy (opsiyonel)</label><input id="nf-cap-boy" placeholder="ör. Ø26 x 200" value="${esc(newForm.capBoy)}" oninput="newForm.capBoy=this.value"></div>
+      <div class="field"><label>Not (opsiyonel)</label><textarea id="nf-not" style="min-height:60px" placeholder="Serbest not" oninput="newForm.not=this.value">${esc(newForm.not)}</textarea></div>
+      <label style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
+        <input id="nf-son-operasyon" type="checkbox" ${newForm.sonOperasyon?'checked':''} onchange="newForm.sonOperasyon=this.checked" style="width:auto">
+        <span style="font-size:13px">Son Operasyon <span style="color:var(--text-muted);font-size:11.5px">(bu adım tamamlanınca iş rotası kapanır)</span></span>
+      </label>
+      <button class="btn-start" onclick="baslat()">▶ Başla (saat otomatik)</button>
+    </div>`;
+  } else if(view==='settings'){
+    body = `<div class="body-pad">
+      <div class="field"><label>Tema</label>
+        <div class="row">
+          <button class="chip ${theme==='dark'?'active':''}" style="flex:1" onclick="setTheme('dark')">🌙 Koyu</button>
+          <button class="chip ${theme==='light'?'active':''}" style="flex:1" onclick="setTheme('light')">☀ Açık</button>
+        </div>
+      </div>
+      <div style="height:1px;background:var(--border);margin:16px 0"></div>
+      <div class="badge" style="margin-bottom:14px">${esc(session.username)} · ${esc(session.displayName)}</div>
+      <div class="field"><label>Mevcut Şifre</label><input id="pw-current" type="password" placeholder="••••"></div>
+      <div class="field"><label>Yeni Şifre (max 8 hane, sadece rakam)</label><input id="pw-next" type="password" inputmode="numeric" maxlength="8" placeholder="ör. 4821"></div>
+      <div class="field"><label>Yeni Şifre (tekrar)</label><input id="pw-confirm" type="password" inputmode="numeric" maxlength="8" placeholder="ör. 4821"></div>
+      <button class="btn-primary" onclick="changePassword()">✓ Şifreyi Güncelle</button>
+    </div>`;
+  } else {
+    const mine = entriesArray().filter(e=>e.operatorUsername===session.username);
+    const groups = {};
+    mine.forEach(e=>{ (groups[e.isEmriNo] ||= []).push(e); });
+    const arr = Object.entries(groups).map(([isEmriNo,ops])=>{ ops.sort((a,b)=>a.startTs-b.startTs); return {isEmriNo,ops,first:ops[0].startTs}; }).sort((a,b)=>a.first-b.first);
+    body = `<div class="body-pad">`;
+    if(arr.length===0) body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Henüz kayıt yok.</div>`;
+    arr.forEach(({isEmriNo,ops})=>{
+      body += `<div class="card"><div class="card-header"><span class="card-id">${esc(isEmriNo)}</span><span class="card-meta">${esc([ops[0].malzemeCinsi, ops[0].capBoy].filter(Boolean).join(' · ')||'—')}</span></div>`;
+      ops.forEach((op,i)=>{
+        const dotColor = op.status==='tamamlandi'?'var(--success)':op.status==='duruş'?'var(--warn)':'var(--accent)';
+        body += `<div class="timeline-row"><div class="timeline-rail"><div class="dot" style="background:${dotColor}"></div>${i<ops.length-1?'<div class="line"></div>':''}</div>
+          <div class="op-content">
+            <div class="op-top"><span class="op-code">${esc(op.makine)}</span><button class="del-btn" onclick="silKayit('${op.id}')">🗑</button></div>
+            ${op.not?`<div class="op-note">${esc(op.not)}</div>`:''}
+            <div class="op-foot">🕐 ${fmtDT(op.startTs)} · ${esc(op.operatorUsername)}</div>
+            ${op.status==='tamamlandi'?`<div class="done-tag">✓ ${fmtDur(op.endTs-op.startTs)} sürdü</div>`
+              : op.status==='duruş'?`<div class="durus-tag">Duruşta: "${esc(op.duruşNedeni)}"</div>`
+              : `<button class="finish-btn" onclick="bitir('${op.id}')">■ Bitir</button>`}
+          </div></div>`;
+      });
+      body += `</div>`;
+    });
+    body += `</div>`;
+  }
+
+  return `<div class="root-mobile theme-${theme}">${header}${body}</div>`;
+}
+
+/* ===================== RENDER: ADMİN ===================== */
+function renderAdmin(){
+  const operatorEntries = Object.entries(STATE.operators).filter(([k,v])=>!v.isAdmin);
+  const header = `
+    <div class="admin-header">
+      <div style="display:flex;align-items:center;gap:10px">${connDot()}<span style="font-size:20px">🏭</span><span class="brand">ROTA TAKİP · YÖNETİCİ RAPORU</span></div>
+      <div style="display:flex;gap:10px">
+        <button class="icon-btn-labeled" onclick="setView('adminSettings')" style="${view==='adminSettings'?'border-color:var(--accent);color:var(--accent)':''}">⚙ Ayarlar</button>
+        <button class="icon-btn-labeled" onclick="doLogout()" style="padding:10px 20px;font-size:14px;font-weight:600">⎋ Çıkış</button>
+      </div>
+    </div>
+    <div class="tabs" style="padding:12px 24px 0">
+      <button class="tab-btn ${view==='report'?'active':''}" onclick="setView('report')">☰ Rapor</button>
+      <button class="tab-btn ${view==='matrix'?'active':''}" onclick="setView('matrix')">🏭 Makine Matrisi</button>
+      <button class="tab-btn ${view==='completed'?'active':''}" onclick="setView('completed')">✓ Tamamlanan Kodlar</button>
+    </div>`;
+
+  let body = '';
+  if(view==='adminSettings'){
+    body = `<div class="settings-wrap">
+      <div class="sub-tabs">
+        <button class="sub-tab-btn ${settingsSubTab==='default'?'active':''}" onclick="setSettingsSubTab('default')">Varsayılan Makineler</button>
+        <button class="sub-tab-btn ${settingsSubTab==='access'?'active':''}" onclick="setSettingsSubTab('access')">Makine Erişimi</button>
+        <button class="sub-tab-btn ${settingsSubTab==='addOperator'?'active':''}" onclick="setSettingsSubTab('addOperator')">+ Operatör Ekle</button>
+        <button class="sub-tab-btn ${settingsSubTab==='addMachine'?'active':''}" onclick="setSettingsSubTab('addMachine')">+ Makine Ekle</button>
+      </div>`;
+    if(settingsSubTab==='default'){
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Operatör Varsayılan Makineleri</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Her operatörün "Başla" ekranında otomatik dolu gelen makinesini buradan değiştirebilirsin.</div>`;
+      operatorEntries.forEach(([code,v])=>{
+        body += `<div class="op-settings-row"><div class="op-settings-id">${esc(code)}</div><div class="op-settings-name">${esc(v.displayName)}</div>
+          <select class="filter-input" style="flex:1" onchange="updateDefaultMachine('${code}', this.value)">
+            <option value="">— Varsayılan yok —</option>
+            ${allMachines().map(m=>{ const label=`${m.code} · ${m.name}`; return `<option value="${esc(label)}" ${v.defaultMachine===label?'selected':''}>${esc(label)}</option>`; }).join('')}
+          </select></div>`;
+      });
+    } else if(settingsSubTab==='access'){
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Kişi Bazlı Makine Erişimi</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">İşaretli makineler o operatörün "Çalışılan Makine" listesinde görünür.</div>
+        <div class="field" style="max-width:340px"><label>Operatör Seç</label>
+          <select class="filter-input" onchange="setAccessOperator(this.value)">
+            <option value="">— Operatör seçin —</option>
+            ${operatorEntries.map(([code,v])=>`<option value="${code}" ${accessOperator===code?'selected':''}>${code} · ${esc(v.displayName)}</option>`).join('')}
+          </select></div>`;
+      if(accessOperator){
+        const op = STATE.operators[accessOperator]||{};
+        const allowed = op.allowedMachines ? Object.keys(op.allowedMachines).filter(k=>op.allowedMachines[k]) : allMachineCodes();
+        body += `<div class="machine-grid">${allMachines().map(m=>`
+          <label class="machine-check-row"><input type="checkbox" ${allowed.includes(m.code)?'checked':''} onchange="toggleMachineAccess('${accessOperator}','${m.code}')"><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</label>
+        `).join('')}</div>`;
+      }
+    } else if(settingsSubTab==='addOperator'){
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Yeni Operatör Ekle</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:480px">Kullanıcı adı OPRT kodu olmalı (ör. OPRT17). Şifreyi operatör kendisi sonradan değiştirebilir.</div>
+        <div style="max-width:400px">
+          <div class="field"><label>OPRT Kodu</label><input id="new-op-code" placeholder="ör. OPRT17"></div>
+          <div class="field"><label>Ad Soyad</label><input id="new-op-name" placeholder="ör. Mehmet YILMAZ"></div>
+          <div class="field"><label>Şifre (max 8 hane, rakam)</label><input id="new-op-pass" inputmode="numeric" maxlength="8" value="1234"></div>
+          <button class="btn-primary" onclick="addOperator()">+ Operatörü Ekle</button>
+        </div>` ;
+    } else if(settingsSubTab==='addMachine'){
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Yeni Makine Ekle</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:480px">Eklediğin makine anında tüm operatörlerin "Çalışılan Makine" listesinde görünür.</div>
+        <div style="max-width:400px">
+          <div class="field"><label>Makine Kodu</label><input id="new-mk-code" placeholder="ör. SM02"></div>
+          <div class="field"><label>Makine Adı</label><input id="new-mk-name" placeholder="ör. Sütun Matkap 2"></div>
+          <button class="btn-primary" onclick="addMachine()">+ Makineyi Ekle</button>
+        </div>
+        <div style="margin-top:24px;font-size:13px;font-weight:600;margin-bottom:8px">Mevcut Makineler (${allMachines().length})</div>
+        <div class="machine-grid">${allMachines().map(m=>`<div class="machine-chip"><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</div>`).join('')}</div>`;
+    }
+    body += `</div>`;
+  } else if(view==='matrix'){
+    const entries = entriesArray();
+    body = `<div class="matrix-wrap">
+      <div class="matrix-legend">
+        <span><span class="legend-dot" style="background:var(--success)"></span>Çalışıyor</span>
+        <span><span class="legend-dot" style="background:var(--warn)"></span>Duruşta</span>
+        <span><span class="legend-dot" style="background:var(--danger)"></span>Boşta</span>
+      </div>
+      <div class="matrix-grid">`;
+    allMachines().forEach(m=>{
+      const label = `${m.code} · ${m.name}`;
+      const machineEntries = entries.filter(e=>e.makine===label);
+      const running = machineEntries.find(e=>e.status==='devam');
+      const stopped = !running && machineEntries.find(e=>e.status==='duruş');
+      const info = running||stopped;
+      const bg = running?'#1a4d2e':stopped?'#4a3f0a':'#3d1f1f';
+      const border = running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
+      const dotColor = running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
+      const lastFinished = (!running&&!stopped) ? machineEntries.slice().sort((a,b)=>b.startTs-a.startTs)[0] : null;
+      body += `<div class="matrix-card" style="background:${bg};border-color:${border}" onclick="openMachineDetail('${m.code}')">
+        <div class="matrix-card-top"><span class="matrix-code">${m.code}</span><span class="matrix-dot" style="background:${dotColor}"></span></div>
+        <div class="matrix-name">${esc(m.name)}</div>`;
+      if(info){
+        body += `<div class="matrix-sub">${esc(info.isEmriNo)} · ${esc(info.operatorUsername)}</div>
+          <div class="matrix-sub">${stopped?`Duruş: "${esc(info.duruşNedeni)}"`:`${fmtElapsed(nowTick-info.startTs)} çalışıyor`}</div>`;
+      } else if(lastFinished){
+        body += `<div class="matrix-sub">Son: ${esc(lastFinished.operatorUsername)} · ${fmtDT(lastFinished.startTs)}</div>`;
+      } else {
+        body += `<div class="matrix-sub">Hiç kullanılmadı</div>`;
+      }
+      body += `</div>`;
+    });
+    body += `</div></div>`;
+  } else if(view==='completed'){
+    const routes = computeCompletedRoutes().filter(r => !completedSearch || r.isEmriNo.toLowerCase().includes(completedSearch.toLowerCase()));
+    body = `<div class="completed-wrap">
+      <input class="filter-input completed-search" placeholder="İş Emri No ara…" value="${esc(completedSearch)}" oninput="setCompletedSearch(this.value)">
+      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px">${routes.length} tamamlanmış rota</div>`;
+    if(routes.length===0){ body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Henüz tamamlanan rota yok.</div>`; }
+    routes.forEach(r=>{
+      const totalMs = r.entries.reduce((sum,e)=>sum+(e.endTs?(e.endTs-e.startTs):0),0);
+      const chain = r.entries.map(e=>(e.makine||'').split(' · ')[0]||'—');
+      const malz = r.entries.find(e=>e.malzemeCinsi||e.capBoy) || {};
+      const malzText = [malz.malzemeCinsi, malz.capBoy].filter(Boolean).join(' · ');
+      body += `<div class="completed-card" onclick="openRouteDetail('${r.isEmriNo.replace(/'/g,"\\'")}', ${r.finishedAt})">
+        <div class="completed-header">
+          <span class="completed-id">${esc(r.isEmriNo)} ✓${malzText?` · <span style="color:var(--text-muted);font-weight:400;font-size:13px">${esc(malzText)}</span>`:''}</span>
+          <span class="completed-meta">Tamamlandı: ${fmtDT(r.finishedAt)} · Toplam süre: ${fmtDur(totalMs)} · ${r.entries.length} adım</span>
+        </div>
+        <div class="route-chain">${chain.map((c,i)=>`<span class="route-chip">${esc(c)}</span>${i<chain.length-1?'<span class="route-arrow">→</span>':''}`).join('')}</div>
+      </div>`;
+    });
+    body += `</div>${routeModal ? renderRouteModal() : ''}`;
+  } else {
+    const entries = entriesArray();
+    const statOperator = new Set(entries.map(e=>e.operatorUsername)).size;
+    const statMakine = new Set(entries.map(e=>e.makine)).size;
+    const fe = filteredEntries();
+    reportVisibleIds = fe.map(e=>e.id);
+    const completedRoutes = computeCompletedRouteIds();
+    body = `
+      <div class="admin-stats">
+        <span><b style="color:var(--accent)">${statOperator}</b> operatör kayıt girmiş</span>
+        <span><b style="color:var(--accent)">${statMakine}</b> / ${allMachines().length} makine kullanılmış</span>
+        <span><b style="color:var(--accent)">${entries.length}</b> toplam kayıt</span>
+        <button class="btn-ghost" style="margin-left:auto" onclick="toggleMachineListView()">${showMachineList?'Makine Kodlarını Gizle':'Makine Kodlarını Göster'}</button>
+      </div>
+      ${showMachineList ? `<div class="machine-grid" style="padding:12px 24px;border-bottom:1px solid var(--border)">${allMachines().map(m=>`<div class="machine-chip"><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</div>`).join('')}</div>` : ''}
+      <div class="filter-bar">
+        <select class="filter-input" onchange="setReportFilterField('operator', this.value)">
+          <option value="">Tüm Operatörler</option>
+          ${operatorEntries.map(([code,v])=>`<option value="${code}" ${reportFilter.operator===code?'selected':''}>${code} · ${esc(v.displayName)}</option>`).join('')}
+        </select>
+        <input class="filter-input" placeholder="İş Emri No ara…" value="${esc(reportFilter.isEmriNo)}" oninput="setReportFilterFieldLight('isEmriNo', this.value)">
+        <select class="filter-input" onchange="setReportFilterField('makine', this.value)">
+          <option value="">Tüm Makineler</option>
+          ${allMachines().map(m=>{ const label=`${m.code} · ${m.name}`; return `<option value="${esc(label)}" ${reportFilter.makine===label?'selected':''}>${esc(label)}</option>`; }).join('')}
+        </select>
+        <input type="date" class="filter-input" value="${esc(reportFilter.tarih)}" onchange="setReportFilterField('tarih', this.value)">
+        ${(reportFilter.operator||reportFilter.isEmriNo||reportFilter.makine||reportFilter.tarih) ? `<button class="btn-ghost" onclick="clearReportFilter()">✕ Temizle</button>` : ''}
+        ${reportSelectedIds.size>0 ? `<button class="btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="deleteReportSelected()">🗑 Seçilenleri Sil (${reportSelectedIds.size})</button>` : ''}
+        <button class="btn-primary" style="width:auto;margin-left:auto;padding:8px 16px" onclick="exportExcel()">⬇ Excel'e Aktar (${fe.length})</button>
+      </div>
+      <div class="table-wrap"><table><thead><tr>
+        <th style="width:26px"><input type="checkbox" ${reportVisibleIds.length>0 && reportVisibleIds.every(id=>reportSelectedIds.has(id))?'checked':''} onchange="toggleReportSelectAll()"></th>
+        ${["İş Emri No","Operasyon No","Malzeme Cinsi","Çap ve Boy","Makine","Operatör","Başlangıç","Bitiş","Süre","Durum","Not"].map(h=>`<th>${h}</th>`).join('')}
+        <th style="width:36px"></th>
+      </tr></thead><tbody>`;
+    if(fe.length===0){ body += `<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:30px">Filtreyle eşleşen kayıt yok.</td></tr>`; }
+    fe.forEach(e=>{
+      const isDone = completedRoutes.has(e.id);
+      const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success)';
+      const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
+      const rowStyle = isDone ? 'background:#1a4d2e33' : '';
+      body += `<tr style="${rowStyle}">
+        <td><input type="checkbox" ${reportSelectedIds.has(e.id)?'checked':''} onchange="toggleReportSelect('${e.id}')"></td>
+        <td class="mono" style="color:var(--accent)">${esc(e.isEmriNo)} ${isDone?'✓':''}</td>
+        <td style="font-weight:700">${e._seq||'—'}</td>
+        <td>${esc(e.malzemeCinsi||'—')}</td>
+        <td>${esc(e.capBoy||'—')}</td>
+        <td>${esc(e.makine||'—')}</td>
+        <td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td>
+        <td>${fmtDT(e.startTs)}</td>
+        <td>${e.endTs?fmtDT(e.endTs):'—'}</td>
+        <td>${e.endTs?fmtDur(e.endTs-e.startTs):'—'}</td>
+        <td><span style="color:${statusColor};font-weight:600">${isDone?'Rota Tamamlandı':statusLabel}</span></td>
+        <td style="color:var(--text-muted);font-style:italic">${esc(e.not||'')}</td>
+        <td><button class="del-btn" onclick="deleteReportRecord('${e.id}')" title="Sil">🗑</button></td>
+      </tr>`;
+    });
+    body += `</tbody></table></div>`;
+  }
+
+  return `<div class="root-wide theme-${theme}">${header}${body}${machineModal ? renderMachineModal() : ''}</div>`;
+}
+function setReportFilterFieldLight(field, val){ reportFilter[field]=val; renderTableOnly(); }
+function renderTableOnly(){ render(); } // basit yaklaşım: filtre değişince tam yeniden çizim yeterli hızda çalışır
+
+/* ===================== ANA RENDER ===================== */
+function render(){
+  const app = document.getElementById('app');
+  if(!session){ app.innerHTML = renderLogin(); return; }
+  app.innerHTML = session.isAdmin ? renderAdmin() : renderOperator();
+}
+function renderLiveBits(){
+  // Sadece kilit ekranındaki / matristeki canlı sayaçları güncellemek için tam render yeterli (veri seti küçük).
+  if(getActiveEntry() || (session && session.isAdmin && view==='matrix')) render();
+}
+
+/* ===================== BAŞLAT ===================== */
+window.addEventListener('DOMContentLoaded', ()=>{
+  document.documentElement.className = 'theme-'+theme;
+  if(!fbConfigured()){
+    document.getElementById('app').innerHTML = `<div class="root-mobile theme-${theme}"><div class="auth-wrap"><div class="error-text" style="max-width:400px;margin:0 auto">Firebase databaseURL henüz girilmemiş. Lütfen KURULUM_BULUT.md dosyasındaki adımları izleyip bu HTML dosyasının başındaki FIREBASE_CONFIG içine databaseURL'i yapıştırın.</div></div></div>`;
+    return;
+  }
+  initFirebase();
+  render();
+});
+</script>
+</body>
+</html>
