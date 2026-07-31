@@ -317,6 +317,9 @@ let showMachineList = false;
 let matrixSort = 'alpha'; // 'alpha' | 'calisma'
 function setMatrixSort(v){ matrixSort = v; render(); }
 let machineModal = null; // açık modal'ın makine kodu
+let entryDetailId = null; // Rapor tablosunda tıklanan tek kaydın detay penceresi
+function openEntryDetail(id){ entryDetailId = id; render(); }
+function closeEntryDetail(){ entryDetailId = null; render(); }
 let modalSelectedIds = new Set();
 let modalVisibleIds = [];
 let reportSelectedIds = new Set();
@@ -971,6 +974,61 @@ function exportMachineExcel(code){
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, m.code);
   XLSX.writeFile(wb, `${m.code}_${modalDateFilter||'tumu'}.xlsx`);
+}
+function renderEntryDetailModal(){
+  const e = STATE.entries[entryDetailId];
+  if(!e){ entryDetailId=null; return ''; }
+  const isDone = computeCompletedRouteIds().has(e.id);
+  const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success)';
+  const statusLabel = isDone ? 'Rota Tamamlandı' : e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
+  const wallMs = e.endTs ? (e.endTs-e.startTs) : (e.status==='devam' ? (nowTick-e.startTs) : 0);
+  const durusMs = e.duruşToplamMs || 0;
+  const netMs = Math.max(0, wallMs - durusMs - (e.excludedMs||0));
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeEntryDetail()">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div><div class="modal-title">${esc(e.isEmriNo)}</div><div class="modal-sub">${esc(e.makine||'—')}</div></div>
+        <button class="icon-btn" onclick="closeEntryDetail()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-stats">
+          <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--success)">${fmtDur(netMs)}</div><div class="modal-stat-label">Üretim Süresi</div></div>
+          <div class="modal-stat-box"><div class="modal-stat-num" style="color:${durusMs>0?'var(--warn)':'var(--text-muted)'}">${fmtDur(durusMs)}</div><div class="modal-stat-label">Duruş Süresi</div></div>
+          <div class="modal-stat-box"><div class="modal-stat-num">${fmtDur(wallMs)}</div><div class="modal-stat-label">Toplam (Geçen Zaman)</div></div>
+          <div class="modal-stat-box"><div class="modal-stat-num" style="color:${statusColor}">${statusLabel}</div><div class="modal-stat-label">Durum</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+          <div class="op-settings-row" style="display:block">
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Operatör</div>
+            <div style="font-size:14px">${esc(e.operatorUsername)} · ${esc(e.operatorName)}</div>
+          </div>
+          <div class="op-settings-row" style="display:block">
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Malzeme / Adet</div>
+            <div style="font-size:14px">${esc(e.malzemeCinsi||'—')} ${esc(e.capBoy||'')} · Adet: ${esc(e.adet||'—')}</div>
+          </div>
+          <div class="op-settings-row" style="display:block">
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Başlangıç</div>
+            <div style="font-size:14px" class="mono">${fmtDT(e.startTs)}</div>
+          </div>
+          <div class="op-settings-row" style="display:block">
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Bitiş</div>
+            <div style="font-size:14px" class="mono">${e.endTs?fmtDT(e.endTs):'— (henüz bitmedi)'}</div>
+          </div>
+        </div>
+
+        ${durusMs>0 ? `<div style="background:#facc1518;border:1px solid #facc1540;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="font-size:11px;color:var(--warn);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Duruş Bilgisi</div>
+          <div style="font-size:14px;color:var(--warn)">Toplam ${fmtDur(durusMs)} durdu ${e.duruşNedeni?`— Neden: "${esc(e.duruşNedeni)}"`:''}</div>
+        </div>` : ''}
+
+        ${e.not ? `<div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:10px;padding:14px">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Not</div>
+          <div style="font-size:14px;font-style:italic">"${esc(e.not)}"</div>
+        </div>` : ''}
+      </div>
+    </div>
+  </div>`;
 }
 function renderMachineModal(){
   const m = allMachines().find(x=>x.code===machineModal);
@@ -1760,7 +1818,7 @@ function renderAdmin(){
       const rowStyle = isDone ? 'background:#1a4d2e33' : '';
       body += `<tr style="${rowStyle}">
         ${session.isSuperAdmin ? `<td><input type="checkbox" ${reportSelectedIds.has(e.id)?'checked':''} onchange="toggleReportSelect('${e.id}')"></td>` : ''}
-        <td class="mono" style="color:var(--accent)">${esc(e.isEmriNo)} ${isDone?'✓':''}</td>
+        <td class="mono" style="color:var(--accent);cursor:pointer" onclick="openEntryDetail('${e.id}')">${esc(e.isEmriNo)} ${isDone?'✓':''}</td>
         <td style="font-weight:700">${e._seq||'—'}</td>
         <td>${esc(e.malzemeCinsi||'—')}</td>
         <td>${esc(e.capBoy||'—')}</td>
@@ -1775,7 +1833,7 @@ function renderAdmin(){
         ${session.isSuperAdmin ? `<td><button class="del-btn" onclick="deleteReportRecord('${e.id}')" title="Sil">🗑</button></td>` : ''}
       </tr>`;
     });
-    body += `</tbody></table></div>`;
+    body += `</tbody></table></div>${entryDetailId ? renderEntryDetailModal() : ''}`;
   }
 
   return `<div class="root-wide theme-${theme}">${header}${body}${machineModal ? renderMachineModal() : ''}</div>`;
