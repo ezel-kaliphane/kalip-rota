@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ezel Cıvata — Atölye Rota Takip</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff8a3d">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rota Takip">
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -241,7 +248,7 @@ function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){}
 function load(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
 
 /* ===================== DURUM (STATE) ===================== */
-let STATE = { operators: {}, entries: {}, messages: {} };
+let STATE = { operators: {}, entries: {}, messages: {}, validIsEmri: {} };
 let extraMachines = {}; // admin tarafından sonradan eklenen makineler (Firebase 'machines_extra')
 let hiddenMachines = {}; // silinen dahili makineler (Firebase 'machines_hidden')
 function allMachines(){ return MACHINE_LIST.filter(m=>!hiddenMachines[m.code]).concat(Object.entries(extraMachines).map(([code,v])=>({code, name:v.name}))); }
@@ -251,8 +258,14 @@ let session = load('rota_remember', false) ? load('rota_session', null) : null;
 let theme = load('rota_theme', 'dark');
 let view = 'list';
 let nowTick = Date.now();
-let newForm = { isEmriNo:'', makine:'', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false };
+let newForm = { isEmriNo:'', makine:'', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false, cokluMode:false, cokluItems:[{isEmriNo:'',adet:''},{isEmriNo:'',adet:''}] };
+function toggleCokluMode(v){ newForm.cokluMode = v; render(); }
+function addCokluItem(){ newForm.cokluItems.push({isEmriNo:'',adet:''}); render(); }
+function removeCokluItem(i){ newForm.cokluItems.splice(i,1); render(); }
 let activeDetailId = null; // görüntülenen aktif işin id'si (Makineler listesinden tıklanan)
+let activeGroupId = null; // görüntülenen çoklu iş emri grubunun id'si
+function openGroupDetail(groupId){ activeGroupId = groupId; render(); }
+function closeGroupDetail(){ activeGroupId = null; view='list'; render(); }
 let editingActiveId = null; // düzenleme modunda olan aktif işin id'si
 let editForm = { isEmriNo:'', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false };
 function openEditActive(id){
@@ -271,7 +284,11 @@ function saveEditActive(id){
   const not = (document.getElementById('edit-not').value||'').trim();
   const sonOperasyon = !!document.getElementById('edit-son-operasyon')?.checked;
   if(!isEmriNo){ toast('İş Emri No boş olamaz'); return; }
+  if(Object.keys(STATE.validIsEmri||{}).length>0 && !STATE.validIsEmri[isEmriNo.toUpperCase()]){
+    toast('Bu iş emri bulunamadı, lütfen kodunuzu kontrol edin'); return;
+  }
   if(!adet){ toast('Adet boş olamaz'); return; }
+  if(!/^\d+$/.test(adet)){ toast('Adet sadece rakam olmalı'); return; }
 
   const fieldLabels = { isEmriNo:'İş Emri No', malzemeCinsi:'Malzeme Cinsi', capBoy:'Çap ve Boy', adet:'Adet', not:'Not', sonOperasyon:'Son Operasyon' };
   const after = { isEmriNo, malzemeCinsi, capBoy, adet, not, sonOperasyon };
@@ -329,6 +346,19 @@ let analizFrom = new Date().toISOString().slice(0,10);
 let analizTo = analizFrom;
 let analizSubTab = 'genel';
 let sendMsgOpen = false;
+let gecmisFrom = '', gecmisTo = '', gecmisSearch = '';
+function setGecmisSearch(v){ gecmisSearch=v; render(); }
+function setGecmisFrom(v){ gecmisFrom=v; render(); }
+function setGecmisTo(v){ gecmisTo=v; render(); }
+function setGecmisPreset(days){
+  const today = new Date();
+  gecmisTo = today.toISOString().slice(0,10);
+  const from = new Date(today);
+  from.setDate(from.getDate() - (days-1));
+  gecmisFrom = from.toISOString().slice(0,10);
+  render();
+}
+function clearGecmisFilter(){ gecmisFrom=''; gecmisTo=''; gecmisSearch=''; render(); }
 function openSendMessage(){ sendMsgOpen = true; render(); }
 function cancelSendMessage(){ sendMsgOpen = false; render(); }
 function submitSendMessage(){
@@ -468,6 +498,10 @@ function initFirebase(){
       STATE.messages = snap.val() || {};
       render();
     });
+    DB.ref('validIsEmri').on('value', snap=>{
+      STATE.validIsEmri = snap.val() || {};
+      render();
+    });
     return true;
   }catch(e){ console.warn('Firebase init hatası', e); return false; }
 }
@@ -536,25 +570,63 @@ function getAllowedMachines(){
 function openActiveDetail(id){ activeDetailId = id; render(); }
 function closeActiveDetail(){ activeDetailId = null; setView('list'); }
 function baslat(){
-  const isEmriNo = (document.getElementById('nf-isemri').value||'').trim();
   const makine = document.getElementById('nf-makine').value||'';
   const malzemeCinsi = (document.getElementById('nf-malzeme-cinsi').value||'').trim();
   const capBoy = (document.getElementById('nf-cap-boy').value||'').trim();
-  const adet = (document.getElementById('nf-adet').value||'').trim();
   const not = (document.getElementById('nf-not').value||'').trim();
   const sonOperasyon = !!document.getElementById('nf-son-operasyon')?.checked;
+  const canCoklu = !!(STATE.operators[session.username]||{}).cokluIsEmri;
+
+  if(!getAllowedMachines().includes(makine)){ toast('Listeden geçerli bir makine seçin'); return; }
+
+  if(canCoklu && newForm.cokluMode){
+    // Çoklu İş Emri: aynı makinede, aynı anda birden fazla İş Emri No — her birinin kendi adediyle
+    const items = newForm.cokluItems.map((it,i)=>({
+      isEmriNo: (document.getElementById('nf-coklu-isemri-'+i)?.value||'').trim(),
+      adet: (document.getElementById('nf-coklu-adet-'+i)?.value||'').trim()
+    }));
+    if(items.length===0){ toast('En az bir İş Emri No girin'); return; }
+    for(const it of items){
+      if(!it.isEmriNo){ toast('Tüm İş Emri No alanlarını doldurun'); return; }
+      if(!it.adet){ toast('Tüm Adet alanlarını doldurun'); return; }
+      if(!/^\d+$/.test(it.adet)){ toast('Adet sadece rakam olmalı'); return; }
+      if(Object.keys(STATE.validIsEmri||{}).length>0 && !STATE.validIsEmri[it.isEmriNo.toUpperCase()]){
+        toast(`"${it.isEmriNo}" bulunamadı, lütfen kodunuzu kontrol edin`); return;
+      }
+    }
+    const groupId = uid();
+    items.forEach(it=>{
+      const id = uid();
+      const entry = { isEmriNo: it.isEmriNo, makine, malzemeCinsi, capBoy, adet: it.adet, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0, excludedMs:0, groupId };
+      DB.ref('entries/'+id).set(entry);
+    });
+    toast(`${items.length} iş emri birlikte başlatıldı`);
+    newForm = { isEmriNo:'', makine: (STATE.operators[session.username]||{}).defaultMachine || '', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false, cokluMode:false, cokluItems:[{isEmriNo:'',adet:''},{isEmriNo:'',adet:''}] };
+    activeGroupId = groupId;
+    activeDetailId = null;
+    view = 'list';
+    render();
+    return;
+  }
+
+  // Tekli mod (varsayılan)
+  const isEmriNo = (document.getElementById('nf-isemri').value||'').trim();
+  const adet = (document.getElementById('nf-adet').value||'').trim();
   const allowMulti = !!(STATE.operators[session.username]||{}).multiJob;
   if(!allowMulti && myActiveEntries().length>0){ toast('Bu hesap aynı anda tek iş açabilir. Önce mevcut işi bitirmelisin.'); return; }
   if(!isEmriNo){ toast('İş Emri No girin'); return; }
-  if(!getAllowedMachines().includes(makine)){ toast('Listeden geçerli bir makine seçin'); return; }
   if(!adet){ toast('Adet girin'); return; }
+  if(!/^\d+$/.test(adet)){ toast('Adet sadece rakam olmalı'); return; }
+  if(Object.keys(STATE.validIsEmri||{}).length>0 && !STATE.validIsEmri[isEmriNo.toUpperCase()]){
+    toast('Bu iş emri bulunamadı, lütfen kodunuzu kontrol edin'); return;
+  }
   const machineBusy = entriesArray().some(e => e.makine === makine && e.status === 'devam');
   if(machineBusy){ toast('Bu makinede zaten aktif bir iş var. Önce o iş bitirilmeli ya da duraklatılmalı.'); return; }
   const id = uid();
   const entry = { isEmriNo, makine, malzemeCinsi, capBoy, adet, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0, excludedMs:0 };
   DB.ref('entries/'+id).set(entry);
   toast('Operasyon başlatıldı');
-  newForm = { isEmriNo:'', makine: (STATE.operators[session.username]||{}).defaultMachine || '', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false };
+  newForm = { isEmriNo:'', makine: (STATE.operators[session.username]||{}).defaultMachine || '', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false, cokluMode:false, cokluItems:[{isEmriNo:'',adet:''},{isEmriNo:'',adet:''}] };
   activeDetailId = id;
   view = 'list';
   render();
@@ -581,7 +653,7 @@ function confirmDurus(id){
 }
 function devamEt(id){
   const e = STATE.entries[id] || {};
-  const machineBusy = entriesArray().some(o => o.id!==id && o.makine===e.makine && o.status==='devam');
+  const machineBusy = entriesArray().some(o => o.id!==id && o.makine===e.makine && o.status==='devam' && !(e.groupId && o.groupId===e.groupId));
   if(machineBusy){ toast('Bu makinede zaten aktif başka bir iş var. Önce onu bitir ya da duraklat.'); return; }
   const extra = e.duruşTs ? (Date.now() - e.duruşTs) : 0;
   const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
@@ -591,6 +663,64 @@ function devamEt(id){
   toast('Operasyona devam ediliyor');
 }
 function silKayit(id){ DB.ref('entries/'+id).remove(); }
+
+/* ===================== ÇOKLU İŞ EMRİ GRUBU — TOPLU İŞLEMLER ===================== */
+function groupMembersOf(groupId){ return entriesArray().filter(e=>e.groupId===groupId && (e.status==='devam'||e.status==='duruş')); }
+function duraklatGrup(groupId){
+  const reason = durusReasonSel==='Diğer' ? (document.getElementById('durus-custom')?.value||'').trim() : durusReasonSel;
+  if(!reason){ toast('Duruş nedeni seçmelisin'); return; }
+  const now = Date.now();
+  groupMembersOf(groupId).forEach(e=>{
+    DB.ref('entries/'+e.id).update({ status:'duruş', duruşNedeni: reason, duruşTs: now });
+  });
+  toast('Tüm iş emirleri duraklatıldı');
+  durusOpen=false; durusReasonSel=''; durusCustom='';
+}
+function devamGrup(groupId){
+  const members = groupMembersOf(groupId);
+  if(members.length===0) return;
+  const makine = members[0].makine;
+  const machineBusy = entriesArray().some(o => o.groupId!==groupId && o.makine===makine && o.status==='devam');
+  if(machineBusy){ toast('Bu makinede zaten aktif başka bir iş var. Önce onu bitir ya da duraklat.'); return; }
+  const now = Date.now();
+  members.forEach(e=>{
+    const extra = e.duruşTs ? (now - e.duruşTs) : 0;
+    const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
+    const duruşToplamMs = (e.duruşToplamMs||0) + (isGunSonu?0:extra);
+    const excludedMs = (e.excludedMs||0) + (isGunSonu?extra:0);
+    DB.ref('entries/'+e.id).update({ status:'devam', duruşNedeni:'', duruşToplamMs, excludedMs });
+  });
+  toast('Tüm iş emirleri devam ediyor');
+}
+function bitirGrup(groupId){
+  const members = groupMembersOf(groupId);
+  if(members.length===0) return;
+  const now = Date.now();
+  // Duraklatılmışsa önce ortak duruş süresini kapat (Gün Sonu hariç tutma kuralı aynı şekilde uygulanır).
+  const withDurus = members.map(e=>{
+    let extra = 0;
+    if(e.status==='duruş' && e.duruşTs) extra = now - e.duruşTs;
+    const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
+    return { e, duruşToplamMs: (e.duruşToplamMs||0) + (isGunSonu?0:extra), excludedMs: (e.excludedMs||0) + (isGunSonu?extra:0) };
+  });
+  const totalAdet = withDurus.reduce((s,x)=>s+(Number(x.e.adet)||0), 0);
+  const n = withDurus.length;
+  withDurus.forEach(x=>{
+    const share = totalAdet>0 ? (Number(x.e.adet)||0)/totalAdet : 1/n;
+    const wallMs = now - x.e.startTs;
+    const allocatedWallMs = Math.round(wallMs*share);
+    const allocatedDurusMs = Math.round(x.duruşToplamMs*share);
+    const allocatedExcludedMs = Math.round(x.excludedMs*share);
+    DB.ref('entries/'+x.e.id).update({
+      endTs: x.e.startTs + allocatedWallMs,
+      status: 'tamamlandi',
+      duruşToplamMs: allocatedDurusMs,
+      excludedMs: allocatedExcludedMs
+    });
+  });
+  toast('Tüm iş emirleri tamamlandı');
+  activeGroupId = null; view='list'; render();
+}
 
 /* ===================== ADMİN İŞLEMLERİ ===================== */
 function updateDefaultMachine(code, val){ DB.ref('operators/'+code+'/defaultMachine').set(val); toast(code+' için varsayılan makine güncellendi'); }
@@ -604,6 +734,10 @@ function setAccessOperator(v){ accessOperator=v; render(); }
 function toggleMultiJob(code){
   const op = STATE.operators[code] || {};
   DB.ref('operators/'+code+'/multiJob').set(!op.multiJob);
+}
+function toggleCokluIsEmri(code){
+  const op = STATE.operators[code] || {};
+  DB.ref('operators/'+code+'/cokluIsEmri').set(!op.cokluIsEmri);
 }
 function toggleMessagesAccess(code){
   const op = STATE.operators[code] || {};
@@ -645,6 +779,60 @@ function addMachine(){
 function requireSuperAdmin(){
   if(!session || !session.isSuperAdmin){ toast('Bu işlem için süper admin yetkisi gerekli'); return false; }
   return true;
+}
+function canManageIsEmriList(){
+  if(!session) return false;
+  if(session.isSuperAdmin || session.isSef) return true;
+  toast('Bu işlem için yetkin yok');
+  return false;
+}
+function uploadIsEmriListesi(){
+  if(!canManageIsEmriList()) return;
+  const fileInput = document.getElementById('isemri-file-input');
+  const file = fileInput?.files?.[0];
+  const statusEl = document.getElementById('isemri-upload-status');
+  const colName = (document.getElementById('isemri-col-name')?.value||'Malzeme kodu').trim().toLowerCase();
+  if(!file){ toast('Bir dosya seçin'); return; }
+  if(statusEl) statusEl.textContent = 'Okunuyor…';
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const sheetName = wb.SheetNames.find(n => n.toUpperCase().includes('İŞ EMRİ') || n.toUpperCase().includes('IS EMRI')) || wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      if(rows.length===0){ if(statusEl) statusEl.textContent='Dosya boş görünüyor.'; return; }
+      const header = rows[0].map(h=>String(h||'').trim().toLowerCase());
+      let colIdx = header.findIndex(h => h===colName);
+      if(colIdx===-1) colIdx = header.findIndex(h => h.includes(colName));
+      if(colIdx===-1){ if(statusEl) statusEl.textContent = `"${colName}" başlıklı sütun bulunamadı (sayfa: ${sheetName}). Sütun adını kontrol edin.`; return; }
+      const codes = {};
+      for(let i=1;i<rows.length;i++){
+        const v = rows[i][colIdx];
+        if(v==null) continue;
+        const s = String(v).trim().toUpperCase();
+        if(s) codes[s] = true;
+      }
+      const codeCount = Object.keys(codes).length;
+      if(codeCount===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
+      DB.ref('validIsEmri').set(codes).then(()=>{
+        toast(`${codeCount} İş Emri No yüklendi`);
+        if(statusEl) statusEl.textContent = `${codeCount} kayıt başarıyla yüklendi (sayfa: ${sheetName}).`;
+        fileInput.value = '';
+      });
+    } catch(err){
+      console.warn(err);
+      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx formatında olduğundan emin olun.';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function clearIsEmriListesi(){
+  if(!canManageIsEmriList()) return;
+  if(!confirm('İş emri listesini tamamen silmek istediğine emin misin? Bu, doğrulamayı devre dışı bırakır (herkes serbestçe iş emri no girebilir).')) return;
+  DB.ref('validIsEmri').remove();
+  toast('Liste temizlendi');
 }
 function deleteMachine(code){
   if(!requireSuperAdmin()) return;
@@ -1189,6 +1377,62 @@ function renderLogin(){
 }
 
 /* ===================== RENDER: KİLİT EKRANI (aktif operasyon) ===================== */
+function renderGroupScreen(groupId, groupMembers){
+  const makine = groupMembers[0]?.makine || '—';
+  const anyDurus = groupMembers.some(e=>e.status==='duruş');
+  const ref = groupMembers[0];
+  const header = `
+    <div class="header">
+      <div class="header-left">${connDot()}<span style="font-size:20px">🏭</span><div><div class="brand">ROTA TAKİP</div><div class="brand-sub">${esc(session.username)} · ${esc(session.displayName)}</div></div></div>
+      <button class="icon-btn" onclick="doLogout()" title="Çıkış">⎋</button>
+    </div>
+    <div style="padding:14px 18px 0">
+      <button class="btn-ghost" onclick="closeGroupDetail()">← Makineler</button>
+    </div>`;
+
+  let actionBlock;
+  if(anyDurus){
+    actionBlock = `<div style="display:flex;gap:10px;margin-top:28px">
+      <button class="btn-start" style="width:auto;padding:13px 26px" onclick="devamGrup('${groupId}')">▶ Duraklatmayı Devam Ettir (Tümü)</button>
+    </div>`;
+  } else if(!durusOpen){
+    actionBlock = `<div style="display:flex;gap:10px;margin-top:28px">
+      <button class="chip" style="padding:13px 22px" onclick="toggleDurus(true)">⏱ Duruşa Al (Tümü)</button>
+      <button class="btn-primary" style="width:auto;padding:13px 22px" onclick="bitirGrup('${groupId}')">■ Bitir (Tümü)</button>
+    </div>`;
+  } else {
+    actionBlock = `<div style="display:flex;flex-direction:column;gap:12px;margin-top:28px;width:100%;max-width:320px">
+      <div class="durus-chip-row">
+        ${DURUS_REASONS.map((r,i)=>{
+          const isGunSonu = r===GUN_SONU_REASON;
+          const isActive = durusReasonSel===r;
+          const style = isGunSonu
+            ? `border-color:#38bdf8;color:#38bdf8;background:${isActive?'#38bdf855':'#38bdf822'};font-weight:700`
+            : '';
+          return `<button class="chip ${isActive&&!isGunSonu?'active':''}" style="${style}" onclick="pickDurusReason(${i})">${isGunSonu?'🌙 ':''}${esc(r)}</button>`;
+        }).join('')}
+      </div>
+      ${durusReasonSel==='Diğer' ? `<input id="durus-custom" placeholder="Nedeni yaz…" value="${esc(durusCustom)}" oninput="durusCustom=this.value">` : ''}
+      <div style="display:flex;gap:10px">
+        <button class="chip" style="border-color:var(--warn);color:var(--warn)" onclick="duraklatGrup('${groupId}')">✓ Duruşu Onayla (Tümü)</button>
+        <button class="btn-ghost" onclick="toggleDurus(false)">✕ Vazgeç</button>
+      </div>
+    </div>`;
+  }
+
+  const body = `<div class="lock-screen">
+    <div class="lock-label" style="${anyDurus?'color:var(--warn)':''}">${anyDurus?'DURUŞTA':'ÇOKLU İŞ EMRİ'}</div>
+    <div class="lock-id">${esc(makine)}</div>
+    <div class="lock-machine">${groupMembers.map(e=>esc(e.isEmriNo)).join(', ')}</div>
+    <div class="lock-timer" style="${anyDurus?'color:var(--warn)':''}">${anyDurus?fmtElapsed(nowTick-ref.duruşTs):fmtElapsed(nowTick-ref.startTs)}</div>
+    <div class="lock-meta">${anyDurus?'duruş süresi (tüm iş emirleri için ortak)':`${groupMembers.length} iş emri bu makinede aynı anda aktif`}</div>
+    ${anyDurus ? `<div class="durus-reason-box" style="${ref.duruşNedeni===GUN_SONU_REASON?'color:#38bdf8;background:#38bdf818;border-color:#38bdf840':''}">${ref.duruşNedeni===GUN_SONU_REASON?'🌙 ':''}"${esc(ref.duruşNedeni)}"</div>` : ''}
+    <div style="margin-top:14px;font-size:12.5px;color:var(--text-muted)">${groupMembers.map(e=>`${esc(e.isEmriNo)} · Adet: ${esc(e.adet||'—')}`).join(' &nbsp;|&nbsp; ')}</div>
+    ${actionBlock}
+  </div>`;
+
+  return `<div class="root-mobile theme-${theme}">${header}${body}</div>`;
+}
 function renderLockScreen(active){
   const header = `
     <div class="header">
@@ -1210,7 +1454,7 @@ function renderLockScreen(active){
           <div class="field"><label>İş Emri No</label><input id="edit-isemri" class="mono" value="${esc(editForm.isEmriNo)}"></div>
           <div class="field"><label>Malzeme Cinsi</label><input id="edit-malzeme-cinsi" value="${esc(editForm.malzemeCinsi)}"></div>
           <div class="field"><label>Çap ve Boy</label><input id="edit-cap-boy" value="${esc(editForm.capBoy)}"></div>
-          <div class="field"><label>Adet</label><input id="edit-adet" inputmode="numeric" value="${esc(editForm.adet)}"></div>
+          <div class="field"><label>Adet</label><input id="edit-adet" inputmode="numeric" value="${esc(editForm.adet)}" oninput="this.value=this.value.replace(/\D/g,'')"></div>
           <div class="field"><label>Not</label><textarea id="edit-not" style="min-height:60px">${esc(editForm.not)}</textarea></div>
           <label style="display:flex;align-items:center;gap:8px;background:var(--panel-alt);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
             <input id="edit-son-operasyon" type="checkbox" ${editForm.sonOperasyon?'checked':''} style="width:auto">
@@ -1287,6 +1531,9 @@ function renderLockScreen(active){
 function renderOperator(){
   const detailEntry = activeDetailId ? entriesArray().find(e=>e.id===activeDetailId && (e.status==='devam'||e.status==='duruş')) : null;
   if(detailEntry) return renderLockScreen(detailEntry);
+  const groupMembers = activeGroupId ? entriesArray().filter(e=>e.groupId===activeGroupId && (e.status==='devam'||e.status==='duruş')) : [];
+  if(activeGroupId && groupMembers.length>0) return renderGroupScreen(activeGroupId, groupMembers);
+  if(activeGroupId && groupMembers.length===0){ activeGroupId=null; }
 
   const header = `
     <div class="header">
@@ -1307,13 +1554,31 @@ function renderOperator(){
     <div class="tabs">
       <button class="tab-btn ${view==='list'?'active':''}" onclick="setView('list')">🏭 Makineler</button>
       <button class="tab-btn ${view==='new'?'active':''}" onclick="setView('new')">+ Yeni Kayıt</button>
+      <button class="tab-btn ${view==='gecmis'?'active':''}" onclick="setView('gecmis')">📜 Geçmiş</button>
     </div>`;
 
   let body = '';
   if(view==='new'){
     const allowed = getAllowedMachines();
+    const canCoklu = !!(STATE.operators[session.username]||{}).cokluIsEmri;
     body = `<div class="body-pad">
-      <div class="field"><label>İş Emri No</label><input id="nf-isemri" class="mono" placeholder="ör. U0009569" value="${esc(newForm.isEmriNo)}" oninput="newForm.isEmriNo=this.value"></div>
+      ${canCoklu ? `<label style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
+        <input id="nf-coklu-mode" type="checkbox" ${newForm.cokluMode?'checked':''} onchange="toggleCokluMode(this.checked)" style="width:auto">
+        <span style="font-size:13px">Çoklu İş Emri <span style="color:var(--text-muted);font-size:11.5px">(bu makinede aynı anda birden fazla İş Emri No çalıştır)</span></span>
+      </label>` : ''}
+      ${newForm.cokluMode ? `
+        <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px">Her iş emri için ayrı İş Emri No ve Adet gir. İstediğin kadar ekleyebilirsin.</div>
+        ${newForm.cokluItems.map((it,i)=>`
+          <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px">
+            <div class="field" style="flex:1;margin-bottom:0"><label>İş Emri No ${i+1}</label><input id="nf-coklu-isemri-${i}" class="mono" placeholder="ör. U0009569" value="${esc(it.isEmriNo)}" oninput="newForm.cokluItems[${i}].isEmriNo=this.value"></div>
+            <div class="field" style="width:90px;margin-bottom:0"><label>Adet</label><input id="nf-coklu-adet-${i}" inputmode="numeric" placeholder="120" value="${esc(it.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newForm.cokluItems[${i}].adet=this.value"></div>
+            ${newForm.cokluItems.length>1 ? `<button type="button" class="btn-ghost" style="padding:10px 12px" onclick="removeCokluItem(${i})">🗑</button>` : ''}
+          </div>
+        `).join('')}
+        <button type="button" class="btn-ghost" style="margin-bottom:14px" onclick="addCokluItem()">+ İş Emri Ekle</button>
+      ` : `
+        <div class="field"><label>İş Emri No</label><input id="nf-isemri" class="mono" placeholder="ör. U0009569" value="${esc(newForm.isEmriNo)}" oninput="newForm.isEmriNo=this.value"></div>
+      `}
       <div class="field"><label>Çalışılan Makine</label>
         <div style="display:flex;gap:8px">
           <input id="nf-makine" list="makine-options" placeholder="Yazmaya başla… ör. TES" value="${esc(newForm.makine)}" oninput="newForm.makine=this.value" onfocus="this.select()" style="flex:1">
@@ -1323,13 +1588,43 @@ function renderOperator(){
       </div>
       <div class="field"><label>Malzeme Cinsi (opsiyonel)</label><input id="nf-malzeme-cinsi" placeholder="ör. 4Mo1 ıslahlı" value="${esc(newForm.malzemeCinsi)}" oninput="newForm.malzemeCinsi=this.value"></div>
       <div class="field"><label>Çap ve Boy (opsiyonel)</label><input id="nf-cap-boy" placeholder="ör. Ø26 x 200" value="${esc(newForm.capBoy)}" oninput="newForm.capBoy=this.value"></div>
-      <div class="field"><label>Adet</label><input id="nf-adet" inputmode="numeric" placeholder="ör. 120" value="${esc(newForm.adet)}" oninput="newForm.adet=this.value"></div>
+      ${!newForm.cokluMode ? `<div class="field"><label>Adet</label><input id="nf-adet" inputmode="numeric" placeholder="ör. 120" value="${esc(newForm.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newForm.adet=this.value"></div>` : ''}
       <div class="field"><label>Not (opsiyonel)</label><textarea id="nf-not" style="min-height:60px" placeholder="Serbest not" oninput="newForm.not=this.value">${esc(newForm.not)}</textarea></div>
       <label style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
         <input id="nf-son-operasyon" type="checkbox" ${newForm.sonOperasyon?'checked':''} onchange="newForm.sonOperasyon=this.checked" style="width:auto">
         <span style="font-size:13px">Son Operasyon <span style="color:var(--text-muted);font-size:11.5px">(bu adım tamamlanınca iş rotası kapanır)</span></span>
       </label>
       <button class="btn-start" onclick="baslat()">▶ Başla (saat otomatik)</button>
+    </div>`;
+  } else if(view==='gecmis'){
+    const myEntries = entriesArray()
+      .filter(e => e.operatorUsername===session.username)
+      .filter(e => (!gecmisFrom || dateKey(e.startTs)>=gecmisFrom) && (!gecmisTo || dateKey(e.startTs)<=gecmisTo))
+      .filter(e => !gecmisSearch || e.isEmriNo.toLowerCase().includes(gecmisSearch.toLowerCase()))
+      .sort((a,b)=>b.startTs-a.startTs);
+    body = `<div class="body-pad">
+      <div class="field"><label>İş Emri No Ara</label><input id="gecmis-search" class="mono" placeholder="ör. U0009569" value="${esc(gecmisSearch)}" oninput="setGecmisSearch(this.value)"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <input type="date" class="filter-input" style="flex:1;min-width:130px" value="${esc(gecmisFrom)}" onchange="setGecmisFrom(this.value)" title="Başlangıç">
+        <input type="date" class="filter-input" style="flex:1;min-width:130px" value="${esc(gecmisTo)}" onchange="setGecmisTo(this.value)" title="Bitiş">
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <button class="chip" onclick="setGecmisPreset(7)">Son 7 Gün</button>
+        <button class="chip" onclick="setGecmisPreset(30)">Son 30 Gün</button>
+        ${(gecmisFrom||gecmisTo||gecmisSearch) ? `<button class="btn-ghost" onclick="clearGecmisFilter()">✕ Temizle</button>` : ''}
+      </div>
+      ${myEntries.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Bu aralıkta kayıt yok.</div>` : myEntries.map(e=>{
+        const statusColor = e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success)';
+        const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
+        const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : (e.status==='devam' ? fmtElapsed(nowTick-e.startTs)+' (sürüyor)' : '—');
+        return `<div class="card" style="cursor:pointer" onclick="openEntryDetail('${e.id}')">
+          <div class="card-header"><span class="card-id">${esc(e.isEmriNo)}</span><span class="card-meta">${dateKey(e.startTs)}</span></div>
+          <div class="op-top"><span class="op-code">${esc(e.makine||'—')}</span></div>
+          <div class="op-foot">🕐 ${fmtDT(e.startTs)} → ${e.endTs?fmtDT(e.endTs):'—'} · ${dur}</div>
+          <div style="margin-top:6px;font-size:12px;font-weight:600;color:${statusColor}">${statusLabel}</div>
+        </div>`;
+      }).join('')}
+      ${entryDetailId ? renderEntryDetailModal() : ''}
     </div>`;
   } else if(view==='settings'){
     body = `<div class="body-pad">
@@ -1341,16 +1636,40 @@ function renderOperator(){
     </div>`;
   } else {
     const mine = myActiveEntries();
-    body = `<div class="body-pad">`;
-    if(mine.length===0) body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Henüz aktif işlem yok.<br><span style="font-size:12px">"+ Yeni Kayıt" ile bir makine başlat.</span></div>`;
+    // Aynı groupId'ye sahip kayıtları TEK kart olarak göster (çoklu iş emri).
+    const groups = [];
+    const seenGroups = new Set();
     mine.forEach(e=>{
-      const dotColor = e.status==='duruş'?'var(--warn)':'var(--success)';
-      const subInfo = e.status==='duruş' ? `Duruşta: "${esc(e.duruşNedeni)}"` : `${fmtElapsed(nowTick-e.startTs)} çalışıyor`;
-      body += `<div class="card" style="cursor:pointer" onclick="openActiveDetail('${e.id}')">
-        <div class="card-header"><span class="card-id">${esc(e.isEmriNo)}</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
-        <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(e.makine)}</span></div>
-        <div class="op-foot">${subInfo}${e.adet?` · Adet: ${esc(e.adet)}`:''}</div>
-      </div>`;
+      if(e.groupId){
+        if(seenGroups.has(e.groupId)) return;
+        seenGroups.add(e.groupId);
+        groups.push({ groupId: e.groupId, members: mine.filter(x=>x.groupId===e.groupId) });
+      } else {
+        groups.push({ groupId: null, members: [e] });
+      }
+    });
+    body = `<div class="body-pad">`;
+    if(groups.length===0) body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Henüz aktif işlem yok.<br><span style="font-size:12px">"+ Yeni Kayıt" ile bir makine başlat.</span></div>`;
+    groups.forEach(g=>{
+      if(g.members.length===1){
+        const e = g.members[0];
+        const dotColor = e.status==='duruş'?'var(--warn)':'var(--success)';
+        const subInfo = e.status==='duruş' ? `Duruşta: "${esc(e.duruşNedeni)}"` : `${fmtElapsed(nowTick-e.startTs)} çalışıyor`;
+        body += `<div class="card" style="cursor:pointer" onclick="openActiveDetail('${e.id}')">
+          <div class="card-header"><span class="card-id">${esc(e.isEmriNo)}</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
+          <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(e.makine)}</span></div>
+          <div class="op-foot">${subInfo}${e.adet?` · Adet: ${esc(e.adet)}`:''}</div>
+        </div>`;
+      } else {
+        const makine = g.members[0].makine;
+        const anyDurus = g.members.some(m=>m.status==='duruş');
+        const dotColor = anyDurus ? 'var(--warn)' : 'var(--success)';
+        body += `<div class="card" style="cursor:pointer" onclick="openGroupDetail('${g.groupId}')">
+          <div class="card-header"><span class="card-id">${g.members.length} İş Emri Aktif</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
+          <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(makine)}</span></div>
+          <div class="op-foot">${g.members.map(m=>`${esc(m.isEmriNo)} (${m.status==='duruş'?'duruşta':fmtElapsed(nowTick-m.startTs)})`).join(', ')}</div>
+        </div>`;
+      }
     });
     body += `</div>`;
   }
@@ -1370,7 +1689,7 @@ function renderAdmin(){
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M2 6l10 7 10-7"></path></svg>
           ${unreadMessageCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadMessageCount()}</span>` : ''}
         </button>` : ''}
-        ${session.isSuperAdmin ? `<button class="icon-btn-labeled" onclick="setView('adminSettings')" style="${view==='adminSettings'?'border-color:var(--accent);color:var(--accent)':''}">⚙ Ayarlar</button>` : ''}
+        ${(session.isSuperAdmin||session.isSef) ? `<button class="icon-btn-labeled" onclick="setView('adminSettings')" style="${view==='adminSettings'?'border-color:var(--accent);color:var(--accent)':''}">⚙ Ayarlar</button>` : ''}
         <button class="icon-btn-labeled" onclick="doLogout()" style="padding:10px 20px;font-size:14px;font-weight:600">⎋ Çıkış</button>
       </div>
     </div>
@@ -1383,17 +1702,22 @@ function renderAdmin(){
     </div>`;
 
   let body = '';
-  if(view==='adminSettings' && !session.isSuperAdmin){ view = 'report'; }
-  if(session.isSef && (view==='report' || view==='analiz' || view==='adminSettings')){ view = 'matrix'; }
+  if(view==='adminSettings' && !session.isSuperAdmin && !session.isSef){ view = 'report'; }
+  if(session.isSef && (view==='report' || view==='analiz')){ view = 'matrix'; }
+  if(session.isSef && view==='adminSettings' && settingsSubTab!=='isEmriListesi'){ settingsSubTab = 'isEmriListesi'; }
   if(view==='adminSettings'){
     body = `<div class="settings-wrap">
       <div class="sub-tabs">
+        ${session.isSuperAdmin ? `
         <button class="sub-tab-btn ${settingsSubTab==='default'?'active':''}" onclick="setSettingsSubTab('default')">Varsayılan Makineler</button>
         <button class="sub-tab-btn ${settingsSubTab==='access'?'active':''}" onclick="setSettingsSubTab('access')">Makine Erişimi</button>
         <button class="sub-tab-btn ${settingsSubTab==='multiJob'?'active':''}" onclick="setSettingsSubTab('multiJob')">Çoklu İş İzni</button>
-        <button class="sub-tab-btn ${settingsSubTab==='msgAccess'?'active':''}" onclick="setSettingsSubTab('msgAccess')">Mesaj Erişimi</button>
+        <button class="sub-tab-btn ${settingsSubTab==='cokluIsEmri'?'active':''}" onclick="setSettingsSubTab('cokluIsEmri')">Çoklu İş Emri İzni</button>
+        <button class="sub-tab-btn ${settingsSubTab==='msgAccess'?'active':''}" onclick="setSettingsSubTab('msgAccess')">Mesaj Erişimi</button>` : ''}
+        <button class="sub-tab-btn ${settingsSubTab==='isEmriListesi'?'active':''}" onclick="setSettingsSubTab('isEmriListesi')">İş Emri Listesi</button>
+        ${session.isSuperAdmin ? `
         <button class="sub-tab-btn ${settingsSubTab==='addOperator'?'active':''}" onclick="setSettingsSubTab('addOperator')">+ Kullanıcı Ekle</button>
-        <button class="sub-tab-btn ${settingsSubTab==='addMachine'?'active':''}" onclick="setSettingsSubTab('addMachine')">+ Makine Ekle</button>
+        <button class="sub-tab-btn ${settingsSubTab==='addMachine'?'active':''}" onclick="setSettingsSubTab('addMachine')">+ Makine Ekle</button>` : ''}
       </div>`;
     if(settingsSubTab==='default'){
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Operatör Varsayılan Makineleri</div>
@@ -1430,6 +1754,19 @@ function renderAdmin(){
               <div class="op-settings-id">${esc(code)}</div>
               <div class="op-settings-name">${esc(v.displayName)}</div>
               <span style="font-size:12px;color:${v.multiJob?'var(--success)':'var(--text-muted)'};font-weight:600">${v.multiJob?'Çoklu iş açabilir':'Tek iş (varsayılan)'}</span>
+            </label>
+          `).join('')}
+        </div>`;
+    } else if(settingsSubTab==='cokluIsEmri'){
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Çoklu İş Emri İzni</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">İşaretli operatörler, Yeni Kayıt ekranında "Çoklu İş Emri" seçeneğini görür — tek bir makinede aynı anda birden fazla İş Emri No'yu (her birinin kendi adediyle) birlikte başlatabilirler. Sınır yok, istediği kadar iş emri girebilir.</div>
+        <div class="op-settings-table">
+          ${operatorEntries.map(([code,v])=>`
+            <label class="op-settings-row" style="cursor:pointer">
+              <input type="checkbox" ${v.cokluIsEmri?'checked':''} onchange="toggleCokluIsEmri('${code}')" style="width:auto">
+              <div class="op-settings-id">${esc(code)}</div>
+              <div class="op-settings-name">${esc(v.displayName)}</div>
+              <span style="font-size:12px;color:${v.cokluIsEmri?'var(--success)':'var(--text-muted)'};font-weight:600">${v.cokluIsEmri?'İzinli':'İzinsiz (varsayılan)'}</span>
             </label>
           `).join('')}
         </div>`;
@@ -1485,6 +1822,20 @@ function renderAdmin(){
         </div>
         <div style="margin-top:24px;font-size:13px;font-weight:600;margin-bottom:8px">Mevcut Makineler (${allMachines().length})</div>
         <div class="machine-grid">${allMachines().map(m=>`<div class="machine-chip" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</span><button class="del-btn" onclick="deleteMachine('${m.code}')" title="Sil">🗑</button></div>`).join('')}</div>`;
+    } else if(settingsSubTab==='isEmriListesi'){
+      const count = Object.keys(STATE.validIsEmri||{}).length;
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">İş Emri Listesi (ERP Doğrulaması)</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">ERP'den aldığınız Excel dosyasını buraya yükleyin. Operatörler İş Emri No (U kodu) girdiğinde, sistem bu listede olup olmadığını kontrol eder — listede yoksa "bu iş emri bulunamadı" uyarısı verir. Excel'inizde yeni iş emirleri oluştukça, dosyayı tekrar buraya yükleyip listeyi güncelleyebilirsiniz (eskisinin üzerine yazılır).</div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:480px;margin-bottom:18px">
+          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${count}</b> adet İş Emri No kayıtlı.${count===0?' <span style="color:var(--warn)">(Liste boşsa doğrulama yapılmaz, herkes serbestçe girebilir.)</span>':''}</div>
+          <div class="field"><label>Sütun Başlığı (varsayılan: Malzeme kodu)</label><input id="isemri-col-name" value="Malzeme kodu" placeholder="Malzeme kodu"></div>
+          <input type="file" id="isemri-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadIsEmriListesi()">⬆ Yükle ve Güncelle</button>
+            ${count>0 ? `<button class="btn-ghost" onclick="clearIsEmriListesi()">🗑 Listeyi Temizle</button>` : ''}
+          </div>
+          <div id="isemri-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
+        </div>`;
     }
     body += `</div>`;
   } else if(view==='matrix'){
@@ -1524,19 +1875,37 @@ function renderAdmin(){
     sortedMachines.forEach(m=>{
       const label = `${m.code} · ${m.name}`;
       const machineEntries = entries.filter(e=>e.makine===label);
-      const running = machineEntries.find(e=>e.status==='devam');
-      const stopped = !running && machineEntries.find(e=>e.status==='duruş');
-      const info = running||stopped;
-      const bg = running?'#1a4d2e':stopped?'#4a3f0a':'#3d1f1f';
+      const runningEntries = machineEntries.filter(e=>e.status==='devam');
+      const stoppedEntries = machineEntries.filter(e=>e.status==='duruş');
+      const running = runningEntries.length>0;
+      const stopped = !running && stoppedEntries.length>0;
+      const bg = theme==='light'
+        ? (running?'#d1fae5':stopped?'#fef3c7':'#fee2e2')
+        : (running?'#1a4d2e':stopped?'#4a3f0a':'#3d1f1f');
       const border = running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
       const dotColor = running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
       const lastFinished = (!running&&!stopped) ? machineEntries.slice().sort((a,b)=>b.startTs-a.startTs)[0] : null;
       body += `<div class="matrix-card" style="background:${bg};border-color:${border}" onclick="openMachineDetail('${m.code}')">
         <div class="matrix-card-top"><span class="matrix-code">${m.code}</span><span class="matrix-dot" style="background:${dotColor}"></span></div>
         <div class="matrix-name">${esc(m.name)}</div>`;
-      if(info){
-        body += `<div class="matrix-sub">${esc(info.isEmriNo)} · ${esc(info.operatorUsername)}</div>
-          <div class="matrix-sub">${stopped?`Duruş: "${esc(info.duruşNedeni)}"`:`${fmtElapsed(nowTick-info.startTs)} çalışıyor`}</div>`;
+      if(running){
+        if(runningEntries.length===1){
+          const info = runningEntries[0];
+          body += `<div class="matrix-sub">${esc(info.isEmriNo)} · ${esc(info.operatorUsername)}</div>
+            <div class="matrix-sub">${fmtElapsed(nowTick-info.startTs)} çalışıyor</div>`;
+        } else {
+          body += `<div class="matrix-sub" style="font-weight:700">${runningEntries.length} İş Emri Aktif</div>
+            <div class="matrix-sub">${runningEntries.map(e=>`${esc(e.isEmriNo)} (${fmtElapsed(nowTick-e.startTs)})`).join(', ')}</div>`;
+        }
+      } else if(stopped){
+        if(stoppedEntries.length===1){
+          const info = stoppedEntries[0];
+          body += `<div class="matrix-sub">${esc(info.isEmriNo)} · ${esc(info.operatorUsername)}</div>
+            <div class="matrix-sub">Duruş: "${esc(info.duruşNedeni)}"</div>`;
+        } else {
+          body += `<div class="matrix-sub" style="font-weight:700">${stoppedEntries.length} İş Duraklatıldı</div>
+            <div class="matrix-sub">${stoppedEntries.map(e=>esc(e.isEmriNo)).join(', ')}</div>`;
+        }
       } else if(lastFinished){
         body += `<div class="matrix-sub">Son: ${esc(lastFinished.operatorUsername)} · ${fmtDT(lastFinished.startTs)}</div>`;
       } else {
@@ -1878,7 +2247,7 @@ function renderLiveBits(){
   // Ama bir form açıkken (düzenleme, duruş nedeni yazma, serbest mesaj) tam render odağı (focus) kaybettiriyor — o an atla.
   const editingSomething = !!editingActiveId || (durusOpen && durusReasonSel==='Diğer') || sendMsgOpen;
   if(editingSomething) return;
-  if(activeDetailId || (session && session.isAdmin && view==='matrix')) render();
+  if(activeDetailId || activeGroupId || (session && !session.isAdmin && view==='list') || (session && session.isAdmin && view==='matrix')) render();
 }
 
 /* ===================== BAŞLAT ===================== */
