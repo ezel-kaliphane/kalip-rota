@@ -232,8 +232,24 @@ const ALL_MACHINE_CODES = MACHINE_LIST.map(m=>m.code);
 // "Sayfa Kaynağını Görüntüle" ile şifreleri (ADMIN dahil) okuyabilmesine yol açıyordu.
 // Yeni operatörler artık Ayarlar → "+ Kullanıcı Ekle" panelinden eklenir.
 
-const DURUS_REASONS = ["Arıza / Bakım","Malzeme Bekleniyor","Kalıp/Takım Değişimi","Program/Ayar Değişimi","Kalite Kontrol Bekleniyor","Elektrik/Basınçlı Hava Kesintisi","Operatör Molası","Farklı İş Emrine Geçiş","Tuvalet","Gün Sonu (Mesai Bitti, yarın devam edilecek)","Diğer"];
+const DEFAULT_DURUS_REASONS = ["Arıza / Bakım","Malzeme Bekleniyor","Kalıp/Takım Değişimi","Program/Ayar Değişimi","Kalite Kontrol Bekleniyor","Elektrik/Basınçlı Hava Kesintisi","Operatör Molası","Farklı İş Emrine Geçiş","Tuvalet"];
+function getDurusReasons(){
+  const custom = (STATE.durusReasons && STATE.durusReasons.length>0) ? STATE.durusReasons : DEFAULT_DURUS_REASONS;
+  return [...custom, GUN_SONU_REASON, "Diğer"];
+}
 const GUN_SONU_REASON = "Gün Sonu (Mesai Bitti, yarın devam edilecek)";
+function effectiveDurusMs(e){
+  let d = e.duruşToplamMs||0;
+  if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON) d += Math.max(0, nowTick - e.duruşTs);
+  return d;
+}
+function effectiveDurusReason(e){
+  // Şu an Gün Sonu ile duraklıysa ama üzerinde eskiden kalma (başka bir sebepten donmuş)
+  // bir duruş süresi varsa, bunu "Gün Sonu" diye etiketlemeyelim — o sürenin gerçek eski
+  // nedeni artık bilinmiyor (üzerine yazıldı), "Belirtilmemiş" demek daha doğru.
+  if(e.status==='duruş' && e.duruşNedeni===GUN_SONU_REASON && (e.duruşToplamMs||0)>0) return 'Belirtilmemiş (önceki duraklama)';
+  return e.duruşNedeni || 'Belirtilmemiş';
+}
 
 /* ===================== YARDIMCI FONKSİYONLAR ===================== */
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -248,7 +264,7 @@ function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){}
 function load(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
 
 /* ===================== DURUM (STATE) ===================== */
-let STATE = { operators: {}, entries: {}, messages: {}, validIsEmri: {} };
+let STATE = { operators: {}, entries: {}, messages: {}, validIsEmri: {}, durusReasons: [] };
 let extraMachines = {}; // admin tarafından sonradan eklenen makineler (Firebase 'machines_extra')
 let hiddenMachines = {}; // silinen dahili makineler (Firebase 'machines_hidden')
 function allMachines(){ return MACHINE_LIST.filter(m=>!hiddenMachines[m.code]).concat(Object.entries(extraMachines).map(([code,v])=>({code, name:v.name}))); }
@@ -503,6 +519,10 @@ function initFirebase(){
       STATE.validIsEmri = snap.val() || {};
       render();
     });
+    DB.ref('durusReasons').on('value', snap=>{
+      STATE.durusReasons = snap.val() || [];
+      render();
+    });
     return true;
   }catch(e){ console.warn('Firebase init hatası', e); return false; }
 }
@@ -644,7 +664,7 @@ function bitir(id){
   if(activeDetailId===id){ activeDetailId=null; view='list'; }
 }
 function toggleDurus(open){ durusOpen=open; durusReasonSel=''; durusCustom=''; render(); }
-function pickDurusReason(i){ durusReasonSel = DURUS_REASONS[i]; render(); }
+function pickDurusReason(i){ durusReasonSel = getDurusReasons()[i]; render(); }
 function confirmDurus(id){
   const reason = durusReasonSel==='Diğer' ? (document.getElementById('durus-custom')?.value||'').trim() : durusReasonSel;
   if(!reason){ toast('Duruş nedeni seçmelisin'); return; }
@@ -834,6 +854,26 @@ function clearIsEmriListesi(){
   if(!confirm('İş emri listesini tamamen silmek istediğine emin misin? Bu, doğrulamayı devre dışı bırakır (herkes serbestçe iş emri no girebilir).')) return;
   DB.ref('validIsEmri').remove();
   toast('Liste temizlendi');
+}
+function addDurusReason(){
+  if(!requireSuperAdmin()) return;
+  const input = document.getElementById('new-durus-reason');
+  const val = (input?.value||'').trim();
+  if(!val){ toast('Bir neden yaz'); return; }
+  const list = (STATE.durusReasons && STATE.durusReasons.length>0) ? STATE.durusReasons : DEFAULT_DURUS_REASONS;
+  if(list.includes(val)){ toast('Bu neden zaten listede'); return; }
+  const updated = [...list, val];
+  DB.ref('durusReasons').set(updated);
+  toast('Eklendi');
+  if(input) input.value = '';
+}
+function removeDurusReason(i){
+  if(!requireSuperAdmin()) return;
+  const list = (STATE.durusReasons && STATE.durusReasons.length>0) ? STATE.durusReasons : DEFAULT_DURUS_REASONS;
+  if(!confirm(`"${list[i]}" nedenini silmek istediğine emin misin?`)) return;
+  const updated = list.filter((_,idx)=>idx!==i);
+  DB.ref('durusReasons').set(updated);
+  toast('Silindi');
 }
 function deleteMachine(code){
   if(!requireSuperAdmin()) return;
@@ -1026,9 +1066,10 @@ function initAnalizCharts(data){
   if(durusCanvas){
     const byReason = {};
     data.perMachine.forEach(m=>m.entries.forEach(e=>{
-      if((e.duruşToplamMs||0)<=0) return;
-      const r = e.duruşNedeni || 'Belirtilmemiş';
-      byReason[r] = (byReason[r]||0) + Math.round(e.duruşToplamMs/60000);
+      const ms = effectiveDurusMs(e);
+      if(ms<=0) return;
+      const r = effectiveDurusReason(e);
+      byReason[r] = (byReason[r]||0) + Math.round(ms/60000);
     }));
     const labels = Object.keys(byReason);
     if(labels.length>0){
@@ -1080,10 +1121,9 @@ function computeCompletedRoutes(){
 function renderDurusBreakdown(entries){
   const byReason = {};
   entries.forEach(e=>{
-    let ms = e.duruşToplamMs||0;
-    if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON) ms += Math.max(0, nowTick - e.duruşTs);
+    const ms = effectiveDurusMs(e);
     if(ms <= 0) return;
-    const r = e.duruşNedeni || 'Belirtilmemiş';
+    const r = effectiveDurusReason(e);
     byReason[r] = (byReason[r]||0) + ms;
   });
   const rows = Object.entries(byReason).sort((a,b)=>b[1]-a[1]);
@@ -1263,11 +1303,7 @@ function renderMachineModal(){
   modalVisibleIds = rows.map(e=>e.id);
 
   const totalMs = rows.reduce((sum,e)=> sum + (e.endTs ? (e.endTs-e.startTs) : (e.status==='devam' ? (nowTick-e.startTs) : 0)), 0);
-  const totalDurusMs = rows.reduce((sum,e)=> {
-    let d = e.duruşToplamMs||0;
-    if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON) d += Math.max(0, nowTick - e.duruşTs);
-    return sum + d;
-  }, 0);
+  const totalDurusMs = rows.reduce((sum,e)=> sum + effectiveDurusMs(e), 0);
   const jobCount = new Set(rows.map(e=>e.isEmriNo)).size;
   const recordCount = rows.length;
 
@@ -1418,7 +1454,7 @@ function renderGroupScreen(groupId, groupMembers){
   } else {
     actionBlock = `<div style="display:flex;flex-direction:column;gap:12px;margin-top:28px;width:100%;max-width:320px">
       <div class="durus-chip-row">
-        ${DURUS_REASONS.map((r,i)=>{
+        ${getDurusReasons().map((r,i)=>{
           const isGunSonu = r===GUN_SONU_REASON;
           const isActive = durusReasonSel===r;
           const style = isGunSonu
@@ -1510,7 +1546,7 @@ function renderLockScreen(active){
   } else {
     durusBlock = `<div style="display:flex;flex-direction:column;gap:12px;margin-top:28px;width:100%;max-width:320px">
       <div class="durus-chip-row">
-        ${DURUS_REASONS.map((r,i)=>{
+        ${getDurusReasons().map((r,i)=>{
           const isGunSonu = r===GUN_SONU_REASON;
           const active = durusReasonSel===r;
           const style = isGunSonu
@@ -1728,7 +1764,8 @@ function renderAdmin(){
         <button class="sub-tab-btn ${settingsSubTab==='access'?'active':''}" onclick="setSettingsSubTab('access')">Makine Erişimi</button>
         <button class="sub-tab-btn ${settingsSubTab==='multiJob'?'active':''}" onclick="setSettingsSubTab('multiJob')">Çoklu İş İzni</button>
         <button class="sub-tab-btn ${settingsSubTab==='cokluIsEmri'?'active':''}" onclick="setSettingsSubTab('cokluIsEmri')">Çoklu İş Emri İzni</button>
-        <button class="sub-tab-btn ${settingsSubTab==='msgAccess'?'active':''}" onclick="setSettingsSubTab('msgAccess')">Mesaj Erişimi</button>` : ''}
+        <button class="sub-tab-btn ${settingsSubTab==='msgAccess'?'active':''}" onclick="setSettingsSubTab('msgAccess')">Mesaj Erişimi</button>
+        <button class="sub-tab-btn ${settingsSubTab==='durusReasons'?'active':''}" onclick="setSettingsSubTab('durusReasons')">Duruş Nedenleri</button>` : ''}
         <button class="sub-tab-btn ${settingsSubTab==='isEmriListesi'?'active':''}" onclick="setSettingsSubTab('isEmriListesi')">İş Emri Listesi</button>
         ${session.isSuperAdmin ? `
         <button class="sub-tab-btn ${settingsSubTab==='addOperator'?'active':''}" onclick="setSettingsSubTab('addOperator')">+ Kullanıcı Ekle</button>
@@ -1851,6 +1888,23 @@ function renderAdmin(){
           </div>
           <div id="isemri-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
         </div>`;
+    } else if(settingsSubTab==='durusReasons'){
+      const list = (STATE.durusReasons && STATE.durusReasons.length>0) ? STATE.durusReasons : DEFAULT_DURUS_REASONS;
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Duruş Nedenleri</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Operatörlerin "Duruşa Al" derken seçebileceği sebep listesi. İstediğini ekleyip çıkarabilirsin. <b>"Gün Sonu"</b> ve <b>"Diğer"</b> sabittir, listede görünmez ama her zaman operatörün karşısına çıkar — biri hesaplara hiç girmeyen özel bir durum, diğeri serbest metin girişi için gerekli.</div>
+        <div style="max-width:480px;margin-bottom:18px">
+          <div class="field"><label>Yeni Neden Ekle</label><input id="new-durus-reason" placeholder="ör. Kalite Kontrol Onayı Bekleniyor"></div>
+          <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="addDurusReason()">+ Ekle</button>
+        </div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Mevcut Nedenler (${list.length})</div>
+        <div class="op-settings-table">
+          ${list.map((r,i)=>`
+            <div class="op-settings-row">
+              <div class="op-settings-name">${esc(r)}</div>
+              <button class="del-btn" onclick="removeDurusReason(${i})" title="Sil">🗑</button>
+            </div>
+          `).join('')}
+        </div>`;
     }
     body += `</div>`;
   } else if(view==='matrix'){
@@ -1953,15 +2007,10 @@ function renderAdmin(){
     const data = computeAnalizData(analizFrom, analizTo);
     const t = data.totals;
     const durusReasonTotals = {};
-    function effectiveDurusMs(e){
-      let d = e.duruşToplamMs||0;
-      if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON) d += Math.max(0, nowTick - e.duruşTs);
-      return d;
-    }
     data.perMachine.forEach(m=>m.entries.forEach(e=>{
       const ms = effectiveDurusMs(e);
       if(ms<=0) return;
-      const r = e.duruşNedeni || 'Belirtilmemiş';
+      const r = effectiveDurusReason(e);
       durusReasonTotals[r] = (durusReasonTotals[r]||0) + ms;
     }));
     const durusEntries = data.perMachine.flatMap(m=>m.entries.filter(e=>effectiveDurusMs(e)>0));
@@ -2127,7 +2176,7 @@ function renderAdmin(){
       <div style="font-size:13px;font-weight:600;margin:18px 0 10px">Duruş Kayıtları</div>
       ${durusEntries.length===0 ? `<div style="color:var(--text-muted);padding:20px 0">Bu tarihte duruş kaydı yok.</div>` : `
       <div class="table-wrap" style="padding:0"><table><thead><tr><th>Makine</th><th>Operatör</th><th>İş Emri No</th><th>Neden</th><th>Duruş Süresi</th></tr></thead><tbody>
-        ${durusEntries.map(e=>`<tr><td class="mono" style="color:var(--accent)">${esc((e.makine||'').split(' · ')[0])}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td class="mono">${esc(e.isEmriNo)}</td><td style="color:var(--warn)">${esc(e.duruşNedeni||'—')}</td><td style="font-weight:600">${fmtDur(effectiveDurusMs(e))}</td></tr>`).join('')}
+        ${durusEntries.map(e=>`<tr><td class="mono" style="color:var(--accent)">${esc((e.makine||'').split(' · ')[0])}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td class="mono">${esc(e.isEmriNo)}</td><td style="color:var(--warn)">${esc(effectiveDurusReason(e))}</td><td style="font-weight:600">${fmtDur(effectiveDurusMs(e))}</td></tr>`).join('')}
       </tbody></table></div>`}
       </div>`;
     } else if(analizSubTab==='mesai'){
@@ -2149,11 +2198,7 @@ function renderAdmin(){
     const fe = filteredEntries();
     reportVisibleIds = fe.map(e=>e.id);
     const completedRoutes = computeCompletedRouteIds();
-    const toplamDurusMs = fe.reduce((s,e)=>{
-      let d = e.duruşToplamMs||0;
-      if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON) d += Math.max(0, nowTick - e.duruşTs);
-      return s+d;
-    },0);
+    const toplamDurusMs = fe.reduce((s,e)=>s+effectiveDurusMs(e),0);
     body = `
       <div class="admin-stats">
         <span><b style="color:var(--accent)">${statOperator}</b> operatör kayıt girmiş</span>
