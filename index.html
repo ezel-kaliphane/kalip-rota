@@ -443,7 +443,8 @@ function deleteMessage(id){
 function deleteAllMessages(){
   if(!requireSuperAdmin()) return;
   if(!confirm('Tüm mesajları silmek istediğine emin misin? Bu işlem geri alınamaz.')) return;
-  DB.ref('messages').remove();
+  // Güvenlik kuralları kök düğüme toplu yazmayı engellediği için tek tek siliyoruz.
+  Object.keys(STATE.messages||{}).forEach(mid => DB.ref('messages/'+mid).remove());
 }
 
 let analizSelectedMachines = new Set(); // Genel Analiz'deki mini matristen seçilen makine kodları (çoklu filtre)
