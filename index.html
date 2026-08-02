@@ -243,6 +243,11 @@ function effectiveDurusMs(e){
   if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON) d += Math.max(0, nowTick - e.duruşTs);
   return d;
 }
+function effectiveExcludedMs(e){
+  let d = e.excludedMs||0;
+  if(e.status==='duruş' && e.duruşTs && e.duruşNedeni===GUN_SONU_REASON) d += Math.max(0, nowTick - e.duruşTs);
+  return d;
+}
 function effectiveDurusReason(e){
   // Şu an Gün Sonu ile duraklıysa ama üzerinde eskiden kalma (başka bir sebepten donmuş)
   // bir duruş süresi varsa, bunu "Gün Sonu" diye etiketlemeyelim — o sürenin gerçek eski
@@ -2135,9 +2140,18 @@ function renderAdmin(){
             const durMin = Math.max(1,(endClip - e.startTs)/60000);
             const leftPct = Math.max(0,(startMin/1440)*100);
             const widthPct = Math.min(100-leftPct,(durMin/1440)*100);
-            const netRatio = durMin>0 ? Math.max(0, Math.min(1, 1 - (e.duruşToplamMs||0)/(durMin*60000))) : 1;
-            const netPct = Math.round(netRatio*100);
-            const bg = netPct>=99 ? 'var(--success)' : netPct<=1 ? 'var(--warn)' : `linear-gradient(to right, var(--success) ${netPct}%, var(--warn) ${netPct}% 100%)`;
+            const totalMs = durMin*60000;
+            const durusMs = effectiveDurusMs(e);
+            const exclMs = effectiveExcludedMs(e);
+            const workMs = Math.max(0, totalMs - durusMs - exclMs);
+            const workPct = Math.round(workMs/totalMs*100);
+            const durusPct = Math.round(durusMs/totalMs*100);
+            const exclPct = Math.max(0, 100-workPct-durusPct);
+            let bg;
+            if(exclPct>=99) bg = '#3a4148';
+            else if(workPct>=99) bg = 'var(--success)';
+            else if(durusPct>=99) bg = 'var(--warn)';
+            else bg = `linear-gradient(to right, var(--success) 0%, var(--success) ${workPct}%, var(--warn) ${workPct}%, var(--warn) ${workPct+durusPct}%, #3a4148 ${workPct+durusPct}%, #3a4148 100%)`;
             return `<div class="analiz-gantt-seg" style="left:${leftPct}%;width:${widthPct}%;background:${bg}" title="${esc(e.isEmriNo)} · ${esc(e.operatorUsername)} · ${fmtDT(e.startTs)}–${e.endTs?fmtDT(e.endTs):'şu an'}"></div>`;
           }).join('');
           return `<div class="analiz-gantt-row">
