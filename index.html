@@ -249,10 +249,11 @@ function effectiveExcludedMs(e){
   return d;
 }
 function effectiveDurusReason(e){
-  // Şu an Gün Sonu ile duraklıysa ama üzerinde eskiden kalma (başka bir sebepten donmuş)
-  // bir duruş süresi varsa, bunu "Gün Sonu" diye etiketlemeyelim — o sürenin gerçek eski
-  // nedeni artık bilinmiyor (üzerine yazıldı), "Belirtilmemiş" demek daha doğru.
-  if(e.status==='duruş' && e.duruşNedeni===GUN_SONU_REASON && (e.duruşToplamMs||0)>0) return 'Belirtilmemiş (önceki duraklama)';
+  // Duraklatılmış bir işin en son nedeni Gün Sonu olabilir ama duruşToplamMs'de daha
+  // önceki (Gün Sonu'ndan önceki) GERÇEK bir duruştan kalma süre birikmiş olabilir.
+  // Bu durum sadece "şu an duraklı" iken değil, iş sonradan devam edip bitse bile
+  // kalıcı olarak veride kalıyor — o yüzden statüden bağımsız olarak düzeltiyoruz.
+  if(e.duruşNedeni===GUN_SONU_REASON && (e.duruşToplamMs||0)>0) return 'Belirtilmemiş (önceki duraklama)';
   return e.duruşNedeni || 'Belirtilmemiş';
 }
 
