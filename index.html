@@ -2326,12 +2326,19 @@ function render(){
 
   if(session && session.isAdmin && view==='analiz'){ initAnalizCharts(computeAnalizData(analizFrom, analizTo)); }
 }
+let analizTickCounter = 0;
 function renderLiveBits(){
   // Sadece kilit ekranındaki / matristeki canlı sayaçları güncellemek için tam render yeterli (veri seti küçük).
   // Ama bir form açıkken (düzenleme, duruş nedeni yazma, serbest mesaj) tam render odağı (focus) kaybettiriyor — o an atla.
   const editingSomething = !!editingActiveId || (durusOpen && durusReasonSel==='Diğer') || sendMsgOpen;
   if(editingSomething) return;
-  if(activeDetailId || activeGroupId || (session && !session.isAdmin && view==='list') || (session && session.isAdmin && view==='matrix')) render();
+  if(activeDetailId || activeGroupId || (session && !session.isAdmin && view==='list') || (session && session.isAdmin && view==='matrix')){ render(); return; }
+  // Analiz'deki sayılar artık duraklamış işler için canlı hesaplanıyor, ama grafikleri (Chart.js)
+  // her saniye yeniden çizmek titremeye sebep olur — o yüzden burayı daha seyrek (15 sn) yeniliyoruz.
+  if(session && session.isAdmin && view==='analiz'){
+    analizTickCounter++;
+    if(analizTickCounter>=15){ analizTickCounter=0; render(); }
+  }
 }
 
 /* ===================== BAŞLAT ===================== */
