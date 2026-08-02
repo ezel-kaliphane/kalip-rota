@@ -660,7 +660,7 @@ function devamEt(id){
   const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
   const duruşToplamMs = (e.duruşToplamMs||0) + (isGunSonu?0:extra);
   const excludedMs = (e.excludedMs||0) + (isGunSonu?extra:0);
-  DB.ref('entries/'+id).update({ status:'devam', duruşNedeni:'', duruşToplamMs, excludedMs });
+  DB.ref('entries/'+id).update({ status:'devam', duruşToplamMs, excludedMs });
   toast('Operasyona devam ediliyor');
 }
 function silKayit(id){ DB.ref('entries/'+id).remove(); }
@@ -689,7 +689,7 @@ function devamGrup(groupId){
     const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
     const duruşToplamMs = (e.duruşToplamMs||0) + (isGunSonu?0:extra);
     const excludedMs = (e.excludedMs||0) + (isGunSonu?extra:0);
-    DB.ref('entries/'+e.id).update({ status:'devam', duruşNedeni:'', duruşToplamMs, excludedMs });
+    DB.ref('entries/'+e.id).update({ status:'devam', duruşToplamMs, excludedMs });
   });
   toast('Tüm iş emirleri devam ediyor');
 }
@@ -935,8 +935,16 @@ function computeAnalizData(fromDate, toDate){
       dayList.forEach(e=>{
         const endClip = e.endTs || nowTick;
         const wallMs = Math.max(0, endClip - e.startTs);
-        const eDurusMs = e.duruşToplamMs || 0;
-        const eExcludedMs = e.excludedMs || 0;
+        let eDurusMs = e.duruşToplamMs || 0;
+        let eExcludedMs = e.excludedMs || 0;
+        // Şu an hâlâ duraklatılmış durumdaysa (henüz "Devam Et"e basılmadıysa), bu ANLIK
+        // bekleme süresini de canlı olarak duruş/hariç tutulan süreye ekle — yoksa devam
+        // ettirilene kadar geçen her saat yanlışlıkla "çalışma süresi" sayılıyordu.
+        if(e.status==='duruş' && e.duruşTs){
+          const liveExtra = Math.max(0, nowTick - e.duruşTs);
+          if(e.duruşNedeni===GUN_SONU_REASON) eExcludedMs += liveExtra;
+          else eDurusMs += liveExtra;
+        }
         workMs += Math.max(0, wallMs - eDurusMs - eExcludedMs);
         durusMs += eDurusMs;
         // Şu an duraklatılmış (ör. gün sonu bekleyen) bir iş "hâlâ çalışıyor" sayılıp
@@ -1072,9 +1080,11 @@ function computeCompletedRoutes(){
 function renderDurusBreakdown(entries){
   const byReason = {};
   entries.forEach(e=>{
-    if((e.duruşToplamMs||0) <= 0) return;
+    let ms = e.duruşToplamMs||0;
+    if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON) ms += Math.max(0, nowTick - e.duruşTs);
+    if(ms <= 0) return;
     const r = e.duruşNedeni || 'Belirtilmemiş';
-    byReason[r] = (byReason[r]||0) + e.duruşToplamMs;
+    byReason[r] = (byReason[r]||0) + ms;
   });
   const rows = Object.entries(byReason).sort((a,b)=>b[1]-a[1]);
   if(rows.length===0) return '';
@@ -1253,7 +1263,11 @@ function renderMachineModal(){
   modalVisibleIds = rows.map(e=>e.id);
 
   const totalMs = rows.reduce((sum,e)=> sum + (e.endTs ? (e.endTs-e.startTs) : (e.status==='devam' ? (nowTick-e.startTs) : 0)), 0);
-  const totalDurusMs = rows.reduce((sum,e)=> sum + (e.duruşToplamMs||0), 0);
+  const totalDurusMs = rows.reduce((sum,e)=> {
+    let d = e.duruşToplamMs||0;
+    if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON) d += Math.max(0, nowTick - e.duruşTs);
+    return sum + d;
+  }, 0);
   const jobCount = new Set(rows.map(e=>e.isEmriNo)).size;
   const recordCount = rows.length;
 
@@ -1939,12 +1953,18 @@ function renderAdmin(){
     const data = computeAnalizData(analizFrom, analizTo);
     const t = data.totals;
     const durusReasonTotals = {};
+    function effectiveDurusMs(e){
+      let d = e.duruşToplamMs||0;
+      if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON) d += Math.max(0, nowTick - e.duruşTs);
+      return d;
+    }
     data.perMachine.forEach(m=>m.entries.forEach(e=>{
-      if((e.duruşToplamMs||0)<=0) return;
+      const ms = effectiveDurusMs(e);
+      if(ms<=0) return;
       const r = e.duruşNedeni || 'Belirtilmemiş';
-      durusReasonTotals[r] = (durusReasonTotals[r]||0) + e.duruşToplamMs;
+      durusReasonTotals[r] = (durusReasonTotals[r]||0) + ms;
     }));
-    const durusEntries = data.perMachine.flatMap(m=>m.entries.filter(e=>(e.duruşToplamMs||0)>0));
+    const durusEntries = data.perMachine.flatMap(m=>m.entries.filter(e=>effectiveDurusMs(e)>0));
 
     const hasFilter = analizSelectedMachines.size>0;
     const filteredList = hasFilter ? data.perMachine.filter(m=>analizSelectedMachines.has(m.code)) : [];
@@ -2107,7 +2127,7 @@ function renderAdmin(){
       <div style="font-size:13px;font-weight:600;margin:18px 0 10px">Duruş Kayıtları</div>
       ${durusEntries.length===0 ? `<div style="color:var(--text-muted);padding:20px 0">Bu tarihte duruş kaydı yok.</div>` : `
       <div class="table-wrap" style="padding:0"><table><thead><tr><th>Makine</th><th>Operatör</th><th>İş Emri No</th><th>Neden</th><th>Duruş Süresi</th></tr></thead><tbody>
-        ${durusEntries.map(e=>`<tr><td class="mono" style="color:var(--accent)">${esc((e.makine||'').split(' · ')[0])}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td class="mono">${esc(e.isEmriNo)}</td><td style="color:var(--warn)">${esc(e.duruşNedeni||'—')}</td><td style="font-weight:600">${fmtDur(e.duruşToplamMs)}</td></tr>`).join('')}
+        ${durusEntries.map(e=>`<tr><td class="mono" style="color:var(--accent)">${esc((e.makine||'').split(' · ')[0])}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td class="mono">${esc(e.isEmriNo)}</td><td style="color:var(--warn)">${esc(e.duruşNedeni||'—')}</td><td style="font-weight:600">${fmtDur(effectiveDurusMs(e))}</td></tr>`).join('')}
       </tbody></table></div>`}
       </div>`;
     } else if(analizSubTab==='mesai'){
@@ -2129,7 +2149,11 @@ function renderAdmin(){
     const fe = filteredEntries();
     reportVisibleIds = fe.map(e=>e.id);
     const completedRoutes = computeCompletedRouteIds();
-    const toplamDurusMs = fe.reduce((s,e)=>s+(e.duruşToplamMs||0),0);
+    const toplamDurusMs = fe.reduce((s,e)=>{
+      let d = e.duruşToplamMs||0;
+      if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON) d += Math.max(0, nowTick - e.duruşTs);
+      return s+d;
+    },0);
     body = `
       <div class="admin-stats">
         <span><b style="color:var(--accent)">${statOperator}</b> operatör kayıt girmiş</span>
