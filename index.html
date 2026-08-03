@@ -643,6 +643,26 @@ function closeActiveDetail(){ activeDetailId = null; setView('list'); }
 // Girilen İş Talep No'yu gerçek takip koduna (U kodu + varsa bileşen eki) çevirir.
 // Rota takibi (isEmriNo/tur/zincir hesapları) tarihten beri U kodu üzerinden çalıştığı için
 // bunu koruyoruz; operatör sadece talep no giriyor, sistem arka planda U koduna çeviriyor.
+// Bir talep no altında _ZARF/_ELMAS olarak ayrı ayrı işlenen dallardan hangileri henüz
+// gerçekten bitmemiş (son operasyon işaretlenmemiş)? Ana/Tek Parça (birleştirme) işini
+// başlatmadan önce bunu kontrol ediyoruz, çünkü shrink-fit birleşimi ancak her iki dal da
+// gerçekten tamamlanınca mantıklı.
+function incompleteBilesenBranches(talepNoRaw){
+  const talepNo = String(talepNoRaw||'').trim().toUpperCase();
+  if(!talepNo) return [];
+  const out = [];
+  ['ZARF','ELMAS'].forEach(suf=>{
+    const branchEntries = entriesArray().filter(e => (e.talepNo||'').toUpperCase()===talepNo && bilesenOfCode(e.isEmriNo)===suf);
+    if(branchEntries.length===0) return;
+    const last = branchEntries.slice().sort((a,b)=>b.startTs-a.startTs)[0];
+    const done = last.status==='tamamlandi' && !!last.sonOperasyon;
+    if(!done){
+      const durum = (last.status==='devam'||last.status==='duruş') ? 'aktif' : 'tamamlanmamış (son operasyon işaretlenmemiş)';
+      out.push({ suf, durum });
+    }
+  });
+  return out;
+}
 function resolveTrackingCode(talepNoRaw, bilesenSel){
   const talepNo = String(talepNoRaw||'').trim().toUpperCase();
   const info = getTalepInfo(talepNo);
@@ -679,6 +699,13 @@ function baslat(){
       if(!isEmriValid(it.talepNoRaw)){
         toast(`"${it.talepNoRaw}" bulunamadı, lütfen kodunuzu kontrol edin`); return;
       }
+      if(!it.bilesen){
+        const incomplete = incompleteBilesenBranches(it.talepNoRaw);
+        if(incomplete.length>0){
+          const msg = incomplete.map(x=>`_${x.suf} (${BILESEN_LABEL[x.suf]}) operasyonu ${x.durum}`).join(' ve ');
+          toast(`"${it.talepNoRaw}": Tamamlanmamış ${msg} — bu iş emrine (birleştirme) önce onlar bitmeden başlanamaz.`); return;
+        }
+      }
     }
     const groupId = uid();
     items.forEach(it=>{
@@ -707,6 +734,13 @@ function baslat(){
   if(!/^\d+$/.test(adet)){ toast('Adet sadece rakam olmalı'); return; }
   if(!isEmriValid(isEmriNoRaw)){
     toast('Bu iş emri bulunamadı, lütfen kodunuzu kontrol edin'); return;
+  }
+  if(!bilesenSel){
+    const incomplete = incompleteBilesenBranches(isEmriNoRaw);
+    if(incomplete.length>0){
+      const msg = incomplete.map(x=>`_${x.suf} (${BILESEN_LABEL[x.suf]}) operasyonu ${x.durum}`).join(' ve ');
+      toast(`Tamamlanmamış ${msg} — bu iş emrine (birleştirme) önce onlar bitmeden başlanamaz.`); return;
+    }
   }
   const machineBusy = entriesArray().some(e => e.makine === makine && e.status === 'devam');
   if(machineBusy){ toast('Bu makinede zaten aktif bir iş var. Önce o iş bitirilmeli ya da duraklatılmalı.'); return; }
@@ -1797,6 +1831,13 @@ function renderOperator(){
             else if(Object.keys(STATE.validIsEmri||{}).length>0) lines.push(`<div style="font-size:11.5px;color:var(--warn)">⚠ Bu talep no listede bulunamadı</div>`);
           }
           if(newForm.bilesen) lines.push(`<div style="font-size:11.5px;color:var(--text-muted)">Kaydedilecek kod: <b class="mono" style="color:var(--accent)">${esc(newForm.isEmriNo||'…')}${BILESEN_SUFFIX[newForm.bilesen]}</b></div>`);
+          if(!newForm.bilesen && newForm.isEmriNo){
+            const incomplete = incompleteBilesenBranches(newForm.isEmriNo);
+            if(incomplete.length>0){
+              const msg = incomplete.map(x=>`_${x.suf} (${BILESEN_LABEL[x.suf]}) ${x.durum}`).join(' ve ');
+              lines.push(`<div style="font-size:11.5px;color:var(--danger)">⛔ Tamamlanmamış: ${esc(msg)} — birleştirme başlatılamaz</div>`);
+            }
+          }
           return lines.length ? `<div style="margin:-8px 0 12px 2px;display:flex;flex-direction:column;gap:3px">${lines.join('')}</div>` : '';
         })()}
       `}
