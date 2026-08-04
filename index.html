@@ -39,10 +39,26 @@ const FIREBASE_CONFIG = {
   --bg:#14171a; --panel:#1c2024; --panel-alt:#20262b; --border:#2a3138;
   --text:#eef1f3; --text-muted:#8b939b;
   --accent:#ff8a3d; --accent-dim:#ff8a3d22; --success:#4ade80; --success-soft:#94d3a2; --warn:#facc15; --danger:#f87171;
+  --btn-primary-bg:var(--accent); --btn-primary-text:#1a1408;
+  --chip-active-bg:var(--warn-med); --chip-active-border:var(--warn); --chip-active-text:var(--warn);
+  --card-shadow:none; --radius-pill:20px;
+  --success-row:var(--success-row);
+  --warn-soft:var(--warn-soft); --warn-med:var(--warn-med); --warn-border:var(--warn-border);
+  --gunsonu:var(--gunsonu); --gunsonu-soft:var(--gunsonu-soft); --gunsonu-med:var(--gunsonu-med); --gunsonu-border:var(--gunsonu-border);
+  --tadilat-info:var(--tadilat-info); --tadilat-soft:var(--tadilat-soft); --tadilat-med:var(--tadilat-med); --tadilat-border:var(--tadilat-border);
 }
 .theme-light{
-  --bg:#f4f5f6; --panel:#ffffff; --panel-alt:#eef0f2; --border:#dde1e5;
-  --text:#1a1d20; --text-muted:#495057;
+  --bg:#F8FAFC; --panel:#FFFFFF; --panel-alt:#F1F5F9; --border:#E2E8F0;
+  --text:#0F172A; --text-muted:#475569;
+  --accent:#2563EB; --accent-dim:#2563EB1a; --success:#15803D; --success-soft:#16A34A; --warn:#B45309; --danger:#B91C1C;
+  --btn-primary-bg:#1E293B; --btn-primary-text:#FFFFFF;
+  --chip-active-bg:#3B82F6; --chip-active-border:#3B82F6; --chip-active-text:#FFFFFF;
+  --card-shadow:0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --radius-pill:10px;
+  --success-row:#DCFCE7;
+  --warn-soft:#FEF3C7; --warn-med:#FEF3C7; --warn-border:#B45309;
+  --gunsonu:#4338CA; --gunsonu-soft:#E0E7FF; --gunsonu-med:#E0E7FF; --gunsonu-border:#4338CA;
+  --tadilat-info:#4338CA; --tadilat-soft:#E0E7FF; --tadilat-med:#E0E7FF; --tadilat-border:#4338CA;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px}
@@ -70,14 +86,14 @@ table{border-collapse:collapse;width:100%}
 .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
 .field label{font-size:11.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
 .row{display:flex;gap:10px}
-.btn-primary{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:#1a1408;font-weight:700;font-size:14px;border:none;border-radius:10px;padding:12px 0;width:100%}
+.btn-primary{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--btn-primary-bg);color:var(--btn-primary-text);font-weight:700;font-size:14px;border:none;border-radius:10px;padding:12px 0;width:100%;box-shadow:var(--card-shadow)}
 .btn-start{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--success);color:#062910;font-weight:700;font-size:14px;border:none;border-radius:10px;padding:13px 0;width:100%}
 .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:8px;padding:7px 12px;font-size:12.5px}
-.chip{font-size:12.5px;color:var(--text-muted);background:var(--panel-alt);border:1px solid var(--border);border-radius:20px;padding:8px 14px}
-.chip.active{background:#facc1522;border-color:var(--warn);color:var(--warn);font-weight:600}
+.chip{font-size:12.5px;color:var(--text-muted);background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-pill);padding:8px 14px}
+.chip.active{background:var(--chip-active-bg);border-color:var(--chip-active-border);color:var(--chip-active-text);font-weight:600}
 .badge{font-size:12.5px;color:var(--accent);background:var(--accent-dim);border:1px solid #ff8a3d55;border-radius:8px;padding:8px 10px}
 
-.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:var(--card-shadow)}
 .card-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
 .card-id{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--accent);font-weight:600}
 .card-meta{font-size:12px;color:var(--text-muted)}
@@ -102,7 +118,7 @@ table{border-collapse:collapse;width:100%}
 .lock-timer{font-family:'JetBrains Mono',monospace;font-size:44px;font-weight:700;margin-top:22px;letter-spacing:1px}
 .lock-meta{font-size:12.5px;color:var(--text-muted);margin-top:6px}
 .lock-note{font-size:13px;color:var(--text-muted);font-style:italic;margin-top:14px;max-width:320px}
-.durus-reason-box{font-size:13px;color:var(--warn);font-style:italic;margin-top:16px;max-width:320px;background:#facc1518;border:1px solid #facc1540;border-radius:8px;padding:10px 14px}
+.durus-reason-box{font-size:13px;color:var(--warn);font-style:italic;margin-top:16px;max-width:320px;background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:8px;padding:10px 14px}
 .lock-hint{font-size:11.5px;color:var(--text-muted);margin-top:18px;max-width:260px;line-height:1.5}
 .durus-chip-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:340px}
 
@@ -123,7 +139,7 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .matrix-legend{display:flex;gap:20px;margin-bottom:18px;font-size:12.5px;color:var(--text-muted);flex-wrap:wrap}
 .legend-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
 .matrix-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
-.matrix-card{border:1px solid;border-radius:12px;padding:12px 14px;min-height:92px;cursor:pointer;transition:transform .1s}
+.matrix-card{border:1px solid;border-radius:12px;padding:12px 14px;min-height:92px;cursor:pointer;transition:transform .1s;box-shadow:var(--card-shadow)}
 .matrix-card:hover{transform:translateY(-1px)}
 .matrix-card-top{display:flex;align-items:center;justify-content:space-between}
 .matrix-code{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px}
@@ -132,7 +148,7 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .matrix-sub{font-size:11.5px;opacity:.9;margin-top:2px}
 
 .modal-overlay{position:fixed;inset:0;background:#000000a0;display:flex;align-items:center;justify-content:center;z-index:500;padding:20px}
-.modal-box{background:var(--bg);border:1px solid var(--border);border-radius:14px;width:100%;max-width:840px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-box{background:var(--panel);border:1px solid var(--border);border-radius:14px;width:100%;max-width:840px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--card-shadow)}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border)}
 .modal-title{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--accent)}
 .modal-sub{font-size:12.5px;color:var(--text-muted);margin-top:2px}
@@ -169,7 +185,7 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 
 .completed-wrap{padding:20px 24px;overflow-y:auto;flex:1}
 .completed-search{margin-bottom:16px;max-width:320px}
-.completed-card{background:var(--panel);border:1px solid var(--success);border-left:4px solid var(--success);border-radius:10px;padding:14px 16px;margin-bottom:12px;cursor:pointer;transition:transform .1s}
+.completed-card{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--success);border-radius:10px;padding:14px 16px;margin-bottom:12px;cursor:pointer;transition:transform .1s;box-shadow:var(--card-shadow)}
 .completed-card:hover{transform:translateY(-1px)}
 
 .analiz-wrap{padding:20px 24px;overflow-y:auto;flex:1}
@@ -809,6 +825,8 @@ function machineGroupOf(code){
 }
 let matrixGroupFilter = 'Tümü';
 function setMatrixGroupFilter(v){ matrixGroupFilter = v; render(); }
+let matrixAtolyeFilter = 'tumu'; // 'tumu' | 'imalat' | 'tadilat'
+function setMatrixAtolyeFilter(v){ matrixAtolyeFilter = v; render(); }
 let machineModal = null; // açık modal'ın makine kodu
 let entryDetailId = null; // Rapor tablosunda tıklanan tek kaydın detay penceresi
 function openEntryDetail(id){ entryDetailId = id; render(); }
@@ -1123,12 +1141,13 @@ function doLogin(){
 function doLogout(){ session=null; save('rota_session', null); save('rota_remember', false); view='list'; render(); }
 function setView(v){ view=v; render(); }
 function setTheme(t){ theme=t; document.documentElement.className = 'theme-'+t; save('rota_theme', t); render(); }
+function toggleTheme(){ setTheme(theme==='dark' ? 'light' : 'dark'); }
 function themeToggleHtml(){
-  return `<button class="icon-btn" onclick="setTheme('dark')" title="Koyu tema" style="color:${theme==='dark'?'var(--accent)':'var(--text-muted)'}">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-  </button>
-  <button class="icon-btn" onclick="setTheme('light')" title="Açık tema" style="color:${theme==='light'?'var(--accent)':'var(--text-muted)'}">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+  const isDark = theme==='dark';
+  return `<button class="icon-btn" onclick="toggleTheme()" title="${isDark?'Açık temaya geç':'Koyu temaya geç'}" style="color:var(--accent)">
+    ${isDark
+      ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`
+      : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`}
   </button>`;
 }
 
@@ -1659,7 +1678,23 @@ function setAnalizPreset(days){
 }
 
 function computeAnalizData(fromDate, toDate, atolyeFilter){
-  const rangeEntries = entriesArray().filter(e => {
+  // Tadilat Atölye makineleri çoğunlukla "entries" tablosunda hiç iz bırakmaz (orada sadece
+  // üretim işleri var) — bu yüzden tadilat operasyonlarını da senkron "iş" kaydı gibi katıyoruz,
+  // yoksa Tadilat Atölye filtresinde makineler hep "0 dk / hiç kayıt yok" görünür.
+  const tadilatSynthetic = [];
+  tadilatArray().forEach(t=>{
+    tadilatOperasyonlarArray(t).forEach(o=>{
+      if(!o.makine || !o.baslamaTs) return;
+      tadilatSynthetic.push({
+        makine: o.makine, startTs: o.baslamaTs, endTs: o.bitisTs || null,
+        status: o.status==='tamamlandi' ? 'tamamlandi' : 'devam',
+        duruşToplamMs: 0, excludedMs: 0,
+        operatorUsername: o.operatorUsername, operatorName: o.operatorName,
+        isEmriNo: t.uKodu, talepNo: t.uKodu, adet: null
+      });
+    });
+  });
+  const rangeEntries = [...entriesArray(), ...tadilatSynthetic].filter(e => {
     const dk = dateKey(e.startTs);
     if(dk<fromDate || dk>toDate) return false;
     if(atolyeFilter && atolyeFilter!=='tumu'){
@@ -1788,7 +1823,7 @@ function initAnalizCharts(data){
     }));
     const labels = Object.keys(byReason);
     if(labels.length>0){
-      const palette = ['#facc15','#f87171','#fb923c','#a78bfa','#38bdf8','#4ade80','#f472b6','#94a3b8','#eab308'];
+      const palette = ['#facc15','#f87171','#fb923c','#a78bfa','var(--gunsonu)','#4ade80','#f472b6','#94a3b8','#eab308'];
       analizCharts.durus = new Chart(durusCanvas, {
         type: 'pie',
         data: { labels, datasets: [{ data: Object.values(byReason), backgroundColor: labels.map((_,i)=>palette[i%palette.length]) }] },
@@ -1887,7 +1922,7 @@ function renderDurusBreakdown(entries){
   return `<div style="margin-bottom:16px">
     <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Duruş Nedenlerine Göre Dağılım</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px">
-      ${rows.map(([reason,ms])=>`<div class="chip" style="color:var(--warn);border-color:var(--warn)55;background:#facc1518">${esc(reason)}: <b>${fmtDur(ms)}</b></div>`).join('')}
+      ${rows.map(([reason,ms])=>`<div class="chip" style="color:var(--warn);border-color:var(--warn)55;background:var(--warn-soft)">${esc(reason)}: <b>${fmtDur(ms)}</b></div>`).join('')}
     </div>
   </div>`;
 }
@@ -2052,7 +2087,7 @@ function renderEntryDetailModal(){
           </div>
         </div>
 
-        ${durusMs>0 ? `<div style="background:#facc1518;border:1px solid #facc1540;border-radius:10px;padding:14px;margin-bottom:14px">
+        ${durusMs>0 ? `<div style="background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;color:var(--warn);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Duruş Bilgisi</div>
           <div style="font-size:14px;color:var(--warn)">Toplam ${fmtDur(durusMs)} durdu ${e.duruşNedeni?`— Neden: "${esc(e.duruşNedeni)}"`:''}</div>
         </div>` : ''}
@@ -2143,7 +2178,7 @@ function renderMachineModal(){
           const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
           const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : (e.status==='devam' ? fmtElapsed(nowTick-e.startTs)+' (sürüyor)' : '—');
           const malzAdi = getTalepInfo(e.talepNo)?.malzemeAdi || e.malzemeCinsi || '—';
-          return `<tr style="${isDone?'background:#1a4d2e33':''}">
+          return `<tr style="${isDone?'background:var(--success-row)':''}">
             ${canDeleteReport() ? `<td><input type="checkbox" ${modalSelectedIds.has(e.id)?'checked':''} onchange="toggleModalSelect('${e.id}')"></td>` : ''}
             <td>${dateKey(e.startTs)}</td><td class="mono" style="color:var(--accent)">${esc(e.talepNo || e.isEmriNo)} ${isDone?'✓':''}</td><td style="font-size:12.5px">${esc(malzAdi)}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td>${fmtDT(e.startTs)}</td><td>${e.endTs?fmtDT(e.endTs):'—'}</td><td>${dur}</td><td><span style="color:${statusColor};font-weight:600">${isDone?'Rota Tamamlandı':statusLabel}</span></td>
             ${canDeleteReport() ? `<td><button class="del-btn" onclick="deleteModalRecord('${e.id}')" title="Sil">🗑</button></td>` : ''}
@@ -2274,9 +2309,9 @@ function renderGroupScreen(groupId, groupMembers){
           const isTad = !isGunSonu && isTadilatRelated(r);
           const isActive = durusReasonSel===r;
           const style = isGunSonu
-            ? `border-color:#38bdf8;color:#38bdf8;background:${isActive?'#38bdf855':'#38bdf822'};font-weight:700`
+            ? `border-color:var(--gunsonu);color:var(--gunsonu);background:${isActive?'var(--gunsonu)55':'var(--gunsonu-med)'};font-weight:700`
             : isTad
-            ? `border-color:#c084fc;color:#c084fc;background:${isActive?'#c084fc55':'#c084fc22'};font-weight:700`
+            ? `border-color:var(--tadilat-info);color:var(--tadilat-info);background:${isActive?'var(--tadilat-info)55':'var(--tadilat-med)'};font-weight:700`
             : '';
           return `<button class="chip ${isActive&&!isGunSonu&&!isTad?'active':''}" style="${style}" onclick="pickDurusReason(${i})">${isGunSonu?'🌙 ':isTad?'🔧 ':''}${esc(r)}</button>`;
         }).join('')}
@@ -2295,7 +2330,7 @@ function renderGroupScreen(groupId, groupMembers){
     <div class="lock-machine">${groupMembers.map(e=>esc(e.talepNo || e.isEmriNo)).join(', ')}</div>
     <div class="lock-timer" style="${anyDurus?'color:var(--warn)':''}">${anyDurus?fmtElapsed(nowTick-ref.duruşTs):fmtElapsed(nowTick-ref.startTs)}</div>
     <div class="lock-meta">${anyDurus?'duruş süresi (tüm iş emirleri için ortak)':`${groupMembers.length} iş emri bu makinede aynı anda aktif`}</div>
-    ${anyDurus ? `<div class="durus-reason-box" style="${ref.duruşNedeni===GUN_SONU_REASON?'color:#38bdf8;background:#38bdf818;border-color:#38bdf840':isTadilatRelated(ref.duruşNedeni)?'color:#c084fc;background:#c084fc18;border-color:#c084fc40':''}">${ref.duruşNedeni===GUN_SONU_REASON?'🌙 ':isTadilatRelated(ref.duruşNedeni)?'🔧 ':''}"${esc(ref.duruşNedeni)}"</div>` : ''}
+    ${anyDurus ? `<div class="durus-reason-box" style="${ref.duruşNedeni===GUN_SONU_REASON?'color:var(--gunsonu);background:var(--gunsonu-soft);border-color:var(--gunsonu-border)':isTadilatRelated(ref.duruşNedeni)?'color:var(--tadilat-info);background:var(--tadilat-soft);border-color:var(--tadilat-border)':''}">${ref.duruşNedeni===GUN_SONU_REASON?'🌙 ':isTadilatRelated(ref.duruşNedeni)?'🔧 ':''}"${esc(ref.duruşNedeni)}"</div>` : ''}
     <div style="margin-top:20px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:8px;text-align:left">
       <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;padding:0 2px">Parti parti dönebilir — her iş emrini ayrı ayrı bitirebilirsin</div>
       ${groupMembers.map(e=>`
@@ -2358,7 +2393,7 @@ function renderLockScreen(active){
         <div class="lock-machine">${esc(active.makine)}</div>
         <div class="lock-timer" style="color:var(--warn)">${fmtElapsed(nowTick-active.duruşTs)}</div>
         <div class="lock-meta">duruş süresi</div>
-        <div class="durus-reason-box" style="${active.duruşNedeni===GUN_SONU_REASON?'color:#38bdf8;background:#38bdf818;border-color:#38bdf840':isTadilatRelated(active.duruşNedeni)?'color:#c084fc;background:#c084fc18;border-color:#c084fc40':''}">${active.duruşNedeni===GUN_SONU_REASON?'🌙 ':isTadilatRelated(active.duruşNedeni)?'🔧 ':''}"${esc(active.duruşNedeni)}"</div>
+        <div class="durus-reason-box" style="${active.duruşNedeni===GUN_SONU_REASON?'color:var(--gunsonu);background:var(--gunsonu-soft);border-color:var(--gunsonu-border)':isTadilatRelated(active.duruşNedeni)?'color:var(--tadilat-info);background:var(--tadilat-soft);border-color:var(--tadilat-border)':''}">${active.duruşNedeni===GUN_SONU_REASON?'🌙 ':isTadilatRelated(active.duruşNedeni)?'🔧 ':''}"${esc(active.duruşNedeni)}"</div>
         <div style="display:flex;gap:10px;margin-top:28px">
           <button class="btn-start" style="width:auto;padding:13px 26px" onclick="devamEt('${active.id}')">▶ Duraklatmayı Devam Ettir</button>
         </div>
@@ -2381,9 +2416,9 @@ function renderLockScreen(active){
           const isTad = !isGunSonu && isTadilatRelated(r);
           const active = durusReasonSel===r;
           const style = isGunSonu
-            ? `border-color:#38bdf8;color:#38bdf8;background:${active?'#38bdf855':'#38bdf822'};font-weight:700`
+            ? `border-color:var(--gunsonu);color:var(--gunsonu);background:${active?'var(--gunsonu)55':'var(--gunsonu-med)'};font-weight:700`
             : isTad
-            ? `border-color:#c084fc;color:#c084fc;background:${active?'#c084fc55':'#c084fc22'};font-weight:700`
+            ? `border-color:var(--tadilat-info);color:var(--tadilat-info);background:${active?'var(--tadilat-info)55':'var(--tadilat-med)'};font-weight:700`
             : '';
           return `<button class="chip ${active&&!isGunSonu&&!isTad?'active':''}" style="${style}" onclick="pickDurusReason(${i})">${isGunSonu?'🌙 ':isTad?'🔧 ':''}${esc(r)}</button>`;
         }).join('')}
@@ -2462,7 +2497,7 @@ function renderOperator(){
         <div style="font-size:12px;color:var(--text-muted);margin-top:16px;max-width:320px;text-align:center">Bitirirken seç: bu iş tamamen bitti mi, yoksa devamı gelecek mi?</div>
         <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;width:100%;max-width:340px">
           <button class="btn-primary" style="padding:14px" onclick="tadilatBitir('${mine.id}','${op.id}',true)">■ Tamamen Bitir <span style="font-weight:400;opacity:.85">(Son Operasyon)</span></button>
-          <button style="padding:14px;font-size:14px;border-radius:10px;border:2px solid #38bdf8;background:#38bdf822;color:#38bdf8;font-weight:700;cursor:pointer" onclick="tadilatBitir('${mine.id}','${op.id}',false)">⏸ Bu Operasyonu Bitir <span style="opacity:.85;font-weight:600">(Devamı Var)</span></button>
+          <button style="padding:14px;font-size:14px;border-radius:10px;border:2px solid var(--gunsonu);background:var(--gunsonu-med);color:var(--gunsonu);font-weight:700;cursor:pointer" onclick="tadilatBitir('${mine.id}','${op.id}',false)">⏸ Bu Operasyonu Bitir <span style="opacity:.85;font-weight:600">(Devamı Var)</span></button>
         </div>
         ${op.kaynakEntryId ? `<div style="font-size:11.5px;color:var(--text-muted);margin-top:18px;max-width:320px;text-align:center">Hangisini seçersen seç, duraklattığın üretim işi otomatik olarak "${TADILAT_SONRASI_REASON}" duruşuna geçecek — kaldığın yerden devam edebileceksin.</div>` : ''}
       </div>`;
@@ -2644,7 +2679,7 @@ function renderOperator(){
         if(!cand) return '';
         const groupCount = cand.groupId ? entriesArray().filter(x=>x.groupId===cand.groupId && (x.status==='devam'||x.status==='duruş')).length : 1;
         const durumTxt = cand.status==='duruş' ? `Duruşta: "${esc(cand.duruşNedeni||'')}"` : `${fmtElapsed(nowTick-cand.startTs)} çalışıyor`;
-        return `<div style="background:#facc1518;border:1px solid #facc1540;border-radius:10px;padding:14px;margin-bottom:14px">
+        return `<div style="background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:12.5px;color:var(--warn);font-weight:600;margin-bottom:6px">⚠ Bu makinede yarım kalmış ${groupCount>1?`${groupCount} iş emri`:'bir iş'} var</div>
           <div style="font-size:13px;margin-bottom:2px"><span class="mono" style="color:var(--accent)">${esc(cand.talepNo || cand.isEmriNo)}</span>${groupCount>1?` +${groupCount-1} daha`:''} · ${esc(cand.operatorUsername)} · ${esc(cand.operatorName)}</div>
           <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">${durumTxt}${cand.adet?` · Adet: ${esc(cand.adet)}`:''}</div>
@@ -2719,12 +2754,12 @@ function renderOperator(){
     // işler sadece arka planda durmasın, operatör buraya her girdiğinde göze çarpsın.
     const bekleyenAyar = mine.filter(e => e.status==='duruş' && e.duruşNedeni===TADILAT_SONRASI_REASON);
     if(bekleyenAyar.length>0){
-      body += `<div style="background:#c084fc18;border:2px solid #c084fc;border-radius:12px;padding:14px 16px;margin-bottom:16px">
-        <div style="font-size:13.5px;font-weight:700;color:#c084fc;margin-bottom:8px">🔧 Devam Etmeyi Bekleyen ${bekleyenAyar.length} Duraklatılmış İş Var</div>
+      body += `<div style="background:var(--tadilat-soft);border:2px solid var(--tadilat-info);border-radius:12px;padding:14px 16px;margin-bottom:16px">
+        <div style="font-size:13.5px;font-weight:700;color:var(--tadilat-info);margin-bottom:8px">🔧 Devam Etmeyi Bekleyen ${bekleyenAyar.length} Duraklatılmış İş Var</div>
         ${bekleyenAyar.map(e=>`
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border-radius:8px;padding:8px 12px;margin-top:6px;cursor:pointer" onclick="openActiveDetail('${e.id}')">
             <div><span class="mono" style="color:var(--accent);font-weight:700">${esc(e.talepNo || e.isEmriNo)}</span> <span style="font-size:11.5px;color:var(--text-muted)">${esc(e.makine)}</span></div>
-            <span style="font-size:11.5px;color:#c084fc">Tadilat sonrası ayar →</span>
+            <span style="font-size:11.5px;color:var(--tadilat-info)">Tadilat sonrası ayar →</span>
           </div>
         `).join('')}
       </div>`;
@@ -2909,7 +2944,7 @@ function renderAdmin(){
             return `
             <div class="op-settings-row" style="flex-wrap:wrap">
               <div class="op-settings-id">${esc(code)}</div>
-              <div class="op-settings-name">${esc(v.displayName)}${v.isSef?' · <span style="color:#38bdf8;font-size:11px">Şef</span>':v.isAdmin?' · <span style="color:var(--accent);font-size:11px">Yönetici</span>':''}</div>
+              <div class="op-settings-name">${esc(v.displayName)}${v.isSef?' · <span style="color:var(--gunsonu);font-size:11px">Şef</span>':v.isAdmin?' · <span style="color:var(--accent);font-size:11px">Yönetici</span>':''}</div>
               <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin-right:14px">
                 <input type="checkbox" style="width:auto" ${atolyeler.includes('imalat')?'checked':''} onchange="toggleUserAtolye('${code}','imalat')"> 🏭 İmalat Atölye
               </label>
@@ -2928,7 +2963,7 @@ function renderAdmin(){
             <label class="op-settings-row" style="cursor:pointer">
               <input type="checkbox" ${v.messagesAccess?'checked':''} onchange="toggleMessagesAccess('${code}')" style="width:auto">
               <div class="op-settings-id">${esc(code)}</div>
-              <div class="op-settings-name">${esc(v.displayName)}${v.isSef?' · <span style="color:#38bdf8">Şef</span>':v.isAdmin?' · <span style="color:var(--accent)">Yönetici</span>':''}</div>
+              <div class="op-settings-name">${esc(v.displayName)}${v.isSef?' · <span style="color:var(--gunsonu)">Şef</span>':v.isAdmin?' · <span style="color:var(--accent)">Yönetici</span>':''}</div>
               <span style="font-size:12px;color:${v.messagesAccess?'var(--success)':'var(--text-muted)'};font-weight:600">${v.messagesAccess?'Mesajları görebilir':'Erişimi yok'}</span>
             </label>
           `).join('')}
@@ -2956,7 +2991,7 @@ function renderAdmin(){
           ${allOps.map(([code,v])=>`
             <div class="op-settings-row" style="flex-wrap:wrap">
               <div class="op-settings-id">${esc(code)}</div>
-              <div class="op-settings-name">${esc(v.displayName)}${v.isSuperAdmin?' · <span style="color:var(--accent)">Süper Admin</span>':v.isSef?' · <span style="color:#38bdf8">Şef</span>':v.isAdmin?' · <span style="color:var(--accent)">Yönetici</span>':''}</div>
+              <div class="op-settings-name">${esc(v.displayName)}${v.isSuperAdmin?' · <span style="color:var(--accent)">Süper Admin</span>':v.isSef?' · <span style="color:var(--gunsonu)">Şef</span>':v.isAdmin?' · <span style="color:var(--accent)">Yönetici</span>':''}</div>
               ${v.isAdmin ? `<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
                 <input type="checkbox" style="width:auto" ${v.permReportEdit!==false?'checked':''} onchange="toggleUserPerm('${code}','permReportEdit')"> Rapor: Düzenleyebilir
               </label>
@@ -3114,6 +3149,7 @@ function renderAdmin(){
     };
     const sortedMachines = allMachines().slice()
       .filter(m => matrixGroupFilter==='Tümü' || machineGroupOf(m.code)===matrixGroupFilter)
+      .filter(m => matrixAtolyeFilter==='tumu' || machineAtolyeOf(m.code)===matrixAtolyeFilter)
       .sort((a,b)=>{
       if(matrixSort==='calisma') return workMsFor(b.code) - workMsFor(a.code);
       if(matrixSort==='renk') return statusPriority(a.code) - statusPriority(b.code) || a.code.localeCompare(b.code);
@@ -3121,6 +3157,11 @@ function renderAdmin(){
     });
     const groupNames = ['Tümü', ...MACHINE_GROUPS.map(g=>g.name), 'Diğer'];
     body = `<div class="matrix-wrap">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="chip ${matrixAtolyeFilter==='tumu'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setMatrixAtolyeFilter('tumu')">Tüm Makineler</button>
+        <button class="chip ${matrixAtolyeFilter==='imalat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setMatrixAtolyeFilter('imalat')">🏭 İmalat Atölye</button>
+        <button class="chip ${matrixAtolyeFilter==='tadilat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setMatrixAtolyeFilter('tadilat')">🔧 Tadilat Atölye</button>
+      </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
         ${groupNames.map(g=>`<button class="chip ${matrixGroupFilter===g?'active':''}" onclick="setMatrixGroupFilter('${g}')">${g}</button>`).join('')}
       </div>
@@ -3128,7 +3169,7 @@ function renderAdmin(){
         <span><span class="legend-dot" style="background:var(--success)"></span>Çalışıyor</span>
         <span><span class="legend-dot" style="background:var(--warn)"></span>Duruşta</span>
         <span><span class="legend-dot" style="background:var(--danger)"></span>Boşta</span>
-        <span><span class="legend-dot" style="background:#c084fc"></span>Tadilat Yapıyor</span>
+        <span><span class="legend-dot" style="background:var(--tadilat-info)"></span>Tadilat Yapıyor</span>
         <span style="margin-left:auto;display:flex;gap:8px">
           <button class="chip ${matrixSort==='alpha'?'active':''}" onclick="setMatrixSort('alpha')">Alfabetik</button>
           <button class="chip ${matrixSort==='calisma'?'active':''}" onclick="setMatrixSort('calisma')">Çalışma Süresine Göre</button>
@@ -3144,18 +3185,18 @@ function renderAdmin(){
       const stoppedEntries = machineEntries.filter(e=>e.status==='duruş');
       const running = !tadilatHere && runningEntries.length>0;
       const stopped = !tadilatHere && !running && stoppedEntries.length>0;
-      const bg = tadilatHere ? (theme==='light'?'#f3e8ff':'#3b2a5c') : theme==='light'
+      const bg = tadilatHere ? (theme==='light'?'var(--tadilat-soft)':'#3b2a5c') : theme==='light'
         ? (running?'#d1fae5':stopped?'#fef3c7':'#fee2e2')
         : (running?'#1a4d2e':stopped?'#4a3f0a':'#3d1f1f');
-      const border = tadilatHere ? '#c084fc' : running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
-      const dotColor = tadilatHere ? '#c084fc' : running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
+      const border = tadilatHere ? 'var(--tadilat-info)' : running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
+      const dotColor = tadilatHere ? 'var(--tadilat-info)' : running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
       const lastFinished = (!running&&!stopped&&!tadilatHere) ? machineEntries.slice().sort((a,b)=>b.startTs-a.startTs)[0] : null;
       body += `<div class="matrix-card" style="background:${bg};border-color:${border}" onclick="openMachineDetail('${m.code}')">
         <div class="matrix-card-top"><span class="matrix-code">${m.code}</span><span class="matrix-dot" style="background:${dotColor}"></span></div>
         <div class="matrix-name">${esc(m.name)}</div>`;
       if(tadilatHere){
         const { tadilat: tt, operasyon: top } = tadilatHere;
-        body += `<div class="matrix-sub" style="color:#c084fc;font-weight:700">🔧 ${esc(tt.uKodu)}</div>
+        body += `<div class="matrix-sub" style="color:var(--tadilat-info);font-weight:700">🔧 ${esc(tt.uKodu)}</div>
           <div class="matrix-sub">${esc(top.operatorUsername)} · ${fmtElapsed(nowTick-top.baslamaTs)}</div>`;
       } else if(running){
         if(runningEntries.length===1){
@@ -3284,9 +3325,9 @@ function renderAdmin(){
         <button class="chip" onclick="setAnalizPreset(30)">Son 30 Gün</button>
         <button class="chip" onclick="setAnalizPreset(90)">Son 3 Ay</button>
         <div style="display:flex;gap:24px;margin-left:auto">
-          <button class="chip ${analizAtolyeFilter==='tumu'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:22px" onclick="setAnalizAtolyeFilter('tumu')">Tüm Makineler</button>
-          <button class="chip ${analizAtolyeFilter==='imalat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:22px" onclick="setAnalizAtolyeFilter('imalat')">🏭 İmalat Atölye</button>
-          <button class="chip ${analizAtolyeFilter==='tadilat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:22px" onclick="setAnalizAtolyeFilter('tadilat')">🔧 Tadilat Atölye</button>
+          <button class="chip ${analizAtolyeFilter==='tumu'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setAnalizAtolyeFilter('tumu')">Tüm Makineler</button>
+          <button class="chip ${analizAtolyeFilter==='imalat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setAnalizAtolyeFilter('imalat')">🏭 İmalat Atölye</button>
+          <button class="chip ${analizAtolyeFilter==='tadilat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setAnalizAtolyeFilter('tadilat')">🔧 Tadilat Atölye</button>
         </div>
       </div>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Standart mesai: kullanılan her gün için 540 dk (08:00 ~17:30) · 17:30'dan sonrası fazla mesai sayılır</div>
@@ -3661,7 +3702,7 @@ function renderAdmin(){
       const isDone = completedRoutes.has(e.id);
       const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success-soft)';
       const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
-      const rowStyle = isDone ? 'background:#1a4d2e33' : '';
+      const rowStyle = isDone ? 'background:var(--success-row)' : '';
       const malzAdi = getTalepInfo(e.talepNo)?.malzemeAdi || '';
       body += `<tr style="${rowStyle}">
         ${canDeleteReport() ? `<td><input type="checkbox" ${reportSelectedIds.has(e.id)?'checked':''} onchange="toggleReportSelect('${e.id}')"></td>` : ''}
