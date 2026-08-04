@@ -38,7 +38,7 @@ const FIREBASE_CONFIG = {
 :root{
   --bg:#14171a; --panel:#1c2024; --panel-alt:#20262b; --border:#2a3138;
   --text:#eef1f3; --text-muted:#8b939b;
-  --accent:#ff8a3d; --accent-dim:#ff8a3d22; --success:#4ade80; --warn:#facc15; --danger:#f87171;
+  --accent:#ff8a3d; --accent-dim:#ff8a3d22; --success:#4ade80; --success-soft:#94d3a2; --warn:#facc15; --danger:#f87171;
 }
 .theme-light{
   --bg:#f4f5f6; --panel:#ffffff; --panel-alt:#eef0f2; --border:#dde1e5;
@@ -306,16 +306,89 @@ function getTalepInfo(code){
 }
 let extraMachines = {}; // admin tarafından sonradan eklenen makineler (Firebase 'machines_extra')
 let hiddenMachines = {}; // silinen dahili makineler (Firebase 'machines_hidden')
+let fasonMachines = {}; // "Fason / Dışarı Gönderim" olarak işaretlenen makineler (Firebase 'machines_fason')
 function allMachines(){ return MACHINE_LIST.filter(m=>!hiddenMachines[m.code]).concat(Object.entries(extraMachines).map(([code,v])=>({code, name:v.name}))); }
+// Fason makinede (ör. dışarıya ısıl işleme giden) aynı anda birden fazla parti/iş emri açılabilir;
+// "makine meşgul" kısıtı burada uygulanmaz. Ayrıca bu makinelerdeki aktif işler, fasonYetkisi verilen
+// operatörlere kim başlatmış olursa olsun görünür ve onlar tarafından kapatılabilir.
+function isFasonMachine(makineLabel){
+  const code = String(makineLabel||'').split(' · ')[0];
+  return !!fasonMachines[code];
+}
+function toggleMachineFason(code){
+  if(!session || !(session.isSuperAdmin || session.isSef)){ toast('Bu işlem için yetkin yok'); return; }
+  DB.ref('machines_fason/'+code).set(!fasonMachines[code]);
+}
+function toggleFasonYetkisi(code){
+  const op = STATE.operators[code] || {};
+  DB.ref('operators/'+code+'/fasonYetkisi').set(!op.fasonYetkisi);
+}
+/* ===================== MALZEME STOK TAKİBİ (opsiyonel modül) =====================
+   Tamamen tek bir anahtarla açılıp kapanabilir (appSettings.stockTrackingEnabled).
+   Kapalıyken hiçbir ekranda görünmez ve hiçbir mantığı çalışmaz — MRP/MES'e evrilmesin
+   diye bilinçli olarak minimum kapsamda tutuldu: sadece "ilk operasyonda" stoktan düşer.
+*/
+let appSettings = {};
+let stockItems = {};
+let stockHareketleri = {};
+function stockEnabled(){ return !!appSettings.stockTrackingEnabled; }
+function canManageStock(){ return !!(session && (session.isSuperAdmin || session.isSef)); }
+function toggleStockTracking(){
+  if(!canManageStock()) return;
+  DB.ref('settings/stockTrackingEnabled').set(!stockEnabled());
+}
+function stockItemsArray(){ return Object.entries(stockItems).map(([id,v])=>({id, ...v})).sort((a,b)=>(a.kod||'').localeCompare(b.kod||'')); }
+// Bir isEmriNo için daha önce hiç kayıt açılmamışsa "ilk operasyon"dur — hammadde tüketimi
+// sadece bu noktada sorulur, rotanın sonraki adımlarında tekrar sorulmaz.
+function isFirstOperationFor(isEmriNo){
+  if(!isEmriNo) return true;
+  return !entriesArray().some(e => e.isEmriNo === isEmriNo);
+}
+function consumeStock(itemId, miktar, meta){
+  if(!itemId || !miktar) return;
+  const item = stockItems[itemId]; if(!item) return;
+  const yeniMiktar = (Number(item.miktar)||0) - Number(miktar);
+  DB.ref('stockItems/'+itemId+'/miktar').set(yeniMiktar);
+  const hid = uid();
+  DB.ref('stockHareketleri/'+hid).set({
+    itemId, itemKod: item.kod||'', itemIsim: item.isim||'', miktar: -Number(miktar), birim: item.birim||'',
+    isEmriNo: meta.isEmriNo||'', talepNo: meta.talepNo||'', operatorUsername: session.username, operatorName: session.displayName, ts: Date.now()
+  });
+}
+function addStockItem(){
+  if(!canManageStock()) return;
+  const kod = (document.getElementById('stok-kod')?.value||'').trim();
+  const isim = (document.getElementById('stok-isim')?.value||'').trim();
+  const birim = document.getElementById('stok-birim')?.value||'adet';
+  const miktar = Number(document.getElementById('stok-miktar')?.value||0);
+  const mode = document.getElementById('stok-mode')?.value||'oto';
+  if(!kod){ toast('Stok kodu girin'); return; }
+  const id = uid();
+  DB.ref('stockItems/'+id).set({ kod, isim, birim, miktar, mode }).then(()=>{
+    toast('Stok kalemi eklendi');
+    ['stok-kod','stok-isim','stok-miktar'].forEach(fid=>{ const el=document.getElementById(fid); if(el) el.value=''; });
+  });
+}
+function updateStockItemField(id, field, val){
+  if(!canManageStock()) return;
+  DB.ref('stockItems/'+id+'/'+field).set(field==='miktar' ? Number(val) : val);
+}
+function deleteStockItem(id){
+  if(!canManageStock()) return;
+  DB.ref('stockItems/'+id).remove();
+}
+function fasonBekleyenCount(){
+  return entriesArray().filter(e => (e.status==='devam'||e.status==='duruş') && isFasonMachine(e.makine)).length;
+}
 function allMachineCodes(){ return allMachines().map(m=>m.code); }
 function resolveMachineLabel(code){ const m = allMachines().find(x=>x.code===code); return m ? `${m.code} · ${m.name}` : ""; }
 let session = load('rota_remember', false) ? load('rota_session', null) : null;
 let theme = load('rota_theme', 'dark');
 let view = 'list';
 let nowTick = Date.now();
-let newForm = { isEmriNo:'', bilesen:'', makine:'', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false, cokluMode:false, cokluItems:[{isEmriNo:'',bilesen:'',adet:''},{isEmriNo:'',bilesen:'',adet:''}] };
+let newForm = { isEmriNo:'', bilesen:'', makine:'', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false, stockItemId:'', stockMiktar:'', cokluMode:false, cokluItems:[{isEmriNo:'',bilesen:'',adet:'',stockItemId:'',stockMiktar:''},{isEmriNo:'',bilesen:'',adet:'',stockItemId:'',stockMiktar:''}] };
 function toggleCokluMode(v){ newForm.cokluMode = v; render(); }
-function addCokluItem(){ newForm.cokluItems.push({isEmriNo:'',bilesen:'',adet:''}); render(); }
+function addCokluItem(){ newForm.cokluItems.push({isEmriNo:'',bilesen:'',adet:'',stockItemId:'',stockMiktar:''}); render(); }
 function removeCokluItem(i){ newForm.cokluItems.splice(i,1); render(); }
 let activeDetailId = null; // görüntülenen aktif işin id'si (Makineler listesinden tıklanan)
 let activeGroupId = null; // görüntülenen çoklu iş emri grubunun id'si
@@ -385,10 +458,93 @@ let settingsSubTab = 'default';
 let showMachineList = false;
 let matrixSort = 'alpha'; // 'alpha' | 'calisma'
 function setMatrixSort(v){ matrixSort = v; render(); }
+// Makine grupları — Makine Matrisi ekranında gruba göre filtreleme için.
+const MACHINE_GROUPS = [
+  { name: 'Torna', codes: ['UT01','UT02','UT03'] },
+  { name: 'Freze-Matkap', codes: ['UF01','SM01','KCM01'] },
+  { name: 'Parlatma', codes: ['PT01','PT02'] },
+  { name: 'EDM', codes: ['TE01','TE02','DE01','DE02','DE03','DDTE01'] },
+  { name: 'CNC', codes: ['C01','C02'] },
+  { name: 'Taşlama', codes: ['ODT01','ODT02','ODT03','MDT01'] },
+];
+function machineGroupOf(code){
+  const g = MACHINE_GROUPS.find(g=>g.codes.includes(code));
+  return g ? g.name : 'Diğer';
+}
+let matrixGroupFilter = 'Tümü';
+function setMatrixGroupFilter(v){ matrixGroupFilter = v; render(); }
 let machineModal = null; // açık modal'ın makine kodu
 let entryDetailId = null; // Rapor tablosunda tıklanan tek kaydın detay penceresi
 function openEntryDetail(id){ entryDetailId = id; render(); }
 function closeEntryDetail(){ entryDetailId = null; render(); }
+let reportEditId = null; // Rapor tablosunda "Düzelt" ile açılan düzenleme penceresi
+let reportEditForm = null;
+function openReportEdit(id){
+  if(!canEditReport()) return;
+  const e = STATE.entries[id]; if(!e) return;
+  reportEditId = id;
+  reportEditForm = { isEmriNo:e.isEmriNo||'', talepNo:e.talepNo||'', malzemeCinsi:e.malzemeCinsi||'', capBoy:e.capBoy||'', adet:e.adet||'', not:e.not||'', sonOperasyon:!!e.sonOperasyon, status:e.status||'tamamlandi' };
+  render();
+}
+function closeReportEdit(){ reportEditId = null; reportEditForm = null; render(); }
+function saveReportEdit(){
+  if(!canEditReport() || !reportEditId) return;
+  const isEmriNo = (document.getElementById('redit-isemri')?.value||'').trim().toUpperCase();
+  const talepNo = (document.getElementById('redit-talepno')?.value||'').trim().toUpperCase();
+  const malzemeCinsi = (document.getElementById('redit-malzeme')?.value||'').trim();
+  const capBoy = (document.getElementById('redit-capboy')?.value||'').trim();
+  const adet = (document.getElementById('redit-adet')?.value||'').trim();
+  const not = (document.getElementById('redit-not')?.value||'').trim();
+  const sonOperasyon = !!document.getElementById('redit-sonop')?.checked;
+  const status = document.getElementById('redit-status')?.value||'tamamlandi';
+  if(!isEmriNo){ toast('İş Emri No (U kodu) boş olamaz'); return; }
+  if(adet && !/^\d+$/.test(adet)){ toast('Adet sadece rakam olmalı'); return; }
+  const patch = { isEmriNo, talepNo, malzemeCinsi, capBoy, adet, not, sonOperasyon, status };
+  if(status!=='devam' && !STATE.entries[reportEditId]?.endTs){ patch.endTs = STATE.entries[reportEditId]?.startTs || Date.now(); }
+  if(status==='devam'){ patch.endTs = null; }
+  DB.ref('entries/'+reportEditId).update(patch).then(()=>{
+    toast('Kayıt güncellendi');
+    closeReportEdit();
+  });
+}
+function renderReportEditModal(){
+  const e = STATE.entries[reportEditId];
+  if(!e || !reportEditForm){ reportEditId=null; return ''; }
+  const f = reportEditForm;
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeReportEdit()">
+    <div class="modal-box" style="max-width:480px">
+      <div class="modal-header">
+        <div><div class="modal-title" style="font-size:18px">Kaydı Düzelt</div><div class="modal-sub">${esc(e.makine||'—')} · ${dateKey(e.startTs)}</div></div>
+        <button class="icon-btn" onclick="closeReportEdit()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field"><label>İş Emri No (U kodu)</label><input id="redit-isemri" class="mono" value="${esc(f.isEmriNo)}"></div>
+        <div class="field"><label>İş Talep No</label><input id="redit-talepno" class="mono" value="${esc(f.talepNo)}"></div>
+        <div style="display:flex;gap:8px">
+          <div class="field" style="flex:1"><label>Malzeme Cinsi</label><input id="redit-malzeme" value="${esc(f.malzemeCinsi)}"></div>
+          <div class="field" style="flex:1"><label>Çap ve Boy</label><input id="redit-capboy" value="${esc(f.capBoy)}"></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div class="field" style="flex:1"><label>Adet</label><input id="redit-adet" inputmode="numeric" value="${esc(f.adet)}"></div>
+          <div class="field" style="flex:1"><label>Durum</label><select id="redit-status">
+            <option value="devam" ${f.status==='devam'?'selected':''}>Devam Ediyor</option>
+            <option value="duruş" ${f.status==='duruş'?'selected':''}>Duruşta</option>
+            <option value="tamamlandi" ${f.status==='tamamlandi'?'selected':''}>Tamamlandı</option>
+          </select></div>
+        </div>
+        <div class="field"><label>Not</label><input id="redit-not" value="${esc(f.not)}"></div>
+        <label style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
+          <input id="redit-sonop" type="checkbox" style="width:auto" ${f.sonOperasyon?'checked':''}>
+          <span style="font-size:13px">Son Operasyon <span style="color:var(--text-muted);font-size:11.5px">(bu rotanın son adımı mı)</span></span>
+        </label>
+        <div style="display:flex;gap:10px">
+          <button class="btn-ghost" style="flex:1" onclick="closeReportEdit()">Vazgeç</button>
+          <button class="btn-primary" style="flex:1" onclick="saveReportEdit()">Kaydet</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
 let modalSelectedIds = new Set();
 let modalVisibleIds = [];
 let reportSelectedIds = new Set();
@@ -561,6 +717,10 @@ function initFirebase(){
       hiddenMachines = snap.val() || {};
       render();
     });
+    DB.ref('machines_fason').on('value', snap=>{
+      fasonMachines = snap.val() || {};
+      render();
+    });
     DB.ref('messages').on('value', snap=>{
       STATE.messages = snap.val() || {};
       render();
@@ -571,6 +731,18 @@ function initFirebase(){
     });
     DB.ref('durusReasons').on('value', snap=>{
       STATE.durusReasons = snap.val() || [];
+      render();
+    });
+    DB.ref('settings').on('value', snap=>{
+      appSettings = snap.val() || {};
+      render();
+    });
+    DB.ref('stockItems').on('value', snap=>{
+      stockItems = snap.val() || {};
+      render();
+    });
+    DB.ref('stockHareketleri').on('value', snap=>{
+      stockHareketleri = snap.val() || {};
       render();
     });
     return true;
@@ -688,7 +860,9 @@ function baslat(){
       return {
         talepNoRaw: raw,
         bilesen,
-        adet: (document.getElementById('nf-coklu-adet-'+i)?.value||'').trim()
+        adet: (document.getElementById('nf-coklu-adet-'+i)?.value||'').trim(),
+        stockItemId: document.getElementById('nf-coklu-stok-'+i)?.value||'',
+        stockMiktar: (document.getElementById('nf-coklu-stok-miktar-'+i)?.value||'').trim()
       };
     });
     if(items.length===0){ toast('En az bir İş Emri No girin'); return; }
@@ -711,11 +885,17 @@ function baslat(){
     items.forEach(it=>{
       const id = uid();
       const { isEmriNo, talepNo } = resolveTrackingCode(it.talepNoRaw, it.bilesen);
-      const entry = { isEmriNo, talepNo, makine, malzemeCinsi, capBoy, adet: it.adet, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0, excludedMs:0, groupId };
+      const wasFirst = isFirstOperationFor(isEmriNo);
+      const entry = { isEmriNo, talepNo, makine, malzemeCinsi, capBoy, adet: it.adet, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startedByUsername:session.username, startedByName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0, excludedMs:0, groupId };
       DB.ref('entries/'+id).set(entry);
+      if(stockEnabled() && wasFirst && it.stockItemId){
+        const stItem = stockItems[it.stockItemId];
+        const miktar = stItem && stItem.mode==='oto' ? Number(it.adet)||0 : Number(it.stockMiktar)||0;
+        if(miktar>0) consumeStock(it.stockItemId, miktar, { isEmriNo, talepNo });
+      }
     });
     toast(`${items.length} iş emri birlikte başlatıldı`);
-    newForm = { isEmriNo:'', bilesen:'', makine: (STATE.operators[session.username]||{}).defaultMachine || '', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false, cokluMode:false, cokluItems:[{isEmriNo:'',bilesen:'',adet:''},{isEmriNo:'',bilesen:'',adet:''}] };
+    newForm = { isEmriNo:'', bilesen:'', makine: (STATE.operators[session.username]||{}).defaultMachine || '', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false, stockItemId:'', stockMiktar:'', cokluMode:false, cokluItems:[{isEmriNo:'',bilesen:'',adet:'',stockItemId:'',stockMiktar:''},{isEmriNo:'',bilesen:'',adet:'',stockItemId:'',stockMiktar:''}] };
     activeGroupId = groupId;
     activeDetailId = null;
     view = 'list';
@@ -742,14 +922,29 @@ function baslat(){
       toast(`Tamamlanmamış ${msg} — bu iş emrine (birleştirme) önce onlar bitmeden başlanamaz.`); return;
     }
   }
-  const machineBusy = entriesArray().some(e => e.makine === makine && e.status === 'devam');
+  const machineBusy = !isFasonMachine(makine) && entriesArray().some(e => e.makine === makine && e.status === 'devam');
   if(machineBusy){ toast('Bu makinede zaten aktif bir iş var. Önce o iş bitirilmeli ya da duraklatılmalı.'); return; }
-  const id = uid();
   const { isEmriNo, talepNo } = resolveTrackingCode(isEmriNoRaw, bilesenSel);
-  const entry = { isEmriNo, talepNo, makine, malzemeCinsi, capBoy, adet, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0, excludedMs:0 };
+  const wasFirst = isFirstOperationFor(isEmriNo);
+  let stockItemIdSel = '', stockMiktarSel = 0;
+  if(stockEnabled() && wasFirst){
+    stockItemIdSel = document.getElementById('nf-stok-item')?.value||'';
+    if(stockItemIdSel){
+      const stItem = stockItems[stockItemIdSel];
+      if(stItem && stItem.mode==='manuel'){
+        stockMiktarSel = Number(document.getElementById('nf-stok-miktar')?.value||0);
+        if(stockMiktarSel<=0){ toast('Kullanılan hammadde miktarını girin'); return; }
+      } else {
+        stockMiktarSel = Number(adet)||0;
+      }
+    }
+  }
+  const id = uid();
+  const entry = { isEmriNo, talepNo, makine, malzemeCinsi, capBoy, adet, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startedByUsername:session.username, startedByName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0, excludedMs:0 };
   DB.ref('entries/'+id).set(entry);
+  if(stockItemIdSel && stockMiktarSel>0) consumeStock(stockItemIdSel, stockMiktarSel, { isEmriNo, talepNo });
   toast('Operasyon başlatıldı');
-  newForm = { isEmriNo:'', bilesen:'', makine: (STATE.operators[session.username]||{}).defaultMachine || '', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false, cokluMode:false, cokluItems:[{isEmriNo:'',bilesen:'',adet:''},{isEmriNo:'',bilesen:'',adet:''}] };
+  newForm = { isEmriNo:'', bilesen:'', makine: (STATE.operators[session.username]||{}).defaultMachine || '', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false, stockItemId:'', stockMiktar:'', cokluMode:false, cokluItems:[{isEmriNo:'',bilesen:'',adet:'',stockItemId:'',stockMiktar:''},{isEmriNo:'',bilesen:'',adet:'',stockItemId:'',stockMiktar:''}] };
   activeDetailId = id;
   view = 'list';
   render();
@@ -761,7 +956,7 @@ function bitir(id){
   const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
   const duruşToplamMs = (e.duruşToplamMs||0) + (isGunSonu?0:extra);
   const excludedMs = (e.excludedMs||0) + (isGunSonu?extra:0);
-  DB.ref('entries/'+id).update({ endTs: Date.now(), status:'tamamlandi', duruşToplamMs, excludedMs });
+  DB.ref('entries/'+id).update({ endTs: Date.now(), status:'tamamlandi', duruşToplamMs, excludedMs, finishedByUsername: session.username, finishedByName: session.displayName });
   toast('Operasyon tamamlandı');
   if(activeDetailId===id){ activeDetailId=null; view='list'; }
 }
@@ -774,9 +969,26 @@ function confirmDurus(id){
   toast('Duruş kaydedildi');
   durusOpen=false; durusReasonSel=''; durusCustom='';
 }
+// Bir operatör/şef bir makinede iş bırakıp gidebiliyor (ör. yerine geçen kişi izinli); ertesi gün
+// asıl operatör aynı makineyi seçtiğinde, üzerinde kimin başlattığı yarım bir iş varsa burada
+// buluyoruz — yeni kayıt açmak yerine "Devral" ile aynı kayda kaldığı yerden devam edebilsin.
+function machineHandoffCandidate(makineLabel){
+  if(!makineLabel || isFasonMachine(makineLabel)) return null;
+  return entriesArray().find(e => e.makine===makineLabel && (e.status==='devam'||e.status==='duruş') && e.operatorUsername!==session.username) || null;
+}
+function devralIs(id){
+  const e = STATE.entries[id]; if(!e) return;
+  const targets = e.groupId ? entriesArray().filter(x=>x.groupId===e.groupId && (x.status==='devam'||x.status==='duruş')) : [e];
+  Promise.all(targets.map(t => DB.ref('entries/'+t.id).update({ operatorUsername: session.username, operatorName: session.displayName }))).then(()=>{
+    toast(targets.length>1 ? `${targets.length} iş emri devralındı — kaldığı yerden devam edebilirsin` : 'İş devralındı — kaldığı yerden devam edebilirsin');
+    if(e.groupId){ activeGroupId = e.groupId; } else { activeDetailId = id; }
+    view = 'list';
+    render();
+  });
+}
 function devamEt(id){
   const e = STATE.entries[id] || {};
-  const machineBusy = entriesArray().some(o => o.id!==id && o.makine===e.makine && o.status==='devam' && !(e.groupId && o.groupId===e.groupId));
+  const machineBusy = !isFasonMachine(e.makine) && entriesArray().some(o => o.id!==id && o.makine===e.makine && o.status==='devam' && !(e.groupId && o.groupId===e.groupId));
   if(machineBusy){ toast('Bu makinede zaten aktif başka bir iş var. Önce onu bitir ya da duraklat.'); return; }
   const extra = e.duruşTs ? (Date.now() - e.duruşTs) : 0;
   const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
@@ -803,7 +1015,7 @@ function devamGrup(groupId){
   const members = groupMembersOf(groupId);
   if(members.length===0) return;
   const makine = members[0].makine;
-  const machineBusy = entriesArray().some(o => o.groupId!==groupId && o.makine===makine && o.status==='devam');
+  const machineBusy = !isFasonMachine(makine) && entriesArray().some(o => o.groupId!==groupId && o.makine===makine && o.status==='devam');
   if(machineBusy){ toast('Bu makinede zaten aktif başka bir iş var. Önce onu bitir ya da duraklat.'); return; }
   const now = Date.now();
   members.forEach(e=>{
@@ -838,7 +1050,9 @@ function bitirGrup(groupId){
       endTs: x.e.startTs + allocatedWallMs,
       status: 'tamamlandi',
       duruşToplamMs: allocatedDurusMs,
-      excludedMs: allocatedExcludedMs
+      excludedMs: allocatedExcludedMs,
+      finishedByUsername: session.username,
+      finishedByName: session.displayName
     });
   });
   toast('Tüm iş emirleri tamamlandı');
@@ -908,6 +1122,29 @@ function canManageIsEmriList(){
   if(session.isSuperAdmin || session.isSef) return true;
   toast('Bu işlem için yetkin yok');
   return false;
+}
+// Rapor ekranında silme/düzenleme yetkisi: süper admin her zaman tam yetkili. Diğer yönetici/şef
+// hesapları için bu, SuperAdmin'in Ayarlar > + Kullanıcı Ekle ekranından her kullanıcıya özel
+// açıp kapatabildiği bir izin. Varsayılan: silme kapalı, düzenleme açık.
+function canDeleteReport(){
+  if(!session) return false;
+  if(session.isSuperAdmin) return true;
+  if(!session.isAdmin) return false;
+  const op = STATE.operators[session.username]||{};
+  return !!op.permReportDelete;
+}
+function canEditReport(){
+  if(!session) return false;
+  if(session.isSuperAdmin) return true;
+  if(!session.isAdmin) return false;
+  const op = STATE.operators[session.username]||{};
+  return op.permReportEdit !== false;
+}
+function toggleUserPerm(code, field){
+  if(!requireSuperAdmin()) return;
+  const op = STATE.operators[code]; if(!op) return;
+  const newVal = field==='permReportEdit' ? (op.permReportEdit===false) : !op[field];
+  DB.ref('operators/'+code+'/'+field).set(newVal);
 }
 function normalizeTalepCode(v){
   if(v==null) return '';
@@ -1311,7 +1548,7 @@ function filteredEntries(){
 }
 function exportExcel(){
   const rows = filteredEntries().map(e=>({
-    "İş Talep No": e.talepNo||'', "U Kodu (İş Emri No)": e.isEmriNo, "Operasyon No": e._seq, "Malzeme Cinsi": e.malzemeCinsi, "Çap ve Boy": e.capBoy, "Adet": e.adet, "Makine Kodu": (e.makine||'').split(' · ')[0]||'', "Makine Adı": (e.makine||'').split(' · ')[1]||'',
+    "İş Talep No": e.talepNo||'', "U Kodu (İş Emri No)": e.isEmriNo, "Malzeme Adı": getTalepInfo(e.talepNo)?.malzemeAdi||'', "Operasyon No": e._seq, "Malzeme Cinsi": e.malzemeCinsi, "Çap ve Boy": e.capBoy, "Adet": e.adet, "Makine Kodu": (e.makine||'').split(' · ')[0]||'', "Makine Adı": (e.makine||'').split(' · ')[1]||'',
     "Operatör Kodu": e.operatorUsername, "Operatör Adı": e.operatorName,
     "Başlangıç": fmtDT(e.startTs), "Bitiş": e.endTs?fmtDT(e.endTs):"",
     "Süre (dk)": e.endTs?Math.round((e.endTs-e.startTs)/60000):"",
@@ -1359,7 +1596,7 @@ function exportMachineExcel(code){
   let rows = machineDetailEntries(code);
   if(modalDateFilter) rows = rows.filter(e=>dateKey(e.startTs)===modalDateFilter);
   const data = rows.map(e=>({
-    "Tarih": dateKey(e.startTs), "İş Talep No": e.talepNo||'', "U Kodu (İş Emri No)": e.isEmriNo, "Malzeme Cinsi": e.malzemeCinsi, "Çap ve Boy": e.capBoy, "Adet": e.adet,
+    "Tarih": dateKey(e.startTs), "İş Talep No": e.talepNo||'', "U Kodu (İş Emri No)": e.isEmriNo, "Malzeme Adı": getTalepInfo(e.talepNo)?.malzemeAdi||'', "Malzeme Cinsi": e.malzemeCinsi, "Çap ve Boy": e.capBoy, "Adet": e.adet,
     "Operatör": `${e.operatorUsername} · ${e.operatorName}`,
     "Başlangıç": fmtDT(e.startTs), "Bitiş": e.endTs?fmtDT(e.endTs):"",
     "Süre (dk)": e.endTs?Math.round((e.endTs-e.startTs)/60000):"",
@@ -1375,33 +1612,47 @@ function renderEntryDetailModal(){
   const e = STATE.entries[entryDetailId];
   if(!e){ entryDetailId=null; return ''; }
   const isDone = computeCompletedRouteIds().has(e.id);
-  const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success)';
+  const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success-soft)';
   const statusLabel = isDone ? 'Rota Tamamlandı' : e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
   const wallMs = e.endTs ? (e.endTs-e.startTs) : (e.status==='devam' ? (nowTick-e.startTs) : 0);
   const durusMs = e.duruşToplamMs || 0;
   const netMs = Math.max(0, wallMs - durusMs - (e.excludedMs||0));
+  const malzAdi = getTalepInfo(e.talepNo)?.malzemeAdi || '';
+  const startedByUsername = e.startedByUsername || e.operatorUsername;
+  const startedByName = e.startedByName || e.operatorName;
+  const handedOver = e.operatorUsername !== startedByUsername;
+  const malzTxt = [e.malzemeCinsi, e.capBoy].filter(Boolean).join(' ');
   return `<div class="modal-overlay" onclick="if(event.target===this) closeEntryDetail()">
     <div class="modal-box">
       <div class="modal-header">
-        <div><div class="modal-title">${esc(e.talepNo || e.isEmriNo)}</div><div class="modal-sub">${e.talepNo ? `U kodu: ${esc(e.isEmriNo)} · ` : ''}${esc(e.makine||'—')}</div></div>
+        <div>
+          <div class="modal-title">${esc(e.talepNo || e.isEmriNo)}${malzAdi ? ` <span style="color:var(--accent);opacity:.45;font-weight:600;font-size:1em">${esc(malzAdi)}</span>` : ''}</div>
+          <div class="modal-sub">${e.talepNo ? `U kodu: ${esc(e.isEmriNo)} · ` : ''}${esc(e.makine||'—')}</div>
+        </div>
         <button class="icon-btn" onclick="closeEntryDetail()">✕</button>
       </div>
       <div class="modal-body">
-        <div class="modal-stats">
-          <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--success)">${fmtDur(netMs)}</div><div class="modal-stat-label">Üretim Süresi</div></div>
-          <div class="modal-stat-box"><div class="modal-stat-num" style="color:${durusMs>0?'var(--warn)':'var(--text-muted)'}">${fmtDur(durusMs)}</div><div class="modal-stat-label">Duruş Süresi</div></div>
-          <div class="modal-stat-box"><div class="modal-stat-num">${fmtDur(wallMs)}</div><div class="modal-stat-label">Toplam (Geçen Zaman)</div></div>
-          <div class="modal-stat-box"><div class="modal-stat-num" style="color:${statusColor}">${statusLabel}</div><div class="modal-stat-label">Durum</div></div>
+        <div class="modal-stats" style="flex-wrap:nowrap;gap:10px">
+          <div class="modal-stat-box" style="min-width:0;flex:1;padding:10px 8px"><div class="modal-stat-num" style="color:var(--success);font-size:16px">${fmtDur(netMs)}</div><div class="modal-stat-label" style="font-size:9.5px">Üretim Süresi</div></div>
+          <div class="modal-stat-box" style="min-width:0;flex:1;padding:10px 8px"><div class="modal-stat-num" style="color:${durusMs>0?'var(--warn)':'var(--text-muted)'};font-size:16px">${fmtDur(durusMs)}</div><div class="modal-stat-label" style="font-size:9.5px">Duruş Süresi</div></div>
+          <div class="modal-stat-box" style="min-width:0;flex:1;padding:10px 8px"><div class="modal-stat-num" style="font-size:16px">${fmtDur(wallMs)}</div><div class="modal-stat-label" style="font-size:9.5px">Toplam (Geçen Zaman)</div></div>
+          <div class="modal-stat-box" style="min-width:0;flex:1.3;padding:10px 8px"><div class="modal-stat-num" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${malzTxt ? esc(malzTxt)+' · ' : ''}Adet: ${esc(e.adet||'—')}</div><div class="modal-stat-label" style="font-size:9.5px">Malzeme / Adet</div></div>
+          <div class="modal-stat-box" style="min-width:0;flex:1;padding:10px 8px"><div class="modal-stat-num" style="color:${statusColor};font-size:14px">${statusLabel}</div><div class="modal-stat-label" style="font-size:9.5px">Durum</div></div>
         </div>
+
+        ${handedOver ? `<div class="op-settings-row" style="display:block;margin-bottom:14px">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">🔄 Devralan / Şu An Sorumlu</div>
+          <div style="font-size:14px">${esc(e.operatorUsername)} · ${esc(e.operatorName)}</div>
+        </div>` : ''}
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
           <div class="op-settings-row" style="display:block">
-            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Operatör</div>
-            <div style="font-size:14px">${esc(e.operatorUsername)} · ${esc(e.operatorName)}</div>
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Başlatan</div>
+            <div style="font-size:14px">${esc(startedByUsername)} · ${esc(startedByName)}</div>
           </div>
           <div class="op-settings-row" style="display:block">
-            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Malzeme / Adet</div>
-            <div style="font-size:14px">${esc(e.malzemeCinsi||'—')} ${esc(e.capBoy||'')} · Adet: ${esc(e.adet||'—')}</div>
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Bitiren</div>
+            <div style="font-size:14px">${e.status==='tamamlandi' ? `${esc(e.finishedByUsername || e.operatorUsername)} · ${esc(e.finishedByName || e.operatorName)}` : '—'}</div>
           </div>
           <div class="op-settings-row" style="display:block">
             <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Başlangıç</div>
@@ -1482,7 +1733,7 @@ function renderMachineModal(){
       <div class="modal-body">
         ${timelineHtml}
         <div class="modal-filter-row">
-          ${session.isSuperAdmin && modalSelectedIds.size>0 ? `<button class="btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="deleteModalSelected()">🗑 Seçilenleri Sil (${modalSelectedIds.size})</button>` : ''}
+          ${canDeleteReport() && modalSelectedIds.size>0 ? `<button class="btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="deleteModalSelected()">🗑 Seçilenleri Sil (${modalSelectedIds.size})</button>` : ''}
           <button class="btn-primary" style="width:auto;margin-left:auto;padding:8px 16px" onclick="exportMachineExcel('${machineModal}')">⬇ Excel'e Aktar (${rows.length})</button>
         </div>
         <div class="modal-stats">
@@ -1495,18 +1746,19 @@ function renderMachineModal(){
         ${dailyTable}
         <div style="font-size:13px;font-weight:600;margin-bottom:8px">${modalDateFilter ? modalDateFilter+' — Detay' : 'Tüm Kayıtlar — Detay (eskiden yeniye)'}</div>
         <table><thead><tr>
-          ${session.isSuperAdmin ? `<th style="width:26px"><input type="checkbox" ${modalVisibleIds.length>0 && modalVisibleIds.every(id=>modalSelectedIds.has(id))?'checked':''} onchange="toggleModalSelectAll()"></th>` : ''}
-          <th>Tarih</th><th>İş Emri No</th><th>Operatör</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th>Durum</th>${session.isSuperAdmin ? `<th style="width:36px"></th>` : ''}
+          ${canDeleteReport() ? `<th style="width:26px"><input type="checkbox" ${modalVisibleIds.length>0 && modalVisibleIds.every(id=>modalSelectedIds.has(id))?'checked':''} onchange="toggleModalSelectAll()"></th>` : ''}
+          <th>Tarih</th><th>İş Emri No</th><th>Malzeme</th><th>Operatör</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th>Durum</th>${canDeleteReport() ? `<th style="width:36px"></th>` : ''}
         </tr></thead><tbody>
-        ${rows.length===0 ? `<tr><td colspan="${session.isSuperAdmin?9:7}" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : rows.map(e=>{
+        ${rows.length===0 ? `<tr><td colspan="${canDeleteReport()?10:8}" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : rows.map(e=>{
           const isDone = computeCompletedRouteIds().has(e.id);
-          const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success)';
+          const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success-soft)';
           const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
           const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : (e.status==='devam' ? fmtElapsed(nowTick-e.startTs)+' (sürüyor)' : '—');
+          const malzAdi = getTalepInfo(e.talepNo)?.malzemeAdi || e.malzemeCinsi || '—';
           return `<tr style="${isDone?'background:#1a4d2e33':''}">
-            ${session.isSuperAdmin ? `<td><input type="checkbox" ${modalSelectedIds.has(e.id)?'checked':''} onchange="toggleModalSelect('${e.id}')"></td>` : ''}
-            <td>${dateKey(e.startTs)}</td><td class="mono" style="color:var(--accent)">${esc(e.isEmriNo)} ${isDone?'✓':''}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td>${fmtDT(e.startTs)}</td><td>${e.endTs?fmtDT(e.endTs):'—'}</td><td>${dur}</td><td><span style="color:${statusColor};font-weight:600">${isDone?'Rota Tamamlandı':statusLabel}</span></td>
-            ${session.isSuperAdmin ? `<td><button class="del-btn" onclick="deleteModalRecord('${e.id}')" title="Sil">🗑</button></td>` : ''}
+            ${canDeleteReport() ? `<td><input type="checkbox" ${modalSelectedIds.has(e.id)?'checked':''} onchange="toggleModalSelect('${e.id}')"></td>` : ''}
+            <td>${dateKey(e.startTs)}</td><td class="mono" style="color:var(--accent)">${esc(e.talepNo || e.isEmriNo)} ${isDone?'✓':''}</td><td style="font-size:12.5px">${esc(malzAdi)}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td>${fmtDT(e.startTs)}</td><td>${e.endTs?fmtDT(e.endTs):'—'}</td><td>${dur}</td><td><span style="color:${statusColor};font-weight:600">${isDone?'Rota Tamamlandı':statusLabel}</span></td>
+            ${canDeleteReport() ? `<td><button class="del-btn" onclick="deleteModalRecord('${e.id}')" title="Sil">🗑</button></td>` : ''}
           </tr>`;
         }).join('')}
         </tbody></table>
@@ -1653,7 +1905,18 @@ function renderGroupScreen(groupId, groupMembers){
     <div class="lock-timer" style="${anyDurus?'color:var(--warn)':''}">${anyDurus?fmtElapsed(nowTick-ref.duruşTs):fmtElapsed(nowTick-ref.startTs)}</div>
     <div class="lock-meta">${anyDurus?'duruş süresi (tüm iş emirleri için ortak)':`${groupMembers.length} iş emri bu makinede aynı anda aktif`}</div>
     ${anyDurus ? `<div class="durus-reason-box" style="${ref.duruşNedeni===GUN_SONU_REASON?'color:#38bdf8;background:#38bdf818;border-color:#38bdf840':''}">${ref.duruşNedeni===GUN_SONU_REASON?'🌙 ':''}"${esc(ref.duruşNedeni)}"</div>` : ''}
-    <div style="margin-top:14px;font-size:12.5px;color:var(--text-muted)">${groupMembers.map(e=>`${esc(e.talepNo || e.isEmriNo)} · Adet: ${esc(e.adet||'—')}`).join(' &nbsp;|&nbsp; ')}</div>
+    <div style="margin-top:20px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:8px;text-align:left">
+      <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;padding:0 2px">Parti parti dönebilir — her iş emrini ayrı ayrı bitirebilirsin</div>
+      ${groupMembers.map(e=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px">
+          <div>
+            <div class="mono" style="font-weight:700;color:var(--accent)">${esc(e.talepNo || e.isEmriNo)}</div>
+            <div style="font-size:11.5px;color:var(--text-muted)">Adet: ${esc(e.adet||'—')}${e.status==='duruş'?' · Duruşta':''}</div>
+          </div>
+          <button class="btn-ghost" style="padding:8px 14px;font-size:12.5px;white-space:nowrap" onclick="bitir('${e.id}')">■ Bitir</button>
+        </div>
+      `).join('')}
+    </div>
     ${actionBlock}
   </div>`;
 
@@ -1783,10 +2046,48 @@ function renderOperator(){
       <button class="tab-btn ${view==='list'?'active':''}" onclick="setView('list')">🏭 Makineler</button>
       <button class="tab-btn ${view==='new'?'active':''}" onclick="setView('new')">+ Yeni Kayıt</button>
       <button class="tab-btn ${view==='gecmis'?'active':''}" onclick="setView('gecmis')">📜 Geçmiş</button>
+      ${(STATE.operators[session.username]||{}).fasonYetkisi ? `<button class="tab-btn ${view==='fason'?'active':''}" onclick="setView('fason')">📦 Fason${fasonBekleyenCount()>0?` (${fasonBekleyenCount()})`:''}</button>` : ''}
     </div>`;
 
   let body = '';
-  if(view==='new'){
+  if(view==='fason'){
+    const items = entriesArray().filter(e => (e.status==='devam'||e.status==='duruş') && isFasonMachine(e.makine));
+    const groups = [];
+    const seenG = new Set();
+    items.forEach(e=>{
+      if(e.groupId){
+        if(seenG.has(e.groupId)) return;
+        seenG.add(e.groupId);
+        groups.push({ groupId:e.groupId, members: items.filter(x=>x.groupId===e.groupId) });
+      } else {
+        groups.push({ groupId:null, members:[e] });
+      }
+    });
+    body = `<div class="body-pad">
+      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px">Fason makinelerdeki (dışarı gönderilen) tüm aktif işler — kim başlatmış olursa olsun burada görünür ve kapatılabilir.</div>
+      ${groups.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Fasonda bekleyen iş yok.</div>` : groups.map(g=>{
+        if(g.members.length===1){
+          const e = g.members[0];
+          const dotColor = e.status==='duruş'?'var(--warn)':'var(--success)';
+          const subInfo = e.status==='duruş' ? `Duruşta: "${esc(e.duruşNedeni)}"` : `${fmtElapsed(nowTick-e.startTs)} · ${esc(e.operatorUsername)} başlattı`;
+          return `<div class="card" style="cursor:pointer" onclick="openActiveDetail('${e.id}')">
+            <div class="card-header"><span class="card-id">${esc(e.talepNo || e.isEmriNo)}</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
+            ${e.talepNo ? `<div style="font-size:11px;color:var(--text-muted);margin:-4px 0 4px" class="mono">U kodu: ${esc(e.isEmriNo)}</div>` : ''}
+            <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(e.makine)}</span></div>
+            <div class="op-foot">${subInfo}${e.adet?` · Adet: ${esc(e.adet)}`:''}</div>
+          </div>`;
+        }
+        const makine = g.members[0].makine;
+        const anyDurus = g.members.some(m=>m.status==='duruş');
+        const dotColor = anyDurus ? 'var(--warn)' : 'var(--success)';
+        return `<div class="card" style="cursor:pointer" onclick="openGroupDetail('${g.groupId}')">
+          <div class="card-header"><span class="card-id">${g.members.length} İş Emri Aktif</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
+          <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(makine)}</span></div>
+          <div class="op-foot">${g.members.map(m=>`${esc(m.talepNo || m.isEmriNo)} (${m.status==='duruş'?'duruşta':fmtElapsed(nowTick-m.startTs)})`).join(', ')}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  } else if(view==='new'){
     const allowed = getAllowedMachines();
     const canCoklu = !!(STATE.operators[session.username]||{}).cokluIsEmri;
     body = `<div class="body-pad">
@@ -1807,10 +2108,28 @@ function renderOperator(){
               <option value="ZARF" ${it.bilesen==='ZARF'?'selected':''}>_ZARF (Çelik)</option>
               <option value="ELMAS" ${it.bilesen==='ELMAS'?'selected':''}>_ELMAS (Karbür)</option>
             </select></div>
-            <div class="field" style="width:80px;margin-bottom:0"><label>Adet</label><input id="nf-coklu-adet-${i}" inputmode="numeric" placeholder="120" value="${esc(it.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newForm.cokluItems[${i}].adet=this.value"></div>
+            <div class="field" style="width:80px;margin-bottom:0"><label>Adet</label><input id="nf-coklu-adet-${i}" inputmode="numeric" placeholder="120" value="${esc(it.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newForm.cokluItems[${i}].adet=this.value" onblur="render()"></div>
             ${newForm.cokluItems.length>1 ? `<button type="button" class="btn-ghost" style="padding:10px 12px" onclick="removeCokluItem(${i})">🗑</button>` : ''}
           </div>
           ${it.isEmriNo ? (cInfo ? `<div style="font-size:11.5px;color:var(--success);margin:4px 0 0 2px">✓ ${esc(cInfo.malzemeKodu||'')}${cInfo.malzemeKodu&&cInfo.malzemeAdi?' · ':''}${esc(cInfo.malzemeAdi||'')}</div>` : (Object.keys(STATE.validIsEmri||{}).length>0 ? `<div style="font-size:11.5px;color:var(--warn);margin:4px 0 0 2px">⚠ Bu talep no listede bulunamadı</div>` : '')) : ''}
+          ${(() => {
+            if(!stockEnabled() || !it.isEmriNo) return '';
+            const { isEmriNo: prevCode } = resolveTrackingCode(it.isEmriNo, it.bilesen);
+            if(!isFirstOperationFor(prevCode)) return '';
+            const stItems = stockItemsArray();
+            if(stItems.length===0) return '';
+            const selItem = stItems.find(x=>x.id===it.stockItemId);
+            return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:6px">
+              <div style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📦 İlk Operasyon — Hammadde (opsiyonel)</div>
+              <select id="nf-coklu-stok-${i}" onchange="newForm.cokluItems[${i}].stockItemId=this.value; render()" style="margin-bottom:${selItem&&selItem.mode==='manuel'?'6px':'0'}">
+                <option value="">Hammadde tüketilmiyor</option>
+                ${stItems.map(x=>`<option value="${x.id}" ${it.stockItemId===x.id?'selected':''}>${esc(x.kod)} (mevcut: ${x.miktar} ${esc(x.birim||'')})</option>`).join('')}
+              </select>
+              ${selItem ? (selItem.mode==='manuel'
+                ? `<input id="nf-coklu-stok-miktar-${i}" type="number" placeholder="Kullanılan miktar" value="${esc(it.stockMiktar)}" oninput="newForm.cokluItems[${i}].stockMiktar=this.value">`
+                : `<div style="font-size:11px;color:var(--text-muted)">Otomatik: Adet kadar (${esc(it.adet||'?')} ${esc(selItem.birim||'')}) düşülecek</div>`) : ''}
+            </div>`;
+          })()}
           </div>
         `}).join('')}
         <button type="button" class="btn-ghost" style="margin-bottom:14px" onclick="addCokluItem()">+ İş Emri Ekle</button>
@@ -1840,17 +2159,47 @@ function renderOperator(){
           }
           return lines.length ? `<div style="margin:-8px 0 12px 2px;display:flex;flex-direction:column;gap:3px">${lines.join('')}</div>` : '';
         })()}
+        ${(() => {
+          if(!stockEnabled() || !newForm.isEmriNo) return '';
+          const { isEmriNo: previewCode } = resolveTrackingCode(newForm.isEmriNo, newForm.bilesen);
+          if(!isFirstOperationFor(previewCode)) return '';
+          const items = stockItemsArray();
+          if(items.length===0) return '';
+          const selItem = items.find(it=>it.id===newForm.stockItemId);
+          return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📦 İlk Operasyon — Kullanılan Hammadde (opsiyonel)</div>
+            <select id="nf-stok-item" onchange="newForm.stockItemId=this.value; render()" style="margin-bottom:${selItem&&selItem.mode==='manuel'?'8px':'0'}">
+              <option value="">Hammadde tüketilmiyor</option>
+              ${items.map(it=>`<option value="${it.id}" ${newForm.stockItemId===it.id?'selected':''}>${esc(it.kod)}${it.isim?' — '+esc(it.isim):''} (mevcut: ${it.miktar} ${esc(it.birim||'')})</option>`).join('')}
+            </select>
+            ${selItem ? (selItem.mode==='manuel'
+              ? `<input id="nf-stok-miktar" type="number" placeholder="Kullanılan miktar (${esc(selItem.birim||'')})" value="${esc(newForm.stockMiktar)}" oninput="newForm.stockMiktar=this.value">`
+              : `<div style="font-size:11.5px;color:var(--text-muted)">Otomatik: Adet kadar (${esc(newForm.adet||'?')} ${esc(selItem.birim||'')}) düşülecek</div>`) : ''}
+          </div>`;
+        })()}
       `}
       <div class="field"><label>Çalışılan Makine</label>
         <div style="display:flex;gap:8px">
-          <input id="nf-makine" list="makine-options" placeholder="Yazmaya başla… ör. TES" value="${esc(newForm.makine)}" oninput="newForm.makine=this.value" onfocus="this.select()" style="flex:1">
-          <button type="button" class="btn-ghost" title="Temizle" onclick="newForm.makine=''; const el=document.getElementById('nf-makine'); if(el){el.value=''; el.focus();}">✕</button>
+          <input id="nf-makine" list="makine-options" placeholder="Yazmaya başla… ör. TES" value="${esc(newForm.makine)}" oninput="newForm.makine=this.value" onblur="render()" onfocus="this.select()" style="flex:1">
+          <button type="button" class="btn-ghost" title="Temizle" onclick="newForm.makine=''; render(); const el=document.getElementById('nf-makine'); if(el){el.focus();}">✕</button>
         </div>
         <datalist id="makine-options">${allowed.map(m=>`<option value="${esc(m)}">`).join('')}</datalist>
       </div>
+      ${(() => {
+        const cand = machineHandoffCandidate(newForm.makine);
+        if(!cand) return '';
+        const groupCount = cand.groupId ? entriesArray().filter(x=>x.groupId===cand.groupId && (x.status==='devam'||x.status==='duruş')).length : 1;
+        const durumTxt = cand.status==='duruş' ? `Duruşta: "${esc(cand.duruşNedeni||'')}"` : `${fmtElapsed(nowTick-cand.startTs)} çalışıyor`;
+        return `<div style="background:#facc1518;border:1px solid #facc1540;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="font-size:12.5px;color:var(--warn);font-weight:600;margin-bottom:6px">⚠ Bu makinede yarım kalmış ${groupCount>1?`${groupCount} iş emri`:'bir iş'} var</div>
+          <div style="font-size:13px;margin-bottom:2px"><span class="mono" style="color:var(--accent)">${esc(cand.talepNo || cand.isEmriNo)}</span>${groupCount>1?` +${groupCount-1} daha`:''} · ${esc(cand.operatorUsername)} · ${esc(cand.operatorName)}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">${durumTxt}${cand.adet?` · Adet: ${esc(cand.adet)}`:''}</div>
+          <button type="button" class="btn-ghost" style="border-color:var(--warn);color:var(--warn)" onclick="devralIs('${cand.id}')">↺ ${groupCount>1?'Tümünü Devral':'Bu İşi Devral'} (Kaldığı Yerden Devam Et)</button>
+        </div>`;
+      })()}
       <div class="field"><label>Malzeme Cinsi (opsiyonel)</label><input id="nf-malzeme-cinsi" placeholder="ör. 4Mo1 ıslahlı" value="${esc(newForm.malzemeCinsi)}" oninput="newForm.malzemeCinsi=this.value"></div>
       <div class="field"><label>Çap ve Boy (opsiyonel)</label><input id="nf-cap-boy" placeholder="ör. Ø26 x 200" value="${esc(newForm.capBoy)}" oninput="newForm.capBoy=this.value"></div>
-      ${!newForm.cokluMode ? `<div class="field"><label>Adet</label><input id="nf-adet" inputmode="numeric" placeholder="ör. 120" value="${esc(newForm.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newForm.adet=this.value"></div>` : ''}
+      ${!newForm.cokluMode ? `<div class="field"><label>Adet</label><input id="nf-adet" inputmode="numeric" placeholder="ör. 120" value="${esc(newForm.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newForm.adet=this.value" onblur="render()"></div>` : ''}
       <div class="field"><label>Not (opsiyonel)</label><textarea id="nf-not" style="min-height:60px" placeholder="Serbest not" oninput="newForm.not=this.value">${esc(newForm.not)}</textarea></div>
       <label style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
         <input id="nf-son-operasyon" type="checkbox" ${newForm.sonOperasyon?'checked':''} onchange="newForm.sonOperasyon=this.checked" style="width:auto">
@@ -1959,7 +2308,7 @@ function renderAdmin(){
     </div>
     ${messagesModalOpen ? renderMessagesModal() : ''}
     <div class="tabs" style="padding:12px 24px 0">
-      ${!session.isSef ? `<button class="tab-btn ${view==='report'?'active':''}" onclick="setView('report')">☰ Rapor</button>` : ''}
+      <button class="tab-btn ${view==='report'?'active':''}" onclick="setView('report')">☰ Rapor</button>
       <button class="tab-btn ${view==='matrix'?'active':''}" onclick="setView('matrix')">🏭 Makine Matrisi</button>
       <button class="tab-btn ${view==='completed'?'active':''}" onclick="setView('completed')">✓ Tamamlanan Kodlar</button>
       ${!session.isSef ? `<button class="tab-btn ${view==='analiz'?'active':''}" onclick="setView('analiz')">📊 Analiz</button>` : ''}
@@ -1967,8 +2316,8 @@ function renderAdmin(){
 
   let body = '';
   if(view==='adminSettings' && !session.isSuperAdmin && !session.isSef){ view = 'report'; }
-  if(session.isSef && (view==='report' || view==='analiz')){ view = 'matrix'; }
-  if(session.isSef && view==='adminSettings' && settingsSubTab!=='isEmriListesi'){ settingsSubTab = 'isEmriListesi'; }
+  if(session.isSef && view==='analiz'){ view = 'matrix'; }
+  if(session.isSef && view==='adminSettings' && settingsSubTab!=='isEmriListesi' && settingsSubTab!=='stok'){ settingsSubTab = 'isEmriListesi'; }
   if(view==='adminSettings'){
     body = `<div class="settings-wrap">
       <div class="sub-tabs">
@@ -1977,9 +2326,12 @@ function renderAdmin(){
         <button class="sub-tab-btn ${settingsSubTab==='access'?'active':''}" onclick="setSettingsSubTab('access')">Makine Erişimi</button>
         <button class="sub-tab-btn ${settingsSubTab==='multiJob'?'active':''}" onclick="setSettingsSubTab('multiJob')">Çoklu İş İzni</button>
         <button class="sub-tab-btn ${settingsSubTab==='cokluIsEmri'?'active':''}" onclick="setSettingsSubTab('cokluIsEmri')">Çoklu İş Emri İzni</button>
+        <button class="sub-tab-btn ${settingsSubTab==='fasonMachines'?'active':''}" onclick="setSettingsSubTab('fasonMachines')">Fason Makineleri</button>
+        <button class="sub-tab-btn ${settingsSubTab==='fasonYetkisi'?'active':''}" onclick="setSettingsSubTab('fasonYetkisi')">Fason Yetkisi</button>
         <button class="sub-tab-btn ${settingsSubTab==='msgAccess'?'active':''}" onclick="setSettingsSubTab('msgAccess')">Mesaj Erişimi</button>
         <button class="sub-tab-btn ${settingsSubTab==='durusReasons'?'active':''}" onclick="setSettingsSubTab('durusReasons')">Duruş Nedenleri</button>` : ''}
         <button class="sub-tab-btn ${settingsSubTab==='isEmriListesi'?'active':''}" onclick="setSettingsSubTab('isEmriListesi')">İş Emri Listesi</button>
+        <button class="sub-tab-btn ${settingsSubTab==='stok'?'active':''}" onclick="setSettingsSubTab('stok')">Malzeme Stoğu</button>
         ${session.isSuperAdmin ? `
         <button class="sub-tab-btn ${settingsSubTab==='addOperator'?'active':''}" onclick="setSettingsSubTab('addOperator')">+ Kullanıcı Ekle</button>
         <button class="sub-tab-btn ${settingsSubTab==='addMachine'?'active':''}" onclick="setSettingsSubTab('addMachine')">+ Makine Ekle</button>` : ''}
@@ -2035,6 +2387,32 @@ function renderAdmin(){
             </label>
           `).join('')}
         </div>`;
+    } else if(settingsSubTab==='fasonMachines'){
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Fason Makineleri</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">"Fason" olarak işaretlenen bir makinede (ör. dışarıya ısıl işleme giden FII01) aynı anda birden fazla parti/iş emri açılabilir — "makine meşgul" uyarısı bu makinelerde uygulanmaz. Ayrıca bu makinelerdeki aktif işler, aşağıdaki "Fason Yetkisi" sekmesinden yetkilendirilen operatörlere kim başlatmış olursa olsun görünür ve onlar tarafından kapatılabilir.</div>
+        <div class="op-settings-table">
+          ${allMachines().map(m=>`
+            <label class="op-settings-row" style="cursor:pointer">
+              <input type="checkbox" ${fasonMachines[m.code]?'checked':''} onchange="toggleMachineFason('${m.code}')" style="width:auto">
+              <div class="op-settings-id">${esc(m.code)}</div>
+              <div class="op-settings-name">${esc(m.name)}</div>
+              <span style="font-size:12px;color:${fasonMachines[m.code]?'var(--success)':'var(--text-muted)'};font-weight:600">${fasonMachines[m.code]?'Fason':'Normal (varsayılan)'}</span>
+            </label>
+          `).join('')}
+        </div>`;
+    } else if(settingsSubTab==='fasonYetkisi'){
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Fason Yetkisi</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">İşaretli operatörler, ana ekranlarında "📦 Fasonda Bekleyen İşler" listesini görür — fason olarak işaretlenmiş makinelerdeki TÜM aktif işleri (kim başlatmış olursa olsun) görüp kapatabilirler. Isıl işlem gibi belirli bir operatörün sürekli takip etmediği, dışarıdan parti parti geri dönen prosesler için düşünüldü.</div>
+        <div class="op-settings-table">
+          ${operatorEntries.map(([code,v])=>`
+            <label class="op-settings-row" style="cursor:pointer">
+              <input type="checkbox" ${v.fasonYetkisi?'checked':''} onchange="toggleFasonYetkisi('${code}')" style="width:auto">
+              <div class="op-settings-id">${esc(code)}</div>
+              <div class="op-settings-name">${esc(v.displayName)}</div>
+              <span style="font-size:12px;color:${v.fasonYetkisi?'var(--success)':'var(--text-muted)'};font-weight:600">${v.fasonYetkisi?'Yetkili':'Yetkisiz (varsayılan)'}</span>
+            </label>
+          `).join('')}
+        </div>`;
     } else if(settingsSubTab==='msgAccess'){
       const allUsers = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Mesaj Erişimi</div>
@@ -2059,20 +2437,26 @@ function renderAdmin(){
           <div class="field"><label>Şifre (max 8 hane, rakam)</label><input id="new-op-pass" inputmode="numeric" maxlength="8" value="1234"></div>
           <label style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
             <input id="new-op-manager" type="checkbox" style="width:auto">
-            <span style="font-size:13px">Yönetici <span style="color:var(--text-muted);font-size:11.5px">(Rapor/Makine Matrisi/Tamamlanan Kodlar/Analiz'i görebilir, Ayarlar'a giremez)</span></span>
+            <span style="font-size:13px">Yönetici <span style="color:var(--text-muted);font-size:11.5px">(Rapor/Makine Matrisi/Tamamlanan Kodlar/Analiz'i görebilir, Ayarlar'a giremez; Rapor'da düzenleme varsayılan açık, silme kapalı — aşağıdan değiştirebilirsin)</span></span>
           </label>
           <label style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
             <input id="new-op-sef" type="checkbox" style="width:auto">
-            <span style="font-size:13px">Şef <span style="color:var(--text-muted);font-size:11.5px">(sadece Makine Matrisi ve Tamamlanan Kodlar'ı görebilir)</span></span>
+            <span style="font-size:13px">Şef <span style="color:var(--text-muted);font-size:11.5px">(Rapor/Makine Matrisi/Tamamlanan Kodlar'ı görebilir, Analiz'e ve diğer Ayarlar sekmelerine giremez; Rapor'da düzenleme varsayılan açık, silme kapalı)</span></span>
           </label>
           <button class="btn-primary" onclick="addOperator()">+ Operatörü Ekle</button>
         </div>
         <div style="margin-top:28px;font-size:13px;font-weight:600;margin-bottom:8px">Kayıtlı Kullanıcılar (${allOps.length})</div>
         <div class="op-settings-table">
           ${allOps.map(([code,v])=>`
-            <div class="op-settings-row">
+            <div class="op-settings-row" style="flex-wrap:wrap">
               <div class="op-settings-id">${esc(code)}</div>
               <div class="op-settings-name">${esc(v.displayName)}${v.isSuperAdmin?' · <span style="color:var(--accent)">Süper Admin</span>':v.isSef?' · <span style="color:#38bdf8">Şef</span>':v.isAdmin?' · <span style="color:var(--accent)">Yönetici</span>':''}</div>
+              ${v.isAdmin ? `<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
+                <input type="checkbox" style="width:auto" ${v.permReportEdit!==false?'checked':''} onchange="toggleUserPerm('${code}','permReportEdit')"> Rapor: Düzenleyebilir
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
+                <input type="checkbox" style="width:auto" ${v.permReportDelete?'checked':''} onchange="toggleUserPerm('${code}','permReportDelete')"> Rapor: Silebilir
+              </label>` : ''}
               ${code===session.username ? `<span style="font-size:11.5px;color:var(--text-muted)">(bu hesap — silinemez)</span>` : `<button class="del-btn" onclick="deleteOperator('${code}')" title="Sil">🗑</button>`}
             </div>
           `).join('')}
@@ -2101,6 +2485,51 @@ function renderAdmin(){
           </div>
           <div id="isemri-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
         </div>`;
+    } else if(settingsSubTab==='stok'){
+      const items = stockItemsArray();
+      const recentMoves = Object.entries(stockHareketleri).map(([id,v])=>({id,...v})).sort((a,b)=>b.ts-a.ts).slice(0,20);
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Malzeme Stoğu <span style="font-size:11.5px;font-weight:400;color:var(--text-muted)">(opsiyonel modül)</span></div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:640px">Hammadde tüketimi sadece bir iş emrinin <b>ilk operasyonunda</b> sorulur — aynı iş emrinin sonraki adımlarında tekrar sorulmaz, çünkü malzeme zaten ilk kesimde tüketilmiştir.</div>
+        <label style="display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid ${stockEnabled()?'var(--success)':'var(--border)'};border-radius:10px;padding:14px 16px;margin-bottom:22px;cursor:pointer;max-width:480px">
+          <input type="checkbox" ${stockEnabled()?'checked':''} onchange="toggleStockTracking()" style="width:auto;transform:scale(1.3)">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:${stockEnabled()?'var(--success)':'var(--text)'}">Malzeme Stok Takibini ${stockEnabled()?'Aktif':'Kapalı'}</div>
+            <div style="font-size:11.5px;color:var(--text-muted)">Kapatırsan bu modülle ilgili hiçbir alan/ekran operatörlere görünmez, hiçbir stok işlemi yapılmaz — tek tuşla tamamen devre dışı kalır.</div>
+          </div>
+        </label>
+        ${!stockEnabled() ? `<div style="font-size:12.5px;color:var(--text-muted)">Modül kapalı. Açtığında aşağıdaki stok kalemi yönetimi ve tüketim geçmişi görünür olacak.</div>` : `
+        <div style="max-width:640px;margin-bottom:22px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">Yeni Stok Kalemi Ekle</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="stok-kod" placeholder="Kod (ör. 4140-Ø26)" style="flex:1;min-width:140px">
+            <input id="stok-isim" placeholder="İsim (ör. 4140 Ø26x200)" style="flex:1.5;min-width:180px">
+            <select id="stok-birim" style="width:100px"><option value="adet">Adet</option><option value="metre">Metre</option><option value="kg">Kg</option></select>
+            <input id="stok-miktar" type="number" placeholder="Başlangıç miktarı" style="width:140px">
+            <select id="stok-mode" style="width:170px"><option value="oto">Otomatik (Adet kadar)</option><option value="manuel">Manuel (operatör girer)</option></select>
+          </div>
+          <button class="btn-primary" style="width:auto;padding:10px 18px;margin-top:10px" onclick="addStockItem()">+ Ekle</button>
+        </div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Stok Kalemleri (${items.length})</div>
+        <div class="op-settings-table" style="margin-bottom:26px">
+          ${items.length===0 ? `<div style="font-size:12.5px;color:var(--text-muted);padding:12px 4px">Henüz stok kalemi eklenmedi.</div>` : items.map(it=>`
+            <div class="op-settings-row" style="flex-wrap:wrap;gap:10px">
+              <div style="min-width:140px"><div class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)}</div><div style="font-size:11.5px;color:var(--text-muted)">${esc(it.isim||'')}</div></div>
+              <input type="number" value="${it.miktar}" style="width:110px" onchange="updateStockItemField('${it.id}','miktar',this.value)" title="Mevcut miktar">
+              <span style="font-size:12px;color:var(--text-muted)">${esc(it.birim||'adet')}</span>
+              <select onchange="updateStockItemField('${it.id}','mode',this.value)" style="width:170px">
+                <option value="oto" ${it.mode==='oto'?'selected':''}>Otomatik (Adet kadar)</option>
+                <option value="manuel" ${it.mode==='manuel'?'selected':''}>Manuel (operatör girer)</option>
+              </select>
+              <button class="del-btn" onclick="deleteStockItem('${it.id}')" title="Sil">🗑</button>
+            </div>
+          `).join('')}
+        </div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Son Stok Hareketleri</div>
+        <table><thead><tr><th>Tarih</th><th>Kalem</th><th>Miktar</th><th>İş Emri</th><th>Kim</th></tr></thead><tbody>
+          ${recentMoves.length===0 ? `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Henüz hareket yok.</td></tr>` : recentMoves.map(m=>`
+            <tr><td>${fmtDT(m.ts)}</td><td class="mono">${esc(m.itemKod)}</td><td style="color:${m.miktar<0?'var(--danger)':'var(--success)'}">${m.miktar>0?'+':''}${m.miktar} ${esc(m.birim||'')}</td><td class="mono">${esc(m.talepNo||m.isEmriNo||'—')}</td><td>${esc(m.operatorName||'')}</td></tr>
+          `).join('')}
+        </tbody></table>`}`;
     } else if(settingsSubTab==='durusReasons'){
       const list = (STATE.durusReasons && STATE.durusReasons.length>0) ? STATE.durusReasons : DEFAULT_DURUS_REASONS;
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Duruş Nedenleri</div>
@@ -2137,12 +2566,18 @@ function renderAdmin(){
       if(machineEntries.some(e=>e.status==='duruş')) return 1;
       return 2;
     };
-    const sortedMachines = allMachines().slice().sort((a,b)=>{
+    const sortedMachines = allMachines().slice()
+      .filter(m => matrixGroupFilter==='Tümü' || machineGroupOf(m.code)===matrixGroupFilter)
+      .sort((a,b)=>{
       if(matrixSort==='calisma') return workMsFor(b.code) - workMsFor(a.code);
       if(matrixSort==='renk') return statusPriority(a.code) - statusPriority(b.code) || a.code.localeCompare(b.code);
       return a.code.localeCompare(b.code);
     });
+    const groupNames = ['Tümü', ...MACHINE_GROUPS.map(g=>g.name), 'Diğer'];
     body = `<div class="matrix-wrap">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        ${groupNames.map(g=>`<button class="chip ${matrixGroupFilter===g?'active':''}" onclick="setMatrixGroupFilter('${g}')">${g}</button>`).join('')}
+      </div>
       <div class="matrix-legend">
         <span><span class="legend-dot" style="background:var(--success)"></span>Çalışıyor</span>
         <span><span class="legend-dot" style="background:var(--warn)"></span>Duruşta</span>
@@ -2515,26 +2950,29 @@ function renderAdmin(){
         <button class="chip" onclick="setReportDatePreset(30)">Son 30 Gün</button>
         <button class="chip" onclick="setReportDatePreset(90)">Son 3 Ay</button>
         ${(reportOperatorFilter.size>0||reportFilter.isEmriNo||reportMakineFilter.size>0||reportFilter.tarihFrom||reportFilter.tarihTo) ? `<button class="btn-ghost" onclick="clearReportFilter()">✕ Temizle</button>` : ''}
-        ${session.isSuperAdmin && reportSelectedIds.size>0 ? `<button class="btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="deleteReportSelected()">🗑 Seçilenleri Sil (${reportSelectedIds.size})</button>` : ''}
+        ${canDeleteReport() && reportSelectedIds.size>0 ? `<button class="btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="deleteReportSelected()">🗑 Seçilenleri Sil (${reportSelectedIds.size})</button>` : ''}
         <button class="btn-primary" style="width:auto;margin-left:auto;padding:8px 16px" onclick="exportExcel()">⬇ Excel'e Aktar (${fe.length})</button>
       </div>
       <div class="table-wrap"><table><thead><tr>
-        ${session.isSuperAdmin ? `<th style="width:26px"><input type="checkbox" ${reportVisibleIds.length>0 && reportVisibleIds.every(id=>reportSelectedIds.has(id))?'checked':''} onchange="toggleReportSelectAll()"></th>` : ''}
-        ${["İş Emri No (U kodu)","İş Talep No","Operasyon No","Malzeme Cinsi","Çap ve Boy","Adet","Makine","Operatör","Başlangıç","Bitiş","Süre","Durum","Not"].map(h=>`<th>${h}</th>`).join('')}
-        ${session.isSuperAdmin ? `<th style="width:36px"></th>` : ''}
+        ${canDeleteReport() ? `<th style="width:26px"><input type="checkbox" ${reportVisibleIds.length>0 && reportVisibleIds.every(id=>reportSelectedIds.has(id))?'checked':''} onchange="toggleReportSelectAll()"></th>` : ''}
+        ${["İş Emri No (U kodu)","İş Talep No","Operasyon No","Malzeme Adı","Malzeme Cinsi","Çap ve Boy","Adet","Makine","Operatör","Başlangıç","Bitiş","Süre","Durum","Not"].map(h=>`<th>${h}</th>`).join('')}
+        ${canEditReport() ? `<th style="width:36px"></th>` : ''}
+        ${canDeleteReport() ? `<th style="width:36px"></th>` : ''}
       </tr></thead><tbody>`;
-    const reportColCount = 13 + (session.isSuperAdmin?2:0);
+    const reportColCount = 14 + (canDeleteReport()?1:0) + (canEditReport()?1:0);
     if(fe.length===0){ body += `<tr><td colspan="${reportColCount}" style="text-align:center;color:var(--text-muted);padding:30px">Filtreyle eşleşen kayıt yok.</td></tr>`; }
     fe.forEach(e=>{
       const isDone = completedRoutes.has(e.id);
-      const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success)';
+      const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success-soft)';
       const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
       const rowStyle = isDone ? 'background:#1a4d2e33' : '';
+      const malzAdi = getTalepInfo(e.talepNo)?.malzemeAdi || '';
       body += `<tr style="${rowStyle}">
-        ${session.isSuperAdmin ? `<td><input type="checkbox" ${reportSelectedIds.has(e.id)?'checked':''} onchange="toggleReportSelect('${e.id}')"></td>` : ''}
+        ${canDeleteReport() ? `<td><input type="checkbox" ${reportSelectedIds.has(e.id)?'checked':''} onchange="toggleReportSelect('${e.id}')"></td>` : ''}
         <td class="mono" style="color:var(--accent);cursor:pointer" onclick="openEntryDetail('${e.id}')">${esc(e.isEmriNo)} ${isDone?'✓':''}</td>
         <td class="mono">${esc(e.talepNo||'—')}</td>
         <td style="font-weight:700">${e._seq||'—'}</td>
+        <td style="font-size:12.5px">${esc(malzAdi||'—')}</td>
         <td>${esc(e.malzemeCinsi||'—')}</td>
         <td>${esc(e.capBoy||'—')}</td>
         <td>${esc(e.adet||'—')}</td>
@@ -2545,10 +2983,11 @@ function renderAdmin(){
         <td>${e.endTs?fmtDur(e.endTs-e.startTs):'—'}</td>
         <td><span style="color:${statusColor};font-weight:600">${isDone?'Rota Tamamlandı':statusLabel}</span></td>
         <td style="color:var(--text-muted);font-style:italic">${esc(e.not||'')}</td>
-        ${session.isSuperAdmin ? `<td><button class="del-btn" onclick="deleteReportRecord('${e.id}')" title="Sil">🗑</button></td>` : ''}
+        ${canEditReport() ? `<td><button class="del-btn" onclick="openReportEdit('${e.id}')" title="Düzelt">✏️</button></td>` : ''}
+        ${canDeleteReport() ? `<td><button class="del-btn" onclick="deleteReportRecord('${e.id}')" title="Sil">🗑</button></td>` : ''}
       </tr>`;
     });
-    body += `</tbody></table></div>${entryDetailId ? renderEntryDetailModal() : ''}`;
+    body += `</tbody></table></div>${entryDetailId ? renderEntryDetailModal() : ''}${reportEditId ? renderReportEditModal() : ''}`;
   }
 
   return `<div class="root-wide theme-${theme}">${header}${body}${machineModal ? renderMachineModal() : ''}</div>`;
