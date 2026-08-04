@@ -199,6 +199,10 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel-alt);border:1px solid var(--border);padding:9px 16px;border-radius:20px;font-size:13px;color:var(--text);z-index:999;display:none}
 .toast.show{display:block}
+.toast-big{position:fixed;top:175px;left:50%;transform:translateX(-50%);background:var(--panel);border:2px solid var(--accent);padding:18px 30px;border-radius:14px;font-size:18px;font-weight:700;color:var(--text);z-index:1000;display:none;text-align:center;max-width:min(92vw,520px);box-shadow:0 10px 30px rgba(0,0,0,.45);line-height:1.4}
+.toast-big::before{content:'!';position:absolute;top:-14px;left:-14px;background:var(--danger);color:#fff;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;box-shadow:0 3px 10px rgba(0,0,0,.5);border:2px solid var(--bg)}
+.toast-big.show{display:block}
+.lock-back-btn{background:var(--panel);border:2px solid var(--accent);color:var(--text);border-radius:10px;padding:11px 18px;font-size:15px;font-weight:600}
 .conn-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
 .conn-dot.on{background:var(--success)} .conn-dot.off{background:var(--danger)}
 </style>
@@ -206,6 +210,7 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 <body>
 <div id="app"></div>
 <div id="toast" class="toast"></div>
+<div id="toast-big" class="toast-big"></div>
 
 <script>
 /* ===================== SABİT VERİLER ===================== */
@@ -233,11 +238,23 @@ const ALL_MACHINE_CODES = MACHINE_LIST.map(m=>m.code);
 // Yeni operatörler artık Ayarlar → "+ Kullanıcı Ekle" panelinden eklenir.
 
 const DEFAULT_DURUS_REASONS = ["Arıza / Bakım","Malzeme Bekleniyor","Kalıp/Takım Değişimi","Program/Ayar Değişimi","Kalite Kontrol Bekleniyor","Elektrik/Basınçlı Hava Kesintisi","Operatör Molası","Farklı İş Emrine Geçiş","Tuvalet"];
+const GUN_SONU_REASON = "Gün Sonu (Mesai Bitti, yarın devam edilecek)";
+const TADILAT_REASON = "Tadilat";
+const TADILAT_SONRASI_REASON = "Tadilat Sonrası Ayar";
 function getDurusReasons(){
   const custom = (STATE.durusReasons && STATE.durusReasons.length>0) ? STATE.durusReasons : DEFAULT_DURUS_REASONS;
-  return [...custom, GUN_SONU_REASON, "Diğer"];
+  const hasTadilat = custom.some(r=>isTadilatReason(r));
+  return [...custom, ...(hasTadilat?[]:[TADILAT_REASON]), GUN_SONU_REASON, "Diğer"];
 }
-const GUN_SONU_REASON = "Gün Sonu (Mesai Bitti, yarın devam edilecek)";
+// Admin'in Duruş Nedenleri listesine "Tadilat", "Tadilat Duruşu" gibi kendi yazdığı bir metin
+// eklemiş olması ihtimaline karşı esnek (bulanık) eşleştirme — birebir "Tadilat" yazmasına gerek yok.
+function isTadilatReason(r){
+  if(!r) return false;
+  const s = String(r).toLowerCase();
+  return s.includes('tadilat') && r!==TADILAT_SONRASI_REASON;
+}
+// Stil amaçlı: hem "Tadilat" hem "Tadilat Sonrası Ayar" için (ikisi de tadilatla ilgili duruş).
+function isTadilatRelated(r){ return !!r && String(r).toLowerCase().includes('tadilat'); }
 function effectiveDurusMs(e){
   let d = e.duruşToplamMs||0;
   if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON) d += Math.max(0, nowTick - e.duruşTs);
@@ -265,6 +282,7 @@ const fmtDur = ms => { const m=Math.round(ms/60000); return m<60?`${m} dk`:`${Ma
 const fmtElapsed = ms => { const s=Math.max(0,Math.floor(ms/1000)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60; const p=n=>String(n).padStart(2,"0"); return h>0?`${p(h)}:${p(m)}:${p(sec)}`:`${p(m)}:${p(sec)}`; };
 const dateKey = ts => new Date(ts).toISOString().slice(0,10);
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.className='toast show'; clearTimeout(t._t); t._t=setTimeout(()=>t.className='toast',2200); }
+function bigToast(msg){ const t=document.getElementById('toast-big'); if(!t) return; t.textContent=msg; t.className='toast-big show'; clearTimeout(t._t); t._t=setTimeout(()=>t.className='toast-big',3800); }
 function connDot(){ return `<span class="conn-dot ${connOK?'on':'off'}" title="${connOK?'Buluta bağlı (senkron)':'Bağlantı yok — internet kontrol edin'}"></span>`; }
 function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 function load(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
@@ -322,6 +340,39 @@ function toggleMachineFason(code){
 function toggleFasonYetkisi(code){
   const op = STATE.operators[code] || {};
   DB.ref('operators/'+code+'/fasonYetkisi').set(!op.fasonYetkisi);
+}
+// Makineleri "İmalat Atölye" / "Tadilat Atölye" olarak ikiye ayırmak için (Firebase 'machines_atolye').
+// Belirtilmemiş makineler varsayılan olarak İmalat Atölye sayılır.
+let machineAtolye = {};
+function machineAtolyeOf(code){ return machineAtolye[code]==='tadilat' ? 'tadilat' : 'imalat'; }
+function setMachineAtolye(code, val){
+  if(!session || !(session.isSuperAdmin || session.isSef)){ toast('Bu işlem için yetkin yok'); return; }
+  DB.ref('machines_atolye/'+code).set(val);
+}
+// Personeli (hem sıradan operatörleri hem tadilat açabilen yönetici/şef hesaplarını) İmalat/Tadilat
+// Atölye'ye ata — artık ikili (ya bu ya o) değil, çoklu seçim: hiçbiri/biri/ikisi de işaretlenebilir
+// (0-1-2 durumu). Bir kullanıcının hem Bekleyen listesi hem Yeni Talep formundaki atölye seçeneği
+// buradan türetiliyor. Hiçbiri işaretli değilse (ve eski tekil "atolye" alanı da yoksa) varsayılan
+// İmalat Atölye sayılır ki kimse yanlışlıkla erişimsiz kalmasın.
+function getUserAtolyeler(code){
+  const op = STATE.operators[code] || {};
+  if(op.isSuperAdmin) return ['imalat','tadilat']; // SuperAdmin her zaman her iki atölyeyi de görür/yönetir
+  if(op.atolyeImalat===undefined && op.atolyeTadilat===undefined){
+    return op.atolye==='tadilat' ? ['tadilat'] : ['imalat']; // eski tekil alan / hiç ayarlanmamış
+  }
+  const list = [];
+  if(op.atolyeImalat) list.push('imalat');
+  if(op.atolyeTadilat) list.push('tadilat');
+  return list.length>0 ? list : ['imalat'];
+}
+function toggleUserAtolye(code, which){
+  if(!session || !(session.isSuperAdmin || session.isSef)){ toast('Bu işlem için yetkin yok'); return; }
+  const cur = getUserAtolyeler(code);
+  const isImalat = cur.includes('imalat'), isTadilat = cur.includes('tadilat');
+  DB.ref('operators/'+code).update({
+    atolyeImalat: which==='imalat' ? !isImalat : isImalat,
+    atolyeTadilat: which==='tadilat' ? !isTadilat : isTadilat
+  });
 }
 /* ===================== MALZEME STOK TAKİBİ (opsiyonel modül) =====================
    Tamamen tek bir anahtarla açılıp kapanabilir (appSettings.stockTrackingEnabled).
@@ -447,6 +498,220 @@ function updateStockLot(itemId, lotId, val){
 function deleteStockLot(itemId, lotId){
   if(!canManageStock()) return;
   DB.ref(`stockItems/${itemId}/lots/${lotId}`).remove();
+}
+/* ===================== TADİLAT (REWORK) MODÜLÜ =====================
+   Yöneticiler (Şef/SuperAdmin, veya izin verilen diğer admin hesapları) tadilat talebi açar
+   (hangi U kodundan kaç adetin, hangi bölümün talebiyle, ne işlem için tadilata alınacağı).
+   Operatör üretim işini "Tadilat" duruş sebebiyle durdurunca Tadilat sekmesine düşer, bekleyen
+   taleplerden birini alır, bitirince otomatik olarak üretim işi "Tadilat Sonrası Ayar" duruşuna
+   geçer — operatör kaldığı yerden devam edebilir.
+
+   Çok operasyonlu yapı: Her tadilat talebi, üretim rotası gibi birden fazla "operasyon" adımından
+   oluşabilir (tadilatlar/$id/operasyonlar/$opId). Bir operatör bir talebi alıp "Son Operasyon" tikini
+   İŞARETLEMEDEN bitirirse, talep tekrar "bekleyen" listesine düşer — bir sonraki operatör (aynı ya da
+   farklı kişi) devam eder. Sadece sonOperasyon=true olan bir operasyon tamamlanınca talep gerçekten
+   kapanır. Talebin durumu (bekliyor/aktif/tamamlandı) hep operasyonlardan TÜRETİLİR, ayrı bir
+   "status" alanı tutmuyoruz — tek doğruluk kaynağı operasyon listesi.
+*/
+let tadilatlar = {};
+let activeTadilatId = null;   // operatörün şu an üzerinde çalıştığı tadilat talebinin id'si
+let activeTadilatOpId = null; // o talebin hangi operasyon kaydı üzerinde çalışıyor
+let tadilatExpandedIds = new Set(); // sadeleştirilmiş "Bekleyen" kartlarından hangileri detaylı gösteriliyor
+let tadilatSubTab = 'talepler'; // 'talepler' | 'analiz'
+function setTadilatSubTab(v){ tadilatSubTab = v; render(); }
+// Tadilat için detaylı analiz: toplam süre, atölye kırılımı, kişi bazlı ve günlük dakika.
+function computeTadilatAnaliz(){
+  const ops = [];
+  tadilatArray().forEach(t=>{
+    tadilatOperasyonlarArray(t).forEach(o=>{
+      if(o.baslamaTs && o.bitisTs) ops.push({ ...o, uKodu:t.uKodu, atolye:(t.atolye||'imalat') });
+    });
+  });
+  const toplamMs = ops.reduce((s,o)=>s+(o.bitisTs-o.baslamaTs),0);
+  const byAtolye = { imalat:{ms:0,count:0}, tadilat:{ms:0,count:0} };
+  ops.forEach(o=>{ byAtolye[o.atolye].ms += (o.bitisTs-o.baslamaTs); byAtolye[o.atolye].count++; });
+  const byPersonMap = {};
+  ops.forEach(o=>{
+    const k = o.operatorUsername;
+    if(!byPersonMap[k]) byPersonMap[k] = { username:o.operatorUsername, name:o.operatorName, ms:0, count:0, imalatMs:0, tadilatMs:0 };
+    byPersonMap[k].ms += (o.bitisTs-o.baslamaTs);
+    byPersonMap[k].count++;
+    byPersonMap[k][o.atolye+'Ms'] += (o.bitisTs-o.baslamaTs);
+  });
+  const byDayMap = {};
+  ops.forEach(o=>{
+    const dk = dateKey(o.baslamaTs);
+    if(!byDayMap[dk]) byDayMap[dk] = { imalatMs:0, tadilatMs:0, count:0 };
+    byDayMap[dk][o.atolye+'Ms'] += (o.bitisTs-o.baslamaTs);
+    byDayMap[dk].count++;
+  });
+  const byDay = Object.entries(byDayMap).map(([gun,v])=>({gun, ...v, toplamMs:v.imalatMs+v.tadilatMs})).sort((a,b)=>b.gun.localeCompare(a.gun));
+  return {
+    opCount: ops.length, toplamMs, byAtolye,
+    byPerson: Object.values(byPersonMap).sort((a,b)=>b.ms-a.ms),
+    byDay
+  };
+}
+function toggleTadilatExpand(id){
+  if(tadilatExpandedIds.has(id)) tadilatExpandedIds.delete(id); else tadilatExpandedIds.add(id);
+  render();
+}
+function tadilatArray(){ return Object.entries(tadilatlar).map(([id,v])=>({id, ...v})); }
+// Eski (tek operasyonlu) kayıtlarla geriye dönük uyumluluk: operasyonlar alanı yoksa, eski
+// düz alanlardan (baslayanUsername, baslamaTs, status...) tek bir "sonOperasyon" operasyonu türetiyoruz.
+function tadilatOperasyonlarArray(t){
+  if(t.operasyonlar) return Object.entries(t.operasyonlar).map(([id,v])=>({id, ...v})).sort((a,b)=>a.baslamaTs-b.baslamaTs);
+  if(t.baslayanUsername){
+    return [{ id:'legacy', operatorUsername:t.baslayanUsername, operatorName:t.baslayanName, baslamaTs:t.baslamaTs||0, bitisTs:t.bitisTs||null, status: t.status==='tamamlandi'?'tamamlandi':'devam', sonOperasyon:true, kaynakEntryId:t.kaynakEntryId||null }];
+  }
+  return [];
+}
+function tadilatAktifOperasyon(t){ return tadilatOperasyonlarArray(t).find(o=>o.status==='devam') || null; }
+// Bir makinede şu an aktif bir tadilat operasyonu var mı? Makine Matrisi'nde ayrı bir renk/durum
+// olarak göstermek için (üretim "entries" tablosunda hiç izi olmasa bile).
+function tadilatAktifOnMachine(makineLabel){
+  if(!makineLabel) return null;
+  for(const t of tadilatArray()){
+    const op = tadilatAktifOperasyon(t);
+    if(op && op.makine===makineLabel) return { tadilat:t, operasyon:op };
+  }
+  return null;
+}
+function tadilatTamamlandiMi(t){ return tadilatOperasyonlarArray(t).some(o=>o.status==='tamamlandi' && o.sonOperasyon); }
+function tadilatBekliyorMu(t){ return !tadilatTamamlandiMi(t) && !tadilatAktifOperasyon(t); }
+function tadilatBekleyenler(atolye){
+  const list = tadilatArray().filter(t=>tadilatBekliyorMu(t)).sort((a,b)=>a.olusturmaTs-b.olusturmaTs);
+  return atolye ? list.filter(t=>(t.atolye||'imalat')===atolye) : list;
+}
+// Bir kullanıcının erişebildiği TÜM atölyelerdeki bekleyen talepleri birleştirir (tekrarsız).
+function tadilatBekleyenlerCombined(code){
+  const atolyeler = getUserAtolyeler(code);
+  const seen = new Set(); const out = [];
+  atolyeler.forEach(a=>{ tadilatBekleyenler(a).forEach(t=>{ if(!seen.has(t.id)){ seen.add(t.id); out.push(t); } }); });
+  return out;
+}
+function myActiveTadilatSession(){
+  for(const t of tadilatArray()){
+    const op = tadilatAktifOperasyon(t);
+    if(op && op.operatorUsername===session.username) return { tadilat:t, operasyon:op };
+  }
+  return null;
+}
+function canCreateTadilat(){
+  if(!session) return false;
+  if(session.isSuperAdmin) return true;
+  if(!session.isAdmin) return false;
+  const op = STATE.operators[session.username]||{};
+  if(op.permTadilatOlustur===true) return true;
+  if(op.permTadilatOlustur===false) return false;
+  return !!session.isSef; // varsayılan: Şef açabilir, diğer yöneticiler kapalı (Ayarlar'dan açılabilir)
+}
+// Tamamlanan tadilatların süre/istatistik analizini sadece SuperAdmin görebilir — talep açma/alma
+// yetkisi bundan ayrı (canCreateTadilat), Şef ve izinli diğer hesaplar hâlâ talep açabilir.
+function canViewTadilatAnaliz(){ return !!(session && session.isSuperAdmin); }
+function toggleTadilatYetkisi(code){
+  const op = STATE.operators[code] || {};
+  const effectiveNow = op.permTadilatOlustur===true ? true : (op.permTadilatOlustur===false ? false : !!op.isSef);
+  DB.ref('operators/'+code+'/permTadilatOlustur').set(!effectiveNow);
+}
+// Operatör/yönetici en son hangi atölye için talep açtıysa, bir sonraki sefer form o atölyede
+// açılsın diye kullanıcı bazlı hatırlıyoruz (localStorage) — her talepte "İmalat"a geri dönmesin.
+function tadilatFormAtolyeGet(){
+  const saved = load('tadilat_form_atolye_'+(session?session.username:'anon'), 'imalat');
+  const allowed = session ? getUserAtolyeler(session.username) : ['imalat'];
+  return allowed.includes(saved) ? saved : allowed[0];
+}
+function tadilatFormAtolyeSet(v){ save('tadilat_form_atolye_'+(session?session.username:'anon'), v); }
+function addTadilat(){
+  if(!canCreateTadilat()) return;
+  const uKodu = (document.getElementById('tad-ukodu')?.value||'').trim();
+  const adet = (document.getElementById('tad-adet')?.value||'').trim();
+  const bolum = (document.getElementById('tad-bolum')?.value||'').trim();
+  const talepEdenKisi = (document.getElementById('tad-kisi')?.value||'').trim();
+  const atolye = document.getElementById('tad-atolye')?.value || 'imalat';
+  const aciklama = (document.getElementById('tad-aciklama')?.value||'').trim();
+  if(!uKodu){ toast('U kodu girin'); return; }
+  if(!aciklama){ toast('Ne işlem yapılacağını girin'); return; }
+  tadilatFormAtolyeSet(atolye);
+  const id = uid();
+  DB.ref('tadilatlar/'+id).set({
+    uKodu, adet, bolum, talepEdenKisi, atolye, aciklama,
+    olusturanUsername: session.username, olusturanName: session.displayName, olusturmaTs: Date.now()
+  }).then(()=>{
+    toast('Tadilat talebi oluşturuldu');
+    ['tad-ukodu','tad-adet','tad-bolum','tad-kisi','tad-aciklama'].forEach(fid=>{ const el=document.getElementById(fid); if(el) el.value=''; });
+  });
+}
+function deleteTadilat(id){
+  if(!canCreateTadilat()) return;
+  DB.ref('tadilatlar/'+id).remove();
+}
+let tadilatMakineSecimId = null; // hangi bekleyen tadilat kartı için makine seçim kutusu açık
+function openTadilatMakineSecim(id){ tadilatMakineSecimId = id; render(); }
+function cancelTadilatMakineSecim(){ tadilatMakineSecimId = null; render(); }
+// Operatörün şu an "Tadilat" sebebiyle duraklattığı bir üretim işi varsa, o işin makinesini
+// otomatik makine önerisi olarak kullanıyoruz (çünkü tadilatı muhtemelen aynı makinede yapıyor).
+function tadilatKaynakMakine(){
+  const kaynak = entriesArray().find(e => e.operatorUsername===session.username && e.status==='duruş' && isTadilatReason(e.duruşNedeni));
+  return kaynak ? kaynak.makine : '';
+}
+function tadilatAl(tadilatId, makine){
+  const t = tadilatlar[tadilatId]; if(!t || !tadilatBekliyorMu(t)){ toast('Bu talep şu an müsait değil'); return; }
+  if(!makine){ toast('Hangi makinede yapacağını seç'); return; }
+  const kaynak = entriesArray().find(e => e.operatorUsername===session.username && e.status==='duruş' && isTadilatReason(e.duruşNedeni));
+  const opId = uid();
+  DB.ref(`tadilatlar/${tadilatId}/operasyonlar/${opId}`).set({
+    operatorUsername: session.username, operatorName: session.displayName, makine,
+    baslamaTs: Date.now(), bitisTs: null, status:'devam', sonOperasyon: false,
+    kaynakEntryId: kaynak ? kaynak.id : null
+  }).then(()=>{
+    activeTadilatId = tadilatId;
+    activeTadilatOpId = opId;
+    tadilatMakineSecimId = null;
+    render();
+  }).catch(err=>{ console.error(err); toast('Tadilat alınamadı: '+(err&&err.message||'hata')); });
+}
+// Aktif operasyonu bitirir. "Son operasyon mu" kararı artık İŞE BAŞLARKEN değil, İŞİ BİTİRİRKEN
+// veriliyor — çünkü operatör çoğu zaman işin tek seferde mi bitecek yoksa devamı mı gelecek
+// bunu ancak işin içine girince anlıyor. sonOperasyon true ise talep tamamen kapanır; false ise
+// talep tekrar "bekleyen" listesine döner (bir sonraki operasyon için). Kaynak üretim işi varsa
+// (madde 3+4), bu SADECE bu operatörün kendi duraklattığı işi geri getirir — talebin genel kapanma
+// durumundan bağımsız çalışır.
+function tadilatBitir(tadilatId, opId, sonOperasyon){
+  const t = tadilatlar[tadilatId]; if(!t) return;
+  const isLegacy = !t.operasyonlar && opId==='legacy';
+  const opRefPath = isLegacy ? null : `tadilatlar/${tadilatId}/operasyonlar/${opId}`;
+  const op = tadilatOperasyonlarArray(t).find(o=>o.id===opId);
+  if(!op){ toast('Operasyon bulunamadı'); return; }
+  const bitisTs = Date.now();
+  const writeP = isLegacy
+    ? DB.ref('tadilatlar/'+tadilatId).update({ status:'tamamlandi', bitisTs }) // eski kayıt formatı
+    : DB.ref(opRefPath).update({ status:'tamamlandi', bitisTs, sonOperasyon: !!sonOperasyon });
+  writeP.then(()=>{
+    let kaynakVarMi = false;
+    if(op.kaynakEntryId){
+      const src = STATE.entries[op.kaynakEntryId];
+      if(src && src.status==='duruş'){
+        const extra = src.duruşTs ? Math.max(0, Date.now()-src.duruşTs) : 0;
+        const duruşToplamMs = (src.duruşToplamMs||0) + extra;
+        DB.ref('entries/'+op.kaynakEntryId).update({ duruşNedeni: TADILAT_SONRASI_REASON, duruşTs: Date.now(), duruşToplamMs });
+        kaynakVarMi = true;
+      }
+    }
+    activeTadilatId = null; activeTadilatOpId = null;
+    if(sonOperasyon){
+      bigToast(kaynakVarMi
+        ? 'Tadilat tamamlandı. Tadilat duruşu devam ettirildi ve tadilat sonrası ayar duruşu başlatıldı.'
+        : 'Tadilat tamamlandı.');
+    } else {
+      bigToast(kaynakVarMi
+        ? 'Bu operasyon tamamlandı, tadilat sıradaki operasyonu bekliyor. Tadilat duruşu devam ettirildi ve tadilat sonrası ayar duruşu başlatıldı.'
+        : 'Bu operasyon tamamlandı — tadilat sıradaki operasyon için bekleyenler listesine döndü.');
+    }
+    if(kaynakVarMi) activeDetailId = op.kaynakEntryId;
+    view = 'list';
+    render();
+  }).catch(err=>{ console.error(err); toast('Tadilat bitirilemedi: '+(err&&err.message||'hata')); });
 }
 function fasonBekleyenCount(){
   return entriesArray().filter(e => (e.status==='devam'||e.status==='duruş') && isFasonMachine(e.makine)).length;
@@ -730,6 +995,8 @@ function deleteAllMessages(){
 
 let analizSelectedMachines = new Set(); // Genel Analiz'deki mini matristen seçilen makine kodları (çoklu filtre)
 let analizMiniSort = 'alpha'; // 'alpha' | 'calisma' | 'renk'
+let analizAtolyeFilter = 'tumu'; // 'tumu' | 'imalat' | 'tadilat' — tüm Analiz sekmesini makinenin atölyesine göre süzer
+function setAnalizAtolyeFilter(v){ analizAtolyeFilter = v; analizSelectedMachines = new Set(); render(); }
 function setAnalizMiniSort(v){ analizMiniSort = v; render(); }
 function toggleAnalizMachineFilter(code){
   if(analizSelectedMachines.has(code)) analizSelectedMachines.delete(code);
@@ -769,52 +1036,60 @@ function initFirebase(){
     FB_OK = true;
     DB.ref('.info/connected').on('value', snap=>{
       connOK = snap.val() === true;
-      render();
+      safeRender();
     });
     DB.ref('operators').on('value', snap=>{
       STATE.operators = snap.val() || {};
       seedIfNeeded();
-      render();
+      safeRender();
     });
     DB.ref('entries').on('value', snap=>{
       STATE.entries = snap.val() || {};
-      render();
+      safeRender();
     });
     DB.ref('machines_extra').on('value', snap=>{
       extraMachines = snap.val() || {};
-      render();
+      safeRender();
     });
     DB.ref('machines_hidden').on('value', snap=>{
       hiddenMachines = snap.val() || {};
-      render();
+      safeRender();
     });
     DB.ref('machines_fason').on('value', snap=>{
       fasonMachines = snap.val() || {};
-      render();
+      safeRender();
+    });
+    DB.ref('machines_atolye').on('value', snap=>{
+      machineAtolye = snap.val() || {};
+      safeRender();
     });
     DB.ref('messages').on('value', snap=>{
       STATE.messages = snap.val() || {};
-      render();
+      safeRender();
     });
     DB.ref('validIsEmri').on('value', snap=>{
       STATE.validIsEmri = snap.val() || {};
-      render();
+      safeRender();
     });
     DB.ref('durusReasons').on('value', snap=>{
       STATE.durusReasons = snap.val() || [];
-      render();
+      safeRender();
     });
     DB.ref('settings').on('value', snap=>{
       appSettings = snap.val() || {};
-      render();
+      safeRender();
     });
     DB.ref('stockItems').on('value', snap=>{
       stockItems = snap.val() || {};
-      render();
+      safeRender();
     });
     DB.ref('stockHareketleri').on('value', snap=>{
       stockHareketleri = snap.val() || {};
-      render();
+      safeRender();
+    });
+    DB.ref('tadilatlar').on('value', snap=>{
+      tadilatlar = snap.val() || {};
+      safeRender();
     });
     return true;
   }catch(e){ console.warn('Firebase init hatası', e); return false; }
@@ -1043,6 +1318,11 @@ function confirmDurus(id){
   DB.ref('entries/'+id).update({ status:'duruş', duruşNedeni: reason, duruşTs: Date.now() });
   toast('Duruş kaydedildi');
   durusOpen=false; durusReasonSel=''; durusCustom='';
+  if(isTadilatReason(reason)){
+    activeDetailId = null; activeGroupId = null;
+    view = 'tadilat';
+    render();
+  }
 }
 // Bir operatör/şef bir makinede iş bırakıp gidebiliyor (ör. yerine geçen kişi izinli); ertesi gün
 // asıl operatör aynı makineyi seçtiğinde, üzerinde kimin başlattığı yarım bir iş varsa burada
@@ -1378,8 +1658,16 @@ function setAnalizPreset(days){
   render();
 }
 
-function computeAnalizData(fromDate, toDate){
-  const rangeEntries = entriesArray().filter(e => { const dk = dateKey(e.startTs); return dk>=fromDate && dk<=toDate; });
+function computeAnalizData(fromDate, toDate, atolyeFilter){
+  const rangeEntries = entriesArray().filter(e => {
+    const dk = dateKey(e.startTs);
+    if(dk<fromDate || dk>toDate) return false;
+    if(atolyeFilter && atolyeFilter!=='tumu'){
+      const code = String(e.makine||'').split(' · ')[0];
+      if(machineAtolyeOf(code)!==atolyeFilter) return false;
+    }
+    return true;
+  });
   const isSingleDay = fromDate===toDate;
   const dayStartMs = isSingleDay ? new Date(fromDate+'T00:00:00').getTime() : null;
 
@@ -1637,6 +1925,28 @@ function exportExcel(){
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Rota");
   XLSX.writeFile(wb, `rota_disaaktarim_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+function exportTadilatExcel(){
+  if(!canViewTadilatAnaliz()) return;
+  const rows = [];
+  tadilatArray().filter(t=>tadilatTamamlandiMi(t)).forEach(t=>{
+    tadilatOperasyonlarArray(t).forEach((o,i)=>{
+      rows.push({
+        "Atölye": (t.atolye||'imalat')==='tadilat'?'Tadilat Atölye':'İmalat Atölye',
+        "U Kodu": t.uKodu, "Adet": t.adet||'', "Talep Eden Kişi": t.talepEdenKisi||'', "Talep Eden Bölüm": t.bolum||'', "Yapılan İşlem": t.aciklama||'',
+        "Talebi Açan": t.olusturanName||'', "Talep Tarihi": fmtDT(t.olusturmaTs),
+        "Operasyon No": i+1, "Son Operasyon Mu": o.sonOperasyon?'Evet':'Hayır', "Makine": o.makine||'',
+        "Yapan": o.operatorName||'', "Başlangıç": fmtDT(o.baslamaTs), "Bitiş": o.bitisTs?fmtDT(o.bitisTs):'',
+        "Süre (dk)": o.bitisTs?Math.round((o.bitisTs-o.baslamaTs)/60000):''
+      });
+    });
+  });
+  rows.sort((a,b)=> new Date(b["Bitiş"]) - new Date(a["Bitiş"]));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Tadilat");
+  XLSX.writeFile(wb, `tadilat_disaaktarim_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 /* ===================== MAKİNE DETAY MODAL ===================== */
@@ -1943,7 +2253,7 @@ function renderGroupScreen(groupId, groupMembers){
       <button class="icon-btn" onclick="doLogout()" title="Çıkış">⎋</button>
     </div>
     <div style="padding:14px 18px 0">
-      <button class="btn-ghost" onclick="closeGroupDetail()">← Makineler</button>
+      <button class="lock-back-btn" onclick="closeGroupDetail()">← Makineler</button>
     </div>`;
 
   let actionBlock;
@@ -1961,11 +2271,14 @@ function renderGroupScreen(groupId, groupMembers){
       <div class="durus-chip-row">
         ${getDurusReasons().map((r,i)=>{
           const isGunSonu = r===GUN_SONU_REASON;
+          const isTad = !isGunSonu && isTadilatRelated(r);
           const isActive = durusReasonSel===r;
           const style = isGunSonu
             ? `border-color:#38bdf8;color:#38bdf8;background:${isActive?'#38bdf855':'#38bdf822'};font-weight:700`
+            : isTad
+            ? `border-color:#c084fc;color:#c084fc;background:${isActive?'#c084fc55':'#c084fc22'};font-weight:700`
             : '';
-          return `<button class="chip ${isActive&&!isGunSonu?'active':''}" style="${style}" onclick="pickDurusReason(${i})">${isGunSonu?'🌙 ':''}${esc(r)}</button>`;
+          return `<button class="chip ${isActive&&!isGunSonu&&!isTad?'active':''}" style="${style}" onclick="pickDurusReason(${i})">${isGunSonu?'🌙 ':isTad?'🔧 ':''}${esc(r)}</button>`;
         }).join('')}
       </div>
       ${durusReasonSel==='Diğer' ? `<input id="durus-custom" placeholder="Nedeni yaz…" value="${esc(durusCustom)}" oninput="durusCustom=this.value">` : ''}
@@ -1982,7 +2295,7 @@ function renderGroupScreen(groupId, groupMembers){
     <div class="lock-machine">${groupMembers.map(e=>esc(e.talepNo || e.isEmriNo)).join(', ')}</div>
     <div class="lock-timer" style="${anyDurus?'color:var(--warn)':''}">${anyDurus?fmtElapsed(nowTick-ref.duruşTs):fmtElapsed(nowTick-ref.startTs)}</div>
     <div class="lock-meta">${anyDurus?'duruş süresi (tüm iş emirleri için ortak)':`${groupMembers.length} iş emri bu makinede aynı anda aktif`}</div>
-    ${anyDurus ? `<div class="durus-reason-box" style="${ref.duruşNedeni===GUN_SONU_REASON?'color:#38bdf8;background:#38bdf818;border-color:#38bdf840':''}">${ref.duruşNedeni===GUN_SONU_REASON?'🌙 ':''}"${esc(ref.duruşNedeni)}"</div>` : ''}
+    ${anyDurus ? `<div class="durus-reason-box" style="${ref.duruşNedeni===GUN_SONU_REASON?'color:#38bdf8;background:#38bdf818;border-color:#38bdf840':isTadilatRelated(ref.duruşNedeni)?'color:#c084fc;background:#c084fc18;border-color:#c084fc40':''}">${ref.duruşNedeni===GUN_SONU_REASON?'🌙 ':isTadilatRelated(ref.duruşNedeni)?'🔧 ':''}"${esc(ref.duruşNedeni)}"</div>` : ''}
     <div style="margin-top:20px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:8px;text-align:left">
       <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;padding:0 2px">Parti parti dönebilir — her iş emrini ayrı ayrı bitirebilirsin</div>
       ${groupMembers.map(e=>`
@@ -2007,7 +2320,7 @@ function renderLockScreen(active){
       <button class="icon-btn" onclick="doLogout()" title="Çıkış">⎋</button>
     </div>
     <div style="padding:14px 18px 0">
-      <button class="btn-ghost" onclick="closeActiveDetail()">← Makineler</button>
+      <button class="lock-back-btn" onclick="closeActiveDetail()">← Makineler</button>
     </div>`;
 
   const editBlock = editingActiveId===active.id ? `
@@ -2045,7 +2358,7 @@ function renderLockScreen(active){
         <div class="lock-machine">${esc(active.makine)}</div>
         <div class="lock-timer" style="color:var(--warn)">${fmtElapsed(nowTick-active.duruşTs)}</div>
         <div class="lock-meta">duruş süresi</div>
-        <div class="durus-reason-box" style="${active.duruşNedeni===GUN_SONU_REASON?'color:#38bdf8;background:#38bdf818;border-color:#38bdf840':''}">${active.duruşNedeni===GUN_SONU_REASON?'🌙 ':''}"${esc(active.duruşNedeni)}"</div>
+        <div class="durus-reason-box" style="${active.duruşNedeni===GUN_SONU_REASON?'color:#38bdf8;background:#38bdf818;border-color:#38bdf840':isTadilatRelated(active.duruşNedeni)?'color:#c084fc;background:#c084fc18;border-color:#c084fc40':''}">${active.duruşNedeni===GUN_SONU_REASON?'🌙 ':isTadilatRelated(active.duruşNedeni)?'🔧 ':''}"${esc(active.duruşNedeni)}"</div>
         <div style="display:flex;gap:10px;margin-top:28px">
           <button class="btn-start" style="width:auto;padding:13px 26px" onclick="devamEt('${active.id}')">▶ Duraklatmayı Devam Ettir</button>
         </div>
@@ -2065,11 +2378,14 @@ function renderLockScreen(active){
       <div class="durus-chip-row">
         ${getDurusReasons().map((r,i)=>{
           const isGunSonu = r===GUN_SONU_REASON;
+          const isTad = !isGunSonu && isTadilatRelated(r);
           const active = durusReasonSel===r;
           const style = isGunSonu
             ? `border-color:#38bdf8;color:#38bdf8;background:${active?'#38bdf855':'#38bdf822'};font-weight:700`
+            : isTad
+            ? `border-color:#c084fc;color:#c084fc;background:${active?'#c084fc55':'#c084fc22'};font-weight:700`
             : '';
-          return `<button class="chip ${active&&!isGunSonu?'active':''}" style="${style}" onclick="pickDurusReason(${i})">${isGunSonu?'🌙 ':''}${esc(r)}</button>`;
+          return `<button class="chip ${active&&!isGunSonu&&!isTad?'active':''}" style="${style}" onclick="pickDurusReason(${i})">${isGunSonu?'🌙 ':isTad?'🔧 ':''}${esc(r)}</button>`;
         }).join('')}
       </div>
       ${durusReasonSel==='Diğer' ? `<input id="durus-custom" placeholder="Nedeni yaz…" value="${esc(durusCustom)}" oninput="durusCustom=this.value">` : ''}
@@ -2098,6 +2414,7 @@ function renderLockScreen(active){
 
 /* ===================== RENDER: OPERATÖR ANA UYGULAMA ===================== */
 function renderOperator(){
+  if(view==='new' && !getUserAtolyeler(session.username).includes('imalat')){ view = 'tadilat'; }
   const detailEntry = activeDetailId ? entriesArray().find(e=>e.id===activeDetailId && (e.status==='devam'||e.status==='duruş')) : null;
   if(detailEntry) return renderLockScreen(detailEntry);
   const groupMembers = activeGroupId ? entriesArray().filter(e=>e.groupId===activeGroupId && (e.status==='devam'||e.status==='duruş')) : [];
@@ -2122,13 +2439,70 @@ function renderOperator(){
     </div>
     <div class="tabs">
       <button class="tab-btn ${view==='list'?'active':''}" onclick="setView('list')">🏭 Makineler</button>
-      <button class="tab-btn ${view==='new'?'active':''}" onclick="setView('new')">+ Yeni Kayıt</button>
+      ${getUserAtolyeler(session.username).includes('imalat') ? `<button class="tab-btn ${view==='new'?'active':''}" onclick="setView('new')">+ Yeni Kayıt</button>` : ''}
       <button class="tab-btn ${view==='gecmis'?'active':''}" onclick="setView('gecmis')">📜 Geçmiş</button>
       ${(STATE.operators[session.username]||{}).fasonYetkisi ? `<button class="tab-btn ${view==='fason'?'active':''}" onclick="setView('fason')">📦 Fason${fasonBekleyenCount()>0?` (${fasonBekleyenCount()})`:''}</button>` : ''}
+      <button class="tab-btn ${view==='tadilat'?'active':''}" onclick="setView('tadilat')">🔧 Tadilat${tadilatBekleyenlerCombined(session.username).length>0?` (${tadilatBekleyenlerCombined(session.username).length})`:''}</button>
     </div>`;
 
   let body = '';
-  if(view==='fason'){
+  if(view==='tadilat'){
+    const sess = myActiveTadilatSession();
+    if(sess){
+      const { tadilat: mine, operasyon: op } = sess;
+      const opsGecmis = tadilatOperasyonlarArray(mine).filter(o=>o.id!==op.id);
+      body = `<div class="lock-screen" style="padding-top:40px">
+        <div class="lock-label">TADİLAT — AKTİF</div>
+        <div class="lock-id">${esc(mine.uKodu)}</div>
+        <div class="lock-machine">${esc(op.makine||'—')}</div>
+        <div class="lock-timer">${fmtElapsed(nowTick-op.baslamaTs)}</div>
+        <div class="lock-meta">${fmtDT(op.baslamaTs)} itibarıyla devam ediyor${opsGecmis.length>0?` · Bu, ${opsGecmis.length+1}. operasyon`:''}</div>
+        <div class="lock-meta">${mine.bolum?`${esc(mine.bolum)} · `:''}${mine.adet?`Adet: ${esc(mine.adet)}`:''}</div>
+        ${mine.aciklama ? `<div class="lock-note">"${esc(mine.aciklama)}"</div>` : ''}
+        <div style="font-size:12px;color:var(--text-muted);margin-top:16px;max-width:320px;text-align:center">Bitirirken seç: bu iş tamamen bitti mi, yoksa devamı gelecek mi?</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;width:100%;max-width:340px">
+          <button class="btn-primary" style="padding:14px" onclick="tadilatBitir('${mine.id}','${op.id}',true)">■ Tamamen Bitir <span style="font-weight:400;opacity:.85">(Son Operasyon)</span></button>
+          <button style="padding:14px;font-size:14px;border-radius:10px;border:2px solid #38bdf8;background:#38bdf822;color:#38bdf8;font-weight:700;cursor:pointer" onclick="tadilatBitir('${mine.id}','${op.id}',false)">⏸ Bu Operasyonu Bitir <span style="opacity:.85;font-weight:600">(Devamı Var)</span></button>
+        </div>
+        ${op.kaynakEntryId ? `<div style="font-size:11.5px;color:var(--text-muted);margin-top:18px;max-width:320px;text-align:center">Hangisini seçersen seç, duraklattığın üretim işi otomatik olarak "${TADILAT_SONRASI_REASON}" duruşuna geçecek — kaldığın yerden devam edebileceksin.</div>` : ''}
+      </div>`;
+    } else {
+      const renderCard = (t) => {
+        const expanded = tadilatExpandedIds.has(t.id);
+        const gecmis = tadilatOperasyonlarArray(t).filter(o=>o.status==='tamamlandi');
+        const secimAcik = tadilatMakineSecimId===t.id;
+        return `<div class="card">
+          <div class="card-header" style="cursor:pointer" onclick="toggleTadilatExpand('${t.id}')"><span class="card-id" style="color:var(--warn)">⏳ ${esc(t.uKodu)}</span><span class="card-meta">${expanded?'▲ gizle':'▼ detay'}</span></div>
+          ${expanded ? `
+            <div style="font-size:12.5px;color:var(--text-muted);margin:6px 0 8px">${t.talepEdenKisi?`${esc(t.talepEdenKisi)} · `:''}${t.bolum?`${esc(t.bolum)} · `:''}${t.adet?`Adet: ${esc(t.adet)}`:''}</div>
+            <div style="font-size:13px;margin-bottom:8px">${esc(t.aciklama)}</div>
+            ${gecmis.length>0 ? `<div style="font-size:11.5px;color:var(--accent);margin-bottom:10px">🔁 ${gecmis.length} operasyon tamamlandı, devamı bekleniyor</div>` : ''}
+          ` : ''}
+          ${secimAcik ? `
+            <div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Hangi makinede yapılacak?</div>
+              <input id="tad-al-makine-${t.id}" list="tadilat-makine-options" placeholder="Makine seç" value="${esc(tadilatKaynakMakine())}" style="margin-bottom:8px">
+              <div style="display:flex;gap:8px">
+                <button class="btn-primary" style="flex:1" onclick="tadilatAl('${t.id}', document.getElementById('tad-al-makine-${t.id}').value)">▶ Başla</button>
+                <button class="btn-ghost" onclick="cancelTadilatMakineSecim()">Vazgeç</button>
+              </div>
+            </div>
+          ` : `<button class="btn-primary" onclick="openTadilatMakineSecim('${t.id}')">▶ Bu İşi Al ve Başla</button>`}
+        </div>`;
+      };
+      const myAtolyeler = getUserAtolyeler(session.username);
+      body = `<div class="body-pad">
+        <datalist id="tadilat-makine-options">${getAllowedMachines().map(m=>`<option value="${esc(m)}">`).join('')}</datalist>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">Bekleyen Tadilat İşleri</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px">Bir işi alırsan üzerinde çalışmaya başlarsın. İşi bitirirken tamamen mi bitti yoksa devamı mı var, orada seçersin.</div>
+        ${myAtolyeler.map(a=>{
+          const list = tadilatBekleyenler(a);
+          return `<div style="font-size:12.5px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">${a==='tadilat'?'🔧 Tadilat Atölye':'🏭 İmalat Atölye'} (${list.length})</div>
+          ${list.length===0 ? `<div style="color:var(--text-muted);padding:14px 0;font-size:12.5px">Bekleyen tadilat işi yok.</div>` : list.map(renderCard).join('')}`;
+        }).join('')}
+      </div>`;
+    }
+  } else if(view==='fason'){
     const items = entriesArray().filter(e => (e.status==='devam'||e.status==='duruş') && isFasonMachine(e.makine));
     const groups = [];
     const seenG = new Set();
@@ -2341,6 +2715,20 @@ function renderOperator(){
       }
     });
     body = `<div class="body-pad">`;
+    // Madde 3+4 ile ilgili "gölgede kalan iş" riskine karşı: tadilat sonrası ayar bekleyen
+    // işler sadece arka planda durmasın, operatör buraya her girdiğinde göze çarpsın.
+    const bekleyenAyar = mine.filter(e => e.status==='duruş' && e.duruşNedeni===TADILAT_SONRASI_REASON);
+    if(bekleyenAyar.length>0){
+      body += `<div style="background:#c084fc18;border:2px solid #c084fc;border-radius:12px;padding:14px 16px;margin-bottom:16px">
+        <div style="font-size:13.5px;font-weight:700;color:#c084fc;margin-bottom:8px">🔧 Devam Etmeyi Bekleyen ${bekleyenAyar.length} Duraklatılmış İş Var</div>
+        ${bekleyenAyar.map(e=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border-radius:8px;padding:8px 12px;margin-top:6px;cursor:pointer" onclick="openActiveDetail('${e.id}')">
+            <div><span class="mono" style="color:var(--accent);font-weight:700">${esc(e.talepNo || e.isEmriNo)}</span> <span style="font-size:11.5px;color:var(--text-muted)">${esc(e.makine)}</span></div>
+            <span style="font-size:11.5px;color:#c084fc">Tadilat sonrası ayar →</span>
+          </div>
+        `).join('')}
+      </div>`;
+    }
     if(groups.length===0) body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Henüz aktif işlem yok.<br><span style="font-size:12px">"+ Yeni Kayıt" ile bir makine başlat.</span></div>`;
     groups.forEach(g=>{
       if(g.members.length===1){
@@ -2392,6 +2780,7 @@ function renderAdmin(){
       <button class="tab-btn ${view==='matrix'?'active':''}" onclick="setView('matrix')">🏭 Makine Matrisi</button>
       <button class="tab-btn ${view==='completed'?'active':''}" onclick="setView('completed')">✓ Tamamlanan Kodlar</button>
       ${!session.isSef ? `<button class="tab-btn ${view==='analiz'?'active':''}" onclick="setView('analiz')">📊 Analiz</button>` : ''}
+      ${canCreateTadilat() ? `<button class="tab-btn ${view==='tadilatYonetim'?'active':''}" onclick="setView('tadilatYonetim')">🔧 Tadilat${tadilatBekleyenler().length>0?` (${tadilatBekleyenler().length})`:''}</button>` : ''}
     </div>`;
 
   let body = '';
@@ -2408,6 +2797,8 @@ function renderAdmin(){
         <button class="sub-tab-btn ${settingsSubTab==='cokluIsEmri'?'active':''}" onclick="setSettingsSubTab('cokluIsEmri')">Çoklu İş Emri İzni</button>
         <button class="sub-tab-btn ${settingsSubTab==='fasonMachines'?'active':''}" onclick="setSettingsSubTab('fasonMachines')">Fason Makineleri</button>
         <button class="sub-tab-btn ${settingsSubTab==='fasonYetkisi'?'active':''}" onclick="setSettingsSubTab('fasonYetkisi')">Fason Yetkisi</button>
+        <button class="sub-tab-btn ${settingsSubTab==='atolyeAyarlari'?'active':''}" onclick="setSettingsSubTab('atolyeAyarlari')">Atölye Ayarları (Makine)</button>
+        <button class="sub-tab-btn ${settingsSubTab==='personelAtolye'?'active':''}" onclick="setSettingsSubTab('personelAtolye')">Atölye Ayarları (Personel)</button>
         <button class="sub-tab-btn ${settingsSubTab==='msgAccess'?'active':''}" onclick="setSettingsSubTab('msgAccess')">Mesaj Erişimi</button>
         <button class="sub-tab-btn ${settingsSubTab==='durusReasons'?'active':''}" onclick="setSettingsSubTab('durusReasons')">Duruş Nedenleri</button>` : ''}
         <button class="sub-tab-btn ${settingsSubTab==='isEmriListesi'?'active':''}" onclick="setSettingsSubTab('isEmriListesi')">İş Emri Listesi</button>
@@ -2493,6 +2884,41 @@ function renderAdmin(){
             </label>
           `).join('')}
         </div>`;
+    } else if(settingsSubTab==='atolyeAyarlari'){
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Atölye Ayarları</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Her makineyi "İmalat Atölye" ya da "Tadilat Atölye"ye ata. Bu ayrım, tadilat taleplerinin doğru listeye düşmesi için kullanılıyor — İmalat ve Tadilat atölyesinin bekleyen tadilat listeleri artık birbirine karışmıyor. Belirtilmemiş makineler varsayılan olarak İmalat Atölye sayılır.</div>
+        <div class="op-settings-table">
+          ${allMachines().map(m=>`
+            <div class="op-settings-row">
+              <div class="op-settings-id">${esc(m.code)}</div>
+              <div class="op-settings-name">${esc(m.name)}</div>
+              <select onchange="setMachineAtolye('${m.code}', this.value)" style="width:170px">
+                <option value="imalat" ${machineAtolyeOf(m.code)==='imalat'?'selected':''}>🏭 İmalat Atölye</option>
+                <option value="tadilat" ${machineAtolyeOf(m.code)==='tadilat'?'selected':''}>🔧 Tadilat Atölye</option>
+              </select>
+            </div>
+          `).join('')}
+        </div>`;
+    } else if(settingsSubTab==='personelAtolye'){
+      const allOpsForAtolye = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Atölye Ayarları (Personel)</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Her kullanıcıyı (operatör, şef, yönetici) İmalat ve/veya Tadilat Atölye personeli olarak işaretle — ikisi de işaretlenebilir. Tadilat sekmesinde/Talepler ekranında SADECE işaretli atölye(ler)in talepleri görünür; talep açma formundaki atölye seçeneği de buna göre sınırlanır. Hiçbiri işaretli değilse varsayılan İmalat Atölye sayılır.</div>
+        <div class="op-settings-table">
+          ${allOpsForAtolye.map(([code,v])=>{
+            const atolyeler = getUserAtolyeler(code);
+            return `
+            <div class="op-settings-row" style="flex-wrap:wrap">
+              <div class="op-settings-id">${esc(code)}</div>
+              <div class="op-settings-name">${esc(v.displayName)}${v.isSef?' · <span style="color:#38bdf8;font-size:11px">Şef</span>':v.isAdmin?' · <span style="color:var(--accent);font-size:11px">Yönetici</span>':''}</div>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin-right:14px">
+                <input type="checkbox" style="width:auto" ${atolyeler.includes('imalat')?'checked':''} onchange="toggleUserAtolye('${code}','imalat')"> 🏭 İmalat Atölye
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${atolyeler.includes('tadilat')?'checked':''} onchange="toggleUserAtolye('${code}','tadilat')"> 🔧 Tadilat Atölye
+              </label>
+            </div>`;
+          }).join('')}
+        </div>`;
     } else if(settingsSubTab==='msgAccess'){
       const allUsers = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Mesaj Erişimi</div>
@@ -2536,6 +2962,9 @@ function renderAdmin(){
               </label>
               <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
                 <input type="checkbox" style="width:auto" ${v.permReportDelete?'checked':''} onchange="toggleUserPerm('${code}','permReportDelete')"> Rapor: Silebilir
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
+                <input type="checkbox" style="width:auto" ${v.permTadilatOlustur===true || (v.permTadilatOlustur!==false && v.isSef)?'checked':''} onchange="toggleTadilatYetkisi('${code}')"> Tadilat Oluşturabilir${v.isSef?' (Şef için varsayılan açık)':''}
               </label>` : ''}
               ${code===session.username ? `<span style="font-size:11.5px;color:var(--text-muted)">(bu hesap — silinemez)</span>` : `<button class="del-btn" onclick="deleteOperator('${code}')" title="Sil">🗑</button>`}
             </div>
@@ -2677,6 +3106,7 @@ function renderAdmin(){
     };
     const statusPriority = (code) => {
       const label = resolveMachineLabel(code);
+      if(tadilatAktifOnMachine(label)) return -1;
       const machineEntries = entries.filter(e=>e.makine===label);
       if(machineEntries.some(e=>e.status==='devam')) return 0;
       if(machineEntries.some(e=>e.status==='duruş')) return 1;
@@ -2698,6 +3128,7 @@ function renderAdmin(){
         <span><span class="legend-dot" style="background:var(--success)"></span>Çalışıyor</span>
         <span><span class="legend-dot" style="background:var(--warn)"></span>Duruşta</span>
         <span><span class="legend-dot" style="background:var(--danger)"></span>Boşta</span>
+        <span><span class="legend-dot" style="background:#c084fc"></span>Tadilat Yapıyor</span>
         <span style="margin-left:auto;display:flex;gap:8px">
           <button class="chip ${matrixSort==='alpha'?'active':''}" onclick="setMatrixSort('alpha')">Alfabetik</button>
           <button class="chip ${matrixSort==='calisma'?'active':''}" onclick="setMatrixSort('calisma')">Çalışma Süresine Göre</button>
@@ -2707,28 +3138,33 @@ function renderAdmin(){
       <div class="matrix-grid">`;
     sortedMachines.forEach(m=>{
       const label = `${m.code} · ${m.name}`;
+      const tadilatHere = tadilatAktifOnMachine(label);
       const machineEntries = entries.filter(e=>e.makine===label);
       const runningEntries = machineEntries.filter(e=>e.status==='devam');
       const stoppedEntries = machineEntries.filter(e=>e.status==='duruş');
-      const running = runningEntries.length>0;
-      const stopped = !running && stoppedEntries.length>0;
-      const bg = theme==='light'
+      const running = !tadilatHere && runningEntries.length>0;
+      const stopped = !tadilatHere && !running && stoppedEntries.length>0;
+      const bg = tadilatHere ? (theme==='light'?'#f3e8ff':'#3b2a5c') : theme==='light'
         ? (running?'#d1fae5':stopped?'#fef3c7':'#fee2e2')
         : (running?'#1a4d2e':stopped?'#4a3f0a':'#3d1f1f');
-      const border = running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
-      const dotColor = running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
-      const lastFinished = (!running&&!stopped) ? machineEntries.slice().sort((a,b)=>b.startTs-a.startTs)[0] : null;
+      const border = tadilatHere ? '#c084fc' : running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
+      const dotColor = tadilatHere ? '#c084fc' : running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
+      const lastFinished = (!running&&!stopped&&!tadilatHere) ? machineEntries.slice().sort((a,b)=>b.startTs-a.startTs)[0] : null;
       body += `<div class="matrix-card" style="background:${bg};border-color:${border}" onclick="openMachineDetail('${m.code}')">
         <div class="matrix-card-top"><span class="matrix-code">${m.code}</span><span class="matrix-dot" style="background:${dotColor}"></span></div>
         <div class="matrix-name">${esc(m.name)}</div>`;
-      if(running){
+      if(tadilatHere){
+        const { tadilat: tt, operasyon: top } = tadilatHere;
+        body += `<div class="matrix-sub" style="color:#c084fc;font-weight:700">🔧 ${esc(tt.uKodu)}</div>
+          <div class="matrix-sub">${esc(top.operatorUsername)} · ${fmtElapsed(nowTick-top.baslamaTs)}</div>`;
+      } else if(running){
         if(runningEntries.length===1){
           const info = runningEntries[0];
           body += `<div class="matrix-sub">${esc(info.talepNo || info.isEmriNo)} · ${esc(info.operatorUsername)}</div>
             <div class="matrix-sub">${fmtElapsed(nowTick-info.startTs)} çalışıyor</div>`;
         } else {
           body += `<div class="matrix-sub" style="font-weight:700">${runningEntries.length} İş Emri Aktif</div>
-            <div class="matrix-sub">${runningEntries.map(e=>`${esc(e.talepNo || e.isEmriNo)} (${fmtElapsed(nowTick-e.startTs)})`).join(', ')}</div>`;
+            <div class="matrix-sub" style="opacity:.7">Detay için tıkla</div>`;
         }
       } else if(stopped){
         if(stoppedEntries.length===1){
@@ -2737,7 +3173,7 @@ function renderAdmin(){
             <div class="matrix-sub">Duruş: "${esc(info.duruşNedeni)}"</div>`;
         } else {
           body += `<div class="matrix-sub" style="font-weight:700">${stoppedEntries.length} İş Duraklatıldı</div>
-            <div class="matrix-sub">${stoppedEntries.map(e=>esc(e.talepNo || e.isEmriNo)).join(', ')}</div>`;
+            <div class="matrix-sub" style="opacity:.7">Detay için tıkla</div>`;
         }
       } else if(lastFinished){
         body += `<div class="matrix-sub">Son: ${esc(lastFinished.operatorUsername)} · ${fmtDT(lastFinished.startTs)}</div>`;
@@ -2821,7 +3257,7 @@ function renderAdmin(){
     }
     body += `</div>`;
   } else if(view==='analiz'){
-    const data = computeAnalizData(analizFrom, analizTo);
+    const data = computeAnalizData(analizFrom, analizTo, analizAtolyeFilter);
     const t = data.totals;
     const durusReasonTotals = {};
     data.perMachine.forEach(m=>m.entries.forEach(e=>{
@@ -2838,7 +3274,7 @@ function renderAdmin(){
     const adetTotal = adetSource.reduce((sum,m)=>sum + m.entries.reduce((s,e)=>s+(Number(e.adet)||0),0), 0);
 
     body = `<div class="analiz-wrap">
-      <div class="filter-bar" style="border-bottom:none;padding-left:0;padding-right:0;flex-wrap:wrap">
+      <div class="filter-bar" style="border-bottom:none;padding-left:0;padding-right:0;flex-wrap:wrap;align-items:center">
         <label style="font-size:11.5px;color:var(--text-muted)">Başlangıç</label>
         <input type="date" class="filter-input" value="${esc(analizFrom)}" onchange="setAnalizFrom(this.value)">
         <label style="font-size:11.5px;color:var(--text-muted)">Bitiş</label>
@@ -2847,8 +3283,13 @@ function renderAdmin(){
         <button class="chip" onclick="setAnalizPreset(7)">Son 7 Gün</button>
         <button class="chip" onclick="setAnalizPreset(30)">Son 30 Gün</button>
         <button class="chip" onclick="setAnalizPreset(90)">Son 3 Ay</button>
+        <div style="display:flex;gap:24px;margin-left:auto">
+          <button class="chip ${analizAtolyeFilter==='tumu'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:22px" onclick="setAnalizAtolyeFilter('tumu')">Tüm Makineler</button>
+          <button class="chip ${analizAtolyeFilter==='imalat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:22px" onclick="setAnalizAtolyeFilter('imalat')">🏭 İmalat Atölye</button>
+          <button class="chip ${analizAtolyeFilter==='tadilat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:22px" onclick="setAnalizAtolyeFilter('tadilat')">🔧 Tadilat Atölye</button>
+        </div>
       </div>
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Standart mesai: kullanılan her gün için 540 dk (08:00 ~17:30) · 17:30'dan sonrası fazla mesai sayılır</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Standart mesai: kullanılan her gün için 540 dk (08:00 ~17:30) · 17:30'dan sonrası fazla mesai sayılır</div>
       <div class="sub-tabs">
         <button class="sub-tab-btn ${analizSubTab==='genel'?'active':''}" onclick="setAnalizSubTab('genel')">Genel Analiz</button>
         <button class="sub-tab-btn ${analizSubTab==='makine'?'active':''}" onclick="setAnalizSubTab('makine')">Makine Bazlı Analiz</button>
@@ -2900,7 +3341,7 @@ function renderAdmin(){
             </span>
           </div>
           <div class="analiz-mini-matrix">
-            ${allMachines().slice().sort((a,b)=>{
+            ${allMachines().filter(m=>analizAtolyeFilter==='tumu' || machineAtolyeOf(m.code)===analizAtolyeFilter).slice().sort((a,b)=>{
               const statusOf = (code) => {
                 const running = liveEntries.some(e=>e.makine===resolveMachineLabel(code) && e.status==='devam');
                 if(running) return 0;
@@ -3017,6 +3458,145 @@ function renderAdmin(){
       </tbody></table></div>`}
       </div>`;
     }
+  } else if(view==='tadilatYonetim'){
+    const renderBekleyenCard = (t) => {
+      const expanded = tadilatExpandedIds.has(t.id);
+      const gecmis = tadilatOperasyonlarArray(t).filter(o=>o.status==='tamamlandi');
+      return `<div class="completed-card" style="cursor:pointer" onclick="toggleTadilatExpand('${t.id}')">
+        <div class="completed-header">
+          <span class="completed-id mono" style="color:var(--warn)">⏳ ${esc(t.uKodu)}</span>
+          <span class="completed-meta">${expanded?'▲':'▼'}</span>
+        </div>
+        ${expanded ? `
+          <div style="font-size:12.5px;color:var(--text-muted);margin:8px 0 4px">${fmtDT(t.olusturmaTs)} · ${esc(t.olusturanName)}</div>
+          <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:6px">${t.talepEdenKisi?`Talep eden: ${esc(t.talepEdenKisi)} · `:''}${t.bolum?`Bölüm: ${esc(t.bolum)} · `:''}${t.adet?`Adet: ${esc(t.adet)}`:''}</div>
+          <div style="font-size:13px;margin-bottom:10px">${esc(t.aciklama)}</div>
+          ${gecmis.length>0 ? `<div style="font-size:11.5px;color:var(--accent);margin-bottom:10px">🔁 ${gecmis.length} operasyon tamamlandı (${gecmis.map(o=>esc(o.operatorName)).join(', ')}), devamı bekleniyor</div>` : ''}
+          <button class="del-btn" onclick="event.stopPropagation(); deleteTadilat('${t.id}')" title="Talebi sil">🗑 Sil</button>
+        ` : ''}
+      </div>`;
+    };
+    const renderDevamCard = (t) => {
+      const op = tadilatAktifOperasyon(t);
+      return `<div class="completed-card">
+        <div class="completed-header">
+          <span class="completed-id mono">${esc(t.uKodu)}</span>
+          <span class="completed-meta" style="color:var(--accent)">${esc(op.operatorUsername)} · ${esc(op.operatorName)} · ${fmtElapsed(nowTick-op.baslamaTs)}</span>
+        </div>
+        ${op.makine ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">🏭 ${esc(op.makine)}</div>` : ''}
+      </div>`;
+    };
+    const myAtolyelerAdmin = getUserAtolyeler(session.username);
+    body = `<div class="body-pad">
+      <div style="display:flex;gap:8px;margin-bottom:20px">
+        <button class="tab-btn ${tadilatSubTab==='talepler'?'active':''}" onclick="setTadilatSubTab('talepler')">Talepler</button>
+        ${canViewTadilatAnaliz() ? `<button class="tab-btn ${tadilatSubTab==='analiz'?'active':''}" onclick="setTadilatSubTab('analiz')">📊 Analiz <span style="font-size:10.5px;opacity:.8">(SuperAdmin)</span></button>` : ''}
+      </div>`;
+    if(tadilatSubTab==='analiz' && canViewTadilatAnaliz()){
+      const A = computeTadilatAnaliz();
+      const tamamlananlar = tadilatArray().filter(t=>tadilatTamamlandiMi(t)).sort((a,b)=>{
+        const aOps=tadilatOperasyonlarArray(a), bOps=tadilatOperasyonlarArray(b);
+        return (bOps[bOps.length-1]?.bitisTs||0) - (aOps[aOps.length-1]?.bitisTs||0);
+      });
+      body += `
+      <div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Analizi</div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Tamamlanmış tüm tadilat operasyonlarının süre ve kişi bazlı kırılımı. Sadece SuperAdmin görür.</div>
+
+      <div class="admin-stats" style="margin-bottom:22px">
+        <span><b style="color:var(--accent)">${fmtDur(A.toplamMs)}</b> toplam tadilat süresi</span>
+        <span><b style="color:var(--accent)">${A.opCount}</b> tamamlanmış operasyon</span>
+        <span><b style="color:var(--success)">${fmtDur(A.byAtolye.imalat.ms)}</b> İmalat Atölye (${A.byAtolye.imalat.count} op.)</span>
+        <span><b style="color:var(--warn)">${fmtDur(A.byAtolye.tadilat.ms)}</b> Tadilat Atölye (${A.byAtolye.tadilat.count} op.)</span>
+      </div>
+
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">Kişi Bazlı Çalışma</div>
+      <div class="table-wrap" style="margin-bottom:26px"><table><thead><tr><th>Operatör</th><th>Toplam Süre</th><th>Operasyon</th><th>İmalat Atölye</th><th>Tadilat Atölye</th></tr></thead><tbody>
+        ${A.byPerson.length===0 ? `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Veri yok.</td></tr>` : A.byPerson.map(p=>`
+          <tr>
+            <td class="mono">${esc(p.username)} · ${esc(p.name)}</td>
+            <td style="color:var(--accent);font-weight:600">${fmtDur(p.ms)}</td>
+            <td style="text-align:center">${p.count}</td>
+            <td>${fmtDur(p.imalatMs)}</td>
+            <td>${fmtDur(p.tadilatMs)}</td>
+          </tr>
+        `).join('')}
+      </tbody></table></div>
+
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">Günlük Çalışma Dakikası</div>
+      <div class="table-wrap" style="margin-bottom:26px"><table><thead><tr><th>Tarih</th><th>İmalat Atölye</th><th>Tadilat Atölye</th><th>Toplam</th><th>Operasyon</th></tr></thead><tbody>
+        ${A.byDay.length===0 ? `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Veri yok.</td></tr>` : A.byDay.map(d=>`
+          <tr>
+            <td class="mono">${esc(d.gun)}</td>
+            <td>${fmtDur(d.imalatMs)}</td>
+            <td>${fmtDur(d.tadilatMs)}</td>
+            <td style="color:var(--accent);font-weight:600">${fmtDur(d.toplamMs)}</td>
+            <td style="text-align:center">${d.count}</td>
+          </tr>
+        `).join('')}
+      </tbody></table></div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:600">Tamamlanan Talepler — Detay (${tamamlananlar.length})</div>
+        ${tamamlananlar.length>0 ? `<button class="btn-primary" style="width:auto;padding:8px 16px;font-size:12.5px" onclick="exportTadilatExcel()">⬇ Excel'e Aktar</button>` : ''}
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Adet</th><th>Talep Eden</th><th>Bölüm</th><th>İşlem</th><th>Op. Sayısı</th><th>Yapanlar</th><th>Makineler</th><th>Toplam Süre</th><th>Son Bitiş</th></tr></thead><tbody>
+        ${tamamlananlar.length===0 ? `<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:16px">Henüz tamamlanan yok.</td></tr>` : tamamlananlar.map(t=>{
+          const ops = tadilatOperasyonlarArray(t);
+          const toplamMs = ops.reduce((s,o)=>s+((o.bitisTs&&o.baslamaTs)?(o.bitisTs-o.baslamaTs):0),0);
+          const yapanlar = [...new Set(ops.map(o=>o.operatorName))].join(', ');
+          const makineler = [...new Set(ops.map(o=>o.makine).filter(Boolean))].join(', ');
+          const sonBitis = ops[ops.length-1]?.bitisTs;
+          return `<tr>
+            <td>${(t.atolye||'imalat')==='tadilat'?'🔧 Tadilat':'🏭 İmalat'}</td>
+            <td class="mono" style="color:var(--accent)">${esc(t.uKodu)}</td>
+            <td>${esc(t.adet||'—')}</td>
+            <td style="font-size:12.5px">${esc(t.talepEdenKisi||'—')}</td>
+            <td>${esc(t.bolum||'—')}</td>
+            <td style="font-size:12.5px">${esc(t.aciklama)}</td>
+            <td style="text-align:center">${ops.length}</td>
+            <td style="font-size:12.5px">${esc(yapanlar||'—')}</td>
+            <td style="font-size:12.5px">${esc(makineler||'—')}</td>
+            <td>${fmtDur(toplamMs)}</td>
+            <td>${sonBitis?fmtDT(sonBitis):'—'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody></table></div>
+      </div>`;
+    } else {
+      body += `
+      <div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Talepleri</div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:900px">Operatörler bu listeden bekleyen bir talebi alıp çalışır. "Son Operasyon" işaretlenene kadar talep tekrar tekrar bekleyenlere düşebilir (çok operasyonlu tadilatlar için). Bitirdiklerinde, varsa duraklattıkları üretim işi otomatik olarak "${TADILAT_SONRASI_REASON}" duruşuna geçer.</div>
+      <div style="display:grid;grid-template-columns:380px 1fr;gap:24px;align-items:start">
+        <div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">Yeni Tadilat Talebi</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <input id="tad-ukodu" class="mono" placeholder="U kodu" style="flex:1;min-width:120px">
+            <input id="tad-adet" inputmode="numeric" placeholder="Adet" style="width:90px" oninput="this.value=this.value.replace(/\\D/g,'')">
+          </div>
+          <input id="tad-kisi" placeholder="Talep eden kişi (ad soyad)" style="margin-bottom:8px">
+          <input id="tad-bolum" placeholder="Talep eden bölüm" style="margin-bottom:8px">
+          ${myAtolyelerAdmin.length>1 ? `
+          <select id="tad-atolye" style="margin-bottom:8px" onchange="tadilatFormAtolyeSet(this.value)">
+            ${myAtolyelerAdmin.includes('imalat') ? `<option value="imalat" ${tadilatFormAtolyeGet()==='imalat'?'selected':''}>🏭 İmalat Atölye</option>` : ''}
+            ${myAtolyelerAdmin.includes('tadilat') ? `<option value="tadilat" ${tadilatFormAtolyeGet()==='tadilat'?'selected':''}>🔧 Tadilat Atölye</option>` : ''}
+          </select>` : `
+          <input type="hidden" id="tad-atolye" value="${myAtolyelerAdmin[0]}">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Atölye: ${myAtolyelerAdmin[0]==='tadilat'?'🔧 Tadilat Atölye':'🏭 İmalat Atölye'} <span style="opacity:.7">(tek atölyene açılıyor)</span></div>`}
+          <textarea id="tad-aciklama" placeholder="Ne işlem yapılacak?" style="min-height:70px;margin-bottom:8px"></textarea>
+          <button class="btn-primary" style="width:100%" onclick="addTadilat()">+ Talep Oluştur</button>
+        </div>
+        <div style="max-height:calc(100vh - 300px);overflow-y:auto;padding-right:4px">
+          ${myAtolyelerAdmin.map(a=>{
+            const list = tadilatBekleyenler(a);
+            return `<div style="font-size:13px;font-weight:600;margin-bottom:8px">${a==='tadilat'?'🔧 Tadilat Atölye':'🏭 İmalat Atölye'} — Bekleyen (${list.length})</div>
+            <div style="margin-bottom:20px">
+              ${list.length===0 ? `<div style="font-size:12.5px;color:var(--text-muted)">Bekleyen talep yok.</div>` : list.map(renderBekleyenCard).join('')}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+    body += `</div>`;
   } else {
     const entries = entriesArray();
     const statOperator = new Set(entries.map(e=>e.operatorUsername)).size;
@@ -3144,12 +3724,28 @@ function render(){
   if(session && session.isAdmin && view==='analiz'){ initAnalizCharts(computeAnalizData(analizFrom, analizTo)); }
 }
 let analizTickCounter = 0;
+// Firebase'den arka planda gelen HERHANGİ bir güncelleme (başka bir kullanıcının işlemi bile
+// olsa) tüm ekranı yeniden çiziyordu — bu da o an açık olan bir <select>/<input> dropdown'ını ya
+// da yazılmakta olan bir form alanını anında kapatıp sıfırlıyordu. Kullanıcı bir alanla aktif
+// olarak uğraşırken (odaklanmış input/select/textarea varsa, ya da bilinen "düzenleme" durumları
+// açıksa) otomatik render'ları erteliyoruz; odak/etkileşim bitince bir sonraki tetiklemede
+// (periyodik tik ya da yeni bir Firebase güncellemesi) ekran zaten güncel hale gelir.
+function isUserInteracting(){
+  if(editingActiveId) return true;
+  if(durusOpen && durusReasonSel==='Diğer') return true;
+  if(sendMsgOpen) return true;
+  if(tadilatMakineSecimId) return true;
+  const ae = document.activeElement;
+  if(ae && ['INPUT','TEXTAREA','SELECT'].includes(ae.tagName)) return true;
+  return false;
+}
+function safeRender(){ if(!isUserInteracting()) render(); }
 function renderLiveBits(){
   // Sadece kilit ekranındaki / matristeki canlı sayaçları güncellemek için tam render yeterli (veri seti küçük).
-  // Ama bir form açıkken (düzenleme, duruş nedeni yazma, serbest mesaj) tam render odağı (focus) kaybettiriyor — o an atla.
-  const editingSomething = !!editingActiveId || (durusOpen && durusReasonSel==='Diğer') || sendMsgOpen;
-  if(editingSomething) return;
-  if(activeDetailId || activeGroupId || (session && !session.isAdmin && view==='list') || (session && session.isAdmin && view==='matrix')){ render(); return; }
+  // Ama bir form açıkken (düzenleme, duruş nedeni yazma, serbest mesaj, aktif input/select) tam render
+  // odağı (focus) kaybettiriyor / açık dropdown'ı kapatıyor — o an atla.
+  if(isUserInteracting()) return;
+  if(activeDetailId || activeGroupId || (session && !session.isAdmin && (view==='list' || view==='tadilat')) || (session && session.isAdmin && view==='matrix')){ render(); return; }
   // Analiz'deki sayılar artık duraklamış işler için canlı hesaplanıyor, ama grafikleri (Chart.js)
   // her saniye yeniden çizmek titremeye sebep olur — o yüzden burayı daha seyrek (15 sn) yeniliyoruz.
   if(session && session.isAdmin && view==='analiz'){
