@@ -495,6 +495,7 @@ function updateStockItemField(id, field, val){
 }
 function deleteStockItem(id){
   if(!canManageStock()) return;
+  if(!confirm('Bu malzeme stok kalemini silmek istediğinize emin misiniz?')) return;
   DB.ref('stockItems/'+id).remove();
 }
 function addStockLot(itemId){
@@ -513,6 +514,7 @@ function updateStockLot(itemId, lotId, val){
 }
 function deleteStockLot(itemId, lotId){
   if(!canManageStock()) return;
+  if(!confirm('Bu çubuğu/lotu silmek istediğinize emin misiniz?')) return;
   DB.ref(`stockItems/${itemId}/lots/${lotId}`).remove();
 }
 /* ===================== TADİLAT (REWORK) MODÜLÜ =====================
@@ -572,7 +574,14 @@ function toggleTadilatExpand(id){
   if(tadilatExpandedIds.has(id)) tadilatExpandedIds.delete(id); else tadilatExpandedIds.add(id);
   render();
 }
-function tadilatArray(){ return Object.entries(tadilatlar).map(([id,v])=>({id, ...v})); }
+let _tadilatArrayCache = null, _tadilatArrayCacheSrc = null;
+function tadilatArray(){
+  if(_tadilatArrayCacheSrc !== tadilatlar){
+    _tadilatArrayCache = Object.entries(tadilatlar).map(([id,v])=>({id, ...v}));
+    _tadilatArrayCacheSrc = tadilatlar;
+  }
+  return _tadilatArrayCache;
+}
 // Eski (tek operasyonlu) kayıtlarla geriye dönük uyumluluk: operasyonlar alanı yoksa, eski
 // düz alanlardan (baslayanUsername, baslamaTs, status...) tek bir "sonOperasyon" operasyonu türetiyoruz.
 function tadilatOperasyonlarArray(t){
@@ -641,26 +650,118 @@ function tadilatFormAtolyeSet(v){ save('tadilat_form_atolye_'+(session?session.u
 function addTadilat(){
   if(!canCreateTadilat()) return;
   const uKodu = (document.getElementById('tad-ukodu')?.value||'').trim();
+  const kisaAciklama = (document.getElementById('tad-kisaaciklama')?.value||'').trim();
   const adet = (document.getElementById('tad-adet')?.value||'').trim();
-  const bolum = (document.getElementById('tad-bolum')?.value||'').trim();
+  const bolum = document.getElementById('tad-bolum')?.value || '';
+  const talepMakine = (document.getElementById('tad-makine')?.value||'').trim().toUpperCase();
   const talepEdenKisi = (document.getElementById('tad-kisi')?.value||'').trim();
   const atolye = document.getElementById('tad-atolye')?.value || 'imalat';
   const aciklama = (document.getElementById('tad-aciklama')?.value||'').trim();
   if(!uKodu){ toast('U kodu girin'); return; }
+  if(!kisaAciklama){ toast('Açıklama girin'); return; }
+  if(!adet){ toast('Adet girin'); return; }
+  if(!/^\d+$/.test(adet)){ toast('Adet sadece rakam olmalı'); return; }
+  const kisiErr = validateTalepEdenKisi(talepEdenKisi);
+  if(kisiErr){ toast(kisiErr); return; }
+  if(!bolum){ toast('Talep eden bölüm girin'); return; }
+  const makineErr = validateTalepMakine(bolum, talepMakine);
+  if(makineErr){ toast(makineErr); return; }
   if(!aciklama){ toast('Ne işlem yapılacağını girin'); return; }
   tadilatFormAtolyeSet(atolye);
   const id = uid();
   DB.ref('tadilatlar/'+id).set({
-    uKodu, adet, bolum, talepEdenKisi, atolye, aciklama,
+    uKodu, kisaAciklama, adet, bolum, talepMakine, talepEdenKisi: canonicalTalepEdenKisi(talepEdenKisi), atolye, aciklama,
     olusturanUsername: session.username, olusturanName: session.displayName, olusturmaTs: Date.now()
   }).then(()=>{
     toast('Tadilat talebi oluşturuldu');
-    ['tad-ukodu','tad-adet','tad-bolum','tad-kisi','tad-aciklama'].forEach(fid=>{ const el=document.getElementById(fid); if(el) el.value=''; });
+    newTadilatForm = { uKodu:'', kisaAciklama:'', bolum:'', aciklamaManual:false };
+    ['tad-ukodu','tad-kisaaciklama','tad-adet','tad-bolum','tad-makine','tad-kisi','tad-aciklama'].forEach(fid=>{ const el=document.getElementById(fid); if(el) el.value=''; });
   });
 }
 function deleteTadilat(id){
-  if(!canCreateTadilat()) return;
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
+  if(!confirm('Bu tadilat talebini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.')) return;
   DB.ref('tadilatlar/'+id).remove();
+}
+// Rapor ekranındaki "Düzelt" ile aynı mantık: tadilat talebinin temel bilgilerini (kod, açıklama,
+// adet, bölüm, makine, kişi, atölye) düzeltebilmek için — yöneticiler (canCreateTadilat) kullanır.
+let tadilatEditId = null;
+let tadilatEditForm = null;
+function openTadilatEdit(id){
+  if(!canCreateTadilat()) return;
+  const t = tadilatlar[id]; if(!t) return;
+  tadilatEditId = id;
+  tadilatEditForm = { uKodu:t.uKodu||'', kisaAciklama:t.kisaAciklama||'', adet:t.adet||'', bolum:t.bolum||'', talepMakine:t.talepMakine||'', talepEdenKisi:t.talepEdenKisi||'', atolye:t.atolye||'imalat', aciklama:t.aciklama||'', aciklamaManual:false };
+  render();
+}
+function cancelTadilatEdit(){ tadilatEditId = null; tadilatEditForm = null; render(); }
+function saveTadilatEdit(id){
+  if(!canCreateTadilat()) return;
+  const uKodu = (document.getElementById('tedit-ukodu')?.value||'').trim();
+  const kisaAciklama = (document.getElementById('tedit-kisaaciklama')?.value||'').trim();
+  const adet = (document.getElementById('tedit-adet')?.value||'').trim();
+  const bolum = document.getElementById('tedit-bolum')?.value || '';
+  const talepMakine = (document.getElementById('tedit-makine')?.value||'').trim().toUpperCase();
+  const talepEdenKisi = (document.getElementById('tedit-kisi')?.value||'').trim();
+  const t0 = tadilatlar[id] || {};
+  const atolye = session.isSuperAdmin ? (document.getElementById('tedit-atolye')?.value || 'imalat') : (t0.atolye || 'imalat');
+  const aciklama = (document.getElementById('tedit-aciklama')?.value||'').trim();
+  if(!uKodu){ toast('U kodu boş olamaz'); return; }
+  if(!kisaAciklama){ toast('Açıklama boş olamaz'); return; }
+  if(!adet){ toast('Adet boş olamaz'); return; }
+  if(!/^\d+$/.test(adet)){ toast('Adet sadece rakam olmalı'); return; }
+  const kisiErr2 = validateTalepEdenKisi(talepEdenKisi);
+  if(kisiErr2){ toast(kisiErr2); return; }
+  if(!bolum){ toast('Talep eden bölüm boş olamaz'); return; }
+  const makineErr = validateTalepMakine(bolum, talepMakine);
+  if(makineErr){ toast(makineErr); return; }
+  if(!aciklama){ toast('Ne işlem yapılacağı boş olamaz'); return; }
+  DB.ref('tadilatlar/'+id).update({ uKodu, kisaAciklama, adet, bolum, talepMakine, talepEdenKisi: canonicalTalepEdenKisi(talepEdenKisi), atolye, aciklama }).then(()=>{
+    toast('Tadilat talebi güncellendi');
+    cancelTadilatEdit();
+  });
+}
+function renderTadilatEditModal(){
+  const t = tadilatlar[tadilatEditId];
+  if(!t || !tadilatEditForm){ tadilatEditId=null; return ''; }
+  const f = tadilatEditForm;
+  return `<div class="modal-overlay" onclick="if(event.target===this) cancelTadilatEdit()">
+    <div class="modal-box" style="max-width:460px">
+      <div class="modal-header">
+        <div><div class="modal-title" style="font-size:18px">Tadilat Talebini Düzelt</div><div class="modal-sub">${fmtDT(t.olusturmaTs)} · ${esc(t.olusturanName)}</div></div>
+        <button class="icon-btn" onclick="cancelTadilatEdit()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <div class="field" style="flex:1.3;margin-bottom:0"><label>U kodu</label><input id="tedit-ukodu" class="mono" value="${esc(f.uKodu)}" oninput="tadilatEditForm.uKodu=this.value" onblur="tadUkoduBlur('edit')"></div>
+          <button type="button" class="btn-ghost" style="padding:10px 14px" title="Malzeme Ara" onclick="openMalzemeArama('edit')">🔍</button>
+          <div class="field" style="flex:1;margin-bottom:0"><label>Adet</label><input id="tedit-adet" inputmode="numeric" value="${esc(f.adet)}" oninput="this.value=this.value.replace(/\\D/g,'')"></div>
+        </div>
+        <div class="field" style="margin-top:14px"><label>Açıklama</label><input id="tedit-kisaaciklama" value="${esc(f.kisaAciklama)}" oninput="tadilatEditForm.kisaAciklama=this.value; tadilatEditForm.aciklamaManual=true"></div>
+        <div style="display:flex;gap:8px">
+          <div class="field" style="flex:1"><label>Talep eden bölüm</label><input id="tedit-bolum" list="tadilat-bolum-options" value="${esc(f.bolum)}" oninput="tadilatEditForm.bolum=this.value" onblur="render()"></div>
+          <div class="field" style="flex:1"><label>Talep edilen makine</label><input id="tedit-makine" list="tadilat-makine-options-edit" value="${esc(f.talepMakine)}"></div>
+        </div>
+        <datalist id="tadilat-bolum-options">${tadilatBolumOptions().map(b=>`<option value="${b}">`).join('')}</datalist>
+        <datalist id="tadilat-makine-options-edit">${isMerkezleriFor(f.bolum).map(k=>`<option value="${esc(k)}">`).join('')}</datalist>
+        <div class="field"><label>Talep eden kişi (ad soyad)</label><input id="tedit-kisi" list="uretim-personeli-options-edit" value="${esc(f.talepEdenKisi)}"></div>
+        <datalist id="uretim-personeli-options-edit">${uretimPersoneliFor(f.bolum).map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+
+        ${session.isSuperAdmin ? `
+        <div class="field"><label>Atölye</label><select id="tedit-atolye">
+          <option value="imalat" ${f.atolye==='imalat'?'selected':''}>🏭 İmalat Atölye</option>
+          <option value="tadilat" ${f.atolye==='tadilat'?'selected':''}>🔧 Tadilat Atölye</option>
+        </select></div>` : `
+        <input type="hidden" id="tedit-atolye" value="${esc(f.atolye)}">
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px">Atölye: ${f.atolye==='tadilat'?'🔧 Tadilat Atölye':'🏭 İmalat Atölye'}</div>`}
+        <div class="field"><label>Ne işlem yapılacak?</label><textarea id="tedit-aciklama" style="min-height:80px">${esc(f.aciklama)}</textarea></div>
+        <div style="display:flex;gap:10px">
+          <button class="btn-primary" onclick="saveTadilatEdit('${t.id}')">✓ Kaydet</button>
+          <button class="btn-ghost" onclick="cancelTadilatEdit()">✕ Vazgeç</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
 }
 let tadilatMakineSecimId = null; // hangi bekleyen tadilat kartı için makine seçim kutusu açık
 function openTadilatMakineSecim(id){ tadilatMakineSecimId = id; render(); }
@@ -747,28 +848,34 @@ let activeGroupId = null; // görüntülenen çoklu iş emri grubunun id'si
 function openGroupDetail(groupId){ activeGroupId = groupId; render(); }
 function closeGroupDetail(){ activeGroupId = null; view='list'; render(); }
 let editingActiveId = null; // düzenleme modunda olan aktif işin id'si
-let editForm = { isEmriNo:'', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false };
+let editForm = { talepNo:'', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false };
 function openEditActive(id){
   const active = STATE.entries[id] || {};
   editingActiveId = id;
-  editForm = { isEmriNo: active.isEmriNo||'', malzemeCinsi: active.malzemeCinsi||'', capBoy: active.capBoy||'', adet: active.adet||'', not: active.not||'', sonOperasyon: !!active.sonOperasyon };
+  editForm = { talepNo: active.talepNo || active.isEmriNo || '', malzemeCinsi: active.malzemeCinsi||'', capBoy: active.capBoy||'', adet: active.adet||'', not: active.not||'', sonOperasyon: !!active.sonOperasyon };
   render();
 }
 function cancelEditActive(){ editingActiveId = null; render(); }
 function saveEditActive(id){
   const before = STATE.entries[id] || {};
-  const isEmriNo = (document.getElementById('edit-isemri').value||'').trim();
+  const talepNoRaw = (document.getElementById('edit-talepno').value||'').trim();
   const malzemeCinsi = (document.getElementById('edit-malzeme-cinsi').value||'').trim();
   const capBoy = (document.getElementById('edit-cap-boy').value||'').trim();
   const adet = (document.getElementById('edit-adet').value||'').trim();
   const not = (document.getElementById('edit-not').value||'').trim();
   const sonOperasyon = !!document.getElementById('edit-son-operasyon')?.checked;
-  if(!isEmriNo){ toast('İş Emri No (U kodu) boş olamaz'); return; }
+  if(!talepNoRaw){ toast('İş Talep No boş olamaz'); return; }
   if(!adet){ toast('Adet boş olamaz'); return; }
   if(!/^\d+$/.test(adet)){ toast('Adet sadece rakam olmalı'); return; }
+  if(!isEmriValid(talepNoRaw)){ toast(`"${talepNoRaw}" bulunamadı, lütfen kodunuzu kontrol edin`); return; }
 
-  const fieldLabels = { isEmriNo:'İş Emri No (U kodu)', malzemeCinsi:'Malzeme Cinsi', capBoy:'Çap ve Boy', adet:'Adet', not:'Not', sonOperasyon:'Son Operasyon' };
-  const after = { isEmriNo, malzemeCinsi, capBoy, adet, not, sonOperasyon };
+  // U kodu operatör tarafından elle girilmiyor — Talep No'dan, aynı "+ Yeni Kayıt" akışındaki gibi
+  // ERP listesinden otomatik çözülüyor. Varsa mevcut bileşen (_ZARF/_ELMAS) korunuyor.
+  const existingBilesen = bilesenOfCode(before.isEmriNo);
+  const { isEmriNo, talepNo } = resolveTrackingCode(talepNoRaw, existingBilesen);
+
+  const fieldLabels = { talepNo:'İş Talep No', malzemeCinsi:'Malzeme Cinsi', capBoy:'Çap ve Boy', adet:'Adet', not:'Not', sonOperasyon:'Son Operasyon' };
+  const after = { isEmriNo, talepNo, malzemeCinsi, capBoy, adet, not, sonOperasyon };
   const changes = [];
   Object.keys(fieldLabels).forEach(f=>{
     const oldV = f==='sonOperasyon' ? (before[f]?'Evet':'Hayır') : (before[f]||'');
@@ -1089,6 +1196,26 @@ function initFirebase(){
       STATE.validIsEmri = snap.val() || {};
       safeRender();
     });
+    DB.ref('malzemeListesi').on('value', snap=>{
+      malzemeListesi = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('isMerkezleri').on('value', snap=>{
+      isMerkezleri = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('uretimPersoneli').on('value', snap=>{
+      uretimPersoneli = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('tadilatBolumKurallari').on('value', snap=>{
+      tadilatBolumKurallari = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('adminTabPermissions').on('value', snap=>{
+      adminTabPermissions = snap.val() || {};
+      safeRender();
+    });
     DB.ref('durusReasons').on('value', snap=>{
       STATE.durusReasons = snap.val() || [];
       safeRender();
@@ -1116,7 +1243,18 @@ function seedIfNeeded(){
   if(Object.keys(STATE.operators).length>0) return;
   console.warn('Firebase "operators" düğümü boş. Ayarlar → "+ Kullanıcı Ekle" panelinden operatörleri ve bir ADMIN hesabını manuel eklemen gerekiyor.');
 }
-function entriesArray(){ return Object.entries(STATE.entries).map(([id,e])=>({id, ...e})); }
+let _entriesArrayCache = null, _entriesArrayCacheSrc = null;
+function entriesArray(){
+  // STATE.entries her Firebase güncellemesinde YENİ bir obje referansıyla değiştiriliyor (bkz.
+  // initFirebase listener'ı) — o yüzden referans karşılaştırması güvenli bir "değişti mi" testi.
+  // Bu fonksiyon tek bir render() geçişinde onlarca yerden çağrılıyor; her seferinde
+  // Object.entries+map'i tekrar tekrar yapmak yerine, veri değişmediği sürece sonucu tekrar kullanıyoruz.
+  if(_entriesArrayCacheSrc !== STATE.entries){
+    _entriesArrayCache = Object.entries(STATE.entries).map(([id,e])=>({id, ...e}));
+    _entriesArrayCacheSrc = STATE.entries;
+  }
+  return _entriesArrayCache;
+}
 
 /* ===================== KİMLİK / GİRİŞ ===================== */
 function doLogin(){
@@ -1532,6 +1670,400 @@ function toggleUserPerm(code, field){
   const newVal = field==='permReportEdit' ? (op.permReportEdit===false) : !op[field];
   DB.ref('operators/'+code+'/'+field).set(newVal);
 }
+/* ===================== MALZEME KATALOĞU / DÜRBÜN ARAMA =====================
+   SuperAdmin BAST03'ten (Canias) aldığı U kodu + Açıklama listesini Excel olarak yükler.
+   Tadilat talebi açarken/düzeltirken, U kodunu bilmeyen kullanıcı 🔍 ile bu listede Canias'taki
+   gibi %parça% joker karakterli arama yapıp doğru kodu bulup otomatik doldurabilir.
+*/
+let malzemeListesi = {}; // { "UC14000126": "M6X50-YP-ELMAS ARA KALIPKONIK", ... }
+function malzemeListesiArray(){ return Object.entries(malzemeListesi).map(([kod,aciklama])=>({kod,aciklama})); }
+// İki mod destekleniyor:
+// 1) Boşlukla ayrılmış kelimeler (varsayılan, kolay yol — % tuşuna gerek yok, klavye/tarayıcı
+//    kısayol çakışması olmasın diye): tüm kelimeler herhangi bir sırada geçsin yeter.
+// 2) % joker karakteri (Canias alışkanlığı olanlar için): sıralı, kesin eşleşme — "%A%B%" gibi.
+function malzemeLikeMatch(text, pattern){
+  if(!pattern) return true;
+  const t = String(text||'');
+  if(pattern.includes('%')){
+    const startsWithPercent = pattern.startsWith('%');
+    const endsWithPercent = pattern.endsWith('%');
+    const parts = pattern.split('%').filter(p=>p.length>0).map(p=>p.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+    if(parts.length===0) return true;
+    let re = parts.join('.*');
+    if(!startsWithPercent) re = '^'+re;
+    if(!endsWithPercent) re = re+'$';
+    try{ return new RegExp(re, 'i').test(t); }catch(e){ return t.toLowerCase().includes(pattern.toLowerCase()); }
+  }
+  const words = pattern.trim().split(/\s+/).filter(Boolean);
+  if(words.length===0) return true;
+  const lower = t.toLowerCase();
+  return words.every(w => lower.includes(w.toLowerCase()));
+}
+function canManageMalzemeListesi(){
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return false; }
+  return true;
+}
+function uploadMalzemeListesi(){
+  if(!canManageMalzemeListesi()) return;
+  const fileInput = document.getElementById('malzeme-file-input');
+  const file = fileInput?.files?.[0];
+  const statusEl = document.getElementById('malzeme-upload-status');
+  const kodColName = trNorm((document.getElementById('malzeme-kod-col')?.value||'U Kodu').trim());
+  const aciklamaColName = trNorm((document.getElementById('malzeme-aciklama-col')?.value||'Açıklama').trim());
+  if(!file){ toast('Bir dosya seçin'); return; }
+  if(statusEl) statusEl.textContent = 'Okunuyor…';
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const sheetName = wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      if(rows.length===0){ if(statusEl) statusEl.textContent='Dosya boş görünüyor.'; return; }
+      const header = rows[0].map(h=>trNorm(String(h||'').trim()));
+      let kodIdx = header.findIndex(h=>h===kodColName); if(kodIdx===-1) kodIdx = header.findIndex(h=>h.includes(kodColName));
+      let acikIdx = header.findIndex(h=>h===aciklamaColName); if(acikIdx===-1) acikIdx = header.findIndex(h=>h.includes(aciklamaColName));
+      if(kodIdx===-1){ if(statusEl) statusEl.textContent = `"${kodColName}" başlıklı sütun bulunamadı.`; return; }
+      const list = {};
+      for(let i=1;i<rows.length;i++){
+        const kod = String(rows[i][kodIdx]||'').trim().toUpperCase();
+        if(!kod) continue;
+        const aciklama = acikIdx!==-1 ? String(rows[i][acikIdx]||'').trim() : '';
+        list[kod] = aciklama;
+      }
+      const count = Object.keys(list).length;
+      if(count===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
+      DB.ref('malzemeListesi').set(list).then(()=>{
+        toast(`${count} malzeme kodu yüklendi`);
+        if(statusEl) statusEl.textContent = `${count} kayıt başarıyla yüklendi (sayfa: ${sheetName}).`;
+        fileInput.value = '';
+      });
+    } catch(err){
+      console.warn(err);
+      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx formatında olduğundan emin olun.';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function clearMalzemeListesi(){
+  if(!canManageMalzemeListesi()) return;
+  if(!confirm('Malzeme listesini tamamen silmek istediğinize emin misiniz?')) return;
+  DB.ref('malzemeListesi').remove();
+}
+/* ===================== İŞ MERKEZİ LİSTESİ (Tadilat "Talep Edilen Makine" kaynağı) =====================
+   Bu, uygulamanın kendi "allMachines()" (üretim/rota takip) makine listesinden TAMAMEN AYRI —
+   ERP'deki (Canias/BAST08) tüm iş merkezi kodlarını (V01, B10, N3 gibi) kapsıyor. Sadece kod
+   tutuyoruz, açıklama YOK (bilinçli olarak — liste çok uzun, sadece kod yeterli).
+*/
+let isMerkezleri = {}; // { "V01": true, "B10": true, ... }
+function isMerkezleriArray(){ return Object.keys(isMerkezleri).sort(); }
+function canManageIsMerkezleri(){
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return false; }
+  return true;
+}
+function uploadIsMerkezleri(){
+  if(!canManageIsMerkezleri()) return;
+  const fileInput = document.getElementById('ismerkezi-file-input');
+  const file = fileInput?.files?.[0];
+  const statusEl = document.getElementById('ismerkezi-upload-status');
+  const kodColName = trNorm((document.getElementById('ismerkezi-kod-col')?.value||'İş Merkezi').trim());
+  if(!file){ toast('Bir dosya seçin'); return; }
+  if(statusEl) statusEl.textContent = 'Okunuyor…';
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const sheetName = wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      if(rows.length===0){ if(statusEl) statusEl.textContent='Dosya boş görünüyor.'; return; }
+      const header = rows[0].map(h=>trNorm(String(h||'').trim()));
+      let kodIdx = header.findIndex(h=>h===kodColName); if(kodIdx===-1) kodIdx = header.findIndex(h=>h.includes(kodColName));
+      if(kodIdx===-1){ if(statusEl) statusEl.textContent = `"${kodColName}" başlıklı sütun bulunamadı.`; return; }
+      const list = {};
+      for(let i=1;i<rows.length;i++){
+        const kod = String(rows[i][kodIdx]||'').trim().toUpperCase();
+        if(kod) list[kod] = true;
+      }
+      const count = Object.keys(list).length;
+      if(count===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
+      DB.ref('isMerkezleri').set(list).then(()=>{
+        toast(`${count} iş merkezi kodu yüklendi`);
+        if(statusEl) statusEl.textContent = `${count} kayıt başarıyla yüklendi (sayfa: ${sheetName}).`;
+        fileInput.value = '';
+      });
+    } catch(err){
+      console.warn(err);
+      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx/.xls formatında olduğundan emin olun.';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function clearIsMerkezleri(){
+  if(!canManageIsMerkezleri()) return;
+  if(!confirm('İş merkezi listesini tamamen silmek istediğinize emin misiniz?')) return;
+  DB.ref('isMerkezleri').remove();
+}
+/* ===================== ÜRETİM PERSONELİ LİSTESİ =====================
+   İş Merkezi Listesi ile aynı mantık: SuperAdmin Excel yükler, kişi kafasına göre isim
+   yazamaz — Tadilat talebindeki "Talep eden kişi" alanı bu listeden seçilir/doğrulanır.
+   Excel'de "Görev" sütunu da varsa, oradan otomatik bir "bölüm" çıkarımı yapıyoruz (Civata/
+   Vida/Somun/Bakım/Kalite anahtar kelimesi geçiyorsa o bölüm, geçmiyorsa "Diğer") — böylece
+   "Talep eden kişi" listesi, seçilen "Talep eden bölüm"e göre otomatik daralıyor.
+*/
+let uretimPersoneli = {}; // { "Enes Çallı": { gorev:"Civata Üretim Operatörü", bolum:"Civata" }, ... }
+function uretimPersoneliArray(){ return Object.keys(uretimPersoneli).sort(); }
+function uretimPersoneliInfo(ad){
+  const v = uretimPersoneli[ad];
+  return (v && typeof v==='object') ? v : { gorev:'', bolum:'' }; // eski/boolean formatla geriye dönük uyumluluk
+}
+function deriveBolumFromGorev(gorev){
+  const g = String(gorev||'').toLocaleLowerCase('tr');
+  if(g.includes('civata')) return 'Civata';
+  if(g.includes('vida')) return 'Vida';
+  if(g.includes('somun')) return 'Somun';
+  if(g.includes('bakım') || g.includes('bakim')) return 'Bakım';
+  if(g.includes('kalite')) return 'Kalite';
+  return 'Diğer';
+}
+// Seçilen "Talep eden bölüm"e göre kişi listesini daraltır. Eşleşme yoksa (bölüm boş, bilinmeyen
+// bir isim, ya da o bölümde kayıtlı kimse yoksa) TÜM listeyi döner — boş bırakmak yerine.
+function uretimPersoneliFor(bolum){
+  const all = uretimPersoneliArray();
+  const b = String(bolum||'').trim().toLocaleLowerCase('tr');
+  if(!b) return all;
+  const filtered = all.filter(ad => uretimPersoneliInfo(ad).bolum.toLocaleLowerCase('tr')===b);
+  return filtered.length>0 ? filtered : all;
+}
+function canManageUretimPersoneli(){
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return false; }
+  return true;
+}
+function uploadUretimPersoneli(){
+  if(!canManageUretimPersoneli()) return;
+  const fileInput = document.getElementById('personel-file-input');
+  const file = fileInput?.files?.[0];
+  const statusEl = document.getElementById('personel-upload-status');
+  const adColName = trNorm((document.getElementById('personel-ad-col')?.value||'Görünen Ad').trim());
+  const gorevColName = trNorm((document.getElementById('personel-gorev-col')?.value||'Görev').trim());
+  if(!file){ toast('Bir dosya seçin'); return; }
+  if(statusEl) statusEl.textContent = 'Okunuyor…';
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const sheetName = wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      if(rows.length===0){ if(statusEl) statusEl.textContent='Dosya boş görünüyor.'; return; }
+      const header = rows[0].map(h=>trNorm(String(h||'').trim()));
+      let adIdx = header.findIndex(h=>h===adColName); if(adIdx===-1) adIdx = header.findIndex(h=>h.includes(adColName));
+      if(adIdx===-1){ if(statusEl) statusEl.textContent = `"${adColName}" başlıklı sütun bulunamadı.`; return; }
+      let gorevIdx = header.findIndex(h=>h===gorevColName); if(gorevIdx===-1) gorevIdx = header.findIndex(h=>h.includes(gorevColName));
+      const list = {};
+      for(let i=1;i<rows.length;i++){
+        const ad = String(rows[i][adIdx]||'').trim();
+        if(!ad) continue;
+        const gorev = gorevIdx!==-1 ? String(rows[i][gorevIdx]||'').trim() : '';
+        list[ad] = { gorev, bolum: deriveBolumFromGorev(gorev) };
+      }
+      const count = Object.keys(list).length;
+      if(count===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
+      DB.ref('uretimPersoneli').set(list).then(()=>{
+        toast(`${count} personel yüklendi`);
+        if(statusEl) statusEl.textContent = `${count} kayıt başarıyla yüklendi (sayfa: ${sheetName})${gorevIdx!==-1?' · bölüm otomatik çıkarıldı':''}.`;
+        fileInput.value = '';
+      });
+    } catch(err){
+      console.warn(err);
+      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx/.xls formatında olduğundan emin olun.';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function clearUretimPersoneli(){
+  if(!canManageUretimPersoneli()) return;
+  if(!confirm('Üretim personeli listesini tamamen silmek istediğinize emin misiniz?')) return;
+  DB.ref('uretimPersoneli').remove();
+}
+// Liste yüklüyse, girilen ismin listede birebir (büyük/küçük harf duyarsız) olmasını zorunlu kılar.
+// Liste boşsa (hiç yüklenmemişse) serbest yazıma izin verir.
+function validateTalepEdenKisi(name){
+  const n = String(name||'').trim();
+  if(!n) return 'Talep eden kişi (ad soyad) zorunlu';
+  if(uretimPersoneliArray().length>0){
+    const found = uretimPersoneliArray().some(p=>p.toLocaleLowerCase('tr')===n.toLocaleLowerCase('tr'));
+    if(!found) return `"${n}" üretim personeli listesinde bulunamadı — listeden seçin`;
+  }
+  return null;
+}
+// Kullanıcı listedeki bir ismi farklı büyük/küçük harfle yazmış olsa bile, kaydı hep listedeki
+// orijinal yazımla saklıyoruz — tutarlılık için.
+function canonicalTalepEdenKisi(name){
+  const n = String(name||'').trim();
+  const match = uretimPersoneliArray().find(p=>p.toLocaleLowerCase('tr')===n.toLocaleLowerCase('tr'));
+  return match || n;
+}
+// Tadilat talebindeki "Bölüm" seçimine göre hangi iş merkezi kodları seçilebilir:
+// Varsayılan kurallar — Ayarlar'dan hiç dokunulmamışsa bu değerler geçerli olur. SuperAdmin
+// Ayarlar'dan bunları değiştirebilir/yenilerini ekleyebilir; Firebase'deki override'lar bunların
+// ÜZERİNE eklenir (merge), yani sadece bir bölümü özelleştirmek diğerlerini silmez.
+const DEFAULT_BOLUM_KURALLARI = {
+  'Bakım':  { mode:'all' },
+  'Civata': { mode:'include', prefixes:['B'] },
+  'Vida':   { mode:'include', prefixes:['V'] },
+  'Somun':  { mode:'include', prefixes:['N'] },
+  'Kalite': { mode:'exclude', prefixes:['B','V','N'] },
+  'Diğer':  { mode:'exclude', prefixes:['B','V','N'] }
+};
+let tadilatBolumKurallari = {}; // Firebase 'tadilatBolumKurallari' — { "Civata": {mode:'include', prefixes:['B']}, ... }
+function getBolumKurallari(){ return { ...DEFAULT_BOLUM_KURALLARI, ...(tadilatBolumKurallari||{}) }; }
+/* ===================== YÖNETİCİ SEKME ERİŞİMİ =====================
+   SuperAdmin, HER yönetici/şef hesabı için AYRI AYRI, üst menüdeki ana sekmelerden (Rapor,
+   Makine Matrisi, Tamamlanan Kodlar, Analiz, Tadilat) hangilerini görebileceğini belirler —
+   global bir açma/kapama değil, kullanıcı bazında ("LV sadece şunlara erişsin" gibi).
+   SuperAdmin kendisi HER ZAMAN hepsini görür, bu ayardan etkilenmez. Bir kullanıcı için hiç
+   ayar girilmemişse varsayılan olarak TÜM sekmeler görünür sayılır (mevcut davranışı bozmamak için).
+*/
+let adminTabPermissions = {}; // { "LV": {rapor:true, matrix:false, ...}, "SEF": {...}, ... }
+const ADMIN_TAB_DEFS = [
+  { key:'rapor', label:'☰ Rapor' },
+  { key:'matrix', label:'🏭 Makine Matrisi' },
+  { key:'completed', label:'✓ Tamamlanan Kodlar' },
+  { key:'analiz', label:'📊 Analiz' },
+  { key:'tadilat', label:'🔧 Tadilat' },
+];
+function isAdminTabVisible(key){
+  if(!session) return false;
+  if(session.isSuperAdmin) return true;
+  const mine = adminTabPermissions[session.username];
+  if(!mine) return true; // bu kullanıcı için hiç ayar girilmemiş -> varsayılan hepsi görünür
+  return mine[key] !== false;
+}
+function setAdminTabPermission(username, key, val){
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
+  DB.ref(`adminTabPermissions/${username}/${key}`).set(val);
+}
+function tadilatBolumOptions(){ return Object.keys(getBolumKurallari()); }
+function canManageBolumKurallari(){
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return false; }
+  return true;
+}
+function saveBolumKural(ad, isNew){
+  if(!canManageBolumKurallari()) return;
+  const suffix = isNew ? 'yeni' : ad;
+  const adInput = isNew ? (document.getElementById('bolum-yeni-ad')?.value||'').trim() : ad;
+  const mode = document.getElementById('bolum-mode-'+suffix)?.value || 'all';
+  const prefixesRaw = (document.getElementById('bolum-prefixes-'+suffix)?.value||'').trim();
+  const prefixes = prefixesRaw.split(',').map(p=>p.trim().toUpperCase()).filter(Boolean);
+  if(!adInput){ toast('Bölüm adı girin'); return; }
+  if((mode==='include'||mode==='exclude') && prefixes.length===0){ toast('En az bir harf/önek girin (ör. B veya B,V)'); return; }
+  if(isNew && getBolumKurallari()[adInput]){ toast('Bu bölüm zaten var'); return; }
+  DB.ref('tadilatBolumKurallari/'+adInput).set({ mode, prefixes }).then(()=>{
+    toast('Bölüm kuralı kaydedildi');
+    if(isNew){ ['bolum-yeni-ad','bolum-yeni-prefixes'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; }); }
+  });
+}
+function deleteBolumKural(ad){
+  if(!canManageBolumKurallari()) return;
+  if(DEFAULT_BOLUM_KURALLARI[ad]){ toast('Varsayılan bölümler silinemez, sadece düzenlenebilir'); return; }
+  DB.ref('tadilatBolumKurallari/'+ad).remove();
+}
+function bolumMakineFilter(bolum){
+  const kurallar = getBolumKurallari();
+  const b = String(bolum||'').trim();
+  const key = Object.keys(kurallar).find(k=>k.toLocaleLowerCase('tr')===b.toLocaleLowerCase('tr'));
+  if(key) return kurallar[key];
+  return { mode:'all' }; // serbest yazılmış, tanımadığımız bir bölüm -> kısıtlama uygulanmaz
+}
+function isMerkezleriFor(bolum){
+  const filter = bolumMakineFilter(bolum);
+  const all = isMerkezleriArray();
+  if(filter.mode==='include') return all.filter(k=>(filter.prefixes||[]).some(p=>k.startsWith(p)));
+  if(filter.mode==='exclude') return all.filter(k=>!(filter.prefixes||[]).some(p=>k.startsWith(p)));
+  return all;
+}
+// Talep edilen makine kodunu, seçilen bölüme göre doğrular. Boşsa/uygun değilse hata metni döner, uygunsa null.
+function validateTalepMakine(bolum, makineRaw){
+  const makine = String(makineRaw||'').trim().toUpperCase();
+  if(!makine) return 'Talep edilen makine zorunlu';
+  const filter = bolumMakineFilter(bolum);
+  if(filter.mode==='include' && !(filter.prefixes||[]).some(p=>makine.startsWith(p))){
+    return `"${bolum}" bölümü için sadece ${(filter.prefixes||[]).join('/')} ile başlayan iş merkezleri seçilebilir`;
+  }
+  if(filter.mode==='exclude' && (filter.prefixes||[]).some(p=>makine.startsWith(p))){
+    return `"${bolum}" bölümü ${(filter.prefixes||[]).join('/')} ile başlayan iş merkezlerine erişemez`;
+  }
+  if(isMerkezleriArray().length>0 && !isMerkezleri[makine]){
+    return `"${makine}" iş merkezi listesinde bulunamadı`;
+  }
+  return null;
+}
+// Dürbün arama penceresi: 'new' = Yeni Tadilat Talebi formu, 'edit' = Tadilat Talebini Düzelt formu
+let malzemeAramaOpen = null;
+let malzemeAramaQuery = '';
+function openMalzemeArama(target){ malzemeAramaOpen = target; malzemeAramaQuery=''; render(); }
+function closeMalzemeArama(){ malzemeAramaOpen = null; render(); }
+function setMalzemeAramaQuery(v){ malzemeAramaQuery = v; render(); }
+let newTadilatForm = { uKodu:'', kisaAciklama:'', bolum:'', aciklamaManual:false }; // dürbün ile seçilen değer buraya, tad-ukodu/kisaaciklama/bolum buradan besleniyor
+function pickMalzeme(kod, aciklama){
+  if(malzemeAramaOpen==='new'){
+    newTadilatForm.uKodu = kod; newTadilatForm.kisaAciklama = aciklama; newTadilatForm.aciklamaManual = false;
+  } else if(malzemeAramaOpen==='edit' && tadilatEditForm){
+    tadilatEditForm.uKodu = kod; tadilatEditForm.kisaAciklama = aciklama; tadilatEditForm.aciklamaManual = false;
+  }
+  malzemeAramaOpen = null;
+  render();
+}
+// U kodu alanından çıkınca (blur), yüklü malzeme listesinde bu kod varsa açıklamayı otomatik
+// doldurur/GÜNCELLER. Operatör açıklamayı KENDİ ELİYLE yazmadıysa (dürbünle seçmek "elle yazmak"
+// sayılmaz), U kodu her değiştiğinde açıklama da onunla birlikte tazeleniyor — eski kodun
+// açıklaması yeni kodda kalmasın diye. Elle yazılmışsa asla üzerine yazılmaz.
+function tadUkoduBlur(target){
+  const form = target==='new' ? newTadilatForm : tadilatEditForm;
+  if(!form || form.aciklamaManual) return; // operatör kendi eliyle yazdıysa dokunma
+  const kodId = target==='new' ? 'tad-ukodu' : 'tedit-ukodu';
+  const kod = (document.getElementById(kodId)?.value||'').trim().toUpperCase();
+  const found = kod ? malzemeListesi[kod] : null;
+  form.kisaAciklama = found || ''; // eşleşme yoksa da eski (artık yanlış) açıklamayı temizle
+  render();
+}
+function renderMalzemeAramaModal(){
+  const results = malzemeAramaQuery ? malzemeListesiArray().filter(m=>malzemeLikeMatch(m.kod,malzemeAramaQuery)||malzemeLikeMatch(m.aciklama,malzemeAramaQuery)).slice(0,200) : [];
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeMalzemeArama()">
+    <div class="modal-box" style="max-width:640px">
+      <div class="modal-header">
+        <div><div class="modal-title" style="font-size:18px">🔍 Malzeme Ara</div><div class="modal-sub">${malzemeListesiArray().length} kayıtlı malzeme · Kelimeleri boşlukla ayırarak yaz (sıra önemli değil) — Canias alışkanlığın varsa %joker% da kullanabilirsin</div></div>
+        <button class="icon-btn" onclick="closeMalzemeArama()">✕</button>
+      </div>
+      <div class="modal-body">
+        <input id="malzeme-arama-input" class="mono" placeholder="ör. m6x50 ara  (ya da Canias tarzı %m6x50%ara%)" value="${esc(malzemeAramaQuery)}" oninput="setMalzemeAramaQuery(this.value)" autofocus style="margin-bottom:14px">
+        ${malzemeListesiArray().length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:30px 0">Henüz malzeme listesi yüklenmemiş. SuperAdmin, Ayarlar → Malzeme Listesi'nden Excel yükleyebilir.</div>`
+          : !malzemeAramaQuery ? `<div style="text-align:center;color:var(--text-muted);padding:30px 0">Aramaya başlamak için yukarı yaz.</div>`
+          : results.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:30px 0">Eşleşme bulunamadı.</div>`
+          : `<div style="max-height:50vh;overflow-y:auto">
+            ${results.map(m=>`
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer" onclick="pickMalzeme('${m.kod.replace(/'/g,"\\'")}', '${m.aciklama.replace(/'/g,"\\'")}')">
+                <div><span class="mono" style="color:var(--accent);font-weight:700">${esc(m.kod)}</span><div style="font-size:12.5px;color:var(--text-muted)">${esc(m.aciklama)}</div></div>
+                <span style="font-size:11.5px;color:var(--success)">Seç →</span>
+              </div>
+            `).join('')}
+            ${results.length===200 ? `<div style="font-size:11.5px;color:var(--text-muted);text-align:center;padding-top:6px">İlk 200 sonuç gösteriliyor — daha spesifik yaz.</div>` : ''}
+          </div>`}
+      </div>
+    </div>
+  </div>`;
+}
+// Excel sütun başlıklarını karşılaştırırken düz .toLowerCase() Türkçe İ/I/ı harflerinde yanılıyor
+// (İ -> "i̇" nokta işaretli, I -> "i" değil "ı" olması gerekirken farklı davranabiliyor). Bu yüzden
+// tüm sütun eşleştirmelerinde bunun yerine bu fonksiyonu kullanıyoruz — İ/I/ı/i hepsini tek bir
+// harfe indirip öyle karşılaştırıyoruz, hangi klavye/yazım alışkanlığıyla yazılmış olursa olsun eşleşsin.
+function trNorm(s){
+  return String(s||'').replace(/İ/g,'i').replace(/I/g,'i').replace(/ı/g,'i').toLowerCase();
+}
 function normalizeTalepCode(v){
   if(v==null) return '';
   let s = String(v).trim();
@@ -1544,7 +2076,7 @@ function uploadIsEmriListesi(){
   const fileInput = document.getElementById('isemri-file-input');
   const file = fileInput?.files?.[0];
   const statusEl = document.getElementById('isemri-upload-status');
-  const colName = (document.getElementById('isemri-col-name')?.value||'İş Talep No').trim().toLowerCase();
+  const colName = trNorm((document.getElementById('isemri-col-name')?.value||'İş Talep No').trim());
   if(!file){ toast('Bir dosya seçin'); return; }
   if(statusEl) statusEl.textContent = 'Okunuyor…';
   const reader = new FileReader();
@@ -1556,14 +2088,14 @@ function uploadIsEmriListesi(){
       const ws = wb.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
       if(rows.length===0){ if(statusEl) statusEl.textContent='Dosya boş görünüyor.'; return; }
-      const header = rows[0].map(h=>String(h||'').trim().toLowerCase());
+      const header = rows[0].map(h=>trNorm(String(h||'').trim()));
       let colIdx = header.findIndex(h => h===colName);
       if(colIdx===-1) colIdx = header.findIndex(h => h.includes(colName));
       if(colIdx===-1){ if(statusEl) statusEl.textContent = `"${colName}" başlıklı sütun bulunamadı (sayfa: ${sheetName}). Sütun adını kontrol edin.`; return; }
       // Malzeme kodu / Malzeme adı sütunlarını da yakalayalım ki İş Talep No girildiğinde hangi
       // malzemeye ait olduğu operatöre/şefe otomatik gösterilebilsin (iki alan birbirine bağlı çünkü).
-      const malzKoduIdx = header.findIndex(h => h.includes('malzeme kod'));
-      const malzAdiIdx = header.findIndex(h => h.includes('malzeme ad'));
+      const malzKoduIdx = header.findIndex(h => h.includes(trNorm('malzeme kod')));
+      const malzAdiIdx = header.findIndex(h => h.includes(trNorm('malzeme ad')));
       const codes = {};
       for(let i=1;i<rows.length;i++){
         const s = normalizeTalepCode(rows[i][colIdx]);
@@ -1611,6 +2143,17 @@ function removeDurusReason(i){
   const updated = list.filter((_,idx)=>idx!==i);
   DB.ref('durusReasons').set(updated);
   toast('Silindi');
+}
+function editDurusReason(i){
+  if(!requireSuperAdmin()) return;
+  const list = (STATE.durusReasons && STATE.durusReasons.length>0) ? STATE.durusReasons : DEFAULT_DURUS_REASONS;
+  const newVal = (document.getElementById('durus-edit-'+i)?.value||'').trim();
+  if(!newVal){ toast('Neden boş olamaz'); return; }
+  if(newVal===list[i]) return; // değişmemiş
+  if(list.includes(newVal)){ toast('Bu neden zaten listede'); return; }
+  const updated = list.slice(); updated[i] = newVal;
+  DB.ref('durusReasons').set(updated);
+  toast('Güncellendi');
 }
 function deleteMachine(code){
   if(!requireSuperAdmin()) return;
@@ -1859,7 +2402,9 @@ function initAnalizCharts(data){
 // sonOperasyon=true VE status='tamamlandi' olan kayıtla kapanır. Kapanan turdaki
 // tüm kayıtlar "tamamlanmış rota" sayılır; o turdan SONRA gelen yeni kayıtlar
 // otomatik olarak yepyeni, boş bir tur başlatır — eskisinden bağımsız kalır.
+let _completedRoutesCache = null, _completedRoutesCacheSrc = null;
 function computeCompletedRoutes(){
+  if(_completedRoutesCacheSrc === STATE.entries) return _completedRoutesCache;
   const byIsEmri = {};
   entriesArray().forEach(e=>{ (byIsEmri[e.isEmriNo] ||= []).push(e); });
   const routes = [];
@@ -1875,6 +2420,8 @@ function computeCompletedRoutes(){
     });
   });
   routes.sort((a,b)=> b.finishedAt - a.finishedAt); // en son tamamlanan üstte
+  _completedRoutesCache = routes;
+  _completedRoutesCacheSrc = STATE.entries;
   return routes;
 }
 // _ZARF (Çelik) ve _ELMAS (Karbür) olarak ayrı ayrı takip edilen iki yarı mamulü, aynı taban
@@ -1935,9 +2482,13 @@ function renderDurusBreakdown(entries){
     </div>
   </div>`;
 }
+let _completedRouteIdsCache = null, _completedRouteIdsCacheSrc = null;
 function computeCompletedRouteIds(){
+  if(_completedRouteIdsCacheSrc === STATE.entries) return _completedRouteIdsCache;
   const ids = new Set();
   computeCompletedRoutes().forEach(r=>r.entries.forEach(e=>ids.add(e.id)));
+  _completedRouteIdsCache = ids;
+  _completedRouteIdsCacheSrc = STATE.entries;
   return ids;
 }
 
@@ -2011,11 +2562,104 @@ function deleteModalRecord(id){
   modalSelectedIds.delete(id);
   toast('Kayıt silindi');
 }
+// Makine Matrisi detayında görünen tadilat satırları, entries değil tadilatlar/$id/operasyonlar/$opId
+// altında yaşıyor — silme isteği geldiğinde oraya gidip o TEK operasyonu siliyoruz.
+function deleteMachineModalTadilatRow(rowId){
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
+  const m = rowId.match(/^tad-(.+)-([^-]+)$/);
+  if(!m) return;
+  const [, tadilatId, opId] = m;
+  if(!confirm('Bu tadilat operasyon kaydını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.')) return;
+  DB.ref(`tadilatlar/${tadilatId}/operasyonlar/${opId}`).remove().then(()=>toast('Tadilat kaydı silindi'));
+}
+function tsToLocalInputStr(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  const pad = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+let tadilatRowEditId = null;
+let tadilatRowEditForm = null;
+function openTadilatRowEdit(rowId){
+  if(!session || !session.isSuperAdmin) return;
+  const m = rowId.match(/^tad-(.+)-([^-]+)$/);
+  if(!m) return;
+  const [, tadilatId, opId] = m;
+  const t = tadilatlar[tadilatId]; if(!t) return;
+  const op = t.operasyonlar && t.operasyonlar[opId]; if(!op) return;
+  tadilatRowEditId = rowId;
+  tadilatRowEditForm = {
+    tadilatId, opId,
+    baslangic: tsToLocalInputStr(op.baslamaTs), bitis: tsToLocalInputStr(op.bitisTs),
+    status: op.status||'devam', sonOperasyon: !!op.sonOperasyon
+  };
+  render();
+}
+function cancelTadilatRowEdit(){ tadilatRowEditId=null; tadilatRowEditForm=null; render(); }
+function saveTadilatRowEdit(){
+  if(!session || !session.isSuperAdmin || !tadilatRowEditForm) return;
+  const f = tadilatRowEditForm;
+  const baslangicStr = document.getElementById('trowedit-baslangic')?.value;
+  const bitisStr = document.getElementById('trowedit-bitis')?.value;
+  const status = document.getElementById('trowedit-status')?.value || 'devam';
+  const sonOperasyon = !!document.getElementById('trowedit-sonop')?.checked;
+  if(!baslangicStr){ toast('Başlangıç zamanı boş olamaz'); return; }
+  const baslamaTs = new Date(baslangicStr).getTime();
+  if(isNaN(baslamaTs)){ toast('Başlangıç zamanı geçersiz'); return; }
+  const patch = { status, sonOperasyon, baslamaTs };
+  if(status==='tamamlandi'){
+    const bitisTs = bitisStr ? new Date(bitisStr).getTime() : Date.now();
+    if(isNaN(bitisTs)){ toast('Bitiş zamanı geçersiz'); return; }
+    patch.bitisTs = bitisTs;
+  } else {
+    patch.bitisTs = null;
+  }
+  DB.ref(`tadilatlar/${f.tadilatId}/operasyonlar/${f.opId}`).update(patch).then(()=>{
+    toast('Tadilat operasyonu güncellendi');
+    cancelTadilatRowEdit();
+  });
+}
+function renderTadilatRowEditModal(){
+  const f = tadilatRowEditForm;
+  const t = f && tadilatlar[f.tadilatId];
+  if(!f || !t){ tadilatRowEditId=null; return ''; }
+  return `<div class="modal-overlay" onclick="if(event.target===this) cancelTadilatRowEdit()">
+    <div class="modal-box" style="max-width:420px">
+      <div class="modal-header">
+        <div><div class="modal-title" style="font-size:18px">Tadilat Operasyonunu Düzelt</div><div class="modal-sub">🔧 ${esc(t.uKodu)}</div></div>
+        <button class="icon-btn" onclick="cancelTadilatRowEdit()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field"><label>Başlangıç</label><input id="trowedit-baslangic" type="datetime-local" value="${f.baslangic}"></div>
+        <div class="field"><label>Durum</label><select id="trowedit-status" onchange="tadilatRowEditForm.status=this.value; render()">
+          <option value="devam" ${f.status==='devam'?'selected':''}>Devam Ediyor</option>
+          <option value="tamamlandi" ${f.status==='tamamlandi'?'selected':''}>Tamamlandı</option>
+        </select></div>
+        ${f.status==='tamamlandi' ? `<div class="field"><label>Bitiş</label><input id="trowedit-bitis" type="datetime-local" value="${f.bitis}"></div>` : ''}
+        <label style="display:flex;align-items:center;gap:8px;background:var(--panel-alt);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
+          <input id="trowedit-sonop" type="checkbox" ${f.sonOperasyon?'checked':''} style="width:auto">
+          <span style="font-size:13px">Son Operasyon <span style="color:var(--text-muted);font-size:11.5px">(bu adım tamamlanınca tadilat kapanır)</span></span>
+        </label>
+        <div style="display:flex;gap:10px">
+          <button class="btn-primary" onclick="saveTadilatRowEdit()">✓ Kaydet</button>
+          <button class="btn-ghost" onclick="cancelTadilatRowEdit()">✕ Vazgeç</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
 function deleteModalSelected(){
   if(!requireSuperAdmin()) return;
   if(modalSelectedIds.size===0) return;
   if(!confirm(`${modalSelectedIds.size} kaydı silmek istediğine emin misin? Bu işlem geri alınamaz.`)) return;
-  modalSelectedIds.forEach(id=> DB.ref('entries/'+id).remove());
+  modalSelectedIds.forEach(id=>{
+    if(id.startsWith('tad-')){
+      const m = id.match(/^tad-(.+)-([^-]+)$/);
+      if(m) DB.ref(`tadilatlar/${m[1]}/operasyonlar/${m[2]}`).remove();
+    } else {
+      DB.ref('entries/'+id).remove();
+    }
+  });
   toast('Seçilen kayıtlar silindi');
   modalSelectedIds = new Set();
 }
@@ -2023,17 +2667,46 @@ function machineDetailEntries(code){
   const label = resolveMachineLabel(code);
   return entriesArray().filter(e=>e.makine===label).sort((a,b)=>a.startTs-b.startTs);
 }
+// Bir makinede yapılan tadilat operasyonlarını da üretim kayıtlarıyla AYNI şekilde (tarih/süre/
+// operatör) gösterebilmek için, entry benzeri satırlara çeviriyoruz — böylece Makine Matrisi
+// detayında ikisi tek bir zaman çizelgesinde/tabloda birleşiyor.
+function machineDetailTadilatRows(code){
+  const label = resolveMachineLabel(code);
+  const out = [];
+  tadilatArray().forEach(t=>{
+    tadilatOperasyonlarArray(t).forEach(o=>{
+      if(o.makine!==label) return;
+      out.push({
+        id: 'tad-'+t.id+'-'+o.id,
+        isEmriNo: t.uKodu, talepNo: t.uKodu,
+        makine: label,
+        operatorUsername: o.operatorUsername, operatorName: o.operatorName,
+        startTs: o.baslamaTs, endTs: o.bitisTs || null,
+        status: o.status==='tamamlandi' ? 'tamamlandi' : 'devam',
+        malzemeCinsi: t.kisaAciklama || t.aciklama || '',
+        adet: t.adet || '',
+        duruşToplamMs: 0, excludedMs: 0,
+        _isTadilat: true, _sonOperasyon: !!o.sonOperasyon
+      });
+    });
+  });
+  return out;
+}
+function machineDetailAllRows(code){
+  return [...machineDetailEntries(code), ...machineDetailTadilatRows(code)].sort((a,b)=>a.startTs-b.startTs);
+}
 function exportMachineExcel(code){
   const m = allMachines().find(x=>x.code===code);
-  let rows = machineDetailEntries(code);
+  let rows = machineDetailAllRows(code);
   if(modalDateFilter) rows = rows.filter(e=>dateKey(e.startTs)===modalDateFilter);
   const data = rows.map(e=>({
-    "Tarih": dateKey(e.startTs), "İş Talep No": e.talepNo||'', "U Kodu (İş Emri No)": e.isEmriNo, "Malzeme Adı": getTalepInfo(e.talepNo)?.malzemeAdi||'', "Malzeme Cinsi": e.malzemeCinsi, "Çap ve Boy": e.capBoy, "Adet": e.adet,
+    "Tür": e._isTadilat ? '🔧 Tadilat' : 'Üretim',
+    "Tarih": dateKey(e.startTs), "İş Talep No": e._isTadilat ? '' : (e.talepNo||''), "U Kodu (İş Emri No)": e.isEmriNo, "Malzeme Adı": e._isTadilat ? '' : (getTalepInfo(e.talepNo)?.malzemeAdi||''), "Malzeme Cinsi": e.malzemeCinsi, "Çap ve Boy": e.capBoy||'', "Adet": e.adet,
     "Operatör": `${e.operatorUsername} · ${e.operatorName}`,
     "Başlangıç": fmtDT(e.startTs), "Bitiş": e.endTs?fmtDT(e.endTs):"",
     "Süre (dk)": e.endTs?Math.round((e.endTs-e.startTs)/60000):"",
-    "Durum": e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı',
-    "Duruş Nedeni": e.duruşNedeni||"", "Not": e.not,
+    "Durum": e._isTadilat ? (e.status==='tamamlandi' ? (e._sonOperasyon?'Tadilat Tamamlandı':'Operasyon Bitti (Devamı Var)') : 'Tadilat Devam Ediyor') : (e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı'),
+    "Duruş Nedeni": e.duruşNedeni||"", "Not": e.not||"",
   }));
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
@@ -2111,7 +2784,7 @@ function renderEntryDetailModal(){
 }
 function renderMachineModal(){
   const m = allMachines().find(x=>x.code===machineModal);
-  const allRows = machineDetailEntries(machineModal);
+  const allRows = machineDetailAllRows(machineModal);
 
   // Tüm günler için toplam süre/iş sayısı (zaman çizelgesi bunun üzerine kurulur)
   const byDayAll = {};
@@ -2157,7 +2830,7 @@ function renderMachineModal(){
   }
 
   return `<div class="modal-overlay" onclick="if(event.target===this) closeMachineDetail()">
-    <div class="modal-box">
+    <div class="modal-box" style="max-width:1180px">
       <div class="modal-header">
         <div><div class="modal-title">${m.code}</div><div class="modal-sub">${esc(m.name)}</div></div>
         <button class="icon-btn" onclick="closeMachineDetail()">✕</button>
@@ -2179,20 +2852,31 @@ function renderMachineModal(){
         <div style="font-size:13px;font-weight:600;margin-bottom:8px">${modalDateFilter ? modalDateFilter+' — Detay' : 'Tüm Kayıtlar — Detay (eskiden yeniye)'}</div>
         <table><thead><tr>
           ${canDeleteReport() ? `<th style="width:26px"><input type="checkbox" ${modalVisibleIds.length>0 && modalVisibleIds.every(id=>modalSelectedIds.has(id))?'checked':''} onchange="toggleModalSelectAll()"></th>` : ''}
-          <th>Tarih</th><th>İş Emri No</th><th>Malzeme</th><th>Operatör</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th>Durum</th>${canDeleteReport() ? `<th style="width:36px"></th>` : ''}
+          <th>Tarih</th><th>İş Emri No</th><th>Malzeme</th><th>Operatör</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th>Durum</th>${session.isSuperAdmin ? `<th style="width:36px"></th>` : ''}${canDeleteReport() ? `<th style="width:36px"></th>` : ''}
         </tr></thead><tbody>
-        ${rows.length===0 ? `<tr><td colspan="${canDeleteReport()?10:8}" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : rows.map(e=>{
-          const isDone = computeCompletedRouteIds().has(e.id);
+        ${(() => { const completedIdsForModal = computeCompletedRouteIds(); return rows.length===0 ? `<tr><td colspan="${8 + (canDeleteReport()?2:0) + (session.isSuperAdmin?1:0)}" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : rows.map(e=>{
+          if(e._isTadilat){
+            const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : fmtElapsed(nowTick-e.startTs)+' (sürüyor)';
+            const statusLabel = e.status==='tamamlandi' ? (e._sonOperasyon?'Tadilat Tamamlandı':'Operasyon Bitti (Devamı Var)') : 'Tadilat — Devam Ediyor';
+            return `<tr>
+              ${canDeleteReport() ? `<td><input type="checkbox" ${modalSelectedIds.has(e.id)?'checked':''} onchange="toggleModalSelect('${e.id}')"></td>` : ''}
+              <td>${dateKey(e.startTs)}</td><td class="mono" style="color:var(--tadilat-info)">🔧 ${esc(e.isEmriNo)}</td><td style="font-size:12.5px">${esc(e.malzemeCinsi||'—')}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td>${fmtDT(e.startTs)}</td><td>${e.endTs?fmtDT(e.endTs):'—'}</td><td>${dur}</td><td><span style="color:var(--tadilat-info);font-weight:600">${statusLabel}</span></td>
+              ${session.isSuperAdmin ? `<td><button class="del-btn" onclick="openTadilatRowEdit('${e.id}')" title="Düzelt">✏️</button></td>` : ''}
+              ${canDeleteReport() ? `<td>${session.isSuperAdmin ? `<button class="del-btn" onclick="deleteMachineModalTadilatRow('${e.id}')" title="Sil">🗑</button>` : ''}</td>` : ''}
+            </tr>`;
+          }
+          const isDone = completedIdsForModal.has(e.id);
           const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success-soft)';
           const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
           const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : (e.status==='devam' ? fmtElapsed(nowTick-e.startTs)+' (sürüyor)' : '—');
-          const malzAdi = getTalepInfo(e.talepNo)?.malzemeAdi || e.malzemeCinsi || '—';
+          const malzAdi = e.malzemeCinsi || getTalepInfo(e.talepNo)?.malzemeAdi || '—';
           return `<tr style="${isDone?'background:var(--success-row)':''}">
             ${canDeleteReport() ? `<td><input type="checkbox" ${modalSelectedIds.has(e.id)?'checked':''} onchange="toggleModalSelect('${e.id}')"></td>` : ''}
             <td>${dateKey(e.startTs)}</td><td class="mono" style="color:var(--accent)">${esc(e.talepNo || e.isEmriNo)} ${isDone?'✓':''}</td><td style="font-size:12.5px">${esc(malzAdi)}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td>${fmtDT(e.startTs)}</td><td>${e.endTs?fmtDT(e.endTs):'—'}</td><td>${dur}</td><td><span style="color:${statusColor};font-weight:600">${isDone?'Rota Tamamlandı':statusLabel}</span></td>
+            ${session.isSuperAdmin ? `<td><button class="del-btn" onclick="openReportEdit('${e.id}')" title="Düzelt">✏️</button></td>` : ''}
             ${canDeleteReport() ? `<td><button class="del-btn" onclick="deleteModalRecord('${e.id}')" title="Sil">🗑</button></td>` : ''}
           </tr>`;
-        }).join('')}
+        }).join('') })()}
         </tbody></table>
       </div>
     </div>
@@ -2367,7 +3051,7 @@ function renderGroupScreen(groupId, groupMembers){
           <button class="icon-btn" onclick="cancelEditActive()">✕</button>
         </div>
         <div class="modal-body">
-          <div class="field"><label>İş Emri No (U kodu)</label><input id="edit-isemri" class="mono" value="${esc(editForm.isEmriNo)}"></div>
+          <div class="field"><label>İş Talep No</label><input id="edit-talepno" class="mono" value="${esc(editForm.talepNo)}"></div>
           <div class="field"><label>Malzeme Cinsi</label><input id="edit-malzeme-cinsi" value="${esc(editForm.malzemeCinsi)}"></div>
           <div class="field"><label>Çap ve Boy</label><input id="edit-cap-boy" value="${esc(editForm.capBoy)}"></div>
           <div class="field"><label>Adet</label><input id="edit-adet" inputmode="numeric" value="${esc(editForm.adet)}" oninput="this.value=this.value.replace(/\\D/g,'')"></div>
@@ -2404,7 +3088,7 @@ function renderLockScreen(active){
           <button class="icon-btn" onclick="cancelEditActive()">✕</button>
         </div>
         <div class="modal-body">
-          <div class="field"><label>İş Emri No (U kodu)</label><input id="edit-isemri" class="mono" value="${esc(editForm.isEmriNo)}"></div>
+          <div class="field"><label>İş Talep No</label><input id="edit-talepno" class="mono" value="${esc(editForm.talepNo)}"></div>
           <div class="field"><label>Malzeme Cinsi</label><input id="edit-malzeme-cinsi" value="${esc(editForm.malzemeCinsi)}"></div>
           <div class="field"><label>Çap ve Boy</label><input id="edit-cap-boy" value="${esc(editForm.capBoy)}"></div>
           <div class="field"><label>Adet</label><input id="edit-adet" inputmode="numeric" value="${esc(editForm.adet)}" oninput="this.value=this.value.replace(/\D/g,'')"></div>
@@ -2853,6 +3537,12 @@ function renderOperator(){
 
 /* ===================== RENDER: ADMİN ===================== */
 function renderAdmin(){
+  const viewToTabKey = { report:'rapor', matrix:'matrix', completed:'completed', analiz:'analiz', tadilatYonetim:'tadilat' };
+  if(viewToTabKey[view] && !isAdminTabVisible(viewToTabKey[view])){
+    const tabKeyToView = { rapor:'report', matrix:'matrix', completed:'completed', analiz:'analiz', tadilat:'tadilatYonetim' };
+    const fallbackKey = ADMIN_TAB_DEFS.map(t=>t.key).find(k=>isAdminTabVisible(k) && (k!=='tadilat' || canCreateTadilat()) && (k!=='analiz' || !session.isSef));
+    view = fallbackKey ? tabKeyToView[fallbackKey] : 'report';
+  }
   const operatorEntries = Object.entries(STATE.operators).filter(([k,v])=>!v.isAdmin);
   const header = `
     <div class="admin-header">
@@ -2869,11 +3559,11 @@ function renderAdmin(){
     </div>
     ${messagesModalOpen ? renderMessagesModal() : ''}
     <div class="tabs" style="padding:12px 24px 0">
-      <button class="tab-btn ${view==='report'?'active':''}" onclick="setView('report')">☰ Rapor</button>
-      <button class="tab-btn ${view==='matrix'?'active':''}" onclick="setView('matrix')">🏭 Makine Matrisi</button>
-      <button class="tab-btn ${view==='completed'?'active':''}" onclick="setView('completed')">✓ Tamamlanan Kodlar</button>
-      ${!session.isSef ? `<button class="tab-btn ${view==='analiz'?'active':''}" onclick="setView('analiz')">📊 Analiz</button>` : ''}
-      ${canCreateTadilat() ? `<button class="tab-btn ${view==='tadilatYonetim'?'active':''}" onclick="setView('tadilatYonetim')">🔧 Tadilat${tadilatBekleyenler().length>0?` (${tadilatBekleyenler().length})`:''}</button>` : ''}
+      ${isAdminTabVisible('rapor') ? `<button class="tab-btn ${view==='report'?'active':''}" onclick="setView('report')">☰ Rapor</button>` : ''}
+      ${isAdminTabVisible('matrix') ? `<button class="tab-btn ${view==='matrix'?'active':''}" onclick="setView('matrix')">🏭 Makine Matrisi</button>` : ''}
+      ${isAdminTabVisible('completed') ? `<button class="tab-btn ${view==='completed'?'active':''}" onclick="setView('completed')">✓ Tamamlanan Kodlar</button>` : ''}
+      ${!session.isSef && isAdminTabVisible('analiz') ? `<button class="tab-btn ${view==='analiz'?'active':''}" onclick="setView('analiz')">📊 Analiz</button>` : ''}
+      ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="tab-btn ${view==='tadilatYonetim'?'active':''}" onclick="setView('tadilatYonetim')">🔧 Tadilat${tadilatBekleyenler().length>0?` (${tadilatBekleyenler().length})`:''}</button>` : ''}
     </div>`;
 
   let body = '';
@@ -2893,7 +3583,12 @@ function renderAdmin(){
         <button class="sub-tab-btn ${settingsSubTab==='atolyeAyarlari'?'active':''}" onclick="setSettingsSubTab('atolyeAyarlari')">Atölye Ayarları (Makine)</button>
         <button class="sub-tab-btn ${settingsSubTab==='personelAtolye'?'active':''}" onclick="setSettingsSubTab('personelAtolye')">Atölye Ayarları (Personel)</button>
         <button class="sub-tab-btn ${settingsSubTab==='msgAccess'?'active':''}" onclick="setSettingsSubTab('msgAccess')">Mesaj Erişimi</button>
-        <button class="sub-tab-btn ${settingsSubTab==='durusReasons'?'active':''}" onclick="setSettingsSubTab('durusReasons')">Duruş Nedenleri</button>` : ''}
+        <button class="sub-tab-btn ${settingsSubTab==='durusReasons'?'active':''}" onclick="setSettingsSubTab('durusReasons')">Duruş Nedenleri</button>
+        <button class="sub-tab-btn ${settingsSubTab==='malzemeListesi'?'active':''}" onclick="setSettingsSubTab('malzemeListesi')">Malzeme Listesi</button>
+        <button class="sub-tab-btn ${settingsSubTab==='isMerkezleri'?'active':''}" onclick="setSettingsSubTab('isMerkezleri')">İş Merkezi Listesi</button>
+        <button class="sub-tab-btn ${settingsSubTab==='bolumKurallari'?'active':''}" onclick="setSettingsSubTab('bolumKurallari')">Tadilat Bölüm Kuralları</button>
+        <button class="sub-tab-btn ${settingsSubTab==='uretimPersoneli'?'active':''}" onclick="setSettingsSubTab('uretimPersoneli')">Üretim Personeli Listesi</button>
+        <button class="sub-tab-btn ${settingsSubTab==='tabErisimi'?'active':''}" onclick="setSettingsSubTab('tabErisimi')">Sekme Erişimi (Yönetici)</button>` : ''}
         <button class="sub-tab-btn ${settingsSubTab==='isEmriListesi'?'active':''}" onclick="setSettingsSubTab('isEmriListesi')">İş Emri Listesi</button>
         <button class="sub-tab-btn ${settingsSubTab==='stok'?'active':''}" onclick="setSettingsSubTab('stok')">Malzeme Stoğu</button>
         ${session.isSuperAdmin ? `
@@ -3087,6 +3782,102 @@ function renderAdmin(){
           </div>
           <div id="isemri-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
         </div>`;
+    } else if(settingsSubTab==='malzemeListesi'){
+      const mCount = malzemeListesiArray().length;
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Malzeme Listesi (Dürbün Arama Kaynağı)</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">BAST03'ten (Canias) aldığınız U kodu + Açıklama listesini buraya yükleyin. Tadilat talebi açarken/düzeltirken, U kodunu bilmeyen kullanıcı 🔍 ile buradan Canias'taki gibi <span class="mono">%joker%</span> karakterli arama yapıp doğru kodu bulup otomatik doldurabilir. Bu yükleme sadece SuperAdmin'e açıktır.</div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:480px;margin-bottom:18px">
+          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${mCount}</b> adet malzeme kayıtlı.</div>
+          <div class="field"><label>U Kodu Sütun Başlığı (varsayılan: U Kodu)</label><input id="malzeme-kod-col" value="U Kodu" placeholder="U Kodu"></div>
+          <div class="field"><label>Açıklama Sütun Başlığı (varsayılan: Açıklama)</label><input id="malzeme-aciklama-col" value="Açıklama" placeholder="Açıklama"></div>
+          <input type="file" id="malzeme-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadMalzemeListesi()">⬆ Yükle ve Güncelle</button>
+            ${mCount>0 ? `<button class="btn-ghost" onclick="clearMalzemeListesi()">🗑 Listeyi Temizle</button>` : ''}
+          </div>
+          <div id="malzeme-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
+        </div>`;
+    } else if(settingsSubTab==='isMerkezleri'){
+      const iCount = isMerkezleriArray().length;
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">İş Merkezi Listesi (Tadilat "Talep Edilen Makine" Kaynağı)</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">ERP'den (BAST08 iş merkezi listesi) aldığınız Excel'i buraya yükleyin — sadece kodlar tutulur (V01, B10, N3 gibi), açıklamalar alınmaz. Bu liste, Rota Takip'in kendi üretim makine listesinden <b>tamamen ayrı</b>; Tadilat talebi açılırken "Talep Edilen Makine" alanında kullanılır. Hangi bölümün hangi makinelere erişebileceğini "Tadilat Bölüm Kuralları" sekmesinden ayarlayabilirsin. Bu yükleme sadece SuperAdmin'e açıktır.</div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:480px;margin-bottom:18px">
+          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${iCount}</b> adet iş merkezi kodu kayıtlı.</div>
+          <div class="field"><label>Sütun Başlığı (varsayılan: İş Merkezi)</label><input id="ismerkezi-kod-col" value="İş Merkezi" placeholder="İş Merkezi"></div>
+          <input type="file" id="ismerkezi-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadIsMerkezleri()">⬆ Yükle ve Güncelle</button>
+            ${iCount>0 ? `<button class="btn-ghost" onclick="clearIsMerkezleri()">🗑 Listeyi Temizle</button>` : ''}
+          </div>
+          <div id="ismerkezi-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
+        </div>`;
+    } else if(settingsSubTab==='bolumKurallari'){
+      const kurallar = getBolumKurallari();
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Bölüm Kuralları</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Tadilat talebi açılırken "Talep Eden Bölüm" seçimine göre hangi iş merkezi kodlarının seçilebileceğini burada ayarlıyorsun — kod değişikliği gerekmez. "Tümüne erişebilir" hiç kısıtlama koymaz; "Sadece şunlarla başlayanlar" sadece girdiğin harf(ler)le başlayan kodları gösterir; "Şunlar hariç hepsi" girdiğin harf(ler)le başlayanlar dışındaki her şeyi gösterir. Birden fazla harf/önek için virgülle ayır (ör. B,V).</div>
+        <div class="op-settings-table" style="margin-bottom:26px">
+          ${Object.entries(kurallar).map(([ad,kural])=>`
+            <div class="op-settings-row" style="flex-wrap:wrap;gap:10px">
+              <div style="min-width:90px;font-weight:700">${esc(ad)}${!DEFAULT_BOLUM_KURALLARI[ad]?' <span style="font-size:10.5px;color:var(--accent);font-weight:400">(özel)</span>':''}</div>
+              <select id="bolum-mode-${ad}" style="width:220px">
+                <option value="all" ${kural.mode==='all'?'selected':''}>Tümüne erişebilir</option>
+                <option value="include" ${kural.mode==='include'?'selected':''}>Sadece şunlarla başlayanlar</option>
+                <option value="exclude" ${kural.mode==='exclude'?'selected':''}>Şunlar hariç hepsi</option>
+              </select>
+              <input id="bolum-prefixes-${ad}" placeholder="ör. B,V" value="${esc((kural.prefixes||[]).join(','))}" style="width:140px">
+              <button class="btn-ghost" onclick="saveBolumKural('${ad}', false)">💾 Kaydet</button>
+              ${!DEFAULT_BOLUM_KURALLARI[ad] ? `<button class="del-btn" onclick="deleteBolumKural('${ad}')" title="Sil">🗑</button>` : ''}
+            </div>
+          `).join('')}
+        </div>
+        <div style="max-width:560px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">Yeni Bölüm Ekle</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <input id="bolum-yeni-ad" placeholder="Bölüm adı (ör. Montaj)" style="flex:1;min-width:140px">
+            <select id="bolum-mode-yeni" style="width:220px">
+              <option value="all">Tümüne erişebilir</option>
+              <option value="include">Sadece şunlarla başlayanlar</option>
+              <option value="exclude">Şunlar hariç hepsi</option>
+            </select>
+            <input id="bolum-prefixes-yeni" placeholder="ör. B,V" style="width:140px">
+          </div>
+          <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="saveBolumKural('', true)">+ Bölüm Ekle</button>
+        </div>`;
+    } else if(settingsSubTab==='uretimPersoneli'){
+      const pCount = uretimPersoneliArray().length;
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Üretim Personeli Listesi</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Tadilat talebindeki "Talep eden kişi (ad soyad)" alanı, burada yüklediğin listeye göre doğrulanır — kişi kafasına göre isim yazamaz, listedeki gerçek adı seçer. Excel'inde "Görev" sütunu da varsa (ör. "Civata Üretim Operatörü"), sistem oradan otomatik bölüm çıkarır (Civata/Vida/Somun/Bakım/Kalite anahtar kelimesi geçiyorsa o bölüm, geçmiyorsa "Diğer") — böylece "Talep eden bölüm" seçilince kişi listesi otomatik daralır. Liste boşken bu alan serbest yazıma açık kalır. Bu yükleme sadece SuperAdmin'e açıktır.</div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:480px;margin-bottom:18px">
+          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${pCount}</b> adet personel kayıtlı.${pCount===0?' <span style="color:var(--warn)">(Liste boşsa doğrulama yapılmaz, herkes serbestçe girebilir.)</span>':''}</div>
+          <div class="field"><label>Ad Sütun Başlığı (varsayılan: Görünen Ad)</label><input id="personel-ad-col" value="Görünen Ad" placeholder="Görünen Ad"></div>
+          <div class="field"><label>Görev Sütun Başlığı (varsayılan: Görev)</label><input id="personel-gorev-col" value="Görev" placeholder="Görev"></div>
+          <input type="file" id="personel-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadUretimPersoneli()">⬆ Yükle ve Güncelle</button>
+            ${pCount>0 ? `<button class="btn-ghost" onclick="clearUretimPersoneli()">🗑 Listeyi Temizle</button>` : ''}
+          </div>
+          <div id="personel-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
+        </div>`;
+    } else if(settingsSubTab==='tabErisimi'){
+      const adminAccounts = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin && (v.isAdmin || v.isSef));
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Sekme Erişimi (Yönetici)</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Her yönetici/şef hesabı için, üst menüdeki ana sekmelerden hangilerini görebileceğini AYRI AYRI belirle (ör. "LV sadece Rapor ve Makine Matrisi'ni görsün" gibi). SuperAdmin bu ayardan hiç etkilenmez, her zaman hepsini görür. Bir kullanıcı için hiçbir kutuyu kapatmazsan, o kullanıcı varsayılan olarak tüm sekmeleri görür.</div>
+        ${adminAccounts.length===0 ? `<div style="color:var(--text-muted);font-size:13px">Henüz yönetici/şef hesabı yok.</div>` : `
+        <div class="op-settings-table">
+          ${adminAccounts.map(([code,v])=>`
+            <div class="op-settings-row" style="flex-wrap:wrap;gap:10px">
+              <div style="min-width:140px">
+                <div class="op-settings-id">${esc(code)}</div>
+                <div style="font-size:11px;color:var(--text-muted)">${esc(v.displayName)}${v.isSef?' · Şef':' · Yönetici'}</div>
+              </div>
+              ${ADMIN_TAB_DEFS.map(t=>`
+                <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer">
+                  <input type="checkbox" style="width:auto" ${(adminTabPermissions[code]?.[t.key])!==false?'checked':''} onchange="setAdminTabPermission('${code}','${t.key}', this.checked)"> ${t.label}
+                </label>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>`}`;
     } else if(settingsSubTab==='stok'){
       const items = stockItemsArray();
       const recentMoves = Object.entries(stockHareketleri).map(([id,v])=>({id,...v})).sort((a,b)=>b.ts-a.ts).slice(0,20);
@@ -3180,7 +3971,8 @@ function renderAdmin(){
         <div class="op-settings-table">
           ${list.map((r,i)=>`
             <div class="op-settings-row">
-              <div class="op-settings-name">${esc(r)}</div>
+              <input id="durus-edit-${i}" value="${esc(r)}" style="flex:1">
+              <button class="btn-ghost" onclick="editDurusReason(${i})" title="Kaydet">💾 Kaydet</button>
               <button class="del-btn" onclick="removeDurusReason(${i})" title="Sil">🗑</button>
             </div>
           `).join('')}
@@ -3563,15 +4355,18 @@ function renderAdmin(){
       const gecmis = tadilatOperasyonlarArray(t).filter(o=>o.status==='tamamlandi');
       return `<div class="completed-card" style="cursor:pointer" onclick="toggleTadilatExpand('${t.id}')">
         <div class="completed-header">
-          <span class="completed-id mono" style="color:var(--warn)">⏳ ${esc(t.uKodu)}</span>
+          <span class="completed-id mono" style="color:var(--warn)">⏳ ${esc(t.uKodu)}${t.kisaAciklama?` <span style="color:var(--text-muted);font-weight:400;font-size:.75em">${esc(t.kisaAciklama)}</span>`:''}</span>
           <span class="completed-meta">${expanded?'▲':'▼'}</span>
         </div>
         ${expanded ? `
           <div style="font-size:12.5px;color:var(--text-muted);margin:8px 0 4px">${fmtDT(t.olusturmaTs)} · ${esc(t.olusturanName)}</div>
-          <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:6px">${t.talepEdenKisi?`Talep eden: ${esc(t.talepEdenKisi)} · `:''}${t.bolum?`Bölüm: ${esc(t.bolum)} · `:''}${t.adet?`Adet: ${esc(t.adet)}`:''}</div>
+          <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:6px">${t.talepEdenKisi?`Talep eden: ${esc(t.talepEdenKisi)} · `:''}${t.bolum?`Bölüm: ${esc(t.bolum)} · `:''}${t.talepMakine?`Makine: ${esc(t.talepMakine)} · `:''}${t.adet?`Adet: ${esc(t.adet)}`:''}</div>
           <div style="font-size:13px;margin-bottom:10px">${esc(t.aciklama)}</div>
           ${gecmis.length>0 ? `<div style="font-size:11.5px;color:var(--accent);margin-bottom:10px">🔁 ${gecmis.length} operasyon tamamlandı (${gecmis.map(o=>esc(o.operatorName)).join(', ')}), devamı bekleniyor</div>` : ''}
-          <button class="del-btn" onclick="event.stopPropagation(); deleteTadilat('${t.id}')" title="Talebi sil">🗑 Sil</button>
+          <div style="display:flex;gap:8px">
+            ${canCreateTadilat() ? `<button class="del-btn" onclick="event.stopPropagation(); openTadilatEdit('${t.id}')" title="Düzelt">✏️ Düzelt</button>` : ''}
+            ${session.isSuperAdmin ? `<button class="del-btn" onclick="event.stopPropagation(); deleteTadilat('${t.id}')" title="Talebi sil">🗑 Sil</button>` : ''}
+          </div>
         ` : ''}
       </div>`;
     };
@@ -3593,13 +4388,14 @@ function renderAdmin(){
         ${canViewTadilatAnaliz() ? `<button class="tab-btn ${tadilatSubTab==='analiz'?'active':''}" onclick="setTadilatSubTab('analiz')">📊 Analiz <span style="font-size:10.5px;opacity:.8">(SuperAdmin)</span></button>` : ''}
       </div>`;
     if(tadilatSubTab==='canli' && (session.isSuperAdmin || session.isSef)){
+      const myAtolyelerCanli = getUserAtolyeler(session.username);
       const aktifler = tadilatArray()
         .map(t=>({ t, op: tadilatAktifOperasyon(t) }))
-        .filter(x=>x.op)
+        .filter(x=>x.op && myAtolyelerCanli.includes(x.t.atolye||'imalat'))
         .sort((a,b)=>a.op.baslamaTs-b.op.baslamaTs);
       body += `
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">Devam Eden Tadilatlar — Canlı Takip</div>
-      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Şu an aktif olarak işlenmekte olan tüm tadilatlar — hangi makinede, kim tarafından, ne zamandır. Her iki atölye de tek listede.</div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Şu an aktif olarak işlenmekte olan tadilatlar — hangi makinede, kim tarafından, ne zamandır. Sadece kendi atölyen/atölyelerin (${myAtolyelerCanli.map(a=>a==='tadilat'?'🔧 Tadilat':'🏭 İmalat').join(' + ')}) gösteriliyor.</div>
       <div class="table-wrap"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Makine</th><th>Operatör</th><th>Başlangıç</th><th>Süre</th><th>Son Operasyon mu</th></tr></thead><tbody>
         ${aktifler.length===0 ? `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px">Şu an devam eden tadilat yok.</td></tr>` : aktifler.map(({t,op})=>`
           <tr>
@@ -3693,11 +4489,19 @@ function renderAdmin(){
         <div>
           <div style="font-size:16px;font-weight:700;margin-bottom:14px">Yeni Tadilat Talebi</div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-            <input id="tad-ukodu" class="mono" placeholder="U kodu" style="flex:1;min-width:120px;padding:12px 14px;font-size:14.5px">
-            <input id="tad-adet" inputmode="numeric" placeholder="Adet" style="width:110px;padding:12px 14px;font-size:14.5px" oninput="this.value=this.value.replace(/\\D/g,'')">
+            <input id="tad-ukodu" class="mono" placeholder="U kodu" value="${esc(newTadilatForm.uKodu)}" oninput="newTadilatForm.uKodu=this.value" onblur="tadUkoduBlur('new')" style="flex:1;min-width:120px;padding:12px 14px;font-size:14.5px">
+            <button type="button" class="btn-ghost" style="padding:0 14px" title="Malzeme Ara" onclick="openMalzemeArama('new')">🔍</button>
+            <input id="tad-kisaaciklama" placeholder="Açıklama (zorunlu)" value="${esc(newTadilatForm.kisaAciklama)}" oninput="newTadilatForm.kisaAciklama=this.value; newTadilatForm.aciklamaManual=true" style="flex:1.5;min-width:140px;padding:12px 14px;font-size:14.5px">
+            <input id="tad-adet" inputmode="numeric" placeholder="Adet (zorunlu)" style="width:110px;padding:12px 14px;font-size:14.5px" oninput="this.value=this.value.replace(/\\D/g,'')">
           </div>
-          <input id="tad-kisi" placeholder="Talep eden kişi (ad soyad)" style="margin-bottom:10px;padding:12px 14px;font-size:14.5px">
-          <input id="tad-bolum" placeholder="Talep eden bölüm" style="margin-bottom:10px;padding:12px 14px;font-size:14.5px">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+            <input id="tad-bolum" list="tadilat-bolum-options" placeholder="Talep eden bölüm (seç ya da yaz) (zorunlu)" value="${esc(newTadilatForm.bolum)}" oninput="newTadilatForm.bolum=this.value" onblur="render()" style="flex:1;min-width:140px;padding:12px 14px;font-size:14.5px">
+            <input id="tad-makine" list="tadilat-makine-options" placeholder="Talep edilen makine (zorunlu)" style="flex:1;min-width:140px;padding:12px 14px;font-size:14.5px">
+          </div>
+          <datalist id="tadilat-bolum-options">${tadilatBolumOptions().map(b=>`<option value="${b}">`).join('')}</datalist>
+          <datalist id="tadilat-makine-options">${isMerkezleriFor(newTadilatForm.bolum).map(k=>`<option value="${esc(k)}">`).join('')}</datalist>
+          <input id="tad-kisi" list="uretim-personeli-options" placeholder="Talep eden kişi (ad soyad) (zorunlu)" style="margin-bottom:10px;padding:12px 14px;font-size:14.5px">
+          <datalist id="uretim-personeli-options">${uretimPersoneliFor(newTadilatForm.bolum).map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
           ${myAtolyelerAdmin.length>1 ? `
           <select id="tad-atolye" style="margin-bottom:10px;padding:12px 14px;font-size:14.5px" onchange="tadilatFormAtolyeSet(this.value)">
             ${myAtolyelerAdmin.includes('imalat') ? `<option value="imalat" ${tadilatFormAtolyeGet()==='imalat'?'selected':''}>🏭 İmalat Atölye</option>` : ''}
@@ -3736,7 +4540,6 @@ function renderAdmin(){
         <span><b style="color:var(--warn)">${fmtDur(toplamDurusMs)}</b> toplam duruş (filtreye göre)</span>
         <button class="btn-ghost" style="margin-left:auto" onclick="toggleMachineListView()">${showMachineList?'Makine Kodlarını Gizle':'Makine Kodlarını Göster'}</button>
       </div>
-      ${toplamDurusMs>0 ? `<div style="padding:12px 24px;border-bottom:1px solid var(--border)">${renderDurusBreakdown(fe)}</div>` : ''}
       ${showMachineList ? `<div class="machine-grid" style="padding:12px 24px;border-bottom:1px solid var(--border)">${allMachines().map(m=>`<div class="machine-chip"><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</div>`).join('')}</div>` : ''}
       <div class="filter-bar" style="position:relative">
         <div style="position:relative">
@@ -3806,10 +4609,10 @@ function renderAdmin(){
         ${canDeleteReport() ? `<td><button class="del-btn" onclick="deleteReportRecord('${e.id}')" title="Sil">🗑</button></td>` : ''}
       </tr>`;
     });
-    body += `</tbody></table></div>${entryDetailId ? renderEntryDetailModal() : ''}${reportEditId ? renderReportEditModal() : ''}`;
+    body += `</tbody></table></div>${entryDetailId ? renderEntryDetailModal() : ''}`;
   }
 
-  return `<div class="root-wide theme-${theme}">${header}${body}${machineModal ? renderMachineModal() : ''}</div>`;
+  return `<div class="root-wide theme-${theme}">${header}${body}${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}</div>`;
 }
 function setReportFilterFieldLight(field, val){ reportFilter[field]=val; renderTableOnly(); }
 function renderTableOnly(){ render(); } // basit yaklaşım: filtre değişince tam yeniden çizim yeterli hızda çalışır
