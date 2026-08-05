@@ -40,12 +40,12 @@ const FIREBASE_CONFIG = {
   --text:#eef1f3; --text-muted:#8b939b;
   --accent:#ff8a3d; --accent-dim:#ff8a3d22; --success:#4ade80; --success-soft:#94d3a2; --warn:#facc15; --danger:#f87171;
   --btn-primary-bg:var(--accent); --btn-primary-text:#1a1408;
-  --chip-active-bg:var(--warn-med); --chip-active-border:var(--warn); --chip-active-text:var(--warn);
+  --chip-active-bg:#facc1522; --chip-active-border:var(--warn); --chip-active-text:var(--warn);
   --card-shadow:none; --radius-pill:20px;
-  --success-row:var(--success-row);
-  --warn-soft:var(--warn-soft); --warn-med:var(--warn-med); --warn-border:var(--warn-border);
-  --gunsonu:var(--gunsonu); --gunsonu-soft:var(--gunsonu-soft); --gunsonu-med:var(--gunsonu-med); --gunsonu-border:var(--gunsonu-border);
-  --tadilat-info:var(--tadilat-info); --tadilat-soft:var(--tadilat-soft); --tadilat-med:var(--tadilat-med); --tadilat-border:var(--tadilat-border);
+  --success-row:#1a4d2e33;
+  --warn-soft:#facc1518; --warn-med:#facc1522; --warn-border:#facc1540;
+  --gunsonu:#38bdf8; --gunsonu-soft:#38bdf818; --gunsonu-med:#38bdf822; --gunsonu-border:#38bdf840; --gunsonu-active-bg:#38bdf855;
+  --tadilat-info:#c084fc; --tadilat-soft:#c084fc18; --tadilat-med:#c084fc22; --tadilat-border:#c084fc40; --tadilat-active-bg:#c084fc55;
 }
 .theme-light{
   --bg:#F8FAFC; --panel:#FFFFFF; --panel-alt:#F1F5F9; --border:#E2E8F0;
@@ -57,8 +57,8 @@ const FIREBASE_CONFIG = {
   --radius-pill:10px;
   --success-row:#DCFCE7;
   --warn-soft:#FEF3C7; --warn-med:#FEF3C7; --warn-border:#B45309;
-  --gunsonu:#4338CA; --gunsonu-soft:#E0E7FF; --gunsonu-med:#E0E7FF; --gunsonu-border:#4338CA;
-  --tadilat-info:#4338CA; --tadilat-soft:#E0E7FF; --tadilat-med:#E0E7FF; --tadilat-border:#4338CA;
+  --gunsonu:#4338CA; --gunsonu-soft:#E0E7FF; --gunsonu-med:#E0E7FF; --gunsonu-border:#4338CA; --gunsonu-active-bg:#4338CA55;
+  --tadilat-info:#4338CA; --tadilat-soft:#E0E7FF; --tadilat-med:#E0E7FF; --tadilat-border:#4338CA; --tadilat-active-bg:#4338CA55;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px}
@@ -1922,7 +1922,7 @@ function renderDurusBreakdown(entries){
   return `<div style="margin-bottom:16px">
     <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Duruş Nedenlerine Göre Dağılım</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px">
-      ${rows.map(([reason,ms])=>`<div class="chip" style="color:var(--warn);border-color:var(--warn)55;background:var(--warn-soft)">${esc(reason)}: <b>${fmtDur(ms)}</b></div>`).join('')}
+      ${rows.map(([reason,ms])=>`<div class="chip" style="color:var(--warn);border-color:var(--warn-border);background:var(--warn-soft)">${esc(reason)}: <b>${fmtDur(ms)}</b></div>`).join('')}
     </div>
   </div>`;
 }
@@ -2294,7 +2294,7 @@ function renderGroupScreen(groupId, groupMembers){
   let actionBlock;
   if(anyDurus){
     actionBlock = `<div style="display:flex;gap:10px;margin-top:28px">
-      <button class="btn-start" style="width:auto;padding:13px 26px" onclick="devamGrup('${groupId}')">▶ Duraklatmayı Devam Ettir (Tümü)</button>
+      <button class="btn-start" style="width:auto;padding:13px 26px" onclick="devamGrup('${groupId}')">▶ Devam Ettir (Tümü)</button>
     </div>`;
   } else if(!durusOpen){
     actionBlock = `<div style="display:flex;gap:10px;margin-top:28px">
@@ -2309,9 +2309,9 @@ function renderGroupScreen(groupId, groupMembers){
           const isTad = !isGunSonu && isTadilatRelated(r);
           const isActive = durusReasonSel===r;
           const style = isGunSonu
-            ? `border-color:var(--gunsonu);color:var(--gunsonu);background:${isActive?'var(--gunsonu)55':'var(--gunsonu-med)'};font-weight:700`
+            ? `border-color:var(--gunsonu);color:var(--gunsonu);background:${isActive?'var(--gunsonu-active-bg)':'var(--gunsonu-med)'};font-weight:700`
             : isTad
-            ? `border-color:var(--tadilat-info);color:var(--tadilat-info);background:${isActive?'var(--tadilat-info)55':'var(--tadilat-med)'};font-weight:700`
+            ? `border-color:var(--tadilat-info);color:var(--tadilat-info);background:${isActive?'var(--tadilat-active-bg)':'var(--tadilat-med)'};font-weight:700`
             : '';
           return `<button class="chip ${isActive&&!isGunSonu&&!isTad?'active':''}" style="${style}" onclick="pickDurusReason(${i})">${isGunSonu?'🌙 ':isTad?'🔧 ':''}${esc(r)}</button>`;
         }).join('')}
@@ -2395,7 +2395,7 @@ function renderLockScreen(active){
         <div class="lock-meta">duruş süresi</div>
         <div class="durus-reason-box" style="${active.duruşNedeni===GUN_SONU_REASON?'color:var(--gunsonu);background:var(--gunsonu-soft);border-color:var(--gunsonu-border)':isTadilatRelated(active.duruşNedeni)?'color:var(--tadilat-info);background:var(--tadilat-soft);border-color:var(--tadilat-border)':''}">${active.duruşNedeni===GUN_SONU_REASON?'🌙 ':isTadilatRelated(active.duruşNedeni)?'🔧 ':''}"${esc(active.duruşNedeni)}"</div>
         <div style="display:flex;gap:10px;margin-top:28px">
-          <button class="btn-start" style="width:auto;padding:13px 26px" onclick="devamEt('${active.id}')">▶ Duraklatmayı Devam Ettir</button>
+          <button class="btn-start" style="width:auto;padding:13px 26px" onclick="devamEt('${active.id}')">▶ Devam Ettir</button>
         </div>
         ${editButton}
         ${editBlock}
@@ -2416,9 +2416,9 @@ function renderLockScreen(active){
           const isTad = !isGunSonu && isTadilatRelated(r);
           const active = durusReasonSel===r;
           const style = isGunSonu
-            ? `border-color:var(--gunsonu);color:var(--gunsonu);background:${active?'var(--gunsonu)55':'var(--gunsonu-med)'};font-weight:700`
+            ? `border-color:var(--gunsonu);color:var(--gunsonu);background:${active?'var(--gunsonu-active-bg)':'var(--gunsonu-med)'};font-weight:700`
             : isTad
-            ? `border-color:var(--tadilat-info);color:var(--tadilat-info);background:${active?'var(--tadilat-info)55':'var(--tadilat-med)'};font-weight:700`
+            ? `border-color:var(--tadilat-info);color:var(--tadilat-info);background:${active?'var(--tadilat-active-bg)':'var(--tadilat-med)'};font-weight:700`
             : '';
           return `<button class="chip ${active&&!isGunSonu&&!isTad?'active':''}" style="${style}" onclick="pickDurusReason(${i})">${isGunSonu?'🌙 ':isTad?'🔧 ':''}${esc(r)}</button>`;
         }).join('')}
@@ -2764,7 +2764,27 @@ function renderOperator(){
         `).join('')}
       </div>`;
     }
-    if(groups.length===0) body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Henüz aktif işlem yok.<br><span style="font-size:12px">"+ Yeni Kayıt" ile bir makine başlat.</span></div>`;
+    // Bir operatör aynı anda birden fazla iş açık bırakıp (ör. çoklu iş izni olan biri tadilatı
+    // kapattım sanıp üstüne yeni bir üretim işi de açarsa) birini unutabiliyor — hepsini tek
+    // bakışta gösteren bir uyarı + tadilatı da bu listeye dahil ediyoruz, sadece Tadilat
+    // sekmesinde gizli kalmasın.
+    const myTadilatSess = myActiveTadilatSession();
+    const totalActiveCount = groups.length + (myTadilatSess ? 1 : 0);
+    if(totalActiveCount>1){
+      body += `<div style="background:var(--warn-soft);border:2px solid var(--warn);border-radius:12px;padding:14px 16px;margin-bottom:16px">
+        <div style="font-size:13.5px;font-weight:700;color:var(--warn);margin-bottom:6px">⚠️ Aynı anda ${totalActiveCount} aktif işin var</div>
+        <div style="font-size:12.5px;color:var(--text-muted)">${groups.length>0?`🏭 ${groups.length} üretim işi`:''}${groups.length>0 && myTadilatSess?' · ':''}${myTadilatSess?`🔧 1 tadilat`:''}</div>
+      </div>`;
+    }
+    if(groups.length===0 && !myTadilatSess) body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Henüz aktif işlem yok.<br><span style="font-size:12px">"+ Yeni Kayıt" ile bir makine başlat.</span></div>`;
+    if(myTadilatSess){
+      const { tadilat: mt, operasyon: mop } = myTadilatSess;
+      body += `<div class="card" style="cursor:pointer;border-color:var(--tadilat-info);border-left:4px solid var(--tadilat-info)" onclick="setView('tadilat')">
+        <div class="card-header"><span class="card-id" style="color:var(--tadilat-info)">🔧 ${esc(mt.uKodu)}</span><span class="matrix-dot" style="background:var(--tadilat-info);width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
+        <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(mop.makine||'—')}</span></div>
+        <div class="op-foot">${fmtElapsed(nowTick-mop.baslamaTs)} çalışıyor · Tadilat${mt.adet?` · Adet: ${esc(mt.adet)}`:''}</div>
+      </div>`;
+    }
     groups.forEach(g=>{
       if(g.members.length===1){
         const e = g.members[0];
@@ -3531,9 +3551,33 @@ function renderAdmin(){
     body = `<div class="body-pad">
       <div style="display:flex;gap:8px;margin-bottom:20px">
         <button class="tab-btn ${tadilatSubTab==='talepler'?'active':''}" onclick="setTadilatSubTab('talepler')">Talepler</button>
+        ${(session.isSuperAdmin || session.isSef) ? `<button class="tab-btn ${tadilatSubTab==='canli'?'active':''}" onclick="setTadilatSubTab('canli')">📍 Devam Eden</button>` : ''}
         ${canViewTadilatAnaliz() ? `<button class="tab-btn ${tadilatSubTab==='analiz'?'active':''}" onclick="setTadilatSubTab('analiz')">📊 Analiz <span style="font-size:10.5px;opacity:.8">(SuperAdmin)</span></button>` : ''}
       </div>`;
-    if(tadilatSubTab==='analiz' && canViewTadilatAnaliz()){
+    if(tadilatSubTab==='canli' && (session.isSuperAdmin || session.isSef)){
+      const aktifler = tadilatArray()
+        .map(t=>({ t, op: tadilatAktifOperasyon(t) }))
+        .filter(x=>x.op)
+        .sort((a,b)=>a.op.baslamaTs-b.op.baslamaTs);
+      body += `
+      <div style="font-size:16px;font-weight:600;margin-bottom:6px">Devam Eden Tadilatlar — Canlı Takip</div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Şu an aktif olarak işlenmekte olan tüm tadilatlar — hangi makinede, kim tarafından, ne zamandır. Her iki atölye de tek listede.</div>
+      <div class="table-wrap"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Makine</th><th>Operatör</th><th>Başlangıç</th><th>Süre</th><th>Son Operasyon mu</th></tr></thead><tbody>
+        ${aktifler.length===0 ? `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px">Şu an devam eden tadilat yok.</td></tr>` : aktifler.map(({t,op})=>`
+          <tr>
+            <td>${(t.atolye||'imalat')==='tadilat'?'🔧 Tadilat':'🏭 İmalat'}</td>
+            <td class="mono" style="color:var(--accent);font-weight:600">${esc(t.uKodu)}</td>
+            <td>${esc(op.makine||'—')}</td>
+            <td>${esc(op.operatorUsername)} · ${esc(op.operatorName)}</td>
+            <td>${fmtDT(op.baslamaTs)}</td>
+            <td style="color:var(--tadilat-info);font-weight:700">${fmtElapsed(nowTick-op.baslamaTs)}</td>
+            <td>${op.sonOperasyon?'—':'<span style="color:var(--warn)">Hayır, devamı gelecek</span>'}</td>
+          </tr>
+        `).join('')}
+      </tbody></table></div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:10px">${aktifler.length} tadilat şu an aktif.</div>
+    `;
+    } else if(tadilatSubTab==='analiz' && canViewTadilatAnaliz()){
       const A = computeTadilatAnaliz();
       const tamamlananlar = tadilatArray().filter(t=>tadilatTamamlandiMi(t)).sort((a,b)=>{
         const aOps=tadilatOperasyonlarArray(a), bOps=tadilatOperasyonlarArray(b);
@@ -3771,6 +3815,8 @@ let analizTickCounter = 0;
 // olarak uğraşırken (odaklanmış input/select/textarea varsa, ya da bilinen "düzenleme" durumları
 // açıksa) otomatik render'ları erteliyoruz; odak/etkileşim bitince bir sonraki tetiklemede
 // (periyodik tik ya da yeni bir Firebase güncellemesi) ekran zaten güncel hale gelir.
+let lastPointerDownAt = 0;
+document.addEventListener('pointerdown', ()=>{ lastPointerDownAt = Date.now(); }, true);
 function isUserInteracting(){
   if(editingActiveId) return true;
   if(durusOpen && durusReasonSel==='Diğer') return true;
@@ -3778,6 +3824,10 @@ function isUserInteracting(){
   if(tadilatMakineSecimId) return true;
   const ae = document.activeElement;
   if(ae && ['INPUT','TEXTAREA','SELECT'].includes(ae.tagName)) return true;
+  // Bir düğmeye tıklandığının hemen ardından (kısa bir "koruma penceresi" içinde) arka plandaki
+  // otomatik yeniden çizimi erteliyoruz — yoksa tam o anda DOM değişip tıklamayı "yutabiliyor",
+  // kullanıcı iki kere tıklamak zorunda kalıyordu.
+  if(Date.now() - lastPointerDownAt < 500) return true;
   return false;
 }
 function safeRender(){ if(!isUserInteracting()) render(); }
@@ -3786,7 +3836,7 @@ function renderLiveBits(){
   // Ama bir form açıkken (düzenleme, duruş nedeni yazma, serbest mesaj, aktif input/select) tam render
   // odağı (focus) kaybettiriyor / açık dropdown'ı kapatıyor — o an atla.
   if(isUserInteracting()) return;
-  if(activeDetailId || activeGroupId || (session && !session.isAdmin && (view==='list' || view==='tadilat')) || (session && session.isAdmin && view==='matrix')){ render(); return; }
+  if(activeDetailId || activeGroupId || (session && !session.isAdmin && (view==='list' || (view==='tadilat' && myActiveTadilatSession()))) || (session && session.isAdmin && (view==='matrix' || (view==='tadilatYonetim' && tadilatSubTab==='canli')))){ render(); return; }
   // Analiz'deki sayılar artık duraklamış işler için canlı hesaplanıyor, ama grafikleri (Chart.js)
   // her saniye yeniden çizmek titremeye sebep olur — o yüzden burayı daha seyrek (15 sn) yeniliyoruz.
   if(session && session.isAdmin && view==='analiz'){
