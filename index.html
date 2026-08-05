@@ -1148,7 +1148,15 @@ function routesForBaseSuffix(base, suf){
 let modalDateFilter = '';
 let DB = null, FB_OK = false, connOK = false;
 
-setInterval(()=>{ nowTick = Date.now(); if(session) renderLiveBits(); }, 1000);
+setInterval(()=>{
+  nowTick = Date.now();
+  if(!session) return;
+  // Etkileşim penceresi (tıklamadan sonraki 500ms) yüzünden ertelenmiş bir Firebase güncellemesi
+  // varsa, artık uygunsa (kullanıcı bir şeyle uğraşmıyorsa) burada yakalayıp gösteriyoruz —
+  // yoksa güncelleme kaybolup, kullanıcı sekme değiştirip geri dönene kadar ekranda görünmüyordu.
+  if(pendingSafeRender && !isUserInteracting()){ pendingSafeRender = false; render(); return; }
+  renderLiveBits();
+}, 1000);
 
 /* ===================== FIREBASE ===================== */
 function fbConfigured(){ return FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.databaseURL.indexOf('BURAYA')<0; }
@@ -1681,6 +1689,14 @@ function malzemeListesiArray(){ return Object.entries(malzemeListesi).map(([kod,
 // 1) Boşlukla ayrılmış kelimeler (varsayılan, kolay yol — % tuşuna gerek yok, klavye/tarayıcı
 //    kısayol çakışması olmasın diye): tüm kelimeler herhangi bir sırada geçsin yeter.
 // 2) % joker karakteri (Canias alışkanlığı olanlar için): sıralı, kesin eşleşme — "%A%B%" gibi.
+// Kartlarda U kodunun yanında gösterilecek kısa etiket — kısa "Açıklama" alanı doldurulmamışsa
+// (özellikle bu alan eklenmeden ÖNCE açılmış eski talepler için), uzun "Ne işlem yapılacak"
+// metnine kısaltarak düşer — hiçbir talep açıklamasız görünmesin diye.
+function tadilatKisaLabel(t){
+  if(t.kisaAciklama) return t.kisaAciklama;
+  if(t.aciklama) return t.aciklama.length>60 ? t.aciklama.slice(0,60)+'…' : t.aciklama;
+  return '';
+}
 function malzemeLikeMatch(text, pattern){
   if(!pattern) return true;
   const t = String(text||'');
@@ -2713,6 +2729,42 @@ function exportMachineExcel(code){
   XLSX.utils.book_append_sheet(wb, ws, m.code);
   XLSX.writeFile(wb, `${m.code}_${modalDateFilter||'tumu'}.xlsx`);
 }
+let tadilatHistoryDetailId = null; // 'tad-{tadilatId}-{opId}' — Geçmiş'te tıklanan tadilat operasyonu
+function openTadilatHistoryDetail(rowId){ tadilatHistoryDetailId = rowId; render(); }
+function closeTadilatHistoryDetail(){ tadilatHistoryDetailId = null; render(); }
+function renderTadilatHistoryDetailModal(){
+  const m = String(tadilatHistoryDetailId||'').match(/^tad-(.+)-([^-]+)$/);
+  if(!m){ tadilatHistoryDetailId=null; return ''; }
+  const [, tadilatId, opId] = m;
+  const t = tadilatlar[tadilatId];
+  const op = t && t.operasyonlar && t.operasyonlar[opId];
+  if(!t || !op){ tadilatHistoryDetailId=null; return ''; }
+  const dur = op.bitisTs ? fmtDur(op.bitisTs-op.baslamaTs) : fmtElapsed(nowTick-op.baslamaTs)+' (sürüyor)';
+  const statusLabel = op.status==='tamamlandi' ? (op.sonOperasyon?'Tadilat Tamamlandı':'Operasyon Bitti (Devamı Var)') : 'Tadilat — Devam Ediyor';
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeTadilatHistoryDetail()">
+    <div class="modal-box" style="max-width:440px">
+      <div class="modal-header">
+        <div><div class="modal-title" style="color:var(--tadilat-info)">🔧 ${esc(t.uKodu)}</div><div class="modal-sub">${op.makine?esc(op.makine):'—'}</div></div>
+        <button class="icon-btn" onclick="closeTadilatHistoryDetail()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-stat-box" style="margin-bottom:14px"><div class="modal-stat-num" style="color:var(--tadilat-info)">${statusLabel}</div><div class="modal-stat-label">Durum${!op.sonOperasyon && op.status==='tamamlandi'?' · devamı bekleniyor':''}</div></div>
+        ${t.kisaAciklama ? `<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:4px">Açıklama</div><div style="font-size:14px;margin-bottom:14px">${esc(t.kisaAciklama)}</div>` : ''}
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:4px">Ne İşlem Yapılacak</div><div style="font-size:14px;margin-bottom:14px">${esc(t.aciklama||'—')}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+          <div><div style="font-size:11.5px;color:var(--text-muted)">Adet</div><div style="font-size:14px">${esc(t.adet||'—')}</div></div>
+          <div><div style="font-size:11.5px;color:var(--text-muted)">Atölye</div><div style="font-size:14px">${(t.atolye||'imalat')==='tadilat'?'🔧 Tadilat':'🏭 İmalat'}</div></div>
+          <div><div style="font-size:11.5px;color:var(--text-muted)">Talep Eden Bölüm</div><div style="font-size:14px">${esc(t.bolum||'—')}</div></div>
+          <div><div style="font-size:11.5px;color:var(--text-muted)">Talep Eden Kişi</div><div style="font-size:14px">${esc(t.talepEdenKisi||'—')}</div></div>
+        </div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:4px">Başlangıç → Bitiş</div>
+        <div style="font-size:14px;margin-bottom:14px">${fmtDT(op.baslamaTs)} → ${op.bitisTs?fmtDT(op.bitisTs):'—'} <span style="color:var(--text-muted)">(${dur})</span></div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:4px">Talebi Açan</div>
+        <div style="font-size:14px">${esc(t.olusturanName||'—')} · ${fmtDT(t.olusturmaTs)}</div>
+      </div>
+    </div>
+  </div>`;
+}
 function renderEntryDetailModal(){
   const e = STATE.entries[entryDetailId];
   if(!e){ entryDetailId=null; return ''; }
@@ -3229,7 +3281,7 @@ function renderOperator(){
         const gecmis = tadilatOperasyonlarArray(t).filter(o=>o.status==='tamamlandi');
         const secimAcik = tadilatMakineSecimId===t.id;
         return `<div class="card">
-          <div class="card-header" style="cursor:pointer" onclick="toggleTadilatExpand('${t.id}')"><span class="card-id" style="color:var(--warn)">⏳ ${esc(t.uKodu)}</span><span class="card-meta">${expanded?'▲ gizle':'▼ detay'}</span></div>
+          <div class="card-header" style="cursor:pointer" onclick="toggleTadilatExpand('${t.id}')"><span class="card-id" style="color:var(--warn)">⏳ ${esc(t.uKodu)}${tadilatKisaLabel(t)?` <span style="color:var(--text-muted);font-weight:400;font-size:.75em">${esc(tadilatKisaLabel(t))}</span>`:''}</span><span class="card-meta">${expanded?'▲ gizle':'▼ detay'}</span></div>
           ${expanded ? `
             <div style="font-size:12.5px;color:var(--text-muted);margin:6px 0 8px">${t.talepEdenKisi?`${esc(t.talepEdenKisi)} · `:''}${t.bolum?`${esc(t.bolum)} · `:''}${t.adet?`Adet: ${esc(t.adet)}`:''}</div>
             <div style="font-size:13px;margin-bottom:8px">${esc(t.aciklama)}</div>
@@ -3422,8 +3474,24 @@ function renderOperator(){
     const myEntries = entriesArray()
       .filter(e => e.operatorUsername===session.username)
       .filter(e => (!gecmisFrom || dateKey(e.startTs)>=gecmisFrom) && (!gecmisTo || dateKey(e.startTs)<=gecmisTo))
-      .filter(e => !gecmisSearch || e.isEmriNo.toLowerCase().includes(gecmisSearch.toLowerCase()) || (e.talepNo||'').toLowerCase().includes(gecmisSearch.toLowerCase()))
-      .sort((a,b)=>b.startTs-a.startTs);
+      .filter(e => !gecmisSearch || e.isEmriNo.toLowerCase().includes(gecmisSearch.toLowerCase()) || (e.talepNo||'').toLowerCase().includes(gecmisSearch.toLowerCase()));
+    const myTadilatOps = [];
+    tadilatArray().forEach(t=>{
+      tadilatOperasyonlarArray(t).forEach(o=>{
+        if(o.operatorUsername!==session.username) return;
+        myTadilatOps.push({
+          id: 'tad-'+t.id+'-'+o.id, isEmriNo: t.uKodu, talepNo: t.uKodu,
+          makine: o.makine||'', startTs: o.baslamaTs, endTs: o.bitisTs||null,
+          status: o.status==='tamamlandi' ? 'tamamlandi' : 'devam',
+          _isTadilat: true, _sonOperasyon: !!o.sonOperasyon,
+          malzemeCinsi: t.kisaAciklama || t.aciklama || ''
+        });
+      });
+    });
+    const myTadilatOpsFiltered = myTadilatOps
+      .filter(e => (!gecmisFrom || dateKey(e.startTs)>=gecmisFrom) && (!gecmisTo || dateKey(e.startTs)<=gecmisTo))
+      .filter(e => !gecmisSearch || e.isEmriNo.toLowerCase().includes(gecmisSearch.toLowerCase()));
+    const myAll = [...myEntries, ...myTadilatOpsFiltered].sort((a,b)=>b.startTs-a.startTs);
     body = `<div class="body-pad">
       <div class="field"><label>İş Emri No / Talep No Ara</label><input id="gecmis-search" class="mono" placeholder="ör. 2607140006" value="${esc(gecmisSearch)}" oninput="setGecmisSearch(this.value)"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -3435,7 +3503,18 @@ function renderOperator(){
         <button class="chip" onclick="setGecmisPreset(30)">Son 30 Gün</button>
         ${(gecmisFrom||gecmisTo||gecmisSearch) ? `<button class="btn-ghost" onclick="clearGecmisFilter()">✕ Temizle</button>` : ''}
       </div>
-      ${myEntries.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Bu aralıkta kayıt yok.</div>` : myEntries.map(e=>{
+      ${myAll.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Bu aralıkta kayıt yok.</div>` : myAll.map(e=>{
+        if(e._isTadilat){
+          const durT = e.endTs ? fmtDur(e.endTs-e.startTs) : fmtElapsed(nowTick-e.startTs)+' (sürüyor)';
+          const statusLabelT = e.status==='tamamlandi' ? (e._sonOperasyon?'Tadilat Tamamlandı':'Operasyon Bitti (Devamı Var)') : 'Tadilat — Devam Ediyor';
+          return `<div class="card" style="border-color:var(--tadilat-info);border-left:4px solid var(--tadilat-info);cursor:pointer" onclick="openTadilatHistoryDetail('${e.id}')">
+            <div class="card-header"><span class="card-id" style="color:var(--tadilat-info)">🔧 ${esc(e.isEmriNo)}</span><span class="card-meta">${dateKey(e.startTs)}</span></div>
+            ${e.malzemeCinsi ? `<div style="font-size:11.5px;color:var(--text-muted);margin:-4px 0 4px">${esc(e.malzemeCinsi)}</div>` : ''}
+            <div class="op-top"><span class="op-code">${esc(e.makine||'—')}</span></div>
+            <div class="op-foot">🕐 ${fmtDT(e.startTs)} → ${e.endTs?fmtDT(e.endTs):'—'} · ${durT}</div>
+            <div style="margin-top:6px;font-size:12px;font-weight:600;color:var(--tadilat-info)">${statusLabelT}</div>
+          </div>`;
+        }
         const statusColor = e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success)';
         const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
         const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : (e.status==='devam' ? fmtElapsed(nowTick-e.startTs)+' (sürüyor)' : '—');
@@ -3448,6 +3527,7 @@ function renderOperator(){
         </div>`;
       }).join('')}
       ${entryDetailId ? renderEntryDetailModal() : ''}
+      ${tadilatHistoryDetailId ? renderTadilatHistoryDetailModal() : ''}
     </div>`;
   } else if(view==='settings'){
     body = `<div class="body-pad">
@@ -3563,7 +3643,7 @@ function renderAdmin(){
       ${isAdminTabVisible('matrix') ? `<button class="tab-btn ${view==='matrix'?'active':''}" onclick="setView('matrix')">🏭 Makine Matrisi</button>` : ''}
       ${isAdminTabVisible('completed') ? `<button class="tab-btn ${view==='completed'?'active':''}" onclick="setView('completed')">✓ Tamamlanan Kodlar</button>` : ''}
       ${!session.isSef && isAdminTabVisible('analiz') ? `<button class="tab-btn ${view==='analiz'?'active':''}" onclick="setView('analiz')">📊 Analiz</button>` : ''}
-      ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="tab-btn ${view==='tadilatYonetim'?'active':''}" onclick="setView('tadilatYonetim')">🔧 Tadilat${tadilatBekleyenler().length>0?` (${tadilatBekleyenler().length})`:''}</button>` : ''}
+      ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="tab-btn ${view==='tadilatYonetim'?'active':''}" onclick="setView('tadilatYonetim')">🔧 Tadilat</button>` : ''}
     </div>`;
 
   let body = '';
@@ -4355,7 +4435,7 @@ function renderAdmin(){
       const gecmis = tadilatOperasyonlarArray(t).filter(o=>o.status==='tamamlandi');
       return `<div class="completed-card" style="cursor:pointer" onclick="toggleTadilatExpand('${t.id}')">
         <div class="completed-header">
-          <span class="completed-id mono" style="color:var(--warn)">⏳ ${esc(t.uKodu)}${t.kisaAciklama?` <span style="color:var(--text-muted);font-weight:400;font-size:.75em">${esc(t.kisaAciklama)}</span>`:''}</span>
+          <span class="completed-id mono" style="color:var(--warn)">⏳ ${esc(t.uKodu)}${tadilatKisaLabel(t)?` <span style="color:var(--text-muted);font-weight:400;font-size:.75em">${esc(tadilatKisaLabel(t))}</span>`:''}</span>
           <span class="completed-meta">${expanded?'▲':'▼'}</span>
         </div>
         ${expanded ? `
@@ -4671,7 +4751,12 @@ function isUserInteracting(){
   if(Date.now() - lastPointerDownAt < 500) return true;
   return false;
 }
-function safeRender(){ if(!isUserInteracting()) render(); }
+let pendingSafeRender = false;
+function safeRender(){
+  if(isUserInteracting()){ pendingSafeRender = true; return; }
+  pendingSafeRender = false;
+  render();
+}
 function renderLiveBits(){
   // Sadece kilit ekranındaki / matristeki canlı sayaçları güncellemek için tam render yeterli (veri seti küçük).
   // Ama bir form açıkken (düzenleme, duruş nedeni yazma, serbest mesaj, aktif input/select) tam render
