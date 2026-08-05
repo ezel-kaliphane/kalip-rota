@@ -3607,24 +3607,24 @@ function renderAdmin(){
       body += `
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Talepleri</div>
       <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:900px">Operatörler bu listeden bekleyen bir talebi alıp çalışır. "Son Operasyon" işaretlenene kadar talep tekrar tekrar bekleyenlere düşebilir (çok operasyonlu tadilatlar için). Bitirdiklerinde, varsa duraklattıkları üretim işi otomatik olarak "${TADILAT_SONRASI_REASON}" duruşuna geçer.</div>
-      <div style="display:grid;grid-template-columns:380px 1fr;gap:24px;align-items:start">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start">
         <div>
-          <div style="font-size:13px;font-weight:600;margin-bottom:10px">Yeni Tadilat Talebi</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-            <input id="tad-ukodu" class="mono" placeholder="U kodu" style="flex:1;min-width:120px">
-            <input id="tad-adet" inputmode="numeric" placeholder="Adet" style="width:90px" oninput="this.value=this.value.replace(/\\D/g,'')">
+          <div style="font-size:16px;font-weight:700;margin-bottom:14px">Yeni Tadilat Talebi</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+            <input id="tad-ukodu" class="mono" placeholder="U kodu" style="flex:1;min-width:120px;padding:12px 14px;font-size:14.5px">
+            <input id="tad-adet" inputmode="numeric" placeholder="Adet" style="width:110px;padding:12px 14px;font-size:14.5px" oninput="this.value=this.value.replace(/\\D/g,'')">
           </div>
-          <input id="tad-kisi" placeholder="Talep eden kişi (ad soyad)" style="margin-bottom:8px">
-          <input id="tad-bolum" placeholder="Talep eden bölüm" style="margin-bottom:8px">
+          <input id="tad-kisi" placeholder="Talep eden kişi (ad soyad)" style="margin-bottom:10px;padding:12px 14px;font-size:14.5px">
+          <input id="tad-bolum" placeholder="Talep eden bölüm" style="margin-bottom:10px;padding:12px 14px;font-size:14.5px">
           ${myAtolyelerAdmin.length>1 ? `
-          <select id="tad-atolye" style="margin-bottom:8px" onchange="tadilatFormAtolyeSet(this.value)">
+          <select id="tad-atolye" style="margin-bottom:10px;padding:12px 14px;font-size:14.5px" onchange="tadilatFormAtolyeSet(this.value)">
             ${myAtolyelerAdmin.includes('imalat') ? `<option value="imalat" ${tadilatFormAtolyeGet()==='imalat'?'selected':''}>🏭 İmalat Atölye</option>` : ''}
             ${myAtolyelerAdmin.includes('tadilat') ? `<option value="tadilat" ${tadilatFormAtolyeGet()==='tadilat'?'selected':''}>🔧 Tadilat Atölye</option>` : ''}
           </select>` : `
           <input type="hidden" id="tad-atolye" value="${myAtolyelerAdmin[0]}">
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Atölye: ${myAtolyelerAdmin[0]==='tadilat'?'🔧 Tadilat Atölye':'🏭 İmalat Atölye'} <span style="opacity:.7">(tek atölyene açılıyor)</span></div>`}
-          <textarea id="tad-aciklama" placeholder="Ne işlem yapılacak?" style="min-height:70px;margin-bottom:8px"></textarea>
-          <button class="btn-primary" style="width:100%" onclick="addTadilat()">+ Talep Oluştur</button>
+          <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px">Atölye: ${myAtolyelerAdmin[0]==='tadilat'?'🔧 Tadilat Atölye':'🏭 İmalat Atölye'} <span style="opacity:.7">(tek atölyene açılıyor)</span></div>`}
+          <textarea id="tad-aciklama" placeholder="Ne işlem yapılacak?" style="min-height:110px;margin-bottom:14px;padding:12px 14px;font-size:14.5px"></textarea>
+          <button class="btn-primary" style="width:100%;padding:15px 0;font-size:15.5px" onclick="addTadilat()">+ Talep Oluştur</button>
         </div>
         <div style="max-height:calc(100vh - 300px);overflow-y:auto;padding-right:4px">
           ${myAtolyelerAdmin.map(a=>{
