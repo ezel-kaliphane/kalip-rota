@@ -1231,6 +1231,7 @@ function baslat(){
       };
     });
     if(items.length===0){ toast('En az bir İş Emri No girin'); return; }
+    const seenPairs = new Set();
     for(const it of items){
       if(!it.talepNoRaw){ toast('Tüm İş Emri No alanlarını doldurun'); return; }
       if(!it.adet){ toast('Tüm Adet alanlarını doldurun'); return; }
@@ -1238,6 +1239,14 @@ function baslat(){
       if(!isEmriValid(it.talepNoRaw)){
         toast(`"${it.talepNoRaw}" bulunamadı, lütfen kodunuzu kontrol edin`); return;
       }
+      // Aynı talep no + aynı bileşen ikinci kez eklenemez (ör. 2 kere "Tek Parça", 2 kere "_ZARF").
+      // Farklı bileşenler (Zarf + Elmas gibi) aynı talep no ile birlikte açılabilir, o geçerli bir senaryo.
+      const pairKey = it.talepNoRaw.trim().toUpperCase()+'::'+(it.bilesen||'TEK');
+      if(seenPairs.has(pairKey)){
+        const bilesenLabel = it.bilesen ? `${BILESEN_LABEL[it.bilesen]} (_${it.bilesen})` : 'Tek Parça';
+        toast(`"${it.talepNoRaw}" için ${bilesenLabel} zaten listede — aynı talep no + aynı bileşen ikinci kez eklenemez.`); return;
+      }
+      seenPairs.add(pairKey);
       if(!it.bilesen){
         const incomplete = incompleteBilesenBranches(it.talepNoRaw);
         if(incomplete.length>0){
