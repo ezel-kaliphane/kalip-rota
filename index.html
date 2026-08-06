@@ -176,7 +176,7 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .sub-tabs{display:flex;gap:8px;margin-bottom:18px}
 .sub-tab-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:12.5px;font-weight:500}
 .sub-tab-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
-.op-settings-row{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;max-width:640px}
+.op-settings-row{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;max-width:1120px;flex-wrap:nowrap}
 .op-settings-id{font-family:'JetBrains Mono',monospace;color:var(--accent);font-weight:700;font-size:13px;width:60px;flex-shrink:0}
 .op-settings-name{font-size:13.5px;flex:1}
 .machine-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;padding:12px 0}
@@ -1118,7 +1118,7 @@ function toggleReportMakineSelect(label){ if(reportMakineFilter.has(label)) repo
 function clearReportOperatorFilter(){ reportOperatorFilter.clear(); reportSelectedIds=new Set(); render(); }
 function clearReportMakineFilter(){ reportMakineFilter.clear(); reportSelectedIds=new Set(); render(); }
 let accessOperator = '';
-let settingsSubTab = 'default';
+let settingsSubTab = 'access';
 let showMachineList = false;
 let matrixSort = 'alpha'; // 'alpha' | 'calisma'
 function setMatrixSort(v){ matrixSort = v; render(); }
@@ -1814,6 +1814,29 @@ function toggleMachineAccess(code, machineCode){
   DB.ref('operators/'+code+'/allowedMachines').set(current);
 }
 function setAccessOperator(v){ accessOperator=v; render(); }
+let machineAccessModalCode = null;
+function openMachineAccessModal(code){ machineAccessModalCode = code; render(); }
+function closeMachineAccessModal(){ machineAccessModalCode = null; render(); }
+function renderMachineAccessModal(){
+  const code = machineAccessModalCode;
+  const op = STATE.operators[code];
+  if(!op){ machineAccessModalCode=null; return ''; }
+  const allowed = op.allowedMachines ? Object.keys(op.allowedMachines).filter(k=>op.allowedMachines[k]) : allMachineCodes();
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeMachineAccessModal()">
+    <div class="modal-box" style="max-width:900px">
+      <div class="modal-header">
+        <div><div class="modal-title">Makine Erişimi</div><div class="modal-sub">${esc(code)} · ${esc(op.displayName)}</div></div>
+        <button class="icon-btn" onclick="closeMachineAccessModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px">İşaretli makineler bu operatörün "Çalışılan Makine" listesinde görünür.</div>
+        <div class="machine-grid">${allMachines().map(m=>`
+          <label class="machine-check-row"><input type="checkbox" ${allowed.includes(m.code)?'checked':''} onchange="toggleMachineAccess('${code}','${m.code}')"><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</label>
+        `).join('')}</div>
+      </div>
+    </div>
+  </div>`;
+}
 function toggleMultiJob(code){
   const op = STATE.operators[code] || {};
   DB.ref('operators/'+code+'/multiJob').set(!op.multiJob);
@@ -3936,43 +3959,25 @@ function renderAdmin(){
   let body = '';
   if(view==='adminSettings' && !session.isSuperAdmin && !session.isSef){ view = 'report'; }
   if(session.isSef && view==='analiz'){ view = 'matrix'; }
-  if(session.isSef && view==='adminSettings' && settingsSubTab!=='isEmriListesi' && settingsSubTab!=='stok'){ settingsSubTab = 'isEmriListesi'; }
+  if(session.isSef && view==='adminSettings' && settingsSubTab!=='veriListeleri' && settingsSubTab!=='stok'){ settingsSubTab = 'veriListeleri'; }
   if(view==='adminSettings'){
     body = `<div class="settings-wrap">
       <div class="sub-tabs">
         ${session.isSuperAdmin ? `
-        <button class="sub-tab-btn ${settingsSubTab==='default'?'active':''}" onclick="setSettingsSubTab('default')">Varsayılan Makineler</button>
         <button class="sub-tab-btn ${settingsSubTab==='access'?'active':''}" onclick="setSettingsSubTab('access')">Makine Erişimi</button>
-        <button class="sub-tab-btn ${settingsSubTab==='multiJob'?'active':''}" onclick="setSettingsSubTab('multiJob')">Çoklu İş İzni</button>
-        <button class="sub-tab-btn ${settingsSubTab==='cokluIsEmri'?'active':''}" onclick="setSettingsSubTab('cokluIsEmri')">Çoklu İş Emri İzni</button>
-        <button class="sub-tab-btn ${settingsSubTab==='fasonMachines'?'active':''}" onclick="setSettingsSubTab('fasonMachines')">Fason Makineleri</button>
-        <button class="sub-tab-btn ${settingsSubTab==='fasonYetkisi'?'active':''}" onclick="setSettingsSubTab('fasonYetkisi')">Fason Yetkisi</button>
-        <button class="sub-tab-btn ${settingsSubTab==='atolyeAyarlari'?'active':''}" onclick="setSettingsSubTab('atolyeAyarlari')">Atölye Ayarları (Makine)</button>
+        <button class="sub-tab-btn ${settingsSubTab==='personelAyarlari'?'active':''}" onclick="setSettingsSubTab('personelAyarlari')">Personel Ayarları</button>
+        <button class="sub-tab-btn ${settingsSubTab==='makineAyarlari'?'active':''}" onclick="setSettingsSubTab('makineAyarlari')">Makine Ayarları</button>
         <button class="sub-tab-btn ${settingsSubTab==='personelAtolye'?'active':''}" onclick="setSettingsSubTab('personelAtolye')">Atölye Ayarları (Personel)</button>
-        <button class="sub-tab-btn ${settingsSubTab==='msgAccess'?'active':''}" onclick="setSettingsSubTab('msgAccess')">Mesaj Erişimi</button>
         <button class="sub-tab-btn ${settingsSubTab==='durusReasons'?'active':''}" onclick="setSettingsSubTab('durusReasons')">Duruş Nedenleri</button>
-        <button class="sub-tab-btn ${settingsSubTab==='malzemeListesi'?'active':''}" onclick="setSettingsSubTab('malzemeListesi')">Malzeme Listesi</button>
-        <button class="sub-tab-btn ${settingsSubTab==='isMerkezleri'?'active':''}" onclick="setSettingsSubTab('isMerkezleri')">İş Merkezi Listesi</button>
         <button class="sub-tab-btn ${settingsSubTab==='bolumKurallari'?'active':''}" onclick="setSettingsSubTab('bolumKurallari')">Tadilat Bölüm Kuralları</button>
-        <button class="sub-tab-btn ${settingsSubTab==='uretimPersoneli'?'active':''}" onclick="setSettingsSubTab('uretimPersoneli')">Üretim Personeli Listesi</button>
         <button class="sub-tab-btn ${settingsSubTab==='tabErisimi'?'active':''}" onclick="setSettingsSubTab('tabErisimi')">Sekme Erişimi (Yönetici)</button>` : ''}
-        <button class="sub-tab-btn ${settingsSubTab==='isEmriListesi'?'active':''}" onclick="setSettingsSubTab('isEmriListesi')">İş Emri Listesi</button>
+        <button class="sub-tab-btn ${settingsSubTab==='veriListeleri'?'active':''}" onclick="setSettingsSubTab('veriListeleri')">Veri Listeleri</button>
         <button class="sub-tab-btn ${settingsSubTab==='stok'?'active':''}" onclick="setSettingsSubTab('stok')">Malzeme Stoğu</button>
         ${session.isSuperAdmin ? `
         <button class="sub-tab-btn ${settingsSubTab==='addOperator'?'active':''}" onclick="setSettingsSubTab('addOperator')">+ Kullanıcı Ekle</button>
         <button class="sub-tab-btn ${settingsSubTab==='addMachine'?'active':''}" onclick="setSettingsSubTab('addMachine')">+ Makine Ekle</button>` : ''}
       </div>`;
-    if(settingsSubTab==='default'){
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Operatör Varsayılan Makineleri</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Her operatörün "Başla" ekranında otomatik dolu gelen makinesini buradan değiştirebilirsin.</div>`;
-      operatorEntries.forEach(([code,v])=>{
-        body += `<div class="op-settings-row"><div class="op-settings-id">${esc(code)}</div><div class="op-settings-name">${esc(v.displayName)}</div>
-          <select class="filter-input" style="flex:1" onchange="updateDefaultMachine('${code}', this.value)">
-            <option value="">— Varsayılan yok —</option>
-            ${allMachines().map(m=>{ const label=`${m.code} · ${m.name}`; return `<option value="${esc(label)}" ${v.defaultMachine===label?'selected':''}>${esc(label)}</option>`; }).join('')}
-          </select></div>`;
-      });
-    } else if(settingsSubTab==='access'){
+    if(settingsSubTab==='access'){
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Kişi Bazlı Makine Erişimi</div>
         <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">İşaretli makineler o operatörün "Çalışılan Makine" listesinde görünür.</div>
         <div class="field" style="max-width:340px"><label>Operatör Seç</label>
@@ -3987,66 +3992,54 @@ function renderAdmin(){
           <label class="machine-check-row"><input type="checkbox" ${allowed.includes(m.code)?'checked':''} onchange="toggleMachineAccess('${accessOperator}','${m.code}')"><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</label>
         `).join('')}</div>`;
       }
-    } else if(settingsSubTab==='multiJob'){
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Çoklu İş İzni</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">İşaretli operatörler aynı anda birden fazla makinede iş açabilir (ör. EDM operatörü birkaç makineyi aynı anda çalıştırıp dolaşabilir). İşaretsiz operatörler, mevcut işini bitirmeden yeni iş açamaz.</div>
+    } else if(settingsSubTab==='personelAyarlari'){
+      const allUsersForSettings = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Personel Ayarları</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:760px">
+          <b>Varsayılan Makine:</b> "Başla" ekranında otomatik dolu gelir. <b>Çoklu İş:</b> aynı anda birden fazla makinede iş açabilir (ör. EDM operatörü). <b>Çoklu İş Emri:</b> tek makinede aynı anda birden fazla İş Emri No birlikte başlatabilir. <b>Fason Yetkisi:</b> "📦 Fasonda Bekleyen İşler" listesini görüp kapatabilir. <b>Mesaj Erişimi:</b> operatörlerin düzenleme mesajlarını (salt okunur) görebilir. <b>🔧 Makine Erişimi:</b> hangi makinelerin "Çalışılan Makine" listesinde görüneceğini ayarlar.
+        </div>
         <div class="op-settings-table">
-          ${operatorEntries.map(([code,v])=>`
-            <label class="op-settings-row" style="cursor:pointer">
-              <input type="checkbox" ${v.multiJob?'checked':''} onchange="toggleMultiJob('${code}')" style="width:auto">
-              <div class="op-settings-id">${esc(code)}</div>
-              <div class="op-settings-name">${esc(v.displayName)}</div>
-              <span style="font-size:12px;color:${v.multiJob?'var(--success)':'var(--text-muted)'};font-weight:600">${v.multiJob?'Çoklu iş açabilir':'Tek iş (varsayılan)'}</span>
-            </label>
+          ${allUsersForSettings.map(([code,v])=>`
+            <div class="op-settings-row" style="flex-wrap:nowrap;gap:14px">
+              <div style="min-width:150px">
+                <div class="op-settings-id">${esc(code)}</div>
+                <div class="op-settings-name">${esc(v.displayName)}${v.isSef?' · <span style="color:var(--gunsonu);font-size:11px">Şef</span>':v.isAdmin?' · <span style="color:var(--accent);font-size:11px">Yönetici</span>':''}</div>
+              </div>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${v.multiJob?'checked':''} onchange="toggleMultiJob('${code}')"> Çoklu İş
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${v.cokluIsEmri?'checked':''} onchange="toggleCokluIsEmri('${code}')"> Çoklu İş Emri
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${v.fasonYetkisi?'checked':''} onchange="toggleFasonYetkisi('${code}')"> Fason Yetkisi
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${v.messagesAccess?'checked':''} onchange="toggleMessagesAccess('${code}')"> Mesaj Erişimi
+              </label>
+              <select class="filter-input" style="width:200px" onchange="updateDefaultMachine('${code}', this.value)">
+                <option value="">— Varsayılan Makine yok —</option>
+                ${allMachines().map(m=>{ const label=`${m.code} · ${m.name}`; return `<option value="${esc(label)}" ${v.defaultMachine===label?'selected':''}>${esc(label)}</option>`; }).join('')}
+              </select>
+              <button class="btn-ghost" style="white-space:nowrap;margin-left:auto" onclick="openMachineAccessModal('${code}')">🔧 Makine Erişimi</button>
+            </div>
           `).join('')}
         </div>`;
-    } else if(settingsSubTab==='cokluIsEmri'){
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Çoklu İş Emri İzni</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">İşaretli operatörler, Yeni Kayıt ekranında "Çoklu İş Emri" seçeneğini görür — tek bir makinede aynı anda birden fazla İş Emri No'yu (her birinin kendi adediyle) birlikte başlatabilirler. Sınır yok, istediği kadar iş emri girebilir.</div>
-        <div class="op-settings-table">
-          ${operatorEntries.map(([code,v])=>`
-            <label class="op-settings-row" style="cursor:pointer">
-              <input type="checkbox" ${v.cokluIsEmri?'checked':''} onchange="toggleCokluIsEmri('${code}')" style="width:auto">
-              <div class="op-settings-id">${esc(code)}</div>
-              <div class="op-settings-name">${esc(v.displayName)}</div>
-              <span style="font-size:12px;color:${v.cokluIsEmri?'var(--success)':'var(--text-muted)'};font-weight:600">${v.cokluIsEmri?'İzinli':'İzinsiz (varsayılan)'}</span>
-            </label>
-          `).join('')}
-        </div>`;
-    } else if(settingsSubTab==='fasonMachines'){
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Fason Makineleri</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">"Fason" olarak işaretlenen bir makinede (ör. dışarıya ısıl işleme giden FII01) aynı anda birden fazla parti/iş emri açılabilir — "makine meşgul" uyarısı bu makinelerde uygulanmaz. Ayrıca bu makinelerdeki aktif işler, aşağıdaki "Fason Yetkisi" sekmesinden yetkilendirilen operatörlere kim başlatmış olursa olsun görünür ve onlar tarafından kapatılabilir.</div>
+    } else if(settingsSubTab==='makineAyarlari'){
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Makine Ayarları</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:760px">
+          <b>Fason:</b> bu makinede aynı anda birden fazla parti/iş emri açılabilir, "makine meşgul" uyarısı uygulanmaz (ör. dışarıya ısıl işleme giden FII01) — bu makinelerdeki işler, "Personel Ayarları"ndan Fason Yetkisi verilen operatörlere kim başlatmış olursa olsun görünür. <b>Atölye:</b> İmalat/Tadilat ayrımı, tadilat taleplerinin doğru listeye düşmesi için kullanılıyor. Belirtilmemiş makineler varsayılan olarak İmalat Atölye + Normal (Fason değil) sayılır.
+        </div>
         <div class="op-settings-table">
           ${allMachines().map(m=>`
-            <label class="op-settings-row" style="cursor:pointer">
-              <input type="checkbox" ${fasonMachines[m.code]?'checked':''} onchange="toggleMachineFason('${m.code}')" style="width:auto">
-              <div class="op-settings-id">${esc(m.code)}</div>
-              <div class="op-settings-name">${esc(m.name)}</div>
-              <span style="font-size:12px;color:${fasonMachines[m.code]?'var(--success)':'var(--text-muted)'};font-weight:600">${fasonMachines[m.code]?'Fason':'Normal (varsayılan)'}</span>
-            </label>
-          `).join('')}
-        </div>`;
-    } else if(settingsSubTab==='fasonYetkisi'){
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Fason Yetkisi</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">İşaretli operatörler, ana ekranlarında "📦 Fasonda Bekleyen İşler" listesini görür — fason olarak işaretlenmiş makinelerdeki TÜM aktif işleri (kim başlatmış olursa olsun) görüp kapatabilirler. Isıl işlem gibi belirli bir operatörün sürekli takip etmediği, dışarıdan parti parti geri dönen prosesler için düşünüldü.</div>
-        <div class="op-settings-table">
-          ${operatorEntries.map(([code,v])=>`
-            <label class="op-settings-row" style="cursor:pointer">
-              <input type="checkbox" ${v.fasonYetkisi?'checked':''} onchange="toggleFasonYetkisi('${code}')" style="width:auto">
-              <div class="op-settings-id">${esc(code)}</div>
-              <div class="op-settings-name">${esc(v.displayName)}</div>
-              <span style="font-size:12px;color:${v.fasonYetkisi?'var(--success)':'var(--text-muted)'};font-weight:600">${v.fasonYetkisi?'Yetkili':'Yetkisiz (varsayılan)'}</span>
-            </label>
-          `).join('')}
-        </div>`;
-    } else if(settingsSubTab==='atolyeAyarlari'){
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Atölye Ayarları</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Her makineyi "İmalat Atölye" ya da "Tadilat Atölye"ye ata. Bu ayrım, tadilat taleplerinin doğru listeye düşmesi için kullanılıyor — İmalat ve Tadilat atölyesinin bekleyen tadilat listeleri artık birbirine karışmıyor. Belirtilmemiş makineler varsayılan olarak İmalat Atölye sayılır.</div>
-        <div class="op-settings-table">
-          ${allMachines().map(m=>`
-            <div class="op-settings-row">
-              <div class="op-settings-id">${esc(m.code)}</div>
-              <div class="op-settings-name">${esc(m.name)}</div>
+            <div class="op-settings-row" style="flex-wrap:wrap;gap:14px">
+              <div style="min-width:150px">
+                <div class="op-settings-id">${esc(m.code)}</div>
+                <div class="op-settings-name">${esc(m.name)}</div>
+              </div>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${fasonMachines[m.code]?'checked':''} onchange="toggleMachineFason('${m.code}')"> Fason
+              </label>
               <select onchange="setMachineAtolye('${m.code}', this.value)" style="width:170px">
                 <option value="imalat" ${machineAtolyeOf(m.code)==='imalat'?'selected':''}>🏭 İmalat Atölye</option>
                 <option value="tadilat" ${machineAtolyeOf(m.code)==='tadilat'?'selected':''}>🔧 Tadilat Atölye</option>
@@ -4073,20 +4066,6 @@ function renderAdmin(){
               </label>
             </div>`;
           }).join('')}
-        </div>`;
-    } else if(settingsSubTab==='msgAccess'){
-      const allUsers = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Mesaj Erişimi</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">İşaretli kullanıcılar, operatörlerin yaptığı düzenleme mesajlarını görebilir (sadece okuma). Mesaj silme yetkisi her zaman yalnızca süper admin'de kalır.</div>
-        <div class="op-settings-table">
-          ${allUsers.map(([code,v])=>`
-            <label class="op-settings-row" style="cursor:pointer">
-              <input type="checkbox" ${v.messagesAccess?'checked':''} onchange="toggleMessagesAccess('${code}')" style="width:auto">
-              <div class="op-settings-id">${esc(code)}</div>
-              <div class="op-settings-name">${esc(v.displayName)}${v.isSef?' · <span style="color:var(--gunsonu)">Şef</span>':v.isAdmin?' · <span style="color:var(--accent)">Yönetici</span>':''}</div>
-              <span style="font-size:12px;color:${v.messagesAccess?'var(--success)':'var(--text-muted)'};font-weight:600">${v.messagesAccess?'Mesajları görebilir':'Erişimi yok'}</span>
-            </label>
-          `).join('')}
         </div>`;
     } else if(settingsSubTab==='addOperator'){
       const allOps = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
@@ -4135,49 +4114,69 @@ function renderAdmin(){
         </div>
         <div style="margin-top:24px;font-size:13px;font-weight:600;margin-bottom:8px">Mevcut Makineler (${allMachines().length})</div>
         <div class="machine-grid">${allMachines().map(m=>`<div class="machine-chip" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</span><button class="del-btn" onclick="deleteMachine('${m.code}')" title="Sil">🗑</button></div>`).join('')}</div>`;
-    } else if(settingsSubTab==='isEmriListesi'){
+    } else if(settingsSubTab==='veriListeleri'){
       const count = Object.keys(STATE.validIsEmri||{}).length;
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">İş Emri Listesi (ERP Doğrulaması)</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">ERP'den aldığınız Excel dosyasını buraya yükleyin. Operatörler artık İş Emri No olarak <b>İş Talep No</b>'yu girecek (Canias U kodu değil) — sistem bu listede olup olmadığını kontrol eder, listede yoksa "bu iş emri bulunamadı" uyarısı verir. Aynı U kodu (malzeme) farklı talep no'larda art arda üretilebildiği için, artık her üretim talep no'suna göre ayrı ayrı takip ediliyor ve karışmıyor. Excel'inizde yeni talep no'lar oluştukça, dosyayı tekrar buraya yükleyip listeyi güncelleyebilirsiniz (eskisinin üzerine yazılır). Excel'de "Malzeme kodu" ve "Malzeme Adı" sütunları da varsa, operatör talep no girdiğinde hangi malzemeye ait olduğu otomatik gösterilir. <b>Not:</b> _ZARF/_ELMAS bileşen seçimiyle girilen kodlar (ör. <span class="mono">2607140006_ZARF</span>) otomatik olarak taban talep no'nun (<span class="mono">2607140006</span>) listede olup olmadığına göre doğrulanır — ayrıca _ZARF/_ELMAS varyantlarını listeye eklemenize gerek yok.</div>
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:480px;margin-bottom:18px">
-          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${count}</b> adet İş Emri No kayıtlı.${count===0?' <span style="color:var(--warn)">(Liste boşsa doğrulama yapılmaz, herkes serbestçe girebilir.)</span>':''}</div>
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Veri Listeleri</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:22px;max-width:760px">Excel'den yüklenen referans listeleri. Excel'iniz güncellendikçe aynı bölümden tekrar yükleyip üzerine yazabilirsiniz.</div>
+
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;margin-bottom:22px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">İş Emri Listesi (ERP Doğrulaması)</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">ERP'den aldığınız Excel'i yükleyin. Operatörler İş Emri No olarak <b>İş Talep No</b> girer, sistem bu listeden doğrular. "Malzeme kodu"/"Malzeme Adı" sütunları da varsa otomatik gösterilir. _ZARF/_ELMAS varyantları taban talep no'ya göre otomatik doğrulanır, ayrıca eklemenize gerek yok.</div>
+          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${count}</b> kayıt.${count===0?' <span style="color:var(--warn)">(Liste boşsa doğrulama yapılmaz.)</span>':''}</div>
           <div class="field"><label>Sütun Başlığı (varsayılan: İş Talep No)</label><input id="isemri-col-name" value="İş Talep No" placeholder="İş Talep No"></div>
           <input type="file" id="isemri-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
           <div style="display:flex;gap:10px">
             <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadIsEmriListesi()">⬆ Yükle ve Güncelle</button>
-            ${count>0 ? `<button class="btn-ghost" onclick="clearIsEmriListesi()">🗑 Listeyi Temizle</button>` : ''}
+            ${count>0 ? `<button class="btn-ghost" onclick="clearIsEmriListesi()">🗑 Temizle</button>` : ''}
           </div>
           <div id="isemri-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
         </div>`;
-    } else if(settingsSubTab==='malzemeListesi'){
-      const mCount = malzemeListesiArray().length;
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Malzeme Listesi (Dürbün Arama Kaynağı)</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">BAST03'ten (Canias) aldığınız U kodu + Açıklama listesini buraya yükleyin. Tadilat talebi açarken/düzeltirken, U kodunu bilmeyen kullanıcı 🔍 ile buradan Canias'taki gibi <span class="mono">%joker%</span> karakterli arama yapıp doğru kodu bulup otomatik doldurabilir. Bu yükleme sadece SuperAdmin'e açıktır.</div>
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:480px;margin-bottom:18px">
-          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${mCount}</b> adet malzeme kayıtlı.</div>
+      if(session.isSuperAdmin){
+        const mCount = malzemeListesiArray().length;
+        const iCount = isMerkezleriArray().length;
+        const pCount = uretimPersoneliArray().length;
+        body += `
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;margin-bottom:22px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">Malzeme Listesi (Dürbün Arama Kaynağı) <span style="font-size:10.5px;color:var(--text-muted);font-weight:400">(SuperAdmin)</span></div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">BAST03'ten (Canias) aldığınız U kodu + Açıklama listesi. Tadilat talebinde 🔍 ile <span class="mono">%joker%</span> karakterli arama yapılabilir.</div>
+          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${mCount}</b> kayıt.</div>
           <div class="field"><label>U Kodu Sütun Başlığı (varsayılan: U Kodu)</label><input id="malzeme-kod-col" value="U Kodu" placeholder="U Kodu"></div>
           <div class="field"><label>Açıklama Sütun Başlığı (varsayılan: Açıklama)</label><input id="malzeme-aciklama-col" value="Açıklama" placeholder="Açıklama"></div>
           <input type="file" id="malzeme-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
           <div style="display:flex;gap:10px">
             <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadMalzemeListesi()">⬆ Yükle ve Güncelle</button>
-            ${mCount>0 ? `<button class="btn-ghost" onclick="clearMalzemeListesi()">🗑 Listeyi Temizle</button>` : ''}
+            ${mCount>0 ? `<button class="btn-ghost" onclick="clearMalzemeListesi()">🗑 Temizle</button>` : ''}
           </div>
           <div id="malzeme-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
-        </div>`;
-    } else if(settingsSubTab==='isMerkezleri'){
-      const iCount = isMerkezleriArray().length;
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">İş Merkezi Listesi (Tadilat "Talep Edilen Makine" Kaynağı)</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">ERP'den (BAST08 iş merkezi listesi) aldığınız Excel'i buraya yükleyin — sadece kodlar tutulur (V01, B10, N3 gibi), açıklamalar alınmaz. Bu liste, Rota Takip'in kendi üretim makine listesinden <b>tamamen ayrı</b>; Tadilat talebi açılırken "Talep Edilen Makine" alanında kullanılır. Hangi bölümün hangi makinelere erişebileceğini "Tadilat Bölüm Kuralları" sekmesinden ayarlayabilirsin. Bu yükleme sadece SuperAdmin'e açıktır.</div>
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:480px;margin-bottom:18px">
-          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${iCount}</b> adet iş merkezi kodu kayıtlı.</div>
+        </div>
+
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;margin-bottom:22px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">İş Merkezi Listesi (Tadilat "Talep Edilen Makine" Kaynağı) <span style="font-size:10.5px;color:var(--text-muted);font-weight:400">(SuperAdmin)</span></div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">ERP'den (BAST08) aldığınız iş merkezi kodları (V01, B10, N3 gibi — açıklama alınmaz). Rota Takip'in kendi makine listesinden ayrı; Tadilat'ta "Talep Edilen Makine" alanında kullanılır. Hangi bölümün hangi kodlara erişebileceği "Tadilat Bölüm Kuralları"ndan ayarlanır.</div>
+          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${iCount}</b> kayıt.</div>
           <div class="field"><label>Sütun Başlığı (varsayılan: İş Merkezi)</label><input id="ismerkezi-kod-col" value="İş Merkezi" placeholder="İş Merkezi"></div>
           <input type="file" id="ismerkezi-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
           <div style="display:flex;gap:10px">
             <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadIsMerkezleri()">⬆ Yükle ve Güncelle</button>
-            ${iCount>0 ? `<button class="btn-ghost" onclick="clearIsMerkezleri()">🗑 Listeyi Temizle</button>` : ''}
+            ${iCount>0 ? `<button class="btn-ghost" onclick="clearIsMerkezleri()">🗑 Temizle</button>` : ''}
           </div>
           <div id="ismerkezi-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
+        </div>
+
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;margin-bottom:22px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">Üretim Personeli Listesi <span style="font-size:10.5px;color:var(--text-muted);font-weight:400">(SuperAdmin)</span></div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Tadilat'taki "Talep eden kişi" alanı bu listeye göre doğrulanır. "Görev" sütunu varsa (ör. "Civata Üretim Operatörü") bölüm otomatik çıkarılır (Civata/Vida/Somun/Bakım/Kalite/Diğer). Liste boşken serbest yazıma açık kalır.</div>
+          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${pCount}</b> kayıt.${pCount===0?' <span style="color:var(--warn)">(Liste boşsa doğrulama yapılmaz.)</span>':''}</div>
+          <div class="field"><label>Ad Sütun Başlığı (varsayılan: Görünen Ad)</label><input id="personel-ad-col" value="Görünen Ad" placeholder="Görünen Ad"></div>
+          <div class="field"><label>Görev Sütun Başlığı (varsayılan: Görev)</label><input id="personel-gorev-col" value="Görev" placeholder="Görev"></div>
+          <input type="file" id="personel-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadUretimPersoneli()">⬆ Yükle ve Güncelle</button>
+            ${pCount>0 ? `<button class="btn-ghost" onclick="clearUretimPersoneli()">🗑 Temizle</button>` : ''}
+          </div>
+          <div id="personel-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
         </div>`;
+      }
     } else if(settingsSubTab==='bolumKurallari'){
       const kurallar = getBolumKurallari();
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Bölüm Kuralları</div>
@@ -4209,21 +4208,6 @@ function renderAdmin(){
             <input id="bolum-prefixes-yeni" placeholder="ör. B,V" style="width:140px">
           </div>
           <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="saveBolumKural('', true)">+ Bölüm Ekle</button>
-        </div>`;
-    } else if(settingsSubTab==='uretimPersoneli'){
-      const pCount = uretimPersoneliArray().length;
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Üretim Personeli Listesi</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Tadilat talebindeki "Talep eden kişi (ad soyad)" alanı, burada yüklediğin listeye göre doğrulanır — kişi kafasına göre isim yazamaz, listedeki gerçek adı seçer. Excel'inde "Görev" sütunu da varsa (ör. "Civata Üretim Operatörü"), sistem oradan otomatik bölüm çıkarır (Civata/Vida/Somun/Bakım/Kalite anahtar kelimesi geçiyorsa o bölüm, geçmiyorsa "Diğer") — böylece "Talep eden bölüm" seçilince kişi listesi otomatik daralır. Liste boşken bu alan serbest yazıma açık kalır. Bu yükleme sadece SuperAdmin'e açıktır.</div>
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:480px;margin-bottom:18px">
-          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${pCount}</b> adet personel kayıtlı.${pCount===0?' <span style="color:var(--warn)">(Liste boşsa doğrulama yapılmaz, herkes serbestçe girebilir.)</span>':''}</div>
-          <div class="field"><label>Ad Sütun Başlığı (varsayılan: Görünen Ad)</label><input id="personel-ad-col" value="Görünen Ad" placeholder="Görünen Ad"></div>
-          <div class="field"><label>Görev Sütun Başlığı (varsayılan: Görev)</label><input id="personel-gorev-col" value="Görev" placeholder="Görev"></div>
-          <input type="file" id="personel-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
-          <div style="display:flex;gap:10px">
-            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadUretimPersoneli()">⬆ Yükle ve Güncelle</button>
-            ${pCount>0 ? `<button class="btn-ghost" onclick="clearUretimPersoneli()">🗑 Listeyi Temizle</button>` : ''}
-          </div>
-          <div id="personel-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
         </div>`;
     } else if(settingsSubTab==='tabErisimi'){
       const adminAccounts = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin && (v.isAdmin || v.isSef));
@@ -4987,7 +4971,7 @@ function renderAdmin(){
     body += `</tbody></table></div>${entryDetailId ? renderEntryDetailModal() : ''}`;
   }
 
-  return `<div class="root-wide theme-${theme}">${header}${body}${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}</div>`;
+  return `<div class="root-wide theme-${theme}">${header}${body}${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}</div>`;
 }
 function setReportFilterFieldLight(field, val){ reportFilter[field]=val; renderTableOnly(); }
 function renderTableOnly(){ render(); } // basit yaklaşım: filtre değişince tam yeniden çizim yeterli hızda çalışır
