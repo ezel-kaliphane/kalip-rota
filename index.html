@@ -340,7 +340,7 @@ function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){}
 function load(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
 
 /* ===================== DURUM (STATE) ===================== */
-let STATE = { operators: {}, entries: {}, messages: {}, validIsEmri: {}, durusReasons: [] };
+let STATE = { operators: {}, entries: {}, messages: {}, validIsEmri: {}, durusReasons: [], manualPushRequests: {} };
 /* ===================== BİLEŞEN (KOVAN/KARBÜR) AYRIMI =====================
    Bazı malzemelerde kalıp iki farklı yarı mamulden oluşuyor (kovan/sıkma çemberi ve karbür),
    bunlar farklı rotalarda ayrı ayrı işlenip sonra shrink-fit ile birleşiyor. ERP (Canias)
@@ -439,6 +439,12 @@ let stockItems = {};
 let stockHareketleri = {};
 function stockEnabled(){ return !!appSettings.stockTrackingEnabled; }
 function canManageStock(){ return !!(session && (session.isSuperAdmin || session.isSef)); }
+function canManageBildirimAyarlari(){
+  if(!session) return false;
+  if(session.isSuperAdmin) return true;
+  const op = STATE.operators[session.username]||{};
+  return !!(session.isAdmin && op.permBildirimYonetimi);
+}
 function toggleStockTracking(){
   if(!canManageStock()) return;
   DB.ref('settings/stockTrackingEnabled').set(!stockEnabled());
@@ -462,11 +468,11 @@ function toggleResimBul(){
 function uzunDurusUyariEnabled(){ return appSettings.uzunDurusUyariEnabled !== false; } // varsayılan: açık
 function uzunDurusEsikMs(){ return (Number(appSettings.uzunDurusEsikDk) || 30) * 60000; }
 function toggleUzunDurusUyari(){
-  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
+  if(!canManageBildirimAyarlari()){ toast('Bu işlem için yetkin yok'); return; }
   DB.ref('settings/uzunDurusUyariEnabled').set(!uzunDurusUyariEnabled());
 }
 function setUzunDurusEsikDk(v){
-  if(!session || !session.isSuperAdmin) return;
+  if(!canManageBildirimAyarlari()) return;
   const n = Math.max(1, Math.min(600, parseInt(v,10)||30));
   DB.ref('settings/uzunDurusEsikDk').set(n);
 }
@@ -1477,7 +1483,7 @@ function pushConfigured(){ return VAPID_KEY && VAPID_KEY.indexOf('BURAYA')<0; }
 let pushPermissionState = (typeof Notification!=='undefined') ? Notification.permission : 'unsupported'; // 'default' | 'granted' | 'denied' | 'unsupported'
 
 async function enablePushNotifications(){
-  if(!session || session.isAdmin) return; // şimdilik sadece operatörler için (duruşu unutan operatör hedefleniyor)
+  if(!session) return;
   if(typeof Notification==='undefined' || !('serviceWorker' in navigator)){
     toast('Bu tarayıcı bildirim desteklemiyor'); return;
   }
@@ -1498,6 +1504,33 @@ async function enablePushNotifications(){
     toast('Bildirim açılamadı: '+(err.message||'bilinmeyen hata'));
   }
   render();
+}
+
+/* SuperAdmin'in istediği kişiye anlık, serbest metinli bildirim göndermesi. Client sadece
+   manualPushRequests/ altına bir istek yazıyor — Cloud Function bunu anında (database trigger,
+   dakikalar sürmüyor) yakalayıp gerçek gönderimi yapıyor, çünkü FCM'e gerçek mesaj göndermek
+   Admin SDK gerektiriyor, tarayıcıdan doğrudan yapılamıyor. */
+function sendManualPush(){
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
+  const toUsername = document.getElementById('mpush-to')?.value || '';
+  const title = (document.getElementById('mpush-title')?.value || '').trim() || 'Rota Takip';
+  const bodyText = (document.getElementById('mpush-body')?.value || '').trim();
+  if(!toUsername){ toast('Alıcı seç'); return; }
+  if(!bodyText){ toast('Mesaj boş olamaz'); return; }
+  if(bodyText.length>500){ toast('Mesaj çok uzun (max 500 karakter)'); return; }
+  DB.ref('manualPushRequests').push({
+    toUsername, title, body: bodyText,
+    requestedBy: session.username, requestedByName: session.displayName,
+    requestedAt: Date.now()
+  }).then(()=>{
+    toast('Bildirim gönderildi ✓');
+    document.getElementById('mpush-body').value = '';
+  }).catch(err=>{
+    toast('Gönderilemedi: '+(err.message||'bilinmeyen hata'));
+  });
+}
+function manualPushHistory(){
+  return Object.entries(STATE.manualPushRequests||{}).map(([id,v])=>({id,...v})).sort((a,b)=>b.requestedAt-a.requestedAt).slice(0,30);
 }
 
 /* ===================== FIREBASE ===================== */
@@ -1540,6 +1573,10 @@ function initFirebase(){
     });
     DB.ref('messages').on('value', snap=>{
       STATE.messages = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('manualPushRequests').on('value', snap=>{
+      STATE.manualPushRequests = snap.val() || {};
       safeRender();
     });
     DB.ref('validIsEmri').on('value', snap=>{
@@ -4182,7 +4219,7 @@ function renderAdmin(){
   let body = '';
   if(view==='adminSettings' && !session.isSuperAdmin && !session.isSef){ view = 'report'; }
   if(session.isSef && view==='analiz'){ view = 'matrix'; }
-  if(session.isSef && view==='adminSettings' && settingsSubTab!=='veriListeleri' && settingsSubTab!=='stok'){ settingsSubTab = 'veriListeleri'; }
+  if(session.isSef && view==='adminSettings' && settingsSubTab!=='veriListeleri' && settingsSubTab!=='stok' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'veriListeleri'; }
   if(view==='adminSettings'){
     body = `<div class="settings-wrap">
       <div class="sub-tabs">
@@ -4196,9 +4233,11 @@ function renderAdmin(){
         <button class="sub-tab-btn ${settingsSubTab==='tabErisimi'?'active':''}" onclick="setSettingsSubTab('tabErisimi')">Sekme Erişimi (Yönetici)</button>` : ''}
         <button class="sub-tab-btn ${settingsSubTab==='veriListeleri'?'active':''}" onclick="setSettingsSubTab('veriListeleri')">Veri Listeleri</button>
         <button class="sub-tab-btn ${settingsSubTab==='stok'?'active':''}" onclick="setSettingsSubTab('stok')">Malzeme Stoğu</button>
+        <button class="sub-tab-btn ${settingsSubTab==='bildirimlerim'?'active':''}" onclick="setSettingsSubTab('bildirimlerim')">🔔 Bildirimlerim</button>
+        ${canManageBildirimAyarlari() ? `<button class="sub-tab-btn ${settingsSubTab==='uyarilar'?'active':''}" onclick="setSettingsSubTab('uyarilar')">Uzun Duruş Uyarısı</button>` : ''}
         ${session.isSuperAdmin ? `
         <button class="sub-tab-btn ${settingsSubTab==='resimBul'?'active':''}" onclick="setSettingsSubTab('resimBul')">Resim/Çizim Bul</button>
-        <button class="sub-tab-btn ${settingsSubTab==='uyarilar'?'active':''}" onclick="setSettingsSubTab('uyarilar')">Uzun Duruş Uyarısı</button>
+        <button class="sub-tab-btn ${settingsSubTab==='bildirimGonder'?'active':''}" onclick="setSettingsSubTab('bildirimGonder')">📤 Bildirim Gönder</button>
         <button class="sub-tab-btn ${settingsSubTab==='addOperator'?'active':''}" onclick="setSettingsSubTab('addOperator')">+ Kullanıcı Ekle</button>
         <button class="sub-tab-btn ${settingsSubTab==='addMachine'?'active':''}" onclick="setSettingsSubTab('addMachine')">+ Makine Ekle</button>` : ''}
       </div>`;
@@ -4317,6 +4356,9 @@ function renderAdmin(){
               </label>
               <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
                 <input type="checkbox" style="width:auto" ${v.permTadilatOlustur===true || (v.permTadilatOlustur!==false && v.isSef)?'checked':''} onchange="toggleTadilatYetkisi('${code}')"> Tadilat Oluşturabilir${v.isSef?' (Şef için varsayılan açık)':''}
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
+                <input type="checkbox" style="width:auto" ${v.permBildirimYonetimi?'checked':''} onchange="toggleUserPerm('${code}','permBildirimYonetimi')"> Bildirim Ayarlarını Yönetebilir
               </label>` : ''}
               ${code===session.username ? `<span style="font-size:11.5px;color:var(--text-muted)">(bu hesap — silinemez)</span>` : `<button class="del-btn" onclick="deleteOperator('${code}')" title="Sil">🗑</button>`}
             </div>
@@ -4475,6 +4517,46 @@ function renderAdmin(){
         </div>
         <div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;max-width:480px">Bir iş bu süreden fazla duruşta kalırsa uyarı tetiklenir. Varsayılan: 30 dakika.</div>
         ` : ''}`;
+    } else if(settingsSubTab==='bildirimlerim'){
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">🔔 Bildirimlerim</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:640px">Bu telefon/tarayıcıda bildirim almak için aç. SuperAdmin sana bir mesaj gönderirse ya da (şefsen) bir tadilat tamamlandığında buradan bildirim alırsın.</div>
+        ${pushConfigured() ? `
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;max-width:480px">
+          ${pushPermissionState==='granted' ? `<div style="color:var(--success);font-size:13px;font-weight:600">✓ Bu cihazda bildirimler açık</div>`
+            : pushPermissionState==='denied' ? `<div style="color:var(--danger);font-size:12.5px">Bildirimlere tarayıcı ayarlarından izin vermemişsin — telefon/tarayıcı ayarlarından bu site için bildirimi manuel açman gerekiyor.</div>`
+            : `<button class="btn-ghost" onclick="enablePushNotifications()">🔔 Bildirimleri Aç</button>`}
+        </div>` : `<div style="font-size:12.5px;color:var(--text-muted)">Bildirim sistemi henüz kurulmadı (VAPID key eksik).</div>`}`;
+    } else if(settingsSubTab==='bildirimGonder'){
+      const opsForSelect = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin).sort((a,b)=>a[0].localeCompare(b[0]));
+      const history = manualPushHistory();
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">📤 Bildirim Gönder</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:640px">Seçtiğin kişiye anında (bekleme yok) push bildirimi gönderir. Alıcının daha önce "Bildirimlerim" ekranından bildirim izni vermiş olması gerekir — yoksa mesaj sessizce gönderilmez.</div>
+        <div style="max-width:420px">
+          <div class="field"><label>Alıcı</label>
+            <select id="mpush-to">
+              <option value="">— seç —</option>
+              ${opsForSelect.map(([code,v])=>{
+                const hasToken = v.fcmTokens && Object.keys(v.fcmTokens).length>0;
+                return `<option value="${esc(code)}">${esc(code)} · ${esc(v.displayName)}${v.isSef?' (Şef)':v.isAdmin?' (Yönetici)':''}${hasToken?'':' — bildirim izni yok'}</option>`;
+              }).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Başlık (opsiyonel)</label><input id="mpush-title" placeholder="Rota Takip"></div>
+          <div class="field"><label>Mesaj</label><textarea id="mpush-body" style="min-height:80px" maxlength="500" placeholder="Mesajını yaz..."></textarea></div>
+          <button class="btn-primary" onclick="sendManualPush()">📤 Gönder</button>
+        </div>
+        <div style="margin-top:28px;font-size:13px;font-weight:600;margin-bottom:8px">Son Gönderilenler</div>
+        ${history.length===0 ? `<div style="color:var(--text-muted);font-size:12.5px">Henüz manuel bildirim gönderilmemiş.</div>` : `
+        <div class="table-wrap" style="padding:0"><table><thead><tr><th>Zaman</th><th>Kime</th><th>Başlık</th><th>Mesaj</th><th>Gönderen</th><th>Durum</th></tr></thead><tbody>
+          ${history.map(h=>`<tr>
+            <td style="font-size:11.5px">${fmtDT(h.requestedAt)}</td>
+            <td class="mono">${esc(h.toUsername)}</td>
+            <td>${esc(h.title||'—')}</td>
+            <td style="max-width:280px;white-space:normal">${esc(h.body||'—')}</td>
+            <td style="font-size:11.5px">${esc(h.requestedByName||h.requestedBy||'—')}</td>
+            <td>${h.sent===true?`<span style="color:var(--success)">✓ Gönderildi</span>`:h.sent===false?`<span style="color:var(--danger)" title="${esc(h.error||'')}">✕ Başarısız</span>`:`<span style="color:var(--text-muted)">… bekliyor</span>`}</td>
+          </tr>`).join('')}
+        </tbody></table></div>`}`;
     } else if(settingsSubTab==='stok'){
       const items = stockItemsArray();
       const recentMoves = Object.entries(stockHareketleri).map(([id,v])=>({id,...v})).sort((a,b)=>b.ts-a.ts).slice(0,20);
