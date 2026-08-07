@@ -5,8 +5,8 @@
 
    Buradaki FIREBASE_CONFIG, rota_takip.html'deki ile BİREBİR AYNI olmalı. Ana dosyada
    değiştirirsen burayı da güncelle. */
-importScripts('https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js');
 
 firebase.initializeApp({
   apiKey: "AIzaSyAYRQVtJt3sMTo8spx7AVa5EeS_bKXNrGI",
