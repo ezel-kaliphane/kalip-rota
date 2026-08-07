@@ -221,6 +221,32 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .lock-back-btn{background:var(--panel);border:2px solid var(--accent);color:var(--text);border-radius:10px;padding:11px 18px;font-size:15px;font-weight:600}
 .conn-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
 .conn-dot.on{background:var(--success)} .conn-dot.off{background:var(--danger)}
+
+/* =============== UZUN DURUŞ UYARISI =============== */
+@keyframes durusPulse{
+  0%{box-shadow:0 0 0 0 rgba(239,68,68,.55)}
+  70%{box-shadow:0 0 0 9px rgba(239,68,68,0)}
+  100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}
+}
+.matrix-card.durus-alert{animation:durusPulse 1.8s infinite}
+.durus-alert-badge{position:absolute;top:-6px;right:-6px;background:var(--danger);color:#fff;font-size:10px;font-weight:800;border-radius:10px;padding:2px 6px;min-width:16px;text-align:center;line-height:1.3;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+
+/* =============== MOBİL DOKUNMA HEDEFİ İYİLEŞTİRMELERİ =============== */
+/* iOS Safari, 16px'in altındaki input font-size'larda alanı otomatik yakınlaştırır — bu can
+   sıkıcı davranışı engellemek için mobilde tüm form alanlarını 16px'e çıkarıyoruz. Ayrıca
+   Apple/Google dokunma hedefi önerisi (~44px) altında kalan küçük butonları büyütüyoruz. */
+@media (max-width:768px){
+  input,select,textarea{font-size:16px!important}
+  .filter-input{font-size:16px!important;padding:10px 12px!important}
+  .icon-btn{width:42px;height:42px;font-size:16px}
+  .icon-btn-labeled{padding:12px 18px!important;font-size:14px!important}
+  .btn-ghost{padding:11px 16px;font-size:13px;min-height:40px}
+  .chip{padding:11px 16px;min-height:38px}
+  .tab-btn{padding:12px 0;font-size:13px;min-height:44px}
+  .sub-tab-btn{padding:10px 16px;min-height:40px}
+  .del-btn{padding:8px;min-width:36px;min-height:36px}
+  button,.card,.matrix-card,.completed-card,[onclick]{touch-action:manipulation}
+}
 </style>
 </head>
 <body>
@@ -292,6 +318,15 @@ function effectiveDurusReason(e){
 
 /* ===================== YARDIMCI FONKSİYONLAR ===================== */
 const uid = () => Math.random().toString(36).slice(2,10);
+/* Şifreler artık düz metin yerine SHA-256 hash olarak saklanıyor (bkz. doLogin/changePassword/
+   addOperator). Tarayıcının kendi Web Crypto API'si kullanılıyor, ek kütüphane gerekmiyor.
+   Eski (henüz hash'lenmemiş) kayıtlarla geriye dönük uyumluluk için doLogin, düz metin eşleşmesi
+   olursa girişe izin verip o an sessizce hash'e yükseltiyor — ayrı bir "şifre sıfırlama" göçü
+   gerekmiyor, her operatör bir sonraki girişinde otomatik olarak güvenli hale geliyor. */
+async function sha256Hex(str){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
 const esc = s => (s==null?"":String(s)).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmtDT = ts => new Date(ts).toLocaleString("tr-TR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"});
 const fmtDur = ms => { const m=Math.round(ms/60000); return m<60?`${m} dk`:`${Math.floor(m/60)} sa ${m%60} dk`; };
@@ -406,6 +441,74 @@ function canManageStock(){ return !!(session && (session.isSuperAdmin || session
 function toggleStockTracking(){
   if(!canManageStock()) return;
   DB.ref('settings/stockTrackingEnabled').set(!stockEnabled());
+}
+/* ===================== RESİM/ÇİZİM BULMA (opsiyonel modül) =====================
+   Yerel ağdaki resim arama sunucusuna bağımlı olduğu için, sadece sunucu ayaktayken
+   ve SuperAdmin tarafından istendiğinde açılabilir bir anahtarla kontrol edilir
+   (appSettings.resimBulEnabled). Kapalıyken "📷 Resim/Çizim Bul" butonları hiçbir
+   ekranda görünmez.
+*/
+function resimBulEnabled(){ return !!appSettings.resimBulEnabled; }
+function toggleResimBul(){
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
+  DB.ref('settings/resimBulEnabled').set(!resimBulEnabled());
+}
+/* ===================== UZUN DURUŞ UYARISI (opsiyonel modül) =====================
+   Bir iş emri/operasyon, "Gün Sonu" dışındaki bir nedenle appSettings.uzunDurusEsikDk
+   dakikadan (varsayılan 30) daha uzun süredir duruşta kalmışsa, admin ekranlarında görsel
+   uyarı (Makine Matrisi'nde yanıp sönen çerçeve + üst barda sayaç rozeti) gösterilir.
+   "Gün Sonu (Mesai Bitti...)" nedeni hariç tutulur çünkü o zaten beklenen/planlı bir duruştur. */
+function uzunDurusUyariEnabled(){ return appSettings.uzunDurusUyariEnabled !== false; } // varsayılan: açık
+function uzunDurusEsikMs(){ return (Number(appSettings.uzunDurusEsikDk) || 30) * 60000; }
+function toggleUzunDurusUyari(){
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
+  DB.ref('settings/uzunDurusUyariEnabled').set(!uzunDurusUyariEnabled());
+}
+function setUzunDurusEsikDk(v){
+  if(!session || !session.isSuperAdmin) return;
+  const n = Math.max(1, Math.min(600, parseInt(v,10)||30));
+  DB.ref('settings/uzunDurusEsikDk').set(n);
+}
+function uzunDurusluKayitlar(){
+  // Normal imalat/tadilat rota kayıtları (entries) + devam eden tadilat operasyonları, birleşik liste.
+  if(!uzunDurusUyariEnabled()) return [];
+  const esik = uzunDurusEsikMs();
+  const sonuc = [];
+  entriesArray().forEach(e=>{
+    if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON){
+      const ms = nowTick - e.duruşTs;
+      if(ms>=esik) sonuc.push({ tur:'entry', makine:e.makine, isEmriNo:e.isEmriNo||e.talepNo, operatorName:e.operatorName, operatorUsername:e.operatorUsername, neden:e.duruşNedeni, ms, ref:e });
+    }
+  });
+  tadilatArray().forEach(t=>{
+    tadilatOperasyonlarArray(t).forEach(op=>{
+      if(op.status==='duruş' && op.duruşTs && op.duruşNedeni!==GUN_SONU_REASON){
+        const ms = nowTick - op.duruşTs;
+        if(ms>=esik) sonuc.push({ tur:'tadilat', makine:op.makine, isEmriNo:t.uKodu, operatorName:op.operatorName, operatorUsername:op.operatorUsername, neden:op.duruşNedeni, ms, ref:op });
+      }
+    });
+  });
+  return sonuc.sort((a,b)=>b.ms-a.ms);
+}
+let uzunDurusModalOpen = false;
+function openUzunDurusModal(){ uzunDurusModalOpen = true; render(); }
+function closeUzunDurusModal(){ uzunDurusModalOpen = false; render(); }
+function renderUzunDurusModal(){
+  const list = uzunDurusluKayitlar();
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeUzunDurusModal()">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div><div class="modal-title">⚠ Uzun Süredir Duruşta</div><div class="modal-sub">Eşik: ${uzunDurusEsikMs()/60000} dk ve üzeri</div></div>
+        <button class="icon-btn" onclick="closeUzunDurusModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        ${list.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:30px 0">Şu an eşiği aşan duruş yok.</div>` : `
+        <div class="table-wrap" style="padding:0"><table><thead><tr><th>Makine</th><th>İş Emri</th><th>Operatör</th><th>Neden</th><th>Süre</th></tr></thead><tbody>
+          ${list.map(r=>`<tr><td class="mono" style="color:var(--accent)">${esc((r.makine||'').split(' · ')[0]||'—')}</td><td class="mono">${esc(r.isEmriNo||'—')}</td><td>${esc(r.operatorName||r.operatorUsername||'—')}</td><td style="color:var(--warn)">${esc(r.neden||'—')}</td><td style="font-weight:700;color:var(--danger)">${fmtDur(r.ms)}</td></tr>`).join('')}
+        </tbody></table></div>`}
+      </div>
+    </div>
+  </div>`;
 }
 function stockItemsArray(){ return Object.entries(stockItems).map(([id,v])=>({id, ...v})).sort((a,b)=>(a.kod||'').localeCompare(b.kod||'')); }
 function lotsArray(item){ return Object.entries(item.lots||{}).map(([id,v])=>({id, ...v})).sort((a,b)=>(b.boy||0)-(a.boy||0)); }
@@ -1470,17 +1573,21 @@ function entriesArray(){
 }
 
 /* ===================== KİMLİK / GİRİŞ ===================== */
-function doLogin(){
+async function doLogin(){
   const uname = (document.getElementById('login-username').value||'').trim().toUpperCase();
   const pass = document.getElementById('login-password').value||'';
   const remember = !!document.getElementById('login-remember')?.checked;
   const op = STATE.operators[uname];
-  if(!op || op.password !== pass){
+  const hash = pass ? await sha256Hex(pass) : '';
+  const legacyPlaintextMatch = !!op && op.password === pass && op.password !== hash;
+  const passOk = !!op && (op.password === hash || legacyPlaintextMatch);
+  if(!op || !passOk){
     loginError = 'Kullanıcı adı veya şifre hatalı';
     toast(loginError);
     render();
     return;
   }
+  if(legacyPlaintextMatch){ DB.ref('operators/'+uname+'/password').set(hash); } // sessiz göç
   loginError = '';
   session = { username: uname, displayName: op.displayName, isAdmin: !!op.isAdmin, isSuperAdmin: !!op.isSuperAdmin, isSef: !!op.isSef };
   if(remember){ save('rota_remember', true); save('rota_session', session); }
@@ -1506,15 +1613,18 @@ function themeToggleHtml(){
   </button>`;
 }
 
-function changePassword(){
+async function changePassword(){
   const cur = document.getElementById('pw-current').value||'';
   const next = (document.getElementById('pw-next').value||'').replace(/\D/g,'').slice(0,8);
   const conf = (document.getElementById('pw-confirm').value||'').replace(/\D/g,'').slice(0,8);
   if(!/^\d{1,8}$/.test(next)){ toast('Yeni şifre en fazla 8 haneli rakam olmalı'); return; }
   if(next!==conf){ toast('Yeni şifreler eşleşmiyor'); return; }
   const op = STATE.operators[session.username];
-  if(!op || op.password !== cur){ toast('Mevcut şifre yanlış'); return; }
-  DB.ref('operators/'+session.username+'/password').set(next);
+  const curHash = cur ? await sha256Hex(cur) : '';
+  const curOk = !!op && (op.password === curHash || op.password === cur); // eski düz metin kayıtları için de kabul
+  if(!op || !curOk){ toast('Mevcut şifre yanlış'); return; }
+  const nextHash = await sha256Hex(next);
+  DB.ref('operators/'+session.username+'/password').set(nextHash);
   toast('Şifre güncellendi');
   setView('list');
 }
@@ -1851,7 +1961,7 @@ function toggleMessagesAccess(code){
 }
 function setSettingsSubTab(t){ settingsSubTab=t; render(); }
 
-function addOperator(){
+async function addOperator(){
   const code = (document.getElementById('new-op-code').value||'').trim().toUpperCase();
   const displayName = (document.getElementById('new-op-name').value||'').trim();
   const password = (document.getElementById('new-op-pass').value||'').replace(/\D/g,'').slice(0,8) || '1234';
@@ -1860,7 +1970,7 @@ function addOperator(){
   if(!code){ toast('Kullanıcı kodu girin'); return; }
   if(!displayName){ toast('Ad soyad girin'); return; }
   if(STATE.operators[code]){ toast(code+' zaten kayıtlı'); return; }
-  const record = { displayName, password, defaultMachine: '' };
+  const record = { displayName, password: await sha256Hex(password), defaultMachine: '' };
   if(isSef){ record.isAdmin = true; record.isSef = true; }
   else if(isManager) record.isAdmin = true;
   DB.ref('operators/'+code).set(record);
@@ -3634,7 +3744,7 @@ function renderOperator(){
         body = `<div class="lock-screen" style="padding-top:40px">
           <div class="lock-label">TADİLAT — AKTİF</div>
           <div class="lock-id">${esc(mine.uKodu)}</div>
-          <button class="btn-ghost" style="margin-top:4px;padding:6px 14px;font-size:11.5px" onclick="resimBul('${esc(mine.uKodu).replace(/'/g,"\\'")}')">📷 Resim/Çizim Bul</button>
+          ${resimBulEnabled() ? `<button class="btn-ghost" style="margin-top:4px;padding:6px 14px;font-size:11.5px" onclick="resimBul('${esc(mine.uKodu).replace(/'/g,"\\'")}')">📷 Resim/Çizim Bul</button>` : ''}
           <div class="lock-machine">${esc(op.makine||'—')}</div>
           <div class="lock-timer">${fmtElapsed(nowTick-op.baslamaTs)}</div>
           <div class="lock-meta">${fmtDT(op.baslamaTs)} itibarıyla devam ediyor${opsGecmis.length>0?` · Bu, ${opsGecmis.length+1}. operasyon`:''}</div>
@@ -3661,7 +3771,7 @@ function renderOperator(){
             <div style="font-size:12.5px;color:var(--text-muted);margin:6px 0 8px">${t.talepEdenKisi?`${esc(t.talepEdenKisi)} · `:''}${t.bolum?`${esc(t.bolum)} · `:''}${t.adet?`Adet: ${esc(t.adet)}`:''}</div>
             <div style="font-size:13px;margin-bottom:8px">${esc(t.aciklama)}</div>
             ${gecmis.length>0 ? `<div style="font-size:11.5px;color:var(--accent);margin-bottom:10px">🔁 ${gecmis.length} operasyon tamamlandı, devamı bekleniyor</div>` : ''}
-            <button class="btn-ghost" style="padding:6px 14px;font-size:11.5px;margin-bottom:8px" onclick="event.stopPropagation(); resimBul('${esc(t.uKodu).replace(/'/g,"\\'")}')">📷 Resim/Çizim Bul</button>
+            ${resimBulEnabled() ? `<button class="btn-ghost" style="padding:6px 14px;font-size:11.5px;margin-bottom:8px" onclick="event.stopPropagation(); resimBul('${esc(t.uKodu).replace(/'/g,"\\'")}')">📷 Resim/Çizim Bul</button>` : ''}
           ` : ''}
           ${secimAcik ? `
             <div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
@@ -4005,11 +4115,16 @@ function renderAdmin(){
     view = fallbackKey ? tabKeyToView[fallbackKey] : 'report';
   }
   const operatorEntries = Object.entries(STATE.operators).filter(([k,v])=>!v.isAdmin);
+  const uzunDurusList = uzunDurusUyariEnabled() ? uzunDurusluKayitlar() : [];
   const header = `
     <div class="admin-header">
       <div style="display:flex;align-items:center;gap:10px">${connDot()}<span style="font-size:20px">🏭</span><span class="brand">ROTA TAKİP · YÖNETİCİ RAPORU</span></div>
       <div style="display:flex;gap:10px">
         ${themeToggleHtml()}
+        ${uzunDurusList.length>0 ? `<button class="icon-btn" style="position:relative;border-color:var(--danger);color:var(--danger)" onclick="openUzunDurusModal()" title="Uzun süredir duruşta olanlar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          <span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${uzunDurusList.length}</span>
+        </button>` : ''}
         ${canViewMessages() ? `<button class="icon-btn" style="position:relative" onclick="openMessagesModal()" title="Mesajlar">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M2 6l10 7 10-7"></path></svg>
           ${unreadMessageCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadMessageCount()}</span>` : ''}
@@ -4018,6 +4133,7 @@ function renderAdmin(){
         <button class="icon-btn-labeled" onclick="doLogout()" style="padding:10px 20px;font-size:14px;font-weight:600">⎋ Çıkış</button>
       </div>
     </div>
+    ${uzunDurusModalOpen ? renderUzunDurusModal() : ''}
     ${messagesModalOpen ? renderMessagesModal() : ''}
     <div class="tabs" style="padding:12px 24px 0">
       ${isAdminTabVisible('rapor') ? `<button class="tab-btn ${view==='report'?'active':''}" onclick="setView('report')">☰ Rapor</button>` : ''}
@@ -4045,6 +4161,8 @@ function renderAdmin(){
         <button class="sub-tab-btn ${settingsSubTab==='veriListeleri'?'active':''}" onclick="setSettingsSubTab('veriListeleri')">Veri Listeleri</button>
         <button class="sub-tab-btn ${settingsSubTab==='stok'?'active':''}" onclick="setSettingsSubTab('stok')">Malzeme Stoğu</button>
         ${session.isSuperAdmin ? `
+        <button class="sub-tab-btn ${settingsSubTab==='resimBul'?'active':''}" onclick="setSettingsSubTab('resimBul')">Resim/Çizim Bul</button>
+        <button class="sub-tab-btn ${settingsSubTab==='uyarilar'?'active':''}" onclick="setSettingsSubTab('uyarilar')">Uzun Duruş Uyarısı</button>
         <button class="sub-tab-btn ${settingsSubTab==='addOperator'?'active':''}" onclick="setSettingsSubTab('addOperator')">+ Kullanıcı Ekle</button>
         <button class="sub-tab-btn ${settingsSubTab==='addMachine'?'active':''}" onclick="setSettingsSubTab('addMachine')">+ Makine Ekle</button>` : ''}
       </div>`;
@@ -4300,6 +4418,34 @@ function renderAdmin(){
             </div>
           `).join('')}
         </div>`}`;
+    } else if(settingsSubTab==='resimBul'){
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Resim/Çizim Bul <span style="font-size:11.5px;font-weight:400;color:var(--text-muted)">(opsiyonel modül)</span></div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:640px">Bu özellik, yerel ağdaki ayrı bir resim arama sunucusuna (ilgili bilgisayarda "SUNUCUYU_BASLAT.bat" ile açılan) bağımlıdır. Sunucu sadece o bilgisayarın bulunduğu ağdan erişilebilir olduğu için, ağ/erişim koşulları netleşene kadar kapalı tutulması önerilir.</div>
+        <label style="display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid ${resimBulEnabled()?'var(--success)':'var(--border)'};border-radius:10px;padding:14px 16px;margin-bottom:22px;cursor:pointer;max-width:480px">
+          <input type="checkbox" ${resimBulEnabled()?'checked':''} onchange="toggleResimBul()" style="width:auto;transform:scale(1.3)">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:${resimBulEnabled()?'var(--success)':'var(--text)'}">Resim/Çizim Bul Butonunu ${resimBulEnabled()?'Aktif':'Kapalı'}</div>
+            <div style="font-size:11.5px;color:var(--text-muted)">Kapalıyken "📷 Resim/Çizim Bul" butonu operatör ve yönetici ekranlarının hiçbirinde görünmez. Açtığında, ilgili sunucu (${RESIM_SUNUCU_URL}) o an ayakta değilse kullanıcıya net bir uyarı gösterilir.</div>
+          </div>
+        </label>`;
+    } else if(settingsSubTab==='uyarilar'){
+      const esikDk = Math.round(uzunDurusEsikMs()/60000);
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Uzun Duruş Uyarısı</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:640px">Bir iş, "Gün Sonu" dışındaki bir nedenle belirlediğiniz süreden daha uzun süre duruşta kalırsa, Makine Matrisi'nde yanıp sönen bir uyarı ve üst barda bir sayaç rozeti gösterilir.</div>
+        <label style="display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid ${uzunDurusUyariEnabled()?'var(--success)':'var(--border)'};border-radius:10px;padding:14px 16px;margin-bottom:20px;cursor:pointer;max-width:480px">
+          <input type="checkbox" ${uzunDurusUyariEnabled()?'checked':''} onchange="toggleUzunDurusUyari()" style="width:auto;transform:scale(1.3)">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:${uzunDurusUyariEnabled()?'var(--success)':'var(--text)'}">Uzun Duruş Uyarısını ${uzunDurusUyariEnabled()?'Aktif':'Kapalı'}</div>
+            <div style="font-size:11.5px;color:var(--text-muted)">Kapalıyken hiçbir uyarı rozeti/animasyonu görünmez.</div>
+          </div>
+        </label>
+        ${uzunDurusUyariEnabled() ? `
+        <div class="field" style="max-width:260px">
+          <label>Eşik (dakika)</label>
+          <input type="number" min="1" max="600" value="${esikDk}" onchange="setUzunDurusEsikDk(this.value)">
+        </div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;max-width:480px">Bir iş bu süreden fazla duruşta kalırsa uyarı tetiklenir. Varsayılan: 30 dakika.</div>
+        ` : ''}`;
     } else if(settingsSubTab==='stok'){
       const items = stockItemsArray();
       const recentMoves = Object.entries(stockHareketleri).map(([id,v])=>({id,...v})).sort((a,b)=>b.ts-a.ts).slice(0,20);
@@ -4463,7 +4609,9 @@ function renderAdmin(){
       const border = tadilatHere ? 'var(--tadilat-info)' : running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
       const dotColor = tadilatHere ? 'var(--tadilat-info)' : running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
       const lastFinished = (!running&&!stopped&&!tadilatHere) ? machineEntries.slice().sort((a,b)=>b.startTs-a.startTs)[0] : null;
-      body += `<div class="matrix-card" style="background:${bg};border-color:${border}" onclick="openMachineDetail('${m.code}')">
+      const durusAlert = uzunDurusUyariEnabled() && stopped && stoppedEntries.some(e=>e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON && (nowTick-e.duruşTs)>=uzunDurusEsikMs());
+      body += `<div class="matrix-card${durusAlert?' durus-alert':''}" style="background:${bg};border-color:${durusAlert?'var(--danger)':border};position:relative" onclick="openMachineDetail('${m.code}')">
+        ${durusAlert ? `<span class="durus-alert-badge" title="Uzun süredir duruşta">⚠</span>` : ''}
         <div class="matrix-card-top"><span class="matrix-code">${m.code}</span><span class="matrix-dot" style="background:${dotColor}"></span></div>
         <div class="matrix-name">${esc(m.name)}</div>`;
       if(tadilatHere){
@@ -4786,7 +4934,7 @@ function renderAdmin(){
           <div style="font-size:13px;margin-bottom:10px">${esc(t.aciklama)}</div>
           ${gecmis.length>0 ? `<div style="font-size:11.5px;color:var(--accent);margin-bottom:10px">🔁 ${gecmis.length} operasyon tamamlandı (${gecmis.map(o=>esc(o.operatorName)).join(', ')}), devamı bekleniyor</div>` : ''}
           <div style="display:flex;gap:8px">
-            <button class="del-btn" onclick="event.stopPropagation(); resimBul('${esc(t.uKodu).replace(/'/g,"\\'")}')" title="Resim/Çizim Bul">📷 Resim Bul</button>
+            ${resimBulEnabled() ? `<button class="del-btn" onclick="event.stopPropagation(); resimBul('${esc(t.uKodu).replace(/'/g,"\\'")}')" title="Resim/Çizim Bul">📷 Resim Bul</button>` : ''}
             ${canCreateTadilat() ? `<button class="del-btn" onclick="event.stopPropagation(); openTadilatEdit('${t.id}')" title="Düzelt">✏️ Düzelt</button>` : ''}
             ${session.isSuperAdmin ? `<button class="del-btn" onclick="event.stopPropagation(); deleteTadilat('${t.id}')" title="Talebi sil">🗑 Sil</button>` : ''}
           </div>
