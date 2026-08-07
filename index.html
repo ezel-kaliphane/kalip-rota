@@ -4102,11 +4102,10 @@ function renderOperator(){
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:20px">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">🔔 Bildirimler</div>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Bir işin uzun süre duruşta kaldığını fark edip telefonuna hatırlatma göndersin mi?</div>
-        ${pushPermissionState==='granted' ? `<div style="color:var(--success);font-size:13px;font-weight:600">✓ Bildirimler açık</div>`
+        ${pushPermissionState==='granted' ? `<div style="color:var(--success);font-size:13px;font-weight:600;margin-bottom:6px">✓ Bildirimler açık</div><button class="btn-ghost" style="font-size:11.5px;padding:6px 12px" onclick="enablePushNotifications()">🔄 Yeniden senkronize et</button>`
           : pushPermissionState==='denied' ? `<div style="color:var(--danger);font-size:12.5px">Bildirimlere tarayıcı ayarlarından izin vermemişsin — telefon/tarayıcı ayarlarından bu site için bildirimi manuel açman gerekiyor.</div>`
           : `<button class="btn-ghost" onclick="enablePushNotifications()">🔔 Bildirimleri Aç</button>`}
       </div>` : ''}
-      <div class="field"><label>Mevcut Şifre</label><input id="pw-current" type="password" placeholder="••••"></div>
       <div class="field"><label>Yeni Şifre (max 8 hane, sadece rakam)</label><input id="pw-next" type="password" inputmode="numeric" maxlength="8" placeholder="ör. 4821"></div>
       <div class="field"><label>Yeni Şifre (tekrar)</label><input id="pw-confirm" type="password" inputmode="numeric" maxlength="8" placeholder="ör. 4821"></div>
       <button class="btn-primary" onclick="changePassword()">✓ Şifreyi Güncelle</button>
@@ -4533,7 +4532,7 @@ function renderAdmin(){
         <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:640px">Bu telefon/tarayıcıda bildirim almak için aç. SuperAdmin sana bir mesaj gönderirse ya da (şefsen) bir tadilat tamamlandığında buradan bildirim alırsın.</div>
         ${pushConfigured() ? `
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;max-width:480px">
-          ${pushPermissionState==='granted' ? `<div style="color:var(--success);font-size:13px;font-weight:600">✓ Bu cihazda bildirimler açık</div>`
+          ${pushPermissionState==='granted' ? `<div style="color:var(--success);font-size:13px;font-weight:600;margin-bottom:6px">✓ Bu cihazda bildirimler açık</div><button class="btn-ghost" style="font-size:11.5px;padding:6px 12px" onclick="enablePushNotifications()">🔄 Yeniden senkronize et</button>`
             : pushPermissionState==='denied' ? `<div style="color:var(--danger);font-size:12.5px">Bildirimlere tarayıcı ayarlarından izin vermemişsin — telefon/tarayıcı ayarlarından bu site için bildirimi manuel açman gerekiyor.</div>`
             : `<button class="btn-ghost" onclick="enablePushNotifications()">🔔 Bildirimleri Aç</button>`}
         </div>` : `<div style="font-size:12.5px;color:var(--text-muted)">Bildirim sistemi henüz kurulmadı (VAPID key eksik).</div>`}`;
