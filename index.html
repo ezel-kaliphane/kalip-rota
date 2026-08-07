@@ -1482,6 +1482,17 @@ const VAPID_KEY = 'BCzH63ol7xwko9kjQRuDHDXK8IwyD5E3vq4TaP5Pd3W6bUay1BzR1J2lTcn1x
 function pushConfigured(){ return VAPID_KEY && VAPID_KEY.indexOf('BURAYA')<0; }
 let pushPermissionState = (typeof Notification!=='undefined') ? Notification.permission : 'unsupported'; // 'default' | 'granted' | 'denied' | 'unsupported'
 
+/* Bu cihaz için sabit bir kimlik — tarayıcının localStorage'ında kalıcı olarak saklanıyor.
+   Token'lar artık bu ID'ye göre kaydediliyor (fcmTokens/{deviceId}: token), token değeri
+   kendisine göre değil — böylece aynı cihazda "Bildirimleri Aç"a tekrar basılsa ya da FCM
+   token'ı arka planda yenilense bile, HEP AYNI YUVAYA yazılır, eski token'lar birikip aynı
+   bildirimin 2-3 kez gitmesine yol açmaz. */
+function pushDeviceId(){
+  let id = load('rota_push_device_id', null);
+  if(!id){ id = uid()+uid(); save('rota_push_device_id', id); }
+  return id;
+}
+
 async function enablePushNotifications(){
   if(!session) return;
   if(typeof Notification==='undefined' || !('serviceWorker' in navigator)){
@@ -1496,7 +1507,7 @@ async function enablePushNotifications(){
     const messaging = firebase.messaging();
     const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
     if(token){
-      DB.ref('operators/'+session.username+'/fcmTokens/'+token).set(true);
+      DB.ref('operators/'+session.username+'/fcmTokens/'+pushDeviceId()).set(token);
       toast('Bildirimler açıldı ✓');
     }
   }catch(err){
