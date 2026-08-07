@@ -13,6 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Rota Takip">
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 <style>
@@ -1466,6 +1467,39 @@ setInterval(()=>{
   renderLiveBits();
 }, 1000);
 
+/* ===================== PUSH BİLDİRİMİ (FCM) =====================
+   Firebase Console → Project Settings → Cloud Messaging → Web Push certificates'ten
+   ürettiğin VAPID public key'i buraya yapıştır. Boş bırakılırsa bildirim özelliği
+   sessizce devre dışı kalır (hata vermez), uygulamanın geri kalanı normal çalışır. */
+const VAPID_KEY = 'BCzH63ol7xwko9kjQRuDHDXK8IwyD5E3vq4TaP5Pd3W6bUay1BzR1J2lTcn1x4FRXoM6SsaLiT5ZCAGz7pMyIZs';
+
+function pushConfigured(){ return VAPID_KEY && VAPID_KEY.indexOf('BURAYA')<0; }
+let pushPermissionState = (typeof Notification!=='undefined') ? Notification.permission : 'unsupported'; // 'default' | 'granted' | 'denied' | 'unsupported'
+
+async function enablePushNotifications(){
+  if(!session || session.isAdmin) return; // şimdilik sadece operatörler için (duruşu unutan operatör hedefleniyor)
+  if(typeof Notification==='undefined' || !('serviceWorker' in navigator)){
+    toast('Bu tarayıcı bildirim desteklemiyor'); return;
+  }
+  if(!pushConfigured()){ toast('Bildirim sistemi henüz kurulmadı (VAPID key eksik)'); return; }
+  try{
+    const reg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+    const perm = await Notification.requestPermission();
+    pushPermissionState = perm;
+    if(perm !== 'granted'){ toast('Bildirim izni verilmedi'); render(); return; }
+    const messaging = firebase.messaging();
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+    if(token){
+      DB.ref('operators/'+session.username+'/fcmTokens/'+token).set(true);
+      toast('Bildirimler açıldı ✓');
+    }
+  }catch(err){
+    console.error('Push kayıt hatası:', err);
+    toast('Bildirim açılamadı: '+(err.message||'bilinmeyen hata'));
+  }
+  render();
+}
+
 /* ===================== FIREBASE ===================== */
 function fbConfigured(){ return FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.databaseURL.indexOf('BURAYA')<0; }
 function initFirebase(){
@@ -1965,21 +1999,15 @@ async function addOperator(){
   const code = (document.getElementById('new-op-code').value||'').trim().toUpperCase();
   const displayName = (document.getElementById('new-op-name').value||'').trim();
   const password = (document.getElementById('new-op-pass').value||'').replace(/\D/g,'').slice(0,8) || '1234';
-  const isManager = !!document.getElementById('new-op-manager')?.checked;
-  const isSef = !!document.getElementById('new-op-sef')?.checked;
   if(!code){ toast('Kullanıcı kodu girin'); return; }
   if(!displayName){ toast('Ad soyad girin'); return; }
   if(STATE.operators[code]){ toast(code+' zaten kayıtlı'); return; }
   const record = { displayName, password: await sha256Hex(password), defaultMachine: '' };
-  if(isSef){ record.isAdmin = true; record.isSef = true; }
-  else if(isManager) record.isAdmin = true;
   DB.ref('operators/'+code).set(record);
-  toast(code+' eklendi'+(isSef?' (şef)':isManager?' (yönetici)':''));
+  toast(code+' eklendi — Yönetici/Şef yapmak için Firebase Console\'dan isAdmin/isSef alanını ayarla');
   document.getElementById('new-op-code').value='';
   document.getElementById('new-op-name').value='';
   document.getElementById('new-op-pass').value='1234';
-  if(document.getElementById('new-op-manager')) document.getElementById('new-op-manager').checked=false;
-  if(document.getElementById('new-op-sef')) document.getElementById('new-op-sef').checked=false;
 }
 function addMachine(){
   const code = (document.getElementById('new-mk-code').value||'').trim().toUpperCase();
@@ -4022,6 +4050,14 @@ function renderOperator(){
   } else if(view==='settings'){
     body = `<div class="body-pad">
       <div class="badge" style="margin-bottom:14px">${esc(session.username)} · ${esc(session.displayName)}</div>
+      ${pushConfigured() ? `
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:20px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">🔔 Bildirimler</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Bir işin uzun süre duruşta kaldığını fark edip telefonuna hatırlatma göndersin mi?</div>
+        ${pushPermissionState==='granted' ? `<div style="color:var(--success);font-size:13px;font-weight:600">✓ Bildirimler açık</div>`
+          : pushPermissionState==='denied' ? `<div style="color:var(--danger);font-size:12.5px">Bildirimlere tarayıcı ayarlarından izin vermemişsin — telefon/tarayıcı ayarlarından bu site için bildirimi manuel açman gerekiyor.</div>`
+          : `<button class="btn-ghost" onclick="enablePushNotifications()">🔔 Bildirimleri Aç</button>`}
+      </div>` : ''}
       <div class="field"><label>Mevcut Şifre</label><input id="pw-current" type="password" placeholder="••••"></div>
       <div class="field"><label>Yeni Şifre (max 8 hane, sadece rakam)</label><input id="pw-next" type="password" inputmode="numeric" maxlength="8" placeholder="ör. 4821"></div>
       <div class="field"><label>Yeni Şifre (tekrar)</label><input id="pw-confirm" type="password" inputmode="numeric" maxlength="8" placeholder="ör. 4821"></div>
@@ -4259,19 +4295,12 @@ function renderAdmin(){
     } else if(settingsSubTab==='addOperator'){
       const allOps = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Yeni Kullanıcı Ekle</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:480px">Operatör için kullanıcı adı OPRT kodu olsun (ör. OPRT17). Yönetici ekliyorsan istediğin bir kullanıcı adı verebilirsin. Şifreyi kendisi sonradan değiştirebilir.</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:480px">Operatör için kullanıcı adı OPRT kodu olsun (ör. OPRT17). Şifreyi kendisi sonradan değiştirebilir.</div>
         <div style="max-width:400px">
           <div class="field"><label>Kullanıcı Kodu</label><input id="new-op-code" placeholder="ör. OPRT17"></div>
           <div class="field"><label>Ad Soyad</label><input id="new-op-name" placeholder="ör. Mehmet YILMAZ"></div>
           <div class="field"><label>Şifre (max 8 hane, rakam)</label><input id="new-op-pass" inputmode="numeric" maxlength="8" value="1234"></div>
-          <label style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
-            <input id="new-op-manager" type="checkbox" style="width:auto">
-            <span style="font-size:13px">Yönetici <span style="color:var(--text-muted);font-size:11.5px">(Rapor/Makine Matrisi/Tamamlanan Kodlar/Analiz'i görebilir, Ayarlar'a giremez; Rapor'da düzenleme varsayılan açık, silme kapalı — aşağıdan değiştirebilirsin)</span></span>
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer">
-            <input id="new-op-sef" type="checkbox" style="width:auto">
-            <span style="font-size:13px">Şef <span style="color:var(--text-muted);font-size:11.5px">(Rapor/Makine Matrisi/Tamamlanan Kodlar'ı görebilir, Analiz'e ve diğer Ayarlar sekmelerine giremez; Rapor'da düzenleme varsayılan açık, silme kapalı)</span></span>
-          </label>
+          <div style="font-size:11.5px;color:var(--text-muted);background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px">🔒 Yönetici/Şef ataması güvenlik nedeniyle artık buradan yapılamıyor. Kullanıcıyı normal operatör olarak ekledikten sonra, Firebase Console → Realtime Database → <span class="mono">operators/KODU/isAdmin</span> (ve gerekirse <span class="mono">isSef</span>) alanını elle <span class="mono">true</span> yapman gerekiyor.</div>
           <button class="btn-primary" onclick="addOperator()">+ Operatörü Ekle</button>
         </div>
         <div style="margin-top:28px;font-size:13px;font-weight:600;margin-bottom:8px">Kayıtlı Kullanıcılar (${allOps.length})</div>
