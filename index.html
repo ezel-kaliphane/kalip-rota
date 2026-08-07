@@ -1934,6 +1934,75 @@ function tadilatKisaLabel(t){
   if(t.aciklama) return t.aciklama.length>60 ? t.aciklama.slice(0,60)+'…' : t.aciklama;
   return '';
 }
+/* ===================== RESİM/ÇİZİM BUL (yerel arama sunucusu üzerinden) =====================
+   Fabrika ağındaki bir bilgisayarda çalışan resim_arama_sunucusu.py'a (SUNUCUYU_BASLAT.bat ile
+   başlatılıyor) bağlanıp, U koduna göre eşleşen resim/çizim/PDF dosyalarını bulur ve gösterir.
+   Sunucu SADECE aynı yerel ağdan (fabrika/ofis içinden) erişilebilir — internetten değil.
+   Sunucunun IP/portu ya da gizli anahtarı değişirse SADECE aşağıdaki iki satırı güncelleyin —
+   resim_arama_sunucusu.py'daki PORT ve GIZLI_ANAHTAR ile birebir aynı olmalılar.
+*/
+const RESIM_SUNUCU_URL = 'http://192.168.0.36:5051';
+const RESIM_SUNUCU_ANAHTAR = 'ezel-2026-resim';
+let resimAramaOpen = null;      // aranan U kodu (modal başlığı için)
+let resimAramaSonuclar = null;  // null = henüz sonuç yok/aranıyor, [] = sonuç yok, [...] = sonuçlar
+let resimAramaHata = null;
+async function resimBul(uKodu){
+  if(!uKodu){ toast('U kodu boş'); return; }
+  resimAramaOpen = uKodu; resimAramaSonuclar = null; resimAramaHata = null;
+  render();
+  try{
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), 2500);
+    const pingRes = await fetch(`${RESIM_SUNUCU_URL}/ping`, { signal: ctrl.signal });
+    clearTimeout(t);
+    if(!pingRes.ok) throw new Error('ping-fail');
+  }catch(err){
+    resimAramaHata = `Resim sunucusuna ulaşılamıyor. Sunucunun çalıştığı bilgisayardan "SUNUCUYU_BASLAT.bat" ile başlatıldığından ve aynı ağda olduğunuzdan emin olun. (${RESIM_SUNUCU_URL})`;
+    render();
+    return;
+  }
+  try{
+    const res = await fetch(`${RESIM_SUNUCU_URL}/ara?q=${encodeURIComponent(uKodu)}&anahtar=${encodeURIComponent(RESIM_SUNUCU_ANAHTAR)}`);
+    const data = await res.json();
+    if(!data.ok){ resimAramaHata = data.hata || 'Arama başarısız oldu.'; render(); return; }
+    resimAramaSonuclar = data.sonuclar || [];
+  }catch(err){
+    resimAramaHata = 'Arama sırasında bir bağlantı hatası oluştu.';
+  }
+  render();
+}
+function closeResimArama(){ resimAramaOpen=null; resimAramaSonuclar=null; resimAramaHata=null; render(); }
+function renderResimAramaModal(){
+  const resimUzantilar = ['.jpg','.jpeg','.png','.bmp','.gif'];
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeResimArama()">
+    <div class="modal-box" style="max-width:760px">
+      <div class="modal-header">
+        <div><div class="modal-title">📷 Resim/Çizim Bul</div><div class="modal-sub mono">${esc(resimAramaOpen)}</div></div>
+        <button class="icon-btn" onclick="closeResimArama()">✕</button>
+      </div>
+      <div class="modal-body">
+        ${resimAramaHata ? `<div style="color:var(--danger);font-size:13px;padding:24px;text-align:center;line-height:1.6">${esc(resimAramaHata)}</div>`
+        : resimAramaSonuclar===null ? `<div style="text-align:center;color:var(--text-muted);padding:30px">Aranıyor…</div>`
+        : resimAramaSonuclar.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:30px">Eşleşen dosya bulunamadı.</div>`
+        : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px">
+          ${resimAramaSonuclar.map(d=>{
+            const dosyaUrl = `${RESIM_SUNUCU_URL}/dosya?id=${d.id}&anahtar=${encodeURIComponent(RESIM_SUNUCU_ANAHTAR)}`;
+            const kategoriIkon = (d.kategori||'').split(' ')[0] || '📄';
+            return resimUzantilar.includes(d.uzanti)
+              ? `<a href="${dosyaUrl}" target="_blank" style="display:block;border:1px solid var(--border);border-radius:8px;overflow:hidden;text-decoration:none">
+                  <img src="${dosyaUrl}" loading="lazy" style="width:100%;height:110px;object-fit:cover;background:var(--panel-alt);display:block">
+                  <div style="padding:6px 8px;font-size:10.5px;color:var(--text);word-break:break-all">${esc(d.ad)}</div>
+                </a>`
+              : `<a href="${dosyaUrl}" target="_blank" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border);border-radius:8px;padding:14px 8px;text-decoration:none;background:var(--panel-alt);min-height:110px">
+                  <span style="font-size:24px">${kategoriIkon}</span>
+                  <div style="font-size:10.5px;color:var(--text);text-align:center;word-break:break-all">${esc(d.ad)}</div>
+                </a>`;
+          }).join('')}
+        </div>`}
+      </div>
+    </div>
+  </div>`;
+}
 function malzemeLikeMatch(text, pattern){
   if(!pattern) return true;
   const t = String(text||'');
@@ -3565,6 +3634,7 @@ function renderOperator(){
         body = `<div class="lock-screen" style="padding-top:40px">
           <div class="lock-label">TADİLAT — AKTİF</div>
           <div class="lock-id">${esc(mine.uKodu)}</div>
+          <button class="btn-ghost" style="margin-top:4px;padding:6px 14px;font-size:11.5px" onclick="resimBul('${esc(mine.uKodu).replace(/'/g,"\\'")}')">📷 Resim/Çizim Bul</button>
           <div class="lock-machine">${esc(op.makine||'—')}</div>
           <div class="lock-timer">${fmtElapsed(nowTick-op.baslamaTs)}</div>
           <div class="lock-meta">${fmtDT(op.baslamaTs)} itibarıyla devam ediyor${opsGecmis.length>0?` · Bu, ${opsGecmis.length+1}. operasyon`:''}</div>
@@ -3591,6 +3661,7 @@ function renderOperator(){
             <div style="font-size:12.5px;color:var(--text-muted);margin:6px 0 8px">${t.talepEdenKisi?`${esc(t.talepEdenKisi)} · `:''}${t.bolum?`${esc(t.bolum)} · `:''}${t.adet?`Adet: ${esc(t.adet)}`:''}</div>
             <div style="font-size:13px;margin-bottom:8px">${esc(t.aciklama)}</div>
             ${gecmis.length>0 ? `<div style="font-size:11.5px;color:var(--accent);margin-bottom:10px">🔁 ${gecmis.length} operasyon tamamlandı, devamı bekleniyor</div>` : ''}
+            <button class="btn-ghost" style="padding:6px 14px;font-size:11.5px;margin-bottom:8px" onclick="event.stopPropagation(); resimBul('${esc(t.uKodu).replace(/'/g,"\\'")}')">📷 Resim/Çizim Bul</button>
           ` : ''}
           ${secimAcik ? `
             <div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
@@ -3922,7 +3993,7 @@ function renderOperator(){
     body += `</div>`;
   }
 
-  return `<div class="root-mobile theme-${theme}">${header}${body}${messagesModalOpen ? renderMessagesModal() : ''}${sendMsgOpen ? renderSendMessageModal() : ''}</div>`;
+  return `<div class="root-mobile theme-${theme}">${header}${body}${messagesModalOpen ? renderMessagesModal() : ''}${sendMsgOpen ? renderSendMessageModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}</div>`;
 }
 
 /* ===================== RENDER: ADMİN ===================== */
@@ -4715,6 +4786,7 @@ function renderAdmin(){
           <div style="font-size:13px;margin-bottom:10px">${esc(t.aciklama)}</div>
           ${gecmis.length>0 ? `<div style="font-size:11.5px;color:var(--accent);margin-bottom:10px">🔁 ${gecmis.length} operasyon tamamlandı (${gecmis.map(o=>esc(o.operatorName)).join(', ')}), devamı bekleniyor</div>` : ''}
           <div style="display:flex;gap:8px">
+            <button class="del-btn" onclick="event.stopPropagation(); resimBul('${esc(t.uKodu).replace(/'/g,"\\'")}')" title="Resim/Çizim Bul">📷 Resim Bul</button>
             ${canCreateTadilat() ? `<button class="del-btn" onclick="event.stopPropagation(); openTadilatEdit('${t.id}')" title="Düzelt">✏️ Düzelt</button>` : ''}
             ${session.isSuperAdmin ? `<button class="del-btn" onclick="event.stopPropagation(); deleteTadilat('${t.id}')" title="Talebi sil">🗑 Sil</button>` : ''}
           </div>
@@ -4971,7 +5043,7 @@ function renderAdmin(){
     body += `</tbody></table></div>${entryDetailId ? renderEntryDetailModal() : ''}`;
   }
 
-  return `<div class="root-wide theme-${theme}">${header}${body}${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}</div>`;
+  return `<div class="root-wide theme-${theme}">${header}${body}${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}</div>`;
 }
 function setReportFilterFieldLight(field, val){ reportFilter[field]=val; renderTableOnly(); }
 function renderTableOnly(){ render(); } // basit yaklaşım: filtre değişince tam yeniden çizim yeterli hızda çalışır
