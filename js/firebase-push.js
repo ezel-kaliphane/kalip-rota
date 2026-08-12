@@ -1,0 +1,318 @@
+/* ===================== PUSH BİLDİRİMİ (FCM) =====================
+   Firebase Console → Project Settings → Cloud Messaging → Web Push certificates'ten
+   ürettiğin VAPID public key'i buraya yapıştır. Boş bırakılırsa bildirim özelliği
+   sessizce devre dışı kalır (hata vermez), uygulamanın geri kalanı normal çalışır. */
+const VAPID_KEY = 'BCzH63ol7xwko9kjQRuDHDXK8IwyD5E3vq4TaP5Pd3W6bUay1BzR1J2lTcn1x4FRXoM6SsaLiT5ZCAGz7pMyIZs';
+
+function pushConfigured(){ return VAPID_KEY && VAPID_KEY.indexOf('BURAYA')<0; }
+let pushPermissionState = (typeof Notification!=='undefined') ? Notification.permission : 'unsupported'; // 'default' | 'granted' | 'denied' | 'unsupported'
+
+/* Bu cihaz için sabit bir kimlik — tarayıcının localStorage'ında kalıcı olarak saklanıyor.
+   Token'lar artık bu ID'ye göre kaydediliyor (fcmTokens/{deviceId}: token), token değeri
+   kendisine göre değil — böylece aynı cihazda "Bildirimleri Aç"a tekrar basılsa ya da FCM
+   token'ı arka planda yenilense bile, HEP AYNI YUVAYA yazılır, eski token'lar birikip aynı
+   bildirimin 2-3 kez gitmesine yol açmaz. */
+function pushDeviceId(){
+  let id = load('rota_push_device_id', null);
+  if(!id){ id = uid()+uid(); save('rota_push_device_id', id); }
+  return id;
+}
+
+/* Uygulama ÖN PLANDAYKEN (sekme/uygulama açık ve odaklanmış) gelen mesajlar, service worker'ın
+   onBackgroundMessage'ından GEÇMEZ — Firebase bunu bilerek böyle tasarlamış, "zaten kullanıcı
+   uygulamanın içinde, gerek yok" varsayımıyla. Ama masaüstünde/laptop'ta insanlar genelde
+   sekmeyi hep açık/odaklı tutuyor, telefonda da uygulama içindeyken aynı durum oluyor — yani
+   pratikte KULLANICI HİÇBİR ZAMAN bildirim görmüyordu. Bu yüzden ön plan mesajlarını da AYRICA
+   burada elle yakalayıp, arka plandakiyle aynı şekilde (service worker üzerinden) gösteriyoruz.
+   Sadece bir kere kurulması yeterli, VAPID key olmasa bile hata vermez (mesaj hiç gelmez). */
+function setupForegroundPushListener(){
+  if(!pushConfigured() || typeof firebase.messaging!=='function') return;
+  try{
+    const messaging = firebase.messaging();
+    messaging.onMessage((payload) => {
+      const title = payload.data?.title || 'Rota Takip';
+      const body = payload.data?.body || '';
+      const tag = payload.data?.tag || 'rota-takip-uyari';
+      if('serviceWorker' in navigator){
+        navigator.serviceWorker.getRegistration().then(reg=>{
+          if(reg) reg.showNotification(title, { body, icon:'/icon-192.png', badge:'/icon-192.png', tag, data: payload.data||{} });
+          else toast(title+': '+body); // service worker hiç kayıtlı değilse en azından uygulama içi bildirim göster
+        });
+      } else {
+        toast(title+': '+body);
+      }
+    });
+  }catch(err){ console.warn('Ön plan push dinleyicisi kurulamadı:', err); }
+}
+
+async function enablePushNotifications(){
+  if(!session) return;
+  if(typeof Notification==='undefined' || !('serviceWorker' in navigator)){
+    toast('Bu tarayıcı bildirim desteklemiyor'); return;
+  }
+  if(!pushConfigured()){ toast('Bildirim sistemi henüz kurulmadı (VAPID key eksik)'); return; }
+  try{
+    const reg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+    const perm = await Notification.requestPermission();
+    pushPermissionState = perm;
+    if(perm !== 'granted'){ toast('Bildirim izni verilmedi'); render(); return; }
+    const messaging = firebase.messaging();
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+    if(token){
+      DB.ref('operators/'+session.username+'/fcmTokens/'+pushDeviceId()).set(token);
+      toast('Bildirimler açıldı ✓');
+    }
+  }catch(err){
+    console.error('Push kayıt hatası:', err);
+    toast('Bildirim açılamadı: '+(err.message||'bilinmeyen hata'));
+  }
+  render();
+}
+
+/* SuperAdmin'in istediği kişiye anlık, serbest metinli bildirim göndermesi. Client sadece
+   manualPushRequests/ altına bir istek yazıyor — Cloud Function bunu anında (database trigger,
+   dakikalar sürmüyor) yakalayıp gerçek gönderimi yapıyor, çünkü FCM'e gerçek mesaj göndermek
+   Admin SDK gerektiriyor, tarayıcıdan doğrudan yapılamıyor. */
+function sendManualPush(){
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
+  const toUsername = document.getElementById('mpush-to')?.value || '';
+  const title = (document.getElementById('mpush-title')?.value || '').trim() || 'Rota Takip';
+  const bodyText = (document.getElementById('mpush-body')?.value || '').trim();
+  if(!toUsername){ toast('Alıcı seç'); return; }
+  if(!bodyText){ toast('Mesaj boş olamaz'); return; }
+  if(bodyText.length>500){ toast('Mesaj çok uzun (max 500 karakter)'); return; }
+  DB.ref('manualPushRequests').push({
+    toUsername, title, body: bodyText,
+    requestedBy: session.username, requestedByName: session.displayName,
+    requestedAt: Date.now()
+  }).then(()=>{
+    toast('Bildirim gönderildi ✓');
+    document.getElementById('mpush-body').value = '';
+  }).catch(err=>{
+    toast('Gönderilemedi: '+(err.message||'bilinmeyen hata'));
+  });
+}
+function pushLogHistory(){
+  return Object.entries(STATE.pushLog||{}).map(([id,v])=>({id,...v})).sort((a,b)=>b.sentAt-a.sentAt).slice(0,50);
+}
+function myPushHistory(){
+  if(!session) return [];
+  return Object.entries(STATE.pushLog||{}).map(([id,v])=>({id,...v})).filter(h=>h.toUsername===session.username).sort((a,b)=>b.sentAt-a.sentAt).slice(0,30);
+}
+function unreadPushCount(){ return myPushHistory().filter(h=>!h.read).length; }
+let myPushHistoryModalOpen = false;
+function openMyPushHistoryModal(){
+  myPushHistoryModalOpen = true;
+  // Açılınca tüm bildirimleri okundu say (rozet sıfırlansın / sadece görülmeyenler kalsın)
+  myPushHistory().forEach(h=>{ if(!h.read) DB.ref('pushLog/'+h.id+'/read').set(true); });
+  render();
+}
+function closeMyPushHistoryModal(){ myPushHistoryModalOpen = false; render(); }
+function renderMyPushHistoryModal(){
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeMyPushHistoryModal()">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div><div class="modal-title">${ico('bell',14)} Bildirimlerim</div><div class="modal-sub">Sana gönderilen son 30 bildirim</div></div>
+        <button class="icon-btn" onclick="closeMyPushHistoryModal()">${ico('x',14)}</button>
+      </div>
+      <div class="modal-body">${renderMyPushHistoryList()}</div>
+    </div>
+  </div>`;
+}
+function renderMyPushHistoryList(){
+  const list = myPushHistory();
+  if(list.length===0) return `<div style="font-size:12px;color:var(--text-muted);margin-top:16px">Henüz hiç bildirim almadın.</div>`;
+  return `<div style="margin-top:20px">
+    <div class="set-sec" style="margin:0 0 9px">SON BİLDİRİMLER (${list.length})</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-width:520px">
+      ${list.map(h=>`<div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:2px">
+          <span style="font-size:12.5px;font-weight:600">${esc(h.title||'Rota Takip')}</span>
+          <span style="font-size:10.5px;color:var(--text-muted);white-space:nowrap">${fmtDT(h.sentAt)}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted)">${esc(h.body||'')}</div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+/* ===================== FIREBASE ===================== */
+function fbConfigured(){ return FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.databaseURL.indexOf('BURAYA')<0; }
+function initFirebase(){
+  if(typeof firebase==='undefined'){ console.warn('Firebase SDK yüklenemedi (internet yok mu?)'); return false; }
+  if(!fbConfigured()){ console.warn('Firebase databaseURL girilmemiş'); return false; }
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    DB = firebase.database();
+    FB_OK = true;
+    setupForegroundPushListener();
+    DB.ref('.info/connected').on('value', snap=>{
+      connOK = snap.val() === true;
+      safeRender();
+    });
+    DB.ref('operators').on('value', snap=>{
+      STATE.operators = snap.val() || {};
+      seedIfNeeded();
+      safeRender();
+    });
+    DB.ref('entries').on('value', snap=>{
+      STATE.entries = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('machines_extra').on('value', snap=>{
+      extraMachines = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('machines_hidden').on('value', snap=>{
+      hiddenMachines = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('machines_fason').on('value', snap=>{
+      fasonMachines = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('machines_atolye').on('value', snap=>{
+      machineAtolye = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('messages').on('value', snap=>{
+      STATE.messages = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('manualPushRequests').on('value', snap=>{
+      STATE.manualPushRequests = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('tadilatOnHazirIstekler').on('value', snap=>{
+      STATE.tadilatOnHazirIstekler = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('pushLog').on('value', snap=>{
+      STATE.pushLog = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('validIsEmri').on('value', snap=>{
+      STATE.validIsEmri = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('malzemeListesi').on('value', snap=>{
+      malzemeListesi = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('isMerkezleri').on('value', snap=>{
+      isMerkezleri = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('uretimPersoneli').on('value', snap=>{
+      uretimPersoneli = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('tadilatBolumKurallari').on('value', snap=>{
+      tadilatBolumKurallari = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('adminTabPermissions').on('value', snap=>{
+      adminTabPermissions = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('durusReasons').on('value', snap=>{
+      STATE.durusReasons = snap.val() || [];
+      safeRender();
+    });
+    DB.ref('settings').on('value', snap=>{
+      appSettings = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('stockItems').on('value', snap=>{
+      stockItems = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('stockHareketleri').on('value', snap=>{
+      stockHareketleri = snap.val() || {};
+      safeRender();
+    });
+    DB.ref('tadilatlar').on('value', snap=>{
+      tadilatlar = snap.val() || {};
+      safeRender();
+    });
+    return true;
+  }catch(e){ console.warn('Firebase init hatası', e); return false; }
+}
+function seedIfNeeded(){
+  if(Object.keys(STATE.operators).length>0) return;
+  console.warn('Firebase "operators" düğümü boş. Ayarlar → "+ Kullanıcı Ekle" panelinden operatörleri ve bir ADMIN hesabını manuel eklemen gerekiyor.');
+}
+let _entriesArrayCache = null, _entriesArrayCacheSrc = null;
+function entriesArray(){
+  // STATE.entries her Firebase güncellemesinde YENİ bir obje referansıyla değiştiriliyor (bkz.
+  // initFirebase listener'ı) — o yüzden referans karşılaştırması güvenli bir "değişti mi" testi.
+  // Bu fonksiyon tek bir render() geçişinde onlarca yerden çağrılıyor; her seferinde
+  // Object.entries+map'i tekrar tekrar yapmak yerine, veri değişmediği sürece sonucu tekrar kullanıyoruz.
+  if(_entriesArrayCacheSrc !== STATE.entries){
+    _entriesArrayCache = Object.entries(STATE.entries).map(([id,e])=>({id, ...e}));
+    _entriesArrayCacheSrc = STATE.entries;
+  }
+  return _entriesArrayCache;
+}
+
+/* ===================== KİMLİK / GİRİŞ ===================== */
+async function doLogin(){
+  const uname = (document.getElementById('login-username').value||'').trim().toUpperCase();
+  const pass = document.getElementById('login-password').value||'';
+  const remember = !!document.getElementById('login-remember')?.checked;
+  const op = STATE.operators[uname];
+  const hash = pass ? await sha256Hex(pass) : '';
+  const legacyPlaintextMatch = !!op && op.password === pass && op.password !== hash;
+  const passOk = !!op && (op.password === hash || legacyPlaintextMatch);
+  if(!op || !passOk){
+    loginError = 'Kullanıcı adı veya şifre hatalı';
+    toast(loginError);
+    render();
+    return;
+  }
+  if(legacyPlaintextMatch){ DB.ref('operators/'+uname+'/password').set(hash); } // sessiz göç
+  loginError = '';
+  session = { username: uname, displayName: op.displayName, isAdmin: !!op.isAdmin, isSuperAdmin: !!op.isSuperAdmin, isSef: !!op.isSef, isUretimSef: !!op.isUretimSef };
+  if(remember){ save('rota_remember', true); save('rota_session', session); }
+  else { save('rota_remember', false); save('rota_session', null); }
+  view = session.isAdmin ? ((session.isSef || session.isUretimSef) ? 'matrix' : 'report') : 'list';
+  if(!session.isAdmin) newForm.makine = op.defaultMachine || '';
+  render();
+}
+function doLogout(){ session=null; save('rota_session', null); save('rota_remember', false); view='list'; render(); }
+let tadilatForceBekleyen = false; // "Tadilat duruşu" ile duraklattıktan hemen sonra bekleyen listeyi göstermeye zorlar
+function setView(v){
+  if(tadilatForceBekleyen && v!=='tadilat'){ toast('Lütfen gireceğiniz tadilat işini seçin ya da iptal edin'); return; }
+  view=v; if(v==='new') newStep=1; if(v!=='tadilat') tadilatForceBekleyen=false; render();
+}
+function resolvedTheme(){
+  if(theme!=='system') return theme==='light' ? 'light' : 'dark';
+  try{ return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }catch(e){ return 'dark'; }
+}
+function setTheme(t){ theme=t; document.documentElement.className = 'theme-'+resolvedTheme(); save('rota_theme', t); render(); }
+function toggleTheme(){ setTheme(resolvedTheme()==='dark' ? 'light' : 'dark'); }
+function themeToggleHtml(){
+  const isDark = resolvedTheme()==='dark';
+  return `<button class="icon-btn" onclick="toggleTheme()" title="${isDark?'Açık temaya geç':'Koyu temaya geç'}">
+    ${isDark
+      ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`
+      : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`}
+  </button>`;
+}
+
+async function changePassword(){
+  const cur = document.getElementById('pw-current').value||'';
+  const next = (document.getElementById('pw-next').value||'').replace(/\D/g,'').slice(0,8);
+  const conf = (document.getElementById('pw-confirm').value||'').replace(/\D/g,'').slice(0,8);
+  if(!/^\d{1,8}$/.test(next)){ toast('Yeni şifre en fazla 8 haneli rakam olmalı'); return; }
+  if(next!==conf){ toast('Yeni şifreler eşleşmiyor'); return; }
+  const op = STATE.operators[session.username];
+  const curHash = cur ? await sha256Hex(cur) : '';
+  const curOk = !!op && (op.password === curHash || op.password === cur); // eski düz metin kayıtları için de kabul
+  if(!op || !curOk){ toast('Mevcut şifre yanlış'); return; }
+  const nextHash = await sha256Hex(next);
+  DB.ref('operators/'+session.username+'/password').set(nextHash);
+  toast('Şifre güncellendi');
+  setView('list');
+}
+
