@@ -1220,6 +1220,7 @@ function renderAdmin(){
         const dk = dateKey(t.olusturmaTs||0);
         if(tadilatAnalizFrom && dk<tadilatAnalizFrom) return false;
         if(tadilatAnalizTo && dk>tadilatAnalizTo) return false;
+        if(yoneticiAnalizAtolyeFilter!=='tumu' && (t.atolye||'imalat')!==yoneticiAnalizAtolyeFilter) return false;
         return true;
       });
       const beklemeVals = gecmisFiltreli.map(t=>{
@@ -1231,9 +1232,18 @@ function renderAdmin(){
       const enUzunBeklemeMs = beklemeVals.length ? Math.max(...beklemeVals) : 0;
       const ortalamaSureMs = sureVals.length ? sureVals.reduce((a,b)=>a+b,0)/sureVals.length : 0;
       body += `
-      <div style="font-size:16px;font-weight:600;margin-bottom:6px">Yönetici Analizi — Geçmiş</div>
-      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;max-width:680px">Tamamlanmış tüm tadilat taleplerinin geçmişi — talebin açılışından bitişine kadar tüm zaman damgalarıyla. Veri zamanla büyüyeceği için aşağıdaki tarih filtresi tabloyu da daraltır.</div>
-      <div class="filter-bar" style="border-bottom:none;padding:0;flex-wrap:wrap;align-items:center;margin-bottom:18px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px">
+        <div>
+          <div style="font-size:16px;font-weight:600;margin-bottom:6px">Yönetici Analizi — Geçmiş</div>
+          <div style="font-size:12.5px;color:var(--text-muted);max-width:680px">Tamamlanmış tüm tadilat taleplerinin geçmişi — talebin açılışından bitişine kadar tüm zaman damgalarıyla. Veri zamanla büyüyeceği için aşağıdaki tarih filtresi tabloyu da daraltır.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="chip ${yoneticiAnalizAtolyeFilter==='tumu'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setYoneticiAnalizAtolyeFilter('tumu')">Tümü</button>
+          <button class="chip ${yoneticiAnalizAtolyeFilter==='imalat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setYoneticiAnalizAtolyeFilter('imalat')">${ico('factory',14)} İmalat Atölye</button>
+          <button class="chip ${yoneticiAnalizAtolyeFilter==='tadilat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setYoneticiAnalizAtolyeFilter('tadilat')">${ico('wrench',14)} Tadilat Atölye</button>
+        </div>
+      </div>
+      <div class="filter-bar" style="border-bottom:none;padding:0;flex-wrap:wrap;align-items:center;margin-bottom:18px;margin-top:12px">
         <label style="font-size:11.5px;color:var(--text-muted)">Başlangıç</label>
         <input type="date" class="filter-input" value="${esc(tadilatAnalizFrom)}" onchange="setTadilatAnalizFrom(this.value)">
         <label style="font-size:11.5px;color:var(--text-muted)">Bitiş</label>
@@ -1254,7 +1264,7 @@ function renderAdmin(){
       // "Güncel Bekleyenler" — canlı üretim izleme mantığıyla aynı: anık açık
       // talepler, en uzun bekleyen/en çok süredir işlemde olan en üstte — geçmiş tabloya göre
       // farklı bir okuma modu (bekleyen bir sorunu HIZLI görmek için), o yüzden ayrı sekme.
-      const devamEdenlerCanli = tadilatArray().filter(t=>!tadilatTamamlandiMi(t));
+      const devamEdenlerCanli = tadilatArray().filter(t=>!tadilatTamamlandiMi(t) && (yoneticiAnalizAtolyeFilter==='tumu' || (t.atolye||'imalat')===yoneticiAnalizAtolyeFilter));
       const canliBilgi = devamEdenlerCanli.map(t=>{
         const ops = tadilatOperasyonlarArray(t);
         const aktifOp = tadilatAktifOperasyon(t);
@@ -1265,9 +1275,18 @@ function renderAdmin(){
       const gecenMsListesi = canliBilgi.map(({t,aktifOp,ilkOp})=> aktifOp ? (nowTick-aktifOp.baslamaTs) : (ilkOp ? (nowTick-t.olusturmaTs) : 0));
       const enUzunGecenMs = gecenMsListesi.length ? Math.max(...gecenMsListesi) : 0;
       body += `
-      <div style="font-size:16px;font-weight:600;margin-bottom:6px">Yönetici Analizi — Güncel Bekleyenler</div>
-      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:680px">Şu an açık olan (bekleyen/duraklatılmış/devam eden) tüm talepler — en uzun süredir bekleyen/işlemde olan en üstte. Bu sayfa canlıdır, otomatik güncellenir.</div>
-      <div class="modal-stats" style="margin-bottom:20px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px">
+        <div>
+          <div style="font-size:16px;font-weight:600;margin-bottom:6px">Yönetici Analizi — Güncel Bekleyenler</div>
+          <div style="font-size:12.5px;color:var(--text-muted);max-width:680px">Şu an açık olan (bekleyen/duraklatılmış/devam eden) tüm talepler — en uzun süredir bekleyen/işlemde olan en üstte. Bu sayfa canlıdır, otomatik güncellenir.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="chip ${yoneticiAnalizAtolyeFilter==='tumu'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setYoneticiAnalizAtolyeFilter('tumu')">Tümü</button>
+          <button class="chip ${yoneticiAnalizAtolyeFilter==='imalat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setYoneticiAnalizAtolyeFilter('imalat')">${ico('factory',14)} İmalat Atölye</button>
+          <button class="chip ${yoneticiAnalizAtolyeFilter==='tadilat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setYoneticiAnalizAtolyeFilter('tadilat')">${ico('wrench',14)} Tadilat Atölye</button>
+        </div>
+      </div>
+      <div class="modal-stats" style="margin-bottom:20px;margin-top:12px">
         <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--tadilat-info)">${devamEdenlerCanli.length}</div><div class="modal-stat-label">Açık Talep</div></div>
         <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--success)">${isleniyorSayisi}</div><div class="modal-stat-label">İşlemde</div></div>
         <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--warn)">${bekliyorSayisi}</div><div class="modal-stat-label">Bekliyor / Duraklatıldı</div></div>

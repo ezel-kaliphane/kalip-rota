@@ -798,6 +798,8 @@ let analizSelectedOperator = null; // Kişi Bazlı Analiz'de detayı açık olan
 let analizMiniSort = 'alpha'; // 'alpha' | 'calisma' | 'renk'
 let analizAtolyeFilter = 'tumu'; // 'tumu' | 'imalat' | 'tadilat' — tüm Analiz sekmesini makinenin atölyesine göre süzer
 function setAnalizAtolyeFilter(v){ analizAtolyeFilter = v; analizSelectedMachines = new Set(); render(); }
+let yoneticiAnalizAtolyeFilter = 'tumu'; // 'tumu' | 'imalat' | 'tadilat' — Yönetici Analizi (Geçmiş/Güncel) sekmelerini talebin atölyesine göre süzer
+function setYoneticiAnalizAtolyeFilter(v){ yoneticiAnalizAtolyeFilter = v; render(); }
 function setAnalizMiniSort(v){ analizMiniSort = v; render(); }
 function toggleAnalizMachineFilter(code){
   if(analizSelectedMachines.has(code)) analizSelectedMachines.delete(code);
