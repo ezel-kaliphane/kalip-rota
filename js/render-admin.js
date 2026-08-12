@@ -582,7 +582,11 @@ function renderAdmin(){
     }
     body += `</div>`;
   } else if(view==='matrix'){
-    const entries = entriesArray();
+    // Tadilat Atölye makineleri "entries" tablosunda hiç iz bırakmaz (orada sadece üretim işleri
+    // var) — tadilat operasyonlarını da senkron kayıt gibi katmazsak bu makineler burada hep
+    // "hiç kullanılmadı"/boşta görünür, geçmiş tadilat işleri hiç okunmaz (Analiz ekranı için
+    // zaten yapılan aynı düzeltme — bkz. buildTadilatSynthetic).
+    const entries = [...entriesArray(), ...buildTadilatSynthetic()];
     const workMsFor = (code) => {
       const label = resolveMachineLabel(code);
       // A1 düzeltmesiyle aynı mantık: "Çoklu İş Emri" (groupId) kayıtları aynı makinede aynı
