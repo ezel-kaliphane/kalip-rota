@@ -170,9 +170,10 @@ function canCreateTadilat(){
   if(op.permTadilatOlustur===false) return false;
   return !!(session.isSef || session.isUretimSef); // varsayılan: Şef/Üretim Şef açabilir, diğer yöneticiler kapalı (Ayarlar'dan açılabilir)
 }
-// Tamamlanan tadilatların süre/istatistik analizini sadece SuperAdmin görebilir — talep açma/alma
-// yetkisi bundan ayrı (canCreateTadilat), Şef ve izinli diğer hesaplar hâlâ talep açabilir.
-function canViewTadilatAnaliz(){ return !!(session && session.isSuperAdmin); }
+// Tamamlanan tadilatların süre/istatistik analizini üretim şefleri ve müdürü de görebilsin diye
+// SuperAdmin ile sınırlı değil — Şef/Üretim Şefi/Admin/SuperAdmin hepsi görebiliyor. Talep açma/
+// alma yetkisi bundan ayrı (canCreateTadilat), Şef ve izinli diğer hesaplar hâlâ talep açabilir.
+function canViewTadilatAnaliz(){ return !!(session && (session.isSef || session.isUretimSef || session.isAdmin || session.isSuperAdmin)); }
 function toggleTadilatYetkisi(code){
   const op = STATE.operators[code] || {};
   const effectiveNow = op.permTadilatOlustur===true ? true : (op.permTadilatOlustur===false ? false : !!(op.isSef || op.isUretimSef));

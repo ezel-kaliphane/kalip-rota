@@ -1130,13 +1130,16 @@ function renderAdmin(){
         <div style="font-size:13px;font-weight:600">Tamamlanan Talepler — Detay (${tamamlananlar.length})</div>
         ${tamamlananlar.length>0 ? `<button class="btn-primary" style="width:auto;padding:8px 16px;font-size:12.5px" onclick="exportTadilatExcel()">⬇ Excel'e Aktar</button>` : ''}
       </div>
-      <div class="table-wrap"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Adet</th><th>Talep Eden</th><th>Bölüm</th><th>İşlem</th><th>Op. Sayısı</th><th>Yapanlar</th><th>Makineler</th><th>Toplam Süre</th><th>Son Bitiş</th></tr></thead><tbody>
-        ${tamamlananlar.length===0 ? `<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:16px">Henüz tamamlanan yok.</td></tr>` : tamamlananlar.map(t=>{
+      <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px">"Bekleme": talep açıldıktan sonra bir operatörün işi seçip başlamasına kadar geçen süre (Şef/Üretim Müdürü takibi için) — "Toplam Süre" ise operatörün fiilen çalıştığı (duruş hariç net) süre, bunlar farklı şeyler.</div>
+      <div class="table-wrap"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Adet</th><th>Talep Eden</th><th>Bölüm</th><th>İşlem</th><th>Talep Açıldı</th><th>İşe Başlandı</th><th>Bekleme</th><th>Op. Sayısı</th><th>Yapanlar</th><th>Makineler</th><th>Toplam Süre</th><th>Son Bitiş</th></tr></thead><tbody>
+        ${tamamlananlar.length===0 ? `<tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:16px">Henüz tamamlanan yok.</td></tr>` : tamamlananlar.map(t=>{
           const ops = tadilatOperasyonlarArray(t);
           const toplamMs = ops.reduce((s,o)=>s+((o.bitisTs&&o.baslamaTs)?tadilatOpDurationBreakdown(o).netMs:0),0);
           const yapanlar = [...new Set(ops.map(o=>o.operatorName))].join(', ');
           const makineler = [...new Set(ops.map(o=>o.makine).filter(Boolean))].join(', ');
           const sonBitis = ops[ops.length-1]?.bitisTs;
+          const ilkBaslangic = ops[0]?.baslamaTs;
+          const beklemeMs = (t.olusturmaTs && ilkBaslangic) ? Math.max(0, ilkBaslangic - t.olusturmaTs) : null;
           return `<tr>
             <td>${(t.atolye||'imalat')==='tadilat'?(ico('wrench',13)+' Tadilat'):(ico('factory',13)+' İmalat')}</td>
             <td class="mono" style="color:var(--accent)">${esc(t.uKodu)}</td>
@@ -1144,6 +1147,9 @@ function renderAdmin(){
             <td style="font-size:12.5px">${esc(t.talepEdenKisi||'—')}</td>
             <td>${esc(t.bolum||'—')}</td>
             <td style="font-size:12.5px">${esc(t.aciklama)}</td>
+            <td style="font-size:12px">${t.olusturmaTs?fmtDT(t.olusturmaTs):'—'}</td>
+            <td style="font-size:12px">${ilkBaslangic?fmtDT(ilkBaslangic):'—'}</td>
+            <td style="color:${beklemeMs>0?'var(--warn)':'inherit'}">${beklemeMs!=null?fmtDur(beklemeMs):'—'}</td>
             <td style="text-align:center">${ops.length}</td>
             <td style="font-size:12.5px">${esc(yapanlar||'—')}</td>
             <td style="font-size:12.5px">${esc(makineler||'—')}</td>
