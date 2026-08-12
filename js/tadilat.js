@@ -25,6 +25,14 @@ function setTadilatSubTab(v){ tadilatSubTab = v; render(); }
 // 2) Süre artık ham (bitisTs-baslamaTs) değil, entryDurationBreakdown() ile duruş süresi
 //    DÜŞÜLMÜŞ net süre — bir tadilat operasyonu status:'duruş' olabiliyor (ör. malzeme
 //    beklerken), eskiden bu bekleme süresi de "çalışma" gibi sayılıyordu.
+// tadilatOperasyonlarArray()'ın döndürdüğü kayıtlar baslamaTs/bitisTs kullanıyor (entries'teki
+// startTs/endTs değil) — entryDurationBreakdown bu adları bilmediği için doğrudan çağrılırsa
+// e.startTs undefined kalıp NaN üretiyordu (görünmeyen bir hataydı: Tadilat Analizi'ndeki toplam/
+// kişi/gün süreleri ile Tadilat Excel dışa aktarımının süre sütunları hep NaN oluyordu). Alanları
+// eşleyip veriyoruz.
+function tadilatOpDurationBreakdown(o){
+  return entryDurationBreakdown({ ...o, startTs: o.baslamaTs, endTs: o.bitisTs });
+}
 function computeTadilatAnaliz(fromDate, toDate){
   const ops = [];
   let gecisToplamMs = 0;
@@ -34,7 +42,7 @@ function computeTadilatAnaliz(fromDate, toDate){
       if(o.baslamaTs && o.bitisTs){
         const dk = dateKey(o.baslamaTs);
         if((!fromDate || dk>=fromDate) && (!toDate || dk<=toDate)){
-          ops.push({ ...o, uKodu:t.uKodu, atolye:(t.atolye||'imalat'), _netMs: entryDurationBreakdown(o).netMs });
+          ops.push({ ...o, uKodu:t.uKodu, atolye:(t.atolye||'imalat'), _netMs: tadilatOpDurationBreakdown(o).netMs });
         }
       }
       // Kesinti sırasında "hangi işi alacağım" kararı verilirken geçen süre — duruşa sayılmıyor,

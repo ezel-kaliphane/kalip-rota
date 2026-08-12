@@ -758,6 +758,7 @@ function renderAdmin(){
     body += `</div>`;
   } else if(view==='analiz'){
     const data = computeAnalizData(analizFrom, analizTo, analizAtolyeFilter);
+    lastAnalizData = data; // initAnalizCharts (app.js) bunu kullanır — bkz. catalog.js'teki not
     const t = data.totals;
     const durusReasonTotals = {};
     collectDurusEvents(data.perMachine.flatMap(m=>m.entries)).forEach(ev=>{
@@ -787,7 +788,7 @@ function renderAdmin(){
           <button class="chip ${analizAtolyeFilter==='tadilat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setAnalizAtolyeFilter('tadilat')">${ico('wrench',14)} Tadilat Atölye</button>
         </div>
       </div>
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Standart mesai: kullanılan her gün için 540 dk (08:00 ~17:30) · 17:30'dan sonrası fazla mesai sayılır</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Standart mesai: kullanılan her gün için ${WORKDAY_MINUTES} dk (08:00~${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}) · ${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}'dan sonrası fazla mesai sayılır</div>
       <div class="sub-tabs">
         <button class="sub-tab-btn ${analizSubTab==='genel'?'active':''}" onclick="setAnalizSubTab('genel')">Genel Analiz</button>
         <button class="sub-tab-btn ${analizSubTab==='makine'?'active':''}" onclick="setAnalizSubTab('makine')">Makine Bazlı Analiz</button>
@@ -803,7 +804,8 @@ function renderAdmin(){
         <div class="modal-stat-box"><div class="modal-stat-num" style="color:${t.verimlilik>=70?'var(--success)':t.verimlilik>=40?'var(--warn)':'var(--danger)'}">%${t.verimlilik}${t.verimlilikAnomali?(' '+ico('alert',12)):''}</div><div class="modal-stat-label">Verimlilik KPI${t.verimlilikAnomali?` <span style="color:var(--danger)" title="Ham hesap %${t.verimlilikRaw} çıktı — 100'ü aşan kısım veri anomalisi olabilir, kontrol et">(${ico('alert',12)} %${t.verimlilikRaw})</span>`:''}</div></div>
         <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--accent)">${adetTotal}</div><div class="modal-stat-label">Toplam Adet${hasFilter?' (Seçili Makine)':''}</div></div>
         ${t.overtimeMin>0 ? `<div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--danger)">${t.overtimeMin} dk</div><div class="modal-stat-label">Toplam Fazla Mesai</div></div>` : ''}
-      </div>`;
+      </div>
+      ${data.anyPhysicalAnomaly ? `<div style="display:flex;align-items:center;gap:8px;background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12.5px;color:var(--warn)">${ico('alert',14)} Bu tarih aralığında en az bir makine/kişi için, o günden gerçekte geçen süreden fazla çalışma hesaplandı (muhtemelen uzun süredir kapatılmamış eski bir kayıt var) — ilgili satırlardaki ${ico('alert',12)} ikonuna bak.</div>` : ''}`;
 
     if(data.perMachine.length===0){
       body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Bu tarihte kayıt yok.</div></div>`;
@@ -952,7 +954,7 @@ function renderAdmin(){
         <tr style="cursor:pointer" onclick="setAnalizOperator('${esc(op.operatorUsername)}')">
           <td style="width:20px;color:var(--text-muted)">${analizSelectedOperator===op.operatorUsername?'▾':'▸'}</td>
           <td class="mono" style="color:var(--accent)">${esc(op.operatorUsername)}<div style="font-size:11px;color:var(--text-muted);font-family:'Inter',sans-serif">${esc(op.operatorName||'')}</div></td>
-          <td>${fmtDur(op.workMin*60000)}</td>
+          <td>${fmtDur(op.workMin*60000)}${op.hasPhysicalAnomaly?` <span style="color:var(--danger)" title="Bu kişide, bir günde gerçek geçen süreden fazla çalışma hesaplandı — muhtemelen uzun süredir kapatılmamış eski bir kayıt var. Değer fiziksel üst sınıra çekildi, ama gerçek kaynağını (unutulmuş açık iş) bulup kapatman gerekiyor.">${ico('alert',14)}</span>`:''}</td>
           <td style="color:${op.durusMin>0?'var(--warn)':'inherit'}">${fmtDur(op.durusMin*60000)}</td>
           <td>${op.overtimeMin>0?`<span style="color:var(--danger);font-weight:600">${op.overtimeMin} dk</span>`:'—'}</td>
           <td>${op.machineCount}</td>
@@ -968,7 +970,7 @@ function renderAdmin(){
               ${op.days.map(d=>`<tr>
                 <td class="mono">${esc(d.tarih)}</td>
                 <td style="font-size:12px">${d.machines.map(m=>`<span class="mono" style="color:var(--accent)">${esc(m.code)}</span> (${fmtDur(m.workMin*60000)})`).join('<br>')}</td>
-                <td>${fmtDur(d.workMin*60000)}</td>
+                <td>${fmtDur(d.workMin*60000)}${d.hasPhysicalAnomaly?` <span style="color:var(--danger)" title="O gün, gerçek geçen süreden fazla çalışma hesaplandı — fiziksel üst sınıra çekildi.">${ico('alert',14)}</span>`:''}</td>
                 <td style="color:${d.durusMin>0?'var(--warn)':'inherit'}">${fmtDur(d.durusMin*60000)}</td>
                 <td>${d.overtimeMin>0?`<span style="color:var(--danger);font-weight:600">${d.overtimeMin} dk</span>`:'—'}</td>
                 <td style="color:${d.kalanMin>0?'var(--text-muted)':'var(--success)'}">${d.kalanMin>0?fmtDur(d.kalanMin*60000):'Tamamlandı'}</td>
@@ -1126,7 +1128,7 @@ function renderAdmin(){
       <div class="table-wrap"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Adet</th><th>Talep Eden</th><th>Bölüm</th><th>İşlem</th><th>Op. Sayısı</th><th>Yapanlar</th><th>Makineler</th><th>Toplam Süre</th><th>Son Bitiş</th></tr></thead><tbody>
         ${tamamlananlar.length===0 ? `<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:16px">Henüz tamamlanan yok.</td></tr>` : tamamlananlar.map(t=>{
           const ops = tadilatOperasyonlarArray(t);
-          const toplamMs = ops.reduce((s,o)=>s+((o.bitisTs&&o.baslamaTs)?(o.bitisTs-o.baslamaTs):0),0);
+          const toplamMs = ops.reduce((s,o)=>s+((o.bitisTs&&o.baslamaTs)?tadilatOpDurationBreakdown(o).netMs:0),0);
           const yapanlar = [...new Set(ops.map(o=>o.operatorName))].join(', ');
           const makineler = [...new Set(ops.map(o=>o.makine).filter(Boolean))].join(', ');
           const sonBitis = ops[ops.length-1]?.bitisTs;

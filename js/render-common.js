@@ -315,14 +315,17 @@ function renderMachineModal(){
       cur = segEnd;
     }
   });
-  // FİZİKSEL TAVAN: bir makine bir günde, o günün standart mesai süresinden (540 dk) fazla
-  // "net çalışmış" görünüyorsa (fazla mesai dahil bile olsa aşırıysa) bunu işaretliyoruz —
-  // sessizce yanlış rakam göstermek yerine.
+  // FİZİKSEL TAVAN: bir makine bir günde, O GÜNDEN GERÇEKTE GEÇEN süreden fazla "çalışmış"
+  // olamaz — Analiz sekmesindeki (computeAnalizData) aynı isimli düzeltmeyle AYNI eşiği
+  // kullanıyoruz. Eskiden burada sabit bir tavan (540+300 dk) vardı — bu da aynı makine/gün
+  // için Analiz sekmesi "anomali yok" derken bu modalın "anomali var" demesine (ya da tersi)
+  // yol açabiliyordu, çünkü iki ekran aynı veriye farklı eşikle bakıyordu.
   Object.keys(byDayAll).forEach(dk=>{
     const d = byDayAll[dk];
-    const dayCapMs = (WORKDAY_MINUTES + 300) * 60000; // 540 dk + 5 saate kadar makul fazla mesai payı
-    d.anomali = d.workMs > dayCapMs;
-    if(d.anomali) d.workMs = dayCapMs;
+    const dStartMs = new Date(dk+'T00:00:00').getTime();
+    const dayElapsedCapMs = Math.max(0, Math.min(nowTick, dStartMs+86400000) - dStartMs);
+    d.anomali = d.workMs > dayElapsedCapMs;
+    if(d.anomali) d.workMs = dayElapsedCapMs;
   });
   const allDays = Object.keys(byDayAll).sort(); // eskiden yeniye, timeline soldan sağa akar
   const maxMs = Math.max(1, ...allDays.map(d=>byDayAll[d].workMs+byDayAll[d].durusMs));

@@ -977,9 +977,16 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
     };
   }).sort((a,b)=>b.workMin-a.workMin);
 
-  return { perMachine, perOperator, totals, overtimeList, isSingleDay, dayStartMs, fromDate, toDate };
+  const anyOperatorAnomaly = perOperator.some(op=>op.hasPhysicalAnomaly);
+  return { perMachine, perOperator, totals, overtimeList, isSingleDay, dayStartMs, fromDate, toDate, anyPhysicalAnomaly: anyPhysicalAnomaly||anyOperatorAnomaly };
 }
 
+// renderAdmin() analiz sekmesini çizerken hesapladığı veriyi burada saklıyor — grafik init'i
+// (app.js render() sonunda) bunu yeniden hesaplamak yerine aynen kullanır. Eskiden burada
+// AYRICA (ve atölye filtresi VERİLMEDEN) yeniden hesaplanıyordu — bu yüzden İmalat/Tadilat
+// Atölye filtresi tablolarda doğru çalışırken grafikler hep TÜM makinelerin verisini
+// gösteriyordu (sayılar ile grafikler çelişiyordu).
+let lastAnalizData = null;
 let analizCharts = {};
 function destroyAnalizCharts(){ Object.values(analizCharts).forEach(c=>{ if(c) c.destroy(); }); analizCharts = {}; }
 function initAnalizCharts(data){
@@ -1236,7 +1243,7 @@ function exportTadilatExcel(){
   const rows = [];
   tadilatArray().filter(t=>tadilatTamamlandiMi(t)).forEach(t=>{
     tadilatOperasyonlarArray(t).forEach((o,i)=>{
-      const d = entryDurationBreakdown(o);
+      const d = tadilatOpDurationBreakdown(o);
       rows.push({
         _bitisTsRaw: o.bitisTs||0, // sıralama için — sadece burada, aşağıda satırdan çıkarılıyor
         "Atölye": (t.atolye||'imalat')==='tadilat'?'Tadilat Atölye':'İmalat Atölye',

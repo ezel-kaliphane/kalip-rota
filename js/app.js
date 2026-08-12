@@ -45,7 +45,7 @@ function render(){
     }
   }
 
-  if(session && session.isAdmin && view==='analiz'){ initAnalizCharts(computeAnalizData(analizFrom, analizTo)); }
+  if(session && session.isAdmin && view==='analiz'){ initAnalizCharts(lastAnalizData || computeAnalizData(analizFrom, analizTo, analizAtolyeFilter)); }
 }
 let analizTickCounter = 0;
 // Firebase'den arka planda gelen HERHANGİ bir güncelleme (başka bir kullanıcının işlemi bile
