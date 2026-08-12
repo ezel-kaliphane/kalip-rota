@@ -1216,11 +1216,13 @@ function renderAdmin(){
         const aOps=tadilatOperasyonlarArray(a), bOps=tadilatOperasyonlarArray(b);
         return (bOps[bOps.length-1]?.bitisTs||0) - (aOps[aOps.length-1]?.bitisTs||0);
       });
+      const aramaQ = yoneticiGecmisArama.trim().toLowerCase();
       const gecmisFiltreli = tamamlananlarTum.filter(t=>{
         const dk = dateKey(t.olusturmaTs||0);
         if(tadilatAnalizFrom && dk<tadilatAnalizFrom) return false;
         if(tadilatAnalizTo && dk>tadilatAnalizTo) return false;
         if(yoneticiAnalizAtolyeFilter!=='tumu' && (t.atolye||'imalat')!==yoneticiAnalizAtolyeFilter) return false;
+        if(aramaQ && !(String(t.uKodu||'').toLowerCase().includes(aramaQ) || String(t.aciklama||'').toLowerCase().includes(aramaQ) || String(t.kisaAciklama||'').toLowerCase().includes(aramaQ))) return false;
         return true;
       });
       const beklemeVals = gecmisFiltreli.map(t=>{
@@ -1251,6 +1253,7 @@ function renderAdmin(){
         <button class="chip" onclick="setTadilatAnalizPreset(7)">Son 7 Gün</button>
         <button class="chip" onclick="setTadilatAnalizPreset(30)">Son 30 Gün</button>
         <button class="chip" onclick="clearTadilatAnalizFilter()">Tüm Zamanlar</button>
+        <input type="text" placeholder="🔍 U Kodu ya da parça/işlem ara..." value="${esc(yoneticiGecmisArama)}" oninput="setYoneticiGecmisArama(this.value)" style="flex:1;min-width:220px;padding:9px 12px;font-size:13px">
       </div>
       <div class="modal-stats" style="margin-bottom:20px">
         <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--accent)">${gecmisFiltreli.length}</div><div class="modal-stat-label">Tamamlanan Talep</div></div>
