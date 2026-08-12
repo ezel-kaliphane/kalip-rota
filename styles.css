@@ -3,18 +3,6 @@
 /* =============== FIREBASE BULUT AYARI — SADECE BU KISMI DOLDURUN =============== */
 /* KURULUM_BULUT.md dosyasındaki adımları izleyin. Realtime Database'i aktif edip
    aldığınız databaseURL'i aşağıya yapıştırın. Başka hiçbir yere dokunmayın. */
-<script>
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAYRQVtJt3sMTo8spx7AVa5EeS_bKXNrGI",
-  authDomain: "ezel-kaliphane.firebaseapp.com",
-  databaseURL: "https://ezel-kaliphane-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "ezel-kaliphane",
-  storageBucket: "ezel-kaliphane.firebasestorage.app",
-  messagingSenderId: "525611507963",
-  appId: "1:525611507963:web:4428d1487e66acdfcf905e",
-  measurementId: "G-9TZ1JRTD7N"
-};
-</script>
 :root{
   --bg:#0F1214; --panel:#171C20; --panel-alt:#1F262C; --border:#293138;
   --text:#EDF1F3; --text-muted:#8B959D;
