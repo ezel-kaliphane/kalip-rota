@@ -1,4 +1,72 @@
 /* ===================== RENDER: ADMİN ===================== */
+// "Tamamlanan Talepler" tablosu birden fazla yerde (Tadilat Analizi sekmesi + Yönetici Analizi'nin
+// Geçmiş alt sekmesi) aynı şekilde kullanılıyor — tek yerden değiştirilsin diye ayrı fonksiyon.
+function renderTamamlananTalepTablosu(tamamlananlar){
+  return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div style="font-size:13px;font-weight:600">Tamamlanan Talepler — Detay (${tamamlananlar.length})</div>
+    ${tamamlananlar.length>0 ? `<button class="btn-primary" style="width:auto;padding:8px 16px;font-size:12.5px" onclick="exportTadilatExcel()">⬇ Excel'e Aktar</button>` : ''}
+  </div>
+  <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px">"Bekleme": talep açıldıktan sonra bir operatörün işi seçip başlamasına kadar geçen süre (Şef/Üretim Müdürü takibi için) — "Toplam Süre" ise operatörün fiilen çalıştığı (duruş hariç net) süre, bunlar farklı şeyler.</div>
+  <div class="table-wrap"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Adet</th><th>Talep Eden</th><th>Bölüm</th><th>İşlem</th><th>Talep Açıldı</th><th>İşe Başlandı</th><th>Bekleme</th><th>Op. Sayısı</th><th>Yapanlar</th><th>Makineler</th><th>Toplam Süre</th><th>Son Bitiş</th></tr></thead><tbody>
+    ${tamamlananlar.length===0 ? `<tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:16px">Henüz tamamlanan yok.</td></tr>` : tamamlananlar.map(t=>{
+      const ops = tadilatOperasyonlarArray(t);
+      const toplamMs = ops.reduce((s,o)=>s+((o.bitisTs&&o.baslamaTs)?tadilatOpDurationBreakdown(o).netMs:0),0);
+      const yapanlar = [...new Set(ops.map(o=>o.operatorName))].join(', ');
+      const makineler = [...new Set(ops.map(o=>o.makine).filter(Boolean))].join(', ');
+      const sonBitis = ops[ops.length-1]?.bitisTs;
+      const ilkBaslangic = ops[0]?.baslamaTs;
+      const beklemeMs = (t.olusturmaTs && ilkBaslangic) ? Math.max(0, ilkBaslangic - t.olusturmaTs) : null;
+      return `<tr>
+        <td>${(t.atolye||'imalat')==='tadilat'?(ico('wrench',13)+' Tadilat'):(ico('factory',13)+' İmalat')}</td>
+        <td class="mono" style="color:var(--accent)">${esc(t.uKodu)}</td>
+        <td>${esc(t.adet||'—')}</td>
+        <td style="font-size:12.5px">${esc(t.talepEdenKisi||'—')}</td>
+        <td>${esc(t.bolum||'—')}</td>
+        <td style="font-size:12.5px">${esc(t.aciklama)}</td>
+        <td style="font-size:12px">${t.olusturmaTs?fmtDT(t.olusturmaTs):'—'}</td>
+        <td style="font-size:12px">${ilkBaslangic?fmtDT(ilkBaslangic):'—'}</td>
+        <td style="color:${beklemeMs>0?'var(--warn)':'inherit'}">${beklemeMs!=null?fmtDur(beklemeMs):'—'}${(canViewTadilatBeklemeDetay() && beklemeMs>0) ? ` <button class="btn-ghost" style="padding:2px 8px;font-size:10.5px" title="Bu bekleme süresinde operatör ne yapıyordu?" onclick="event.stopPropagation(); openBeklemeDetay('${t.id}')">${ico('search',11)} detay</button>` : ''}</td>
+        <td style="text-align:center">${ops.length}</td>
+        <td style="font-size:12.5px">${esc(yapanlar||'—')}</td>
+        <td style="font-size:12.5px">${esc(makineler||'—')}</td>
+        <td>${fmtDur(toplamMs)}</td>
+        <td>${sonBitis?fmtDT(sonBitis):'—'}</td>
+      </tr>`;
+    }).join('')}
+  </tbody></table></div>`;
+}
+// Bekleyen/duraklatılmış/ara-bekleme/devam eden (henüz TAMAMLANMAMIŞ) talepleri, canlı bekleme
+// ve geçen süreyle birlikte listeler. sortByUrgency=true ise en uzun bekleyen/en çok geçen süre
+// üstte çıkar (Yönetici Analizi'nin "Güncel Bekleyenler" sekmesi için — en kritik olan ilk görünsün).
+function renderDevamEdenTalepTablosu(devamEdenler, sortByUrgency){
+  const rowsData = devamEdenler.map(t=>{
+    const ops = tadilatOperasyonlarArray(t);
+    const ilkOp = ops[0];
+    const aktifOp = tadilatAktifOperasyon(t);
+    const duraklatilmisOp = !aktifOp ? ops.find(o=>o.status==='duruş') : null;
+    const durumTxt = aktifOp ? 'Devam Ediyor' : duraklatilmisOp ? 'Duraklatıldı' : ilkOp ? 'Ara Bekleme (devamı bekleniyor)' : 'Bekliyor';
+    const durumColor = aktifOp ? 'var(--success)' : duraklatilmisOp ? 'var(--warn)' : 'var(--tadilat-info)';
+    const beklemeMs = t.olusturmaTs ? Math.max(0, (ilkOp?.baslamaTs || nowTick) - t.olusturmaTs) : null;
+    const gecenMs = aktifOp ? (nowTick-aktifOp.baslamaTs) : (ilkOp ? (nowTick-t.olusturmaTs) : null);
+    return { t, ilkOp, durumTxt, durumColor, beklemeMs, gecenMs };
+  });
+  if(sortByUrgency) rowsData.sort((a,b)=>(b.gecenMs||0)-(a.gecenMs||0));
+  return `<div class="table-wrap"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Talep Eden</th><th>İşlem</th><th>Talep Açıldı</th><th>Durum</th><th>İşe Başlandı</th><th>Bekleme</th><th>Geçen Süre</th></tr></thead><tbody>
+    ${rowsData.length===0 ? `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:16px">Bekleyen/devam eden talep yok.</td></tr>` : rowsData.map(({t,ilkOp,durumTxt,durumColor,beklemeMs,gecenMs})=>`
+      <tr>
+        <td>${(t.atolye||'imalat')==='tadilat'?(ico('wrench',13)+' Tadilat'):(ico('factory',13)+' İmalat')}</td>
+        <td class="mono" style="color:var(--accent)">${esc(t.uKodu)}</td>
+        <td style="font-size:12.5px">${esc(t.talepEdenKisi||'—')}</td>
+        <td style="font-size:12.5px">${esc(t.aciklama)}</td>
+        <td style="font-size:12px">${t.olusturmaTs?fmtDT(t.olusturmaTs):'—'}</td>
+        <td style="color:${durumColor};font-weight:600;font-size:12.5px">${durumTxt}</td>
+        <td style="font-size:12px">${ilkOp?.baslamaTs?fmtDT(ilkOp.baslamaTs):'—'}</td>
+        <td style="color:${beklemeMs>0?'var(--warn)':'inherit'}">${beklemeMs!=null?fmtDur(beklemeMs):'—'}</td>
+        <td style="font-weight:600;color:${gecenMs>=uzunDurusEsikMs()*4?'var(--danger)':'inherit'}">${gecenMs!=null?fmtDur(gecenMs):'—'}</td>
+      </tr>
+    `).join('')}
+  </tbody></table></div>`;
+}
 function renderAdmin(){
   const viewToTabKey = { report:'rapor', matrix:'matrix', completed:'completed', analiz:'analiz', tadilatYonetim:'tadilat' };
   if(viewToTabKey[view] && !isAdminTabVisible(viewToTabKey[view])){
@@ -1047,6 +1115,8 @@ function renderAdmin(){
         <button class="tab-btn ${tadilatSubTab==='talepler'?'active':''}" onclick="setTadilatSubTab('talepler')">Talepler</button>
         ${(session.isSuperAdmin || session.isSef || session.isUretimSef) ? `<button class="tab-btn ${tadilatSubTab==='canli'?'active':''}" onclick="setTadilatSubTab('canli')">📍 Devam Eden</button>` : ''}
         ${canViewTadilatAnaliz() ? `<button class="tab-btn ${tadilatSubTab==='analiz'?'active':''}" onclick="setTadilatSubTab('analiz')">${ico('chart',14)} Analiz</button>` : ''}
+        ${canViewYoneticiAnalizi() ? `<button class="tab-btn ${tadilatSubTab==='yonetimGecmis'?'active':''}" onclick="setTadilatSubTab('yonetimGecmis')">${ico('chart',14)} Yönetici Analizi — Geçmiş</button>` : ''}
+        ${canViewYoneticiAnalizi() ? `<button class="tab-btn ${tadilatSubTab==='yonetimCanli'?'active':''}" onclick="setTadilatSubTab('yonetimCanli')">🔴 Yönetici Analizi — Güncel</button>` : ''}
       </div>`;
     if(tadilatSubTab==='canli' && (session.isSuperAdmin || session.isSef || session.isUretimSef)){
       const myAtolyelerCanli = getUserAtolyeler(session.username);
@@ -1132,63 +1202,79 @@ function renderAdmin(){
 
       <div style="font-size:13px;font-weight:600;margin-bottom:8px">Bekleyen / Devam Eden Talepler — Detay (${devamEdenler.length})</div>
       <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px">Henüz tamamlanmamış talepler — "Bekleme" ve "Geçen Süre" canlı olarak sayılıyor.</div>
-      <div class="table-wrap" style="margin-bottom:26px"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Talep Eden</th><th>İşlem</th><th>Talep Açıldı</th><th>Durum</th><th>İşe Başlandı</th><th>Bekleme</th><th>Geçen Süre</th></tr></thead><tbody>
-        ${devamEdenler.length===0 ? `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:16px">Bekleyen/devam eden talep yok.</td></tr>` : devamEdenler.map(t=>{
-          const ops = tadilatOperasyonlarArray(t);
-          const ilkOp = ops[0];
-          const aktifOp = tadilatAktifOperasyon(t);
-          const duraklatilmisOp = !aktifOp ? ops.find(o=>o.status==='duruş') : null;
-          const durumTxt = aktifOp ? 'Devam Ediyor' : duraklatilmisOp ? 'Duraklatıldı' : ilkOp ? 'Ara Bekleme (devamı bekleniyor)' : 'Bekliyor';
-          const durumColor = aktifOp ? 'var(--success)' : duraklatilmisOp ? 'var(--warn)' : 'var(--tadilat-info)';
-          const beklemeMs = t.olusturmaTs ? Math.max(0, (ilkOp?.baslamaTs || nowTick) - t.olusturmaTs) : null;
-          const gecenMs = aktifOp ? (nowTick-aktifOp.baslamaTs) : (ilkOp ? (nowTick-t.olusturmaTs) : null);
-          return `<tr>
-            <td>${(t.atolye||'imalat')==='tadilat'?(ico('wrench',13)+' Tadilat'):(ico('factory',13)+' İmalat')}</td>
-            <td class="mono" style="color:var(--accent)">${esc(t.uKodu)}</td>
-            <td style="font-size:12.5px">${esc(t.talepEdenKisi||'—')}</td>
-            <td style="font-size:12.5px">${esc(t.aciklama)}</td>
-            <td style="font-size:12px">${t.olusturmaTs?fmtDT(t.olusturmaTs):'—'}</td>
-            <td style="color:${durumColor};font-weight:600;font-size:12.5px">${durumTxt}</td>
-            <td style="font-size:12px">${ilkOp?.baslamaTs?fmtDT(ilkOp.baslamaTs):'—'}</td>
-            <td style="color:${beklemeMs>0?'var(--warn)':'inherit'}">${beklemeMs!=null?fmtDur(beklemeMs):'—'}</td>
-            <td style="font-weight:600">${gecenMs!=null?fmtDur(gecenMs):'—'}</td>
-          </tr>`;
-        }).join('')}
-      </tbody></table></div>
+      ${renderDevamEdenTalepTablosu(devamEdenler, false)}
 
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:13px;font-weight:600">Tamamlanan Talepler — Detay (${tamamlananlar.length})</div>
-        ${tamamlananlar.length>0 ? `<button class="btn-primary" style="width:auto;padding:8px 16px;font-size:12.5px" onclick="exportTadilatExcel()">⬇ Excel'e Aktar</button>` : ''}
-      </div>
-      <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px">"Bekleme": talep açıldıktan sonra bir operatörün işi seçip başlamasına kadar geçen süre (Şef/Üretim Müdürü takibi için) — "Toplam Süre" ise operatörün fiilen çalıştığı (duruş hariç net) süre, bunlar farklı şeyler.</div>
-      <div class="table-wrap"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Adet</th><th>Talep Eden</th><th>Bölüm</th><th>İşlem</th><th>Talep Açıldı</th><th>İşe Başlandı</th><th>Bekleme</th><th>Op. Sayısı</th><th>Yapanlar</th><th>Makineler</th><th>Toplam Süre</th><th>Son Bitiş</th></tr></thead><tbody>
-        ${tamamlananlar.length===0 ? `<tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:16px">Henüz tamamlanan yok.</td></tr>` : tamamlananlar.map(t=>{
-          const ops = tadilatOperasyonlarArray(t);
-          const toplamMs = ops.reduce((s,o)=>s+((o.bitisTs&&o.baslamaTs)?tadilatOpDurationBreakdown(o).netMs:0),0);
-          const yapanlar = [...new Set(ops.map(o=>o.operatorName))].join(', ');
-          const makineler = [...new Set(ops.map(o=>o.makine).filter(Boolean))].join(', ');
-          const sonBitis = ops[ops.length-1]?.bitisTs;
-          const ilkBaslangic = ops[0]?.baslamaTs;
-          const beklemeMs = (t.olusturmaTs && ilkBaslangic) ? Math.max(0, ilkBaslangic - t.olusturmaTs) : null;
-          return `<tr>
-            <td>${(t.atolye||'imalat')==='tadilat'?(ico('wrench',13)+' Tadilat'):(ico('factory',13)+' İmalat')}</td>
-            <td class="mono" style="color:var(--accent)">${esc(t.uKodu)}</td>
-            <td>${esc(t.adet||'—')}</td>
-            <td style="font-size:12.5px">${esc(t.talepEdenKisi||'—')}</td>
-            <td>${esc(t.bolum||'—')}</td>
-            <td style="font-size:12.5px">${esc(t.aciklama)}</td>
-            <td style="font-size:12px">${t.olusturmaTs?fmtDT(t.olusturmaTs):'—'}</td>
-            <td style="font-size:12px">${ilkBaslangic?fmtDT(ilkBaslangic):'—'}</td>
-            <td style="color:${beklemeMs>0?'var(--warn)':'inherit'}">${beklemeMs!=null?fmtDur(beklemeMs):'—'}${(canViewTadilatBeklemeDetay() && beklemeMs>0) ? ` <button class="btn-ghost" style="padding:2px 8px;font-size:10.5px" title="Bu bekleme süresinde operatör ne yapıyordu?" onclick="event.stopPropagation(); openBeklemeDetay('${t.id}')">${ico('search',11)} detay</button>` : ''}</td>
-            <td style="text-align:center">${ops.length}</td>
-            <td style="font-size:12.5px">${esc(yapanlar||'—')}</td>
-            <td style="font-size:12.5px">${esc(makineler||'—')}</td>
-            <td>${fmtDur(toplamMs)}</td>
-            <td>${sonBitis?fmtDT(sonBitis):'—'}</td>
-          </tr>`;
-        }).join('')}
-      </tbody></table></div>
+      ${renderTamamlananTalepTablosu(tamamlananlar)}
       </div>${beklemeDetayId ? renderBeklemeDetayModal() : ''}`;
+    } else if(tadilatSubTab==='yonetimGecmis' && canViewYoneticiAnalizi()){
+      // Tadilat Analizi'ndeki (kendi personelini takip eden) görünümden AYRI — bu, üretim
+      // yönetiminin talep bazlı geçmişi (KPI + tam liste) takip etmesi için. Veri zamanla çok
+      // birikeceği için (kullanıcı notu) tarih filtresi burada GERÇEKTEN tabloyu daraltıyor —
+      // Tadilat Analizi'ndeki aynı filtre chip'leri sadece üstteki KPI'ları etkiliyordu, tabloyu
+      // değil; burada ikisi de aynı filtreye göre süzülüyor.
+      const tamamlananlarTum = tadilatArray().filter(t=>tadilatTamamlandiMi(t)).sort((a,b)=>{
+        const aOps=tadilatOperasyonlarArray(a), bOps=tadilatOperasyonlarArray(b);
+        return (bOps[bOps.length-1]?.bitisTs||0) - (aOps[aOps.length-1]?.bitisTs||0);
+      });
+      const gecmisFiltreli = tamamlananlarTum.filter(t=>{
+        const dk = dateKey(t.olusturmaTs||0);
+        if(tadilatAnalizFrom && dk<tadilatAnalizFrom) return false;
+        if(tadilatAnalizTo && dk>tadilatAnalizTo) return false;
+        return true;
+      });
+      const beklemeVals = gecmisFiltreli.map(t=>{
+        const ilkOp = tadilatOperasyonlarArray(t)[0];
+        return (t.olusturmaTs && ilkOp?.baslamaTs) ? Math.max(0, ilkOp.baslamaTs-t.olusturmaTs) : null;
+      }).filter(v=>v!=null);
+      const sureVals = gecmisFiltreli.map(t=>tadilatOperasyonlarArray(t).reduce((s,o)=>s+((o.bitisTs&&o.baslamaTs)?tadilatOpDurationBreakdown(o).netMs:0),0));
+      const ortalamaBeklemeMs = beklemeVals.length ? beklemeVals.reduce((a,b)=>a+b,0)/beklemeVals.length : 0;
+      const enUzunBeklemeMs = beklemeVals.length ? Math.max(...beklemeVals) : 0;
+      const ortalamaSureMs = sureVals.length ? sureVals.reduce((a,b)=>a+b,0)/sureVals.length : 0;
+      body += `
+      <div style="font-size:16px;font-weight:600;margin-bottom:6px">Yönetici Analizi — Geçmiş</div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;max-width:680px">Tamamlanmış tüm tadilat taleplerinin geçmişi — talebin açılışından bitişine kadar tüm zaman damgalarıyla. Veri zamanla büyüyeceği için aşağıdaki tarih filtresi tabloyu da daraltır.</div>
+      <div class="filter-bar" style="border-bottom:none;padding:0;flex-wrap:wrap;align-items:center;margin-bottom:18px">
+        <label style="font-size:11.5px;color:var(--text-muted)">Başlangıç</label>
+        <input type="date" class="filter-input" value="${esc(tadilatAnalizFrom)}" onchange="setTadilatAnalizFrom(this.value)">
+        <label style="font-size:11.5px;color:var(--text-muted)">Bitiş</label>
+        <input type="date" class="filter-input" value="${esc(tadilatAnalizTo)}" onchange="setTadilatAnalizTo(this.value)">
+        <button class="chip" onclick="setTadilatAnalizPreset(7)">Son 7 Gün</button>
+        <button class="chip" onclick="setTadilatAnalizPreset(30)">Son 30 Gün</button>
+        <button class="chip" onclick="clearTadilatAnalizFilter()">Tüm Zamanlar</button>
+      </div>
+      <div class="modal-stats" style="margin-bottom:20px">
+        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--accent)">${gecmisFiltreli.length}</div><div class="modal-stat-label">Tamamlanan Talep</div></div>
+        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--warn)">${fmtDur(ortalamaBeklemeMs)}</div><div class="modal-stat-label">Ortalama Bekleme</div></div>
+        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--danger)">${fmtDur(enUzunBeklemeMs)}</div><div class="modal-stat-label">En Uzun Bekleme</div></div>
+        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--success)">${fmtDur(ortalamaSureMs)}</div><div class="modal-stat-label">Ortalama İşlem Süresi</div></div>
+      </div>
+      ${renderTamamlananTalepTablosu(gecmisFiltreli)}
+      </div>${beklemeDetayId ? renderBeklemeDetayModal() : ''}`;
+    } else if(tadilatSubTab==='yonetimCanli' && canViewYoneticiAnalizi()){
+      // "Güncel Bekleyenler" — canlı üretim izleme mantığıyla aynı: anık açık
+      // talepler, en uzun bekleyen/en çok süredir işlemde olan en üstte — geçmiş tabloya göre
+      // farklı bir okuma modu (bekleyen bir sorunu HIZLI görmek için), o yüzden ayrı sekme.
+      const devamEdenlerCanli = tadilatArray().filter(t=>!tadilatTamamlandiMi(t));
+      const canliBilgi = devamEdenlerCanli.map(t=>{
+        const ops = tadilatOperasyonlarArray(t);
+        const aktifOp = tadilatAktifOperasyon(t);
+        return { t, aktifOp, ilkOp: ops[0] };
+      });
+      const isleniyorSayisi = canliBilgi.filter(x=>x.aktifOp).length;
+      const bekliyorSayisi = canliBilgi.length - isleniyorSayisi;
+      const gecenMsListesi = canliBilgi.map(({t,aktifOp,ilkOp})=> aktifOp ? (nowTick-aktifOp.baslamaTs) : (ilkOp ? (nowTick-t.olusturmaTs) : 0));
+      const enUzunGecenMs = gecenMsListesi.length ? Math.max(...gecenMsListesi) : 0;
+      body += `
+      <div style="font-size:16px;font-weight:600;margin-bottom:6px">Yönetici Analizi — Güncel Bekleyenler</div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:680px">Şu an açık olan (bekleyen/duraklatılmış/devam eden) tüm talepler — en uzun süredir bekleyen/işlemde olan en üstte. Bu sayfa canlıdır, otomatik güncellenir.</div>
+      <div class="modal-stats" style="margin-bottom:20px">
+        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--tadilat-info)">${devamEdenlerCanli.length}</div><div class="modal-stat-label">Açık Talep</div></div>
+        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--success)">${isleniyorSayisi}</div><div class="modal-stat-label">İşlemde</div></div>
+        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--warn)">${bekliyorSayisi}</div><div class="modal-stat-label">Bekliyor / Duraklatıldı</div></div>
+        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--danger)">${fmtDur(enUzunGecenMs)}</div><div class="modal-stat-label">En Uzun Süredir Açık</div></div>
+      </div>
+      ${renderDevamEdenTalepTablosu(devamEdenlerCanli, true)}
+      </div>`;
     } else {
       body += `
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Talepleri</div>

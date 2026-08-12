@@ -178,6 +178,16 @@ function canCreateTadilat(){
 // SuperAdmin ile sınırlı değil — Şef/Üretim Şefi/Admin/SuperAdmin hepsi görebiliyor. Talep açma/
 // alma yetkisi bundan ayrı (canCreateTadilat), Şef ve izinli diğer hesaplar hâlâ talep açabilir.
 function canViewTadilatAnaliz(){ return !!(session && (session.isSef || session.isUretimSef || session.isAdmin || session.isSuperAdmin)); }
+// Yönetici Analizi (Geçmiş özet/KPI + Güncel Bekleyenler) — Tadilat Analizi'nden ayrı, daha
+// detaylı ve büyüyen veriye göre tasarlanmış bir görünüm. Şimdilik SADECE SuperAdmin görüyor;
+// Bekleme Detayı yetkisiyle aynı desen — ileride başka rollere açmak için kod değişikliği
+// GEREKMEZ, ilgili operatörün Firebase'deki "permYoneticiAnalizi" alanını true yapman yeterli.
+function canViewYoneticiAnalizi(){
+  if(!session) return false;
+  if(session.isSuperAdmin) return true;
+  const op = STATE.operators[session.username]||{};
+  return op.permYoneticiAnalizi===true;
+}
 function toggleTadilatYetkisi(code){
   const op = STATE.operators[code] || {};
   const effectiveNow = op.permTadilatOlustur===true ? true : (op.permTadilatOlustur===false ? false : !!(op.isSef || op.isUretimSef));
