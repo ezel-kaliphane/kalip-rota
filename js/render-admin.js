@@ -1078,6 +1078,10 @@ function renderAdmin(){
         const aOps=tadilatOperasyonlarArray(a), bOps=tadilatOperasyonlarArray(b);
         return (bOps[bOps.length-1]?.bitisTs||0) - (aOps[aOps.length-1]?.bitisTs||0);
       });
+      // Üretim şefleri/müdürü sadece tamamlananları değil, henüz bitmemiş talepleri de (talep
+      // ne zaman açıldı, tadilata ne zaman başlandı, şu ana kadar ne kadar geçti) aynı zaman
+      // damgalarıyla takip edebilsin diye — "Tamamlanan Talepler" tablosunun canlı/bitmemiş hali.
+      const devamEdenler = tadilatArray().filter(t=>!tadilatTamamlandiMi(t)).sort((a,b)=>a.olusturmaTs-b.olusturmaTs);
       body += `
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Analizi</div>
       <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;max-width:640px">Tamamlanmış tadilat operasyonlarının süre (duruş hariç, net) ve kişi bazlı kırılımı.</div>
@@ -1124,6 +1128,32 @@ function renderAdmin(){
             <td style="text-align:center">${d.count}</td>
           </tr>
         `).join('')}
+      </tbody></table></div>
+
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">Bekleyen / Devam Eden Talepler — Detay (${devamEdenler.length})</div>
+      <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px">Henüz tamamlanmamış talepler — "Bekleme" ve "Geçen Süre" canlı olarak sayılıyor.</div>
+      <div class="table-wrap" style="margin-bottom:26px"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Talep Eden</th><th>İşlem</th><th>Talep Açıldı</th><th>Durum</th><th>İşe Başlandı</th><th>Bekleme</th><th>Geçen Süre</th></tr></thead><tbody>
+        ${devamEdenler.length===0 ? `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:16px">Bekleyen/devam eden talep yok.</td></tr>` : devamEdenler.map(t=>{
+          const ops = tadilatOperasyonlarArray(t);
+          const ilkOp = ops[0];
+          const aktifOp = tadilatAktifOperasyon(t);
+          const duraklatilmisOp = !aktifOp ? ops.find(o=>o.status==='duruş') : null;
+          const durumTxt = aktifOp ? 'Devam Ediyor' : duraklatilmisOp ? 'Duraklatıldı' : ilkOp ? 'Ara Bekleme (devamı bekleniyor)' : 'Bekliyor';
+          const durumColor = aktifOp ? 'var(--success)' : duraklatilmisOp ? 'var(--warn)' : 'var(--tadilat-info)';
+          const beklemeMs = t.olusturmaTs ? Math.max(0, (ilkOp?.baslamaTs || nowTick) - t.olusturmaTs) : null;
+          const gecenMs = aktifOp ? (nowTick-aktifOp.baslamaTs) : (ilkOp ? (nowTick-t.olusturmaTs) : null);
+          return `<tr>
+            <td>${(t.atolye||'imalat')==='tadilat'?(ico('wrench',13)+' Tadilat'):(ico('factory',13)+' İmalat')}</td>
+            <td class="mono" style="color:var(--accent)">${esc(t.uKodu)}</td>
+            <td style="font-size:12.5px">${esc(t.talepEdenKisi||'—')}</td>
+            <td style="font-size:12.5px">${esc(t.aciklama)}</td>
+            <td style="font-size:12px">${t.olusturmaTs?fmtDT(t.olusturmaTs):'—'}</td>
+            <td style="color:${durumColor};font-weight:600;font-size:12.5px">${durumTxt}</td>
+            <td style="font-size:12px">${ilkOp?.baslamaTs?fmtDT(ilkOp.baslamaTs):'—'}</td>
+            <td style="color:${beklemeMs>0?'var(--warn)':'inherit'}">${beklemeMs!=null?fmtDur(beklemeMs):'—'}</td>
+            <td style="font-weight:600">${gecenMs!=null?fmtDur(gecenMs):'—'}</td>
+          </tr>`;
+        }).join('')}
       </tbody></table></div>
 
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
