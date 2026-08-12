@@ -364,10 +364,18 @@ function devamEtTadilatDurus(){
   });
 }
 // "Diğer tadilata geçebilirsin" uyarısında yanlışlıkla duraklattıysa ya da vazgeçtiyse, direkt
-// buradan iptal edip duraklattığı işe geri dönebilsin diye.
+// buradan iptal edip duraklattığı işe geri dönebilsin diye. Duraklatılan iş ya AKTİF BİR TADİLAT
+// (confirmTadilatDurus'tan gelir, devamEtTadilatDurus bunu bulur) ya da NORMAL BİR ÜRETİM İŞİ
+// olabilir (confirmDurus'tan tadilat nedenli duruş verilince gelir) — devamEtTadilatDurus sadece
+// tadilat oturumlarını bildiği için ikinci durumda hiçbir şey yapmadan sessizce çıkıyor ve buton
+// tepkisiz görünüyordu. İkisini de kontrol edip uygun olanı devam ettiriyoruz.
 function cancelTadilatInterrupt(){
   tadilatForceBekleyen = false;
-  devamEtTadilatDurus();
+  const sess = myActiveTadilatSession();
+  if(sess && sess.operasyon.status==='duruş'){ devamEtTadilatDurus(); return; }
+  const entry = entriesArray().find(e => e.operatorUsername===session.username && e.status==='duruş' && isTadilatReason(e.duruşNedeni));
+  if(entry){ devamEt(entry.id); activeDetailId = entry.id; activeGroupId = entry.groupId || null; view = 'list'; }
+  render();
 }
 function tadilatAl(tadilatId, makine){
   const t = tadilatlar[tadilatId]; if(!t || !tadilatBekliyorMu(t)){ toast('Bu talep şu an müsait değil'); return; }
