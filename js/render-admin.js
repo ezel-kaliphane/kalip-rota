@@ -1046,7 +1046,7 @@ function renderAdmin(){
       <div style="display:flex;gap:8px;margin-bottom:20px">
         <button class="tab-btn ${tadilatSubTab==='talepler'?'active':''}" onclick="setTadilatSubTab('talepler')">Talepler</button>
         ${(session.isSuperAdmin || session.isSef || session.isUretimSef) ? `<button class="tab-btn ${tadilatSubTab==='canli'?'active':''}" onclick="setTadilatSubTab('canli')">📍 Devam Eden</button>` : ''}
-        ${canViewTadilatAnaliz() ? `<button class="tab-btn ${tadilatSubTab==='analiz'?'active':''}" onclick="setTadilatSubTab('analiz')">${ico('chart',14)} Analiz <span style="font-size:10.5px;opacity:.8">(SuperAdmin)</span></button>` : ''}
+        ${canViewTadilatAnaliz() ? `<button class="tab-btn ${tadilatSubTab==='analiz'?'active':''}" onclick="setTadilatSubTab('analiz')">${ico('chart',14)} Analiz</button>` : ''}
       </div>`;
     if(tadilatSubTab==='canli' && (session.isSuperAdmin || session.isSef || session.isUretimSef)){
       const myAtolyelerCanli = getUserAtolyeler(session.username);
@@ -1080,7 +1080,7 @@ function renderAdmin(){
       });
       body += `
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Analizi</div>
-      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;max-width:640px">Tamamlanmış tadilat operasyonlarının süre (duruş hariç, net) ve kişi bazlı kırılımı. Sadece SuperAdmin görür.</div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;max-width:640px">Tamamlanmış tadilat operasyonlarının süre (duruş hariç, net) ve kişi bazlı kırılımı.</div>
       <div class="filter-bar" style="border-bottom:none;padding:0;flex-wrap:wrap;align-items:center;margin-bottom:18px">
         <label style="font-size:11.5px;color:var(--text-muted)">Başlangıç</label>
         <input type="date" class="filter-input" value="${esc(tadilatAnalizFrom)}" onchange="setTadilatAnalizFrom(this.value)">
@@ -1149,7 +1149,7 @@ function renderAdmin(){
             <td style="font-size:12.5px">${esc(t.aciklama)}</td>
             <td style="font-size:12px">${t.olusturmaTs?fmtDT(t.olusturmaTs):'—'}</td>
             <td style="font-size:12px">${ilkBaslangic?fmtDT(ilkBaslangic):'—'}</td>
-            <td style="color:${beklemeMs>0?'var(--warn)':'inherit'}">${beklemeMs!=null?fmtDur(beklemeMs):'—'}</td>
+            <td style="color:${beklemeMs>0?'var(--warn)':'inherit'}">${beklemeMs!=null?fmtDur(beklemeMs):'—'}${(canViewTadilatBeklemeDetay() && beklemeMs>0) ? ` <button class="btn-ghost" style="padding:2px 8px;font-size:10.5px" title="Bu bekleme süresinde operatör ne yapıyordu?" onclick="event.stopPropagation(); openBeklemeDetay('${t.id}')">${ico('search',11)} detay</button>` : ''}</td>
             <td style="text-align:center">${ops.length}</td>
             <td style="font-size:12.5px">${esc(yapanlar||'—')}</td>
             <td style="font-size:12.5px">${esc(makineler||'—')}</td>
@@ -1158,7 +1158,7 @@ function renderAdmin(){
           </tr>`;
         }).join('')}
       </tbody></table></div>
-      </div>`;
+      </div>${beklemeDetayId ? renderBeklemeDetayModal() : ''}`;
     } else {
       body += `
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Talepleri</div>

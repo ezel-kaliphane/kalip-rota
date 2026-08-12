@@ -274,6 +274,52 @@ function renderEntryDetailModal(){
     </div>
   </div>`;
 }
+function renderBeklemeDetayModal(){
+  const t = tadilatlar[beklemeDetayId];
+  const ilkOp = t ? tadilatOperasyonlarArray(t)[0] : null;
+  if(!t || !ilkOp || !t.olusturmaTs || !ilkOp.baslamaTs){ beklemeDetayId=null; return ''; }
+  const fromMs = t.olusturmaTs, toMs = ilkOp.baslamaTs;
+  const beklemeMs = Math.max(0, toMs - fromMs);
+  const activity = operatorActivityInRange(ilkOp.operatorUsername, fromMs, toMs);
+  let accountedMs = 0;
+  const rows = activity.map(e=>{
+    const segStart = Math.max(e.startTs, fromMs);
+    const segEnd = Math.min(e.endTs||nowTick, toMs);
+    const overlapMs = Math.max(0, segEnd-segStart);
+    accountedMs += overlapMs;
+    const label = e._isTadilat ? `${ico('wrench',12)} Tadilat: ${esc(e.isEmriNo)}` : `Üretim: ${esc(e.isEmriNo||'—')}`;
+    const statusLabel = e.status==='devam' ? 'Çalışıyor' : e.status==='duruş' ? `Duruşta ("${esc(e.duruşNedeni||'')}")` : 'Tamamlandı';
+    return `<tr>
+      <td style="font-size:12.5px">${label}</td>
+      <td style="font-size:12px">${esc(e.makine||'—')}</td>
+      <td style="font-size:12px" class="mono">${fmtDT(segStart)} → ${fmtDT(segEnd)}</td>
+      <td style="font-size:12px;color:${e.status==='duruş'?'var(--warn)':'inherit'}">${statusLabel}</td>
+      <td style="font-weight:600">${fmtDur(overlapMs)}</td>
+    </tr>`;
+  }).join('');
+  const unaccountedMs = Math.max(0, beklemeMs - accountedMs);
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeBeklemeDetay()">
+    <div class="modal-box" style="max-width:760px">
+      <div class="modal-header">
+        <div><div class="modal-title">${ico('wrench',14)} ${esc(t.uKodu)} — Bekleme Detayı</div><div class="modal-sub">${esc(ilkOp.operatorName||ilkOp.operatorUsername)} · ${fmtDT(fromMs)} → ${fmtDT(toMs)}</div></div>
+        <button class="icon-btn" onclick="closeBeklemeDetay()">${ico('x',14)}</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px">"${esc(t.aciklama||'')}" talebi açıldıktan sonra ${esc(ilkOp.operatorName||ilkOp.operatorUsername)} bu işi seçip başlayana kadar geçen ${fmtDur(beklemeMs)} boyunca bu kişinin sistemdeki tüm kayıtlı hareketleri (üretim + tadilat) aşağıda listeleniyor.</div>
+        <div class="modal-stats" style="margin-bottom:16px">
+          <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--warn)">${fmtDur(beklemeMs)}</div><div class="modal-stat-label">Toplam Bekleme</div></div>
+          <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--success)">${fmtDur(accountedMs)}</div><div class="modal-stat-label">Başka İşle Meşgul</div></div>
+          <div class="modal-stat-box"><div class="modal-stat-num" style="color:${unaccountedMs>0?'var(--danger)':'var(--text-muted)'}">${fmtDur(unaccountedMs)}</div><div class="modal-stat-label">Sistemde Kaydı Yok</div></div>
+        </div>
+        ${activity.length===0 ? `<div style="color:var(--text-muted);padding:20px 0;text-align:center">Bu aralıkta bu kişinin sistemde hiç kaydı yok — sistem üzerinden görünürde hiçbir iş yapmamış.</div>` : `
+        <div class="table-wrap" style="padding:0"><table><thead><tr><th>İş</th><th>Makine</th><th>Zaman Aralığı</th><th>Durum</th><th>Bu Aralıktaki Süre</th></tr></thead><tbody>
+          ${rows}
+        </tbody></table></div>`}
+        ${unaccountedMs>0 ? `<div style="margin-top:14px;font-size:11.5px;color:var(--text-muted)">"Sistemde Kaydı Yok" süresi, kişinin o sırada izinli/molada olabileceği ya da sisteme hiç kayıt açmadan bekliyor olabileceği anlamına gelir — kesin yorum için ilgili kişiyle konuşulması gerekir.</div>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
 function renderMachineModal(){
   const m = allMachines().find(x=>x.code===machineModal);
   const allRows = machineDetailAllRows(machineModal);

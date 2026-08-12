@@ -583,6 +583,21 @@ let matrixGroupFilter = 'Tümü';
 function setMatrixGroupFilter(v){ matrixGroupFilter = v; render(); }
 let matrixAtolyeFilter = 'tumu'; // 'tumu' | 'imalat' | 'tadilat'
 function setMatrixAtolyeFilter(v){ matrixAtolyeFilter = v; render(); }
+// Bir tadilat talebinin "Bekleme" (talep açıldıktan sonra bir operatörün işi seçip başlamasına
+// kadar geçen) süresinde ilgili operatörün sistemde ne yaptığını gösteren detay ekranı — kısa süreli
+// işler için uzun beklemelerin savunulabilir olup olmadığını görmek için. Şu an SADECE SuperAdmin
+// görüyor; Şef/Üretim Şefi gibi başka rollere açmak istersen kod değişikliği GEREKMEZ — ilgili
+// operatörün Firebase'deki "permTadilatBeklemeDetay" alanını true yapman yeterli (permTadilatOlustur
+// ile aynı desen, bkz. canCreateTadilat).
+function canViewTadilatBeklemeDetay(){
+  if(!session) return false;
+  if(session.isSuperAdmin) return true;
+  const op = STATE.operators[session.username]||{};
+  return op.permTadilatBeklemeDetay===true;
+}
+let beklemeDetayId = null; // hangi tadilat talebinin bekleme detayı açık
+function openBeklemeDetay(id){ beklemeDetayId = id; render(); }
+function closeBeklemeDetay(){ beklemeDetayId = null; render(); }
 let machineModal = null; // açık modal'ın makine kodu
 let entryDetailId = null; // Rapor tablosunda tıklanan tek kaydın detay penceresi
 function openEntryDetail(id){ entryDetailId = id; render(); }

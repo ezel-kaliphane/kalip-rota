@@ -750,6 +750,14 @@ function buildTadilatSynthetic(){
   });
   return out;
 }
+// Bir operatörün belirtilen zaman aralığında (kısmen de olsa) çakışan TÜM hareketlerini
+// (üretim işleri + tadilat operasyonları) döner — "Bekleme Detayı" ekranı bunu kullanarak
+// bir tadilat talebi açıldıktan sonra ilgili operatörün o saatlerde ne yaptığını gösteriyor.
+function operatorActivityInRange(username, fromMs, toMs){
+  return [...entriesArray(), ...buildTadilatSynthetic()]
+    .filter(e => e.operatorUsername===username && e.startTs < toMs && (e.endTs||nowTick) > fromMs)
+    .sort((a,b)=>a.startTs-b.startTs);
+}
 // Bir kaydın (entry ya da tadilat operasyonu) duvar-saati/duruş/hariç-tutulan/net süresini
 // tek bir yerden, HER YERDE aynı mantıkla hesaplayan ortak fonksiyon (Analiz ve Excel dışa
 // aktarımlarının aynı sonucu vermesi için — eskiden bu hesap 3 farklı yerde ayrı ayrı, bazen
