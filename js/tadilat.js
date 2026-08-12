@@ -39,6 +39,10 @@ function computeTadilatAnaliz(fromDate, toDate){
   const gecisByPerson = {};
   tadilatArray().forEach(t=>{
     tadilatOperasyonlarArray(t).forEach(o=>{
+      // Ayarlar'dan sadece İmalat Atölye'ye atanmış bir personel ara sıra bir tadilat işine
+      // girmiş olsa bile, bu ekranda "tadilat personeli" olarak sayılmasın — Tadilat Analizi
+      // sadece Ayarlar'da Tadilat Atölye'ye atanmış kişilerin katkısını gösteriyor.
+      if(!getUserAtolyeler(o.operatorUsername).includes('tadilat')) return;
       if(o.baslamaTs && o.bitisTs){
         const dk = dateKey(o.baslamaTs);
         if((!fromDate || dk>=fromDate) && (!toDate || dk<=toDate)){
