@@ -743,6 +743,7 @@ function buildTadilatSynthetic(){
         duruşNedeni: o.duruşNedeni||null, duruşTs: o.duruşTs||null,
         operatorUsername: o.operatorUsername, operatorName: o.operatorName,
         isEmriNo: t.uKodu, talepNo: t.uKodu, adet: t.adet||null,
+        aciklama: t.kisaAciklama || t.aciklama || '',
         _isTadilat: true
       });
     });

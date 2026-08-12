@@ -680,7 +680,8 @@ function renderAdmin(){
             <div class="matrix-sub" style="opacity:.7">Detay için tıkla</div>`;
         }
       } else if(lastFinished){
-        body += `<div class="matrix-sub">Son: ${esc(lastFinished.operatorUsername)} · ${fmtDT(lastFinished.startTs)}</div>`;
+        body += `<div class="matrix-sub">Son: ${esc(lastFinished.operatorUsername)} · ${fmtDT(lastFinished.startTs)}</div>
+          ${lastFinished._isTadilat && lastFinished.aciklama ? `<div class="matrix-sub" style="opacity:.8">${esc(lastFinished.aciklama)}</div>` : ''}`;
       } else {
         body += `<div class="matrix-sub">Hiç kullanılmadı</div>`;
       }
