@@ -368,8 +368,29 @@ function confirmTadilatDurus(){
     } else {
       bigToast('Tadilat duraklatıldı.');
     }
+    if(reason===GUN_SONU_REASON){
+      carryGunSonuToOtherPausedEntries(session.username, []);
+      carryGunSonuToOtherPausedTadilatOps(session.username, t.id+'_'+op.id);
+    }
     render();
   }).catch(err=>{ console.error(err); toast('Duraklatılamadı: '+(err&&err.message||'hata')); });
+}
+// operations.js'teki carryGunSonuToOtherPausedEntries ile AYNI mantık ama tadilat operasyonları
+// için — bir operatör herhangi bir işine (üretim ya da tadilat) Gün Sonu verdiğinde, elinde
+// duruşta unutulmuş başka bir tadilat operasyonu varsa (ör. malzeme bekleyen, geri dönülmemiş)
+// onu da Gün Sonu'na çeviriyoruz — yoksa gece boyu gerçek saatle duruşta saymaya devam eder.
+function carryGunSonuToOtherPausedTadilatOps(username, excludeKey){
+  const now = Date.now();
+  tadilatArray().forEach(t=>{
+    tadilatOperasyonlarArray(t).forEach(op=>{
+      const key = t.id+'_'+op.id;
+      if(op.operatorUsername!==username || op.status!=='duruş' || key===excludeKey || op.duruşNedeni===GUN_SONU_REASON) return;
+      const extra = op.duruşTs ? Math.max(0, now - op.duruşTs) : 0;
+      const duruşToplamMs = (op.duruşToplamMs||0) + extra;
+      const durusLog = appendDurusLog(op.durusLog, op.duruşNedeni, extra, op.duruşTs);
+      DB.ref(`tadilatlar/${t.id}/operasyonlar/${op.id}`).update({ duruşNedeni: GUN_SONU_REASON, duruşTs: now, duruşToplamMs, durusLog });
+    });
+  });
 }
 function devamEtTadilatDurus(){
   const sess = myActiveTadilatSession();

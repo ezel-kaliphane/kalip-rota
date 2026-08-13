@@ -280,13 +280,34 @@ function pickDurusReason(i){
   if(el){ el.innerHTML = durusOptionsListHtml(); updateDurusStartBtn(); }
   else { render(); } // güvenlik ağı: beklenmedik bir ekranda id yoksa eskisi gibi tam çizim
 }
+// Operatör "Gün Sonu" verdiğinde, elinde BAŞKA duruşta unutulmuş kayıt varsa (ör. "Farklı İş
+// Emrine Geçiş" ile duraklatıp hiç geri dönmediği bir iş) onları da Gün Sonu'na çeviriyoruz.
+// SEBEP: Gün Sonu VERİLMEZSE o kayıtların duruş sayacı gece boyu GERÇEK SAATLE işlemeye devam
+// eder — sabaha karşı devasa (10+ saatlik) bir "duruş" olarak raporlanır (oysa operatör o süre
+// boyunca aslında BAŞKA bir işte çalışıyordu, hiç durmamıştı) VE uzunDurusUyarisi Cloud Function'ı
+// gece boyu tekrar tekrar "hâlâ duruşta" bildirimi göndermeye devam eder. Bu fonksiyon, o ana
+// kadarki GERÇEK nedeni (ör. "Farklı İş Emrine Geçiş") durusLog'a olduğu gibi yazıp kaydediyor,
+// bundan sonraki süre ise (B'nin kendi Gün Sonu'su gibi) verimlilikten hariç tutuluyor.
+function carryGunSonuToOtherPausedEntries(username, excludeIds){
+  const now = Date.now();
+  const excluded = excludeIds instanceof Set ? excludeIds : new Set(excludeIds||[]);
+  entriesArray().filter(e => e.operatorUsername===username && e.status==='duruş' && !excluded.has(e.id) && e.duruşNedeni!==GUN_SONU_REASON).forEach(e=>{
+    const extra = e.duruşTs ? Math.max(0, now - e.duruşTs) : 0;
+    const duruşToplamMs = (e.duruşToplamMs||0) + extra;
+    const durusLog = appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
+    DB.ref('entries/'+e.id).update({ duruşNedeni: GUN_SONU_REASON, duruşTs: now, duruşToplamMs, durusLog });
+  });
+}
 function confirmDurus(id){
   const reason = durusReasonSel==='Diğer' ? (document.getElementById('durus-custom')?.value||'').trim() : durusReasonSel;
   if(!reason){ toast('Duruş nedeni seçmelisin'); return; }
   DB.ref('entries/'+id).update({ status:'duruş', duruşNedeni: reason, duruşTs: Date.now() });
   toast('Duruş kaydedildi');
   durusOpen=false; durusReasonSel=''; durusCustom='';
-  if(isTadilatReason(reason)){
+  if(reason===GUN_SONU_REASON){
+    carryGunSonuToOtherPausedEntries(session.username, [id]);
+    carryGunSonuToOtherPausedTadilatOps(session.username, null);
+  } else if(isTadilatReason(reason)){
     activeDetailId = null; activeGroupId = null;
     tadilatForceBekleyen = true;
     view = 'tadilat';
@@ -341,11 +362,16 @@ function duraklatGrup(groupId){
   const reason = durusReasonSel==='Diğer' ? (document.getElementById('durus-custom')?.value||'').trim() : durusReasonSel;
   if(!reason){ toast('Duruş nedeni seçmelisin'); return; }
   const now = Date.now();
-  groupMembersOf(groupId).forEach(e=>{
+  const members = groupMembersOf(groupId);
+  members.forEach(e=>{
     DB.ref('entries/'+e.id).update({ status:'duruş', duruşNedeni: reason, duruşTs: now });
   });
   toast('Tüm iş emirleri duraklatıldı');
   durusOpen=false; durusReasonSel=''; durusCustom='';
+  if(reason===GUN_SONU_REASON){
+    carryGunSonuToOtherPausedEntries(session.username, members.map(e=>e.id));
+    carryGunSonuToOtherPausedTadilatOps(session.username, null);
+  }
 }
 function devamGrup(groupId){
   const members = groupMembersOf(groupId);
