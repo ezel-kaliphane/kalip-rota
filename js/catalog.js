@@ -1010,7 +1010,10 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
       if(dayHasAnomaly) dayWorkMs = dayElapsedCapMs;
       totalWorkMs += dayWorkMs; totalDurusMs += dayDurusMs; totalOvertimeMs += dayOvertimeMs;
       const machines = Object.entries(dayData.byMachine).map(([code,md])=>({ code, label: md.label, workMin: Math.round(md.workMs/60000), durusMin: Math.round(md.durusMs/60000) })).sort((a,b)=>b.workMin-a.workMin);
-      return { tarih: dk, workMin: Math.round(dayWorkMs/60000), durusMin: Math.round(dayDurusMs/60000), overtimeMin: Math.round(dayOvertimeMs/60000), kalanMin: Math.max(0, WORKDAY_MINUTES - Math.round(dayWorkMs/60000)), machines, hasPhysicalAnomaly: dayHasAnomaly };
+      // "entries" burada AYRICA taşınıyor — Kişi Bazlı Analiz'deki günlük Gantt çizelgesi (bkz.
+      // render-admin.js) bu kişinin o gün üzerinde çalıştığı ham kayıtları (saat bazlı segment
+      // çizebilmek için) kullanıyor, machines/workMin gibi özetlenmiş sayılar yetmiyor.
+      return { tarih: dk, workMin: Math.round(dayWorkMs/60000), durusMin: Math.round(dayDurusMs/60000), overtimeMin: Math.round(dayOvertimeMs/60000), kalanMin: Math.max(0, WORKDAY_MINUTES - Math.round(dayWorkMs/60000)), machines, entries: dayData.entries, hasPhysicalAnomaly: dayHasAnomaly };
     }).sort((a,b)=>b.tarih.localeCompare(a.tarih));
     return {
       operatorUsername: op.operatorUsername, operatorName: op.operatorName,
@@ -1022,6 +1025,38 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
 
   const anyOperatorAnomaly = perOperator.some(op=>op.hasPhysicalAnomaly);
   return { perMachine, perOperator, totals, overtimeList, isSingleDay, dayStartMs, fromDate, toDate, anyPhysicalAnomaly: anyPhysicalAnomaly||anyOperatorAnomaly };
+}
+// Bir günün 24 saatlik zaman çizelgesinde (Gantt), verilen kayıtları saat bazlı segmentler
+// olarak çizen ORTAK fonksiyon — Makine Gantt'ı (analizSubTab==='genel') ve Kişi Gantt'ı
+// (analizSubTab==='kisi') birbirinden bağımsız aynı çizim mantığını tekrarlamasın diye tek
+// yerden. Her segment kendi içinde çalışma (yeşil) / duruş (sarı) / Gün Sonu (koyu gri)
+// oranına göre renkleniyor; segmentin OLMADIĞI boşluklar track'in kendi arka planıyla
+// (var(--panel-alt)) otomatik olarak "boşta" gibi görünür, ayrıca renklendirmeye gerek yok.
+function renderGanttSegmentsHtml(entries, dayStartMs, rangeEndMs, titleFn){
+  return entries.map(e=>{
+    const endClip = Math.min(e.endTs || nowTick, rangeEndMs);
+    const segStart = Math.max(e.startTs, dayStartMs);
+    const segEndForSeg = Math.min(endClip, dayStartMs+86400000);
+    if(segEndForSeg <= segStart) return '';
+    const startMin = Math.max(0, (segStart - dayStartMs)/60000);
+    const durMin = Math.max(1,(segEndForSeg - segStart)/60000);
+    const leftPct = Math.max(0,(startMin/1440)*100);
+    const widthPct = Math.min(100-leftPct,(durMin/1440)*100);
+    const totalMs = Math.max(0, segEndForSeg - segStart);
+    const durusMs = entryDurusEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, segStart, segEndForSeg), 0);
+    const exclMs = entryExcludedEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, segStart, segEndForSeg), 0);
+    const workMs = Math.max(0, totalMs - durusMs - exclMs);
+    const workPct = totalMs>0 ? Math.round(workMs/totalMs*100) : 0;
+    const durusPct = totalMs>0 ? Math.round(durusMs/totalMs*100) : 0;
+    const exclPct = Math.max(0, 100-workPct-durusPct);
+    let bg;
+    if(exclPct>=99) bg = '#3a4148';
+    else if(workPct>=99) bg = 'var(--success)';
+    else if(durusPct>=99) bg = 'var(--warn)';
+    else bg = `linear-gradient(to right, var(--success) 0%, var(--success) ${workPct}%, var(--warn) ${workPct}%, var(--warn) ${workPct+durusPct}%, #3a4148 ${workPct+durusPct}%, #3a4148 100%)`;
+    const titleTxt = titleFn ? titleFn(e) : `${e.isEmriNo||e.talepNo||''} · ${e.makine||''}`;
+    return `<div class="analiz-gantt-seg" style="left:${leftPct}%;width:${widthPct}%;background:${bg}" title="${esc(titleTxt)} · ${fmtDT(e.startTs)}–${e.endTs?fmtDT(e.endTs):'şu an'}"></div>`;
+  }).join('');
 }
 
 // renderAdmin() analiz sekmesini çizerken hesapladığı veriyi burada saklıyor — grafik init'i

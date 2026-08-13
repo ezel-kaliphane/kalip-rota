@@ -971,33 +971,7 @@ function renderAdmin(){
         </div>
         ${ganttMachines.length===0 ? `<div style="color:var(--text-muted);padding:10px 0">Bu makine bu tarihte kullanılmamış.</div>` : ganttMachines.map(m=>{
           const cutoffPct = (WORKDAY_END_MINUTE/1440)*100;
-          const segs = m.entries.map(e=>{
-            const endClip = e.endTs || nowTick;
-            // DÜZELTME: Eskiden hem başlangıç hem bitiş güne kelepçelenmeden kullanılıyordu —
-            // dün akşam başlayıp bu sabah biten bir iş, bu Gantt'ta ya negatif konumda başlıyor
-            // ya da effectiveDurusMs/effectiveExcludedMs'in TÜM geçmişi kapsayan değerleri bu
-            // günün küçük dilimine uygulanınca sonucu sıfırlıyordu (iş "hiç çalışılmamış" gibi
-            // görünüyordu). Artık hem konum hem duruş/Gün Sonu payı SADECE bu güne göre.
-            const segStart = Math.max(e.startTs, data.dayStartMs);
-            const segEndForSeg = Math.min(endClip, data.dayStartMs+86400000);
-            const startMin = Math.max(0, (segStart - data.dayStartMs)/60000);
-            const durMin = Math.max(1,(segEndForSeg - segStart)/60000);
-            const leftPct = Math.max(0,(startMin/1440)*100);
-            const widthPct = Math.min(100-leftPct,(durMin/1440)*100);
-            const totalMs = Math.max(0, segEndForSeg - segStart);
-            const durusMs = entryDurusEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, segStart, segEndForSeg), 0);
-            const exclMs = entryExcludedEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, segStart, segEndForSeg), 0);
-            const workMs = Math.max(0, totalMs - durusMs - exclMs);
-            const workPct = totalMs>0 ? Math.round(workMs/totalMs*100) : 0;
-            const durusPct = totalMs>0 ? Math.round(durusMs/totalMs*100) : 0;
-            const exclPct = Math.max(0, 100-workPct-durusPct);
-            let bg;
-            if(exclPct>=99) bg = '#3a4148';
-            else if(workPct>=99) bg = 'var(--success)';
-            else if(durusPct>=99) bg = 'var(--warn)';
-            else bg = `linear-gradient(to right, var(--success) 0%, var(--success) ${workPct}%, var(--warn) ${workPct}%, var(--warn) ${workPct+durusPct}%, #3a4148 ${workPct+durusPct}%, #3a4148 100%)`;
-            return `<div class="analiz-gantt-seg" style="left:${leftPct}%;width:${widthPct}%;background:${bg}" title="${esc(e.isEmriNo)} · ${esc(e.operatorUsername)} · ${fmtDT(e.startTs)}–${e.endTs?fmtDT(e.endTs):'şu an'}"></div>`;
-          }).join('');
+          const segs = renderGanttSegmentsHtml(m.entries, data.dayStartMs, data.dayStartMs+86400000, e=>`${e.isEmriNo||''} · ${e.operatorUsername||''}`);
           return `<div class="analiz-gantt-row">
             <div class="analiz-gantt-label mono">${m.code}<div style="font-size:10px;color:var(--text-muted);font-family:'Inter',sans-serif">%${m.verimlilik}</div></div>
             <div class="analiz-gantt-track">${segs}<div class="analiz-gantt-cutoff" style="left:${cutoffPct}%"></div></div>
@@ -1046,19 +1020,38 @@ function renderAdmin(){
         ${analizSelectedOperator===op.operatorUsername ? `
         <tr><td colspan="7" style="padding:0;background:var(--bg)">
           <div style="padding:14px 16px 18px 40px">
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Gün gün dökümü — standart mesai: ${WORKDAY_MINUTES} dk</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Gün gün dökümü — standart mesai: ${WORKDAY_MINUTES} dk. "Boşta": o günkü kullanılabilirlikten (standart mesai + fazla mesai) çalışma ve duruş süresi düşülünce kalan, hiçbir kayda denk gelmeyen süre.</div>
             <div class="table-wrap" style="padding:0"><table><thead><tr>
-              <th>Tarih</th><th>Makineler</th><th>Çalışma</th><th>Duruş</th><th>Fazla Mesai</th><th>Kalan Mesai</th>
+              <th>Tarih</th><th>Makineler</th><th>Çalışma</th><th>Duruş</th><th>Boşta</th><th>Fazla Mesai</th><th>Kalan Mesai</th>
             </tr></thead><tbody>
-              ${op.days.map(d=>`<tr>
+              ${op.days.map(d=>{
+                const dStartMs = new Date(d.tarih+'T00:00:00').getTime();
+                const availMin = WORKDAY_MINUTES + d.overtimeMin;
+                const idleMin = Math.max(0, availMin - d.workMin - d.durusMin);
+                const segs = renderGanttSegmentsHtml(d.entries||[], dStartMs, dStartMs+86400000, e=>`${e.isEmriNo||e.talepNo||''} · ${e.makine||''}`);
+                return `<tr>
                 <td class="mono">${esc(d.tarih)}</td>
                 <td style="font-size:12px">${d.machines.map(m=>`<span class="mono" style="color:var(--accent)">${esc(m.code)}</span> (${fmtDur(m.workMin*60000)})`).join('<br>')}</td>
                 <td>${fmtDur(d.workMin*60000)}${d.hasPhysicalAnomaly?` <span style="color:var(--danger)" title="O gün, gerçek geçen süreden fazla çalışma hesaplandı — fiziksel üst sınıra çekildi.">${ico('alert',14)}</span>`:''}</td>
                 <td style="color:${d.durusMin>0?'var(--warn)':'inherit'}">${fmtDur(d.durusMin*60000)}</td>
+                <td style="color:var(--text-muted)">${fmtDur(idleMin*60000)}</td>
                 <td>${d.overtimeMin>0?`<span style="color:var(--danger);font-weight:600">${d.overtimeMin} dk</span>`:'—'}</td>
                 <td style="color:${d.kalanMin>0?'var(--text-muted)':'var(--success)'}">${d.kalanMin>0?fmtDur(d.kalanMin*60000):'Tamamlandı'}</td>
-              </tr>`).join('')}
+              </tr>
+              <tr><td colspan="7" style="padding:2px 0 12px">
+                <div class="analiz-gantt-row" style="margin-bottom:0">
+                  <div class="analiz-gantt-label" style="width:0"></div>
+                  <div class="analiz-gantt-track">${segs}<div class="analiz-gantt-cutoff" style="left:${(WORKDAY_END_MINUTE/1440)*100}%"></div></div>
+                </div>
+              </td></tr>`;
+              }).join('')}
             </tbody></table></div>
+            <div style="display:flex;gap:14px;font-size:11px;color:var(--text-muted);margin-top:8px">
+              <span><span style="display:inline-block;width:10px;height:10px;background:var(--success);border-radius:2px;margin-right:4px"></span>Çalışma</span>
+              <span><span style="display:inline-block;width:10px;height:10px;background:var(--warn);border-radius:2px;margin-right:4px"></span>Duruş</span>
+              <span><span style="display:inline-block;width:10px;height:10px;background:var(--panel-alt);border:1px solid var(--border);border-radius:2px;margin-right:4px"></span>Boşta / kayıt yok</span>
+              <span><span style="display:inline-block;width:10px;height:10px;background:#3a4148;border-radius:2px;margin-right:4px"></span>Gün Sonu (hariç tutulan)</span>
+            </div>
           </div>
         </td></tr>` : ''}
         `).join('')}
