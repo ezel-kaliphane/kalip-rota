@@ -321,6 +321,21 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
      Bu, sınıf yerine inline style kullanan yerleri de (ör. Yeni Tadilat Talebi ekranı,
      Personel Ayarları formu) kapsıyor. */
   div[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}
+  /* Analiz sekmesindeki (Yönetim/Şef/Tadilat/Kişi Bazlı/Saha) çok sütunlu kart yerleşimleri —
+     aynı inline-style-substring deseni, oradaki farklı oran/sabit-genişlik kombinasyonları için. */
+  div[style*="grid-template-columns:repeat(4,1fr)"],
+  div[style*="grid-template-columns:1.2fr 1fr"],
+  div[style*="grid-template-columns:1.15fr 1fr"],
+  div[style*="grid-template-columns:1.4fr 1fr"],
+  div[style*="grid-template-columns:1fr 1.7fr"],
+  div[style*="grid-template-columns:1fr 320px"]{
+    grid-template-columns:1fr!important;
+  }
+  /* Kişi Bazlı görünümündeki operatör satırları: sabit genişlikli isim/özet sütunları telefonda
+     ortadaki Gantt şeridini neredeyse hiç bırakmıyordu — daraltılıyor, saat ekseni de buna uyuyor. */
+  .analiz-kisi-name{width:104px!important}
+  .analiz-kisi-info{width:88px!important;font-size:10px!important}
+  .analiz-kisi-axis{padding-left:116px!important}
 }
 /* =============== MOBİL YERLEŞİM (v27) — alt gezinme çubuğu, aktif iş şeridi, nefes payı =============== */
 .logo-plate{display:inline-flex;align-items:center;background:#fff;border-radius:10px;padding:7px 11px;line-height:0}

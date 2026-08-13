@@ -1,47 +1,48 @@
 /* ===================== RENDER: ADMİN ===================== */
-// "Tamamlanan Talepler" tablosu birden fazla yerde (Tadilat Analizi sekmesi + Yönetici Analizi'nin
-// Geçmiş alt sekmesi) aynı şekilde kullanılıyor — tek yerden değiştirilsin diye ayrı fonksiyon.
+// U kodunun altına, listede eşleşen malzeme adını (varsa) küçük gri yazıyla ekler — hem
+// "Tamamlanan Talepler" hem "Bekleyen/Aktif" tablolarında ve akış şeması modalında ortak kullanılıyor.
+function uKoduHücresi(uKodu, color){
+  const info = getTalepInfo(uKodu);
+  return `<div class="mono" style="color:${color||'var(--accent)'};font-weight:600">${esc(uKodu)}</div>${info?.malzemeAdi?`<div style="font-size:10.5px;color:var(--text-muted);font-family:'Inter',sans-serif;font-weight:400">${esc(info.malzemeAdi)}</div>`:''}`;
+}
+// "Tamamlanan Talepler" tablosu birden fazla yerde (renderAnalizTadilat — hem Analiz sekmesindeki
+// "Tadilat" görünümü hem Tadilat sekmesinin kendi "Analiz" alt sekmesi buradan besleniyor) aynı
+// şekilde kullanılıyor — tek yerden değiştirilsin diye ayrı fonksiyon. Satıra tıklamak akış
+// şemasını açar (bkz. renderTadilatAkisModal); ayrı bir "Detay" butonuna gerek yok.
 function renderTamamlananTalepTablosu(tamamlananlar){
   // Excel butonu bir onclick metni olduğu için diziyi doğrudan geçemiyoruz; o an EKRANDA
   // gösterilen (filtrelenmiş olabilen) listeyi burada saklayıp dışa aktarımın onu kullanmasını
   // sağlıyoruz — yoksa ekranda 12 kayıt görünürken Excel'e 400 kayıt iniyordu.
   lastTamamlananTalepListesi = tamamlananlar;
-  return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-    <div style="font-size:13px;font-weight:600">Tamamlanan Talepler — Detay (${tamamlananlar.length})</div>
-    ${tamamlananlar.length>0 ? `<button class="btn-primary" style="width:auto;padding:8px 16px;font-size:12.5px" onclick="exportTadilatExcel(lastTamamlananTalepListesi)">⬇ Excel'e Aktar</button>` : ''}
+  return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;flex-wrap:wrap">
+    <div style="font-size:11.5px;color:var(--text-muted)">"Bekleme": açılış→başlama · "İşlem Süresi": başlama→bitiş (duvar saati) · "Toplam Süre": açılış→bitiş. Satıra tıkla, adım adım akışı gör.</div>
+    ${tamamlananlar.length>0 ? `<button class="btn-primary" style="width:auto;padding:7px 14px;font-size:12px;flex-shrink:0" onclick="exportTadilatExcel(lastTamamlananTalepListesi)">⬇ Excel'e Aktar</button>` : ''}
   </div>
-  <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px">"Bekleme": talep açıldıktan sonra bir operatörün işi seçip başlamasına kadar geçen süre (Şef/Üretim Müdürü takibi için) — "Toplam Süre" ise operatörün fiilen çalıştığı (duruş hariç net) süre, bunlar farklı şeyler.</div>
-  <div class="table-wrap"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Adet</th><th>Talep Eden</th><th>Bölüm</th><th>İşlem</th><th>Talep Açıldı</th><th>İşe Başlandı</th><th>Bekleme</th><th>Op. Sayısı</th><th>Yapanlar</th><th>Makineler</th><th>Toplam Süre</th><th>Son Bitiş</th></tr></thead><tbody>
-    ${tamamlananlar.length===0 ? `<tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:16px">Henüz tamamlanan yok.</td></tr>` : tamamlananlar.map(t=>{
+  <div class="table-wrap"><table><thead><tr><th>U Kodu</th><th>İşlem</th><th>Açılış</th><th>Başlama</th><th>Bekleme</th><th>Bitiş</th><th>İşlem Süresi</th><th>Toplam Süre</th></tr></thead><tbody>
+    ${tamamlananlar.length===0 ? `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:16px">Henüz tamamlanan yok.</td></tr>` : tamamlananlar.map(t=>{
       const ops = tadilatOperasyonlarArray(t);
-      const toplamMs = ops.reduce((s,o)=>s+((o.bitisTs&&o.baslamaTs)?tadilatOpDurationBreakdown(o).netMs:0),0);
-      const yapanlar = [...new Set(ops.map(o=>o.operatorName))].join(', ');
-      const makineler = [...new Set(ops.map(o=>o.makine).filter(Boolean))].join(', ');
+      const ilkOp = ops[0];
       const sonBitis = ops[ops.length-1]?.bitisTs;
-      const ilkBaslangic = ops[0]?.baslamaTs;
+      const ilkBaslangic = ilkOp?.baslamaTs;
       const beklemeMs = (t.olusturmaTs && ilkBaslangic) ? Math.max(0, ilkBaslangic - t.olusturmaTs) : null;
-      return `<tr>
-        <td>${(t.atolye||'imalat')==='tadilat'?(ico('wrench',13)+' Tadilat'):(ico('factory',13)+' İmalat')}</td>
-        <td class="mono" style="color:var(--accent)">${esc(t.uKodu)}</td>
-        <td>${esc(t.adet||'—')}</td>
-        <td style="font-size:12.5px">${esc(t.talepEdenKisi||'—')}</td>
-        <td>${esc(t.bolum||'—')}</td>
+      const islemSureMs = (ilkBaslangic && sonBitis) ? Math.max(0, sonBitis - ilkBaslangic) : null;
+      const toplamSureMs = (t.olusturmaTs && sonBitis) ? Math.max(0, sonBitis - t.olusturmaTs) : null;
+      return `<tr style="cursor:pointer" onclick="openTadilatAkis('${t.id}')">
+        <td>${uKoduHücresi(t.uKodu)}</td>
         <td style="font-size:12.5px">${esc(t.aciklama)}</td>
         <td style="font-size:12px">${t.olusturmaTs?fmtDT(t.olusturmaTs):'—'}</td>
-        <td style="font-size:12px">${ilkBaslangic?fmtDT(ilkBaslangic):'—'}</td>
-        <td style="color:${beklemeMs>0?'var(--warn)':'inherit'}">${beklemeMs!=null?fmtDur(beklemeMs):'—'}${(canViewTadilatBeklemeDetay() && beklemeMs>0) ? ` <button class="btn-ghost" style="padding:2px 8px;font-size:10.5px" title="Bu bekleme süresinde operatör ne yapıyordu?" onclick="event.stopPropagation(); openBeklemeDetay('${t.id}')">${ico('search',11)} detay</button>` : ''}</td>
-        <td style="text-align:center">${ops.length}</td>
-        <td style="font-size:12.5px">${esc(yapanlar||'—')}</td>
-        <td style="font-size:12.5px">${esc(makineler||'—')}</td>
-        <td>${fmtDur(toplamMs)}</td>
-        <td>${sonBitis?fmtDT(sonBitis):'—'}</td>
+        <td style="font-size:12px">${ilkBaslangic?`${fmtDT(ilkBaslangic)}<div style="font-size:10.5px;color:var(--text-muted)">${esc(ilkOp.operatorName||ilkOp.operatorUsername||'')}</div>`:'—'}</td>
+        <td style="color:${beklemeMs>0?'var(--warn)':'inherit'}">${beklemeMs!=null?fmtDur(beklemeMs):'—'}${(canViewTadilatBeklemeDetay() && beklemeMs>0) ? ` <button class="btn-ghost" style="padding:2px 8px;font-size:10.5px" title="Bu bekleme süresinde operatör ne yapıyordu?" onclick="event.stopPropagation(); openBeklemeDetay('${t.id}')">${ico('search',11)}</button>` : ''}</td>
+        <td style="font-size:12px">${sonBitis?fmtDT(sonBitis):'—'}</td>
+        <td>${islemSureMs!=null?fmtDur(islemSureMs):'—'}</td>
+        <td style="font-weight:700;color:var(--success)">${toplamSureMs!=null?fmtDur(toplamSureMs):'—'}</td>
       </tr>`;
     }).join('')}
   </tbody></table></div>`;
 }
 // Bekleyen/duraklatılmış/ara-bekleme/devam eden (henüz TAMAMLANMAMIŞ) talepleri, canlı bekleme
 // ve geçen süreyle birlikte listeler. sortByUrgency=true ise en uzun bekleyen/en çok geçen süre
-// üstte çıkar (Yönetici Analizi'nin "Güncel Bekleyenler" sekmesi için — en kritik olan ilk görünsün).
+// üstte çıkar. Satıra tıklamak akış şemasını açar.
 function renderDevamEdenTalepTablosu(devamEdenler, sortByUrgency){
   const rowsData = devamEdenler.map(t=>{
     const ops = tadilatOperasyonlarArray(t);
@@ -61,21 +62,418 @@ function renderDevamEdenTalepTablosu(devamEdenler, sortByUrgency){
     return { t, ilkOp, durumTxt, durumColor, beklemeMs, gecenMs };
   });
   if(sortByUrgency) rowsData.sort((a,b)=>(b.gecenMs||0)-(a.gecenMs||0));
-  return `<div class="table-wrap"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Talep Eden</th><th>İşlem</th><th>Talep Açıldı</th><th>Durum</th><th>İşe Başlandı</th><th>Bekleme</th><th>Geçen Süre</th></tr></thead><tbody>
+  return `<div class="table-wrap"><table><thead><tr><th>Atölye</th><th>Talep Eden</th><th>U Kodu</th><th>İşlem</th><th>Açılış</th><th>Durum</th><th>Başlama</th><th>Bekleme</th><th>Geçen Süre</th></tr></thead><tbody>
     ${rowsData.length===0 ? `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:16px">Bekleyen/devam eden talep yok.</td></tr>` : rowsData.map(({t,ilkOp,durumTxt,durumColor,beklemeMs,gecenMs})=>`
-      <tr>
+      <tr style="cursor:pointer" onclick="openTadilatAkis('${t.id}')">
         <td>${(t.atolye||'imalat')==='tadilat'?(ico('wrench',13)+' Tadilat'):(ico('factory',13)+' İmalat')}</td>
-        <td class="mono" style="color:var(--accent)">${esc(t.uKodu)}</td>
         <td style="font-size:12.5px">${esc(t.talepEdenKisi||'—')}</td>
+        <td>${uKoduHücresi(t.uKodu)}</td>
         <td style="font-size:12.5px">${esc(t.aciklama)}</td>
         <td style="font-size:12px">${t.olusturmaTs?fmtDT(t.olusturmaTs):'—'}</td>
         <td style="color:${durumColor};font-weight:600;font-size:12.5px">${durumTxt}</td>
-        <td style="font-size:12px">${ilkOp?.baslamaTs?fmtDT(ilkOp.baslamaTs):'—'}</td>
+        <td style="font-size:12px">${ilkOp?.baslamaTs?`${fmtDT(ilkOp.baslamaTs)}<div style="font-size:10.5px;color:var(--text-muted)">${esc(ilkOp.operatorName||ilkOp.operatorUsername||'')}</div>`:'—'}</td>
         <td style="color:${beklemeMs>0?'var(--warn)':'inherit'}">${beklemeMs!=null?fmtDur(beklemeMs):'—'}</td>
         <td style="font-weight:600;color:${gecenMs>=uzunDurusEsikMs()*4?'var(--danger)':'inherit'}">${gecenMs!=null?fmtDur(gecenMs):'—'}</td>
       </tr>
     `).join('')}
   </tbody></table></div>`;
+}
+/* "Detay" butonuyla açılan iş akışı şeması — İş Açıldı → (Operasyon Başladı → Operasyon Bitti)*
+   → Toplam Süre. Çok operasyonlu (ara bekleme geçirmiş) talepler zincire ekstra kutu olarak
+   ekleniyor; tek operasyonlu, doğrudan biten sıradan bir talepte tam olarak istenen üç kutu
+   (İş Açıldı / İşe Başlandı / İş Bitti) çıkıyor. */
+function renderTadilatAkisModal(){
+  const t = tadilatlar[tadilatAkisModalId];
+  if(!t){ tadilatAkisModalId = null; return ''; }
+  const ops = tadilatOperasyonlarArray(t);
+  const tamamlandi = tadilatTamamlandiMi(t);
+
+  const node = (title, color, tarihSaat, topLabel, bottomLabel) => `
+    <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:220px">
+      <div style="font-size:12px;font-weight:700;color:${color};margin-bottom:8px;text-align:center;min-height:16px">${topLabel||''}</div>
+      <div style="background:var(--panel-alt);border:2px solid ${color};border-radius:14px;padding:16px 18px;text-align:center;width:100%">
+        <div style="font-size:12.5px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.4px">${title}</div>
+        <div class="mono" style="font-size:15px;font-weight:600;margin-top:6px">${tarihSaat||'—'}</div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center;min-height:16px;max-width:210px">${bottomLabel||''}</div>
+    </div>`;
+  const connector = (label, color) => `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;width:110px;padding-top:26px;gap:5px">
+      <div style="font-size:11.5px;font-weight:700;color:${color};white-space:nowrap">${label}</div>
+      <div style="width:100%;height:2px;background:${color};position:relative">
+        <div style="position:absolute;right:-1px;top:-4px;width:0;height:0;border-left:8px solid ${color};border-top:5px solid transparent;border-bottom:5px solid transparent"></div>
+      </div>
+    </div>`;
+
+  const chain = [];
+  chain.push(node('İş Açıldı', 'var(--accent)', t.olusturmaTs?fmtDT(t.olusturmaTs):'—', esc(t.talepEdenKisi||'—'), esc(t.aciklama||'')));
+  ops.forEach((o,i)=>{
+    const beklemeOncekindenMs = i===0
+      ? (t.olusturmaTs && o.baslamaTs ? Math.max(0, o.baslamaTs - t.olusturmaTs) : null)
+      : (ops[i-1].bitisTs && o.baslamaTs ? Math.max(0, o.baslamaTs - ops[i-1].bitisTs) : null);
+    chain.push(connector(beklemeOncekindenMs!=null ? `${fmtDur(beklemeOncekindenMs)} bekledi` : '—', i===0?'var(--warn)':'var(--gunsonu)'));
+    chain.push(node(ops.length>1?`${i+1}. Operasyon Başladı`:'İşe Başlandı', 'var(--tadilat-info)', o.baslamaTs?fmtDT(o.baslamaTs):'—', `${esc(o.operatorName||o.operatorUsername||'—')}`, o.makine?esc(o.makine.split(' · ')[0]):''));
+    if(o.bitisTs){
+      const islemMs = (o.baslamaTs && o.bitisTs) ? Math.max(0, o.bitisTs-o.baslamaTs) : null;
+      chain.push(connector(islemMs!=null?fmtDur(islemMs):'—', 'var(--success)'));
+      const sonMu = i===ops.length-1 && o.sonOperasyon;
+      chain.push(node(sonMu?'İş Bitti':'Operasyon Bitti', sonMu?'var(--success)':'var(--text-muted)', fmtDT(o.bitisTs), '', sonMu?'':'devamı bekleniyor'));
+    }
+  });
+  const sonBitis = ops[ops.length-1]?.bitisTs;
+  const toplamSureMs = (t.olusturmaTs && sonBitis) ? Math.max(0, sonBitis - t.olusturmaTs) : null;
+
+  const malzemeAdi = getTalepInfo(t.uKodu)?.malzemeAdi;
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeTadilatAkis()">
+    <div class="modal-box" style="max-width:min(98vw,1600px);width:98vw">
+      <div class="modal-header">
+        <div><div class="modal-title">${ico('wrench',16)} ${esc(t.uKodu)}${malzemeAdi?` <span style="color:var(--text-muted);font-weight:400;font-size:.7em">${esc(malzemeAdi)}</span>`:''}</div><div class="modal-sub">${esc(t.aciklama||'')}${t.bolum?` · ${esc(t.bolum)}`:''}${t.adet?` · Adet: ${esc(t.adet)}`:''}</div></div>
+        <button class="icon-btn" onclick="closeTadilatAkis()">${ico('x',14)}</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex;align-items:flex-start;gap:0;overflow-x:auto;padding:14px 4px 24px">${chain.join('')}</div>
+        ${toplamSureMs!=null ? `<div style="display:flex;align-items:center;justify-content:center;gap:10px;background:var(--success-row);border:1px solid var(--success);border-radius:10px;padding:14px 18px;margin-top:6px">
+          <span style="font-size:14px;font-weight:600;color:var(--success)">Toplam Süre (Açılış → Bitiş)</span>
+          <span class="mono" style="font-size:20px;font-weight:700;color:var(--success)">${fmtDur(toplamSureMs)}</span>
+        </div>` : `<div style="text-align:center;color:var(--text-muted);font-size:12.5px;padding:8px 0">${tamamlandi?'':'Bu talep henüz tamamlanmadı — toplam süre kapanınca hesaplanır.'}</div>`}
+      </div>
+    </div>
+  </div>`;
+}
+/* Analiz sekmesi — "Atölye Şefi" görünümü: geçmiş bir aralık değil, ŞU AN atölyede ne olduğunu
+   gösteren canlı bir pano (canlı makine sayaçları, uzun süredir duruşta olanlar, bugünün duruş
+   nedenleri, bugünkü operatör yükü). Fason makineler diğer analiz ekranlarıyla tutarlı olsun
+   diye burada da hariç tutuluyor (bkz. computeAnalizData'daki aynı filtre). */
+function renderAnalizSefLive(){
+  const liveEntries = [...entriesArray(), ...buildTadilatSynthetic()].filter(e=>!isFasonMachine(e.makine));
+  const liveMachines = allMachines().filter(m=>!isFasonMachine(m.code));
+  let calisiyor=0, durusta=0, gunsonu=0, bosta=0;
+  liveMachines.forEach(m=>{
+    const label = `${m.code} · ${m.name}`;
+    const tadilatHere = tadilatAktifOnMachine(label);
+    const machineEntries = liveEntries.filter(e=>e.makine===label);
+    const running = !tadilatHere && machineEntries.some(e=>e.status==='devam');
+    const stoppedEntries = machineEntries.filter(e=>e.status==='duruş');
+    const stopped = !tadilatHere && !running && stoppedEntries.length>0;
+    if(tadilatHere || running) calisiyor++;
+    else if(stopped){ (stoppedEntries.every(e=>e.duruşNedeni===GUN_SONU_REASON) ? gunsonu++ : durusta++); }
+    else bosta++;
+  });
+  const uzun = uzunDurusluKayitlar();
+  const esikDk = Math.round(uzunDurusEsikMs()/60000);
+
+  const bugun = dateKey(Date.now());
+  const dayStartMs = new Date(bugun+'T00:00:00').getTime(), dayEndMs = dayStartMs+86400000;
+  const bugunEntries = liveEntries.filter(e => e.startTs < dayEndMs && (e.endTs||nowTick) >= dayStartMs);
+  const bugunDurusAgg = {};
+  collectDurusEvents(bugunEntries).forEach(ev=>{
+    if(ev.neden===GUN_SONU_REASON || !Number.isFinite(ev.sureMs) || ev.sureMs<=0) return;
+    const overlap = msOverlap(ev.ts, ev.sureMs, dayStartMs, dayEndMs);
+    if(overlap<=0) return;
+    (bugunDurusAgg[ev.neden] ||= { ms:0, count:0 });
+    bugunDurusAgg[ev.neden].ms += overlap; bugunDurusAgg[ev.neden].count++;
+  });
+  const bugunList = Object.entries(bugunDurusAgg).map(([neden,v])=>({neden, ms:v.ms, count:v.count})).sort((a,b)=>b.ms-a.ms);
+  const bugunMax = Math.max(...bugunList.map(x=>x.ms), 1);
+
+  const todayData = computeAnalizData(bugun, bugun, 'tumu');
+  const opLoad = todayData.perOperator.slice(0,10);
+  const opMax = Math.max(...opLoad.map(o=>o.workMin+o.durusMin+o.overtimeMin), 1);
+
+  const counter = (label, value, color) => `<div class="analiz-chart-box" style="display:flex;align-items:center;gap:12px">
+    <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
+    <div><div class="mono" style="font-size:26px;font-weight:700;color:${color}">${value}</div><div style="font-size:11px;color:var(--text-muted)">${label}</div></div>
+  </div>`;
+
+  return `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px">
+      ${counter('Çalışıyor', calisiyor, 'var(--success)')}
+      ${counter('Duruşta', durusta, 'var(--warn)')}
+      ${counter('Gün Sonu Bekliyor', gunsonu, 'var(--gunsonu)')}
+      ${counter('Boşta', bosta, 'var(--text-muted)')}
+    </div>
+    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:14px">
+      <div class="analiz-chart-box">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:14.5px;font-weight:700;color:var(--danger)">${ico('alert',14)} Uzun Süredir Duruşta</div>
+          <span class="mono" style="font-size:12px;color:var(--danger)">${uzun.length} kayıt · eşik ${esikDk} dk</span>
+        </div>
+        ${uzun.length===0 ? `<div style="color:var(--text-muted);font-size:12.5px;padding:14px 0">Eşiği aşan duruş yok.</div>` : `
+        <div class="table-wrap" style="padding:0"><table><thead><tr><th>Makine</th><th>İş Emri</th><th>Operatör</th><th>Neden</th><th style="text-align:right">Süre</th></tr></thead><tbody>
+          ${uzun.slice(0,12).map(u=>`<tr><td class="mono" style="color:var(--accent)">${esc((u.makine||'').split(' · ')[0]||'—')}</td><td class="mono">${esc(u.isEmriNo||'—')}</td><td>${esc(u.operatorName||u.operatorUsername||'—')}</td><td style="color:var(--warn)">${esc(u.neden||'—')}</td><td class="mono" style="text-align:right;font-weight:700;color:var(--danger)">${fmtDur(u.ms)}</td></tr>`).join('')}
+        </tbody></table></div>`}
+      </div>
+      <div class="analiz-chart-box">
+        <div style="font-size:14.5px;font-weight:700;margin-bottom:10px">Bugünün Duruş Nedenleri</div>
+        ${bugunList.length===0 ? `<div style="color:var(--text-muted);font-size:12.5px">Bugün hiç duruş kaydı yok.</div>` : bugunList.map((b,i)=>`
+          <div style="display:grid;grid-template-columns:1fr 74px;align-items:center;gap:10px;padding:6px 0">
+            <div>
+              <div style="font-size:12.5px;margin-bottom:4px">${esc(b.neden)}</div>
+              <div style="height:9px;background:var(--panel-alt);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.round(b.ms/bugunMax*100)}%;background:${i===0?'var(--danger)':i<3?'var(--warn)':'var(--border)'};border-radius:3px"></div></div>
+            </div>
+            <div style="text-align:right">
+              <div class="mono" style="font-size:12.5px;font-weight:700">${fmtDur(b.ms)}</div>
+              <div style="font-size:10px;color:var(--text-muted)">${b.count} olay</div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="analiz-chart-box">
+      <div style="font-size:14.5px;font-weight:700;margin-bottom:2px">Bugünkü Operatör Yükü</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Net çalışma, duruş ve fazla mesai — bugün</div>
+      ${opLoad.length===0 ? `<div style="color:var(--text-muted);font-size:12.5px">Bugün kayıt yok.</div>` : opLoad.map(o=>`
+        <div style="display:grid;grid-template-columns:170px 1fr 110px;align-items:center;gap:12px;padding:6px 0">
+          <div><div style="font-size:12.5px;font-weight:600">${esc(o.operatorName||o.operatorUsername)}</div><div class="mono" style="font-size:10.5px;color:var(--text-muted)">${esc(o.operatorUsername)} · ${o.machineCount} makine</div></div>
+          <div style="display:flex;height:13px;border-radius:3px;overflow:hidden;background:var(--panel-alt)">
+            <div style="width:${Math.round(o.workMin/opMax*100)}%;background:var(--success)"></div>
+            <div style="width:${Math.round(o.durusMin/opMax*100)}%;background:var(--warn)"></div>
+            <div style="width:${Math.round(o.overtimeMin/opMax*100)}%;background:var(--accent)"></div>
+          </div>
+          <div style="text-align:right" class="mono"><div style="font-size:12px">${fmtDur(o.workMin*60000)}</div>${o.overtimeMin>0?`<div style="font-size:10.5px;color:var(--accent)">+${fmtDur(o.overtimeMin*60000)} mesai</div>`:''}</div>
+        </div>`).join('')}
+    </div>
+  `;
+}
+/* Analiz sekmesi — "Kişi Bazlı" görünümü: TEK bir gün için tüm operatörlerin saatlik
+   çizelgesini (Gantt) yan yana gösterir, birine tıklayınca altta o kişinin o günkü saat saat
+   dökümü açılır. computeAnalizData(gün,gün,'tumu') zaten günlük perOperator[].days[0].entries
+   içinde ham kayıtları verdiği için renderGanttSegmentsHtml (aynı fonksiyon eski "Kişi Bazlı
+   Analiz" alt sekmesinde de kullanılıyor) doğrudan yeniden kullanılabiliyor. */
+function renderAnalizKisiBazli(){
+  const dt = new Date(); dt.setHours(12,0,0,0); dt.setDate(dt.getDate()-analizKisiGun);
+  const dayKey = dateKey(dt.getTime());
+  const dayData = computeAnalizData(dayKey, dayKey, 'tumu');
+  const rows = dayData.perOperator;
+  if(analizKisiSecili && !rows.some(o=>o.operatorUsername===analizKisiSecili)) analizKisiSecili = null;
+  if(!analizKisiSecili && rows.length>0) analizKisiSecili = rows[0].operatorUsername;
+
+  const gunChips = [0,1,2,3,4,5,6].map(o=>{
+    const d = new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()-o);
+    const label = o===0 ? 'Bugün' : d.toLocaleDateString('tr-TR',{day:'2-digit',month:'2-digit'});
+    return `<button class="chip ${analizKisiGun===o?'active':''}" onclick="setAnalizKisiGun(${o})">${esc(label)}</button>`;
+  }).join('');
+  const dayLabel = dt.toLocaleDateString('tr-TR',{day:'2-digit',month:'long',weekday:'long'});
+
+  let html = `<div class="analiz-chart-box" style="margin-bottom:14px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+      <div><div style="font-size:14.5px;font-weight:700">Operatör Gün Çizelgesi</div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">${esc(dayLabel)} · satıra tıklayınca altta saat saat dökümü açılır</div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${gunChips}</div>
+    </div>`;
+  if(rows.length===0){
+    return html + `<div style="color:var(--text-muted);padding:30px 0;text-align:center">Bu günde kayıt yok.</div></div>`;
+  }
+  html += `<div class="analiz-kisi-axis" style="display:flex;gap:12px;padding:0 0 4px 162px">
+      ${[0,2,4,6,8,10,12,14,16,18,20,22].map(h=>`<span style="position:relative;left:${(h*60/1440)*100}%;font-size:10px;color:var(--text-muted)">${String(h).padStart(2,'0')}:00</span>`).join('')}
+    </div>`;
+  rows.forEach(op=>{
+    const d0 = op.days[0];
+    const verim = (d0.workMin+d0.durusMin)>0 ? Math.round(d0.workMin/(d0.workMin+d0.durusMin)*100) : 0;
+    const selected = analizKisiSecili===op.operatorUsername;
+    const segs = renderGanttSegmentsHtml(d0.entries||[], dayData.dayStartMs, dayData.dayStartMs+86400000, e=>`${e.isEmriNo||e.talepNo||''} · ${e.makine||''}`);
+    html += `<div style="display:flex;align-items:center;gap:12px;padding:7px 6px;margin:0 -6px 4px;border-radius:8px;cursor:pointer;background:${selected?'var(--panel-alt)':'transparent'}" onclick="selectAnalizKisi('${escJs(op.operatorUsername)}')">
+      <div class="analiz-kisi-name" style="width:150px;flex-shrink:0">
+        <div style="font-size:12.5px;font-weight:600">${esc(op.operatorName||op.operatorUsername)}</div>
+        <div class="mono" style="font-size:10.5px;color:var(--text-muted)">${esc(op.operatorUsername)}</div>
+      </div>
+      <div class="analiz-gantt-track" style="flex:1;height:30px">${segs}<div class="analiz-gantt-cutoff" style="left:${(WORKDAY_END_MINUTE/1440)*100}%"></div></div>
+      <div class="analiz-kisi-info" style="width:140px;flex-shrink:0;text-align:right">
+        <div style="font-size:11px;color:var(--text-muted)">${fmtDur(d0.workMin*60000)} · ${fmtDur(d0.durusMin*60000)}</div>
+        <div class="mono" style="font-size:12.5px;font-weight:700;color:${verim>=70?'var(--success)':verim>=40?'var(--warn)':'var(--danger)'}">%${verim}</div>
+      </div>
+    </div>`;
+  });
+  html += `<div style="display:flex;gap:18px;margin-top:10px;padding-top:12px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-muted)">
+    <span style="display:flex;align-items:center;gap:6px"><i style="width:9px;height:9px;border-radius:2px;background:var(--success);display:inline-block"></i>Çalışma</span>
+    <span style="display:flex;align-items:center;gap:6px"><i style="width:9px;height:9px;border-radius:2px;background:var(--warn);display:inline-block"></i>Duruş</span>
+    <span style="margin-left:auto">Mesai bitişi ${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')} · sonrası fazla mesai sayılır</span>
+  </div></div>`;
+
+  const sec = rows.find(o=>o.operatorUsername===analizKisiSecili);
+  if(sec){
+    const d0 = sec.days[0];
+    const entriesSorted = (d0.entries||[]).slice().sort((a,b)=>a.startTs-b.startTs);
+    html += `<div style="display:grid;grid-template-columns:1fr 320px;gap:14px">
+      <div class="analiz-chart-box">
+        <div style="display:flex;align-items:baseline;gap:10px"><div style="font-size:14.5px;font-weight:700">${esc(sec.operatorName||sec.operatorUsername)}</div><div class="mono" style="font-size:11.5px;color:var(--text-muted)">${esc(sec.operatorUsername)}</div></div>
+        <div style="font-size:11px;color:var(--text-muted);margin:2px 0 14px">${esc(dayLabel)} · saat saat hareket dökümü</div>
+        ${entriesSorted.length===0 ? `<div style="color:var(--text-muted);font-size:12.5px">Bu günde kaydı yok.</div>` : entriesSorted.map(e=>{
+          const baslangic = fmtDT(e.startTs).split(' ').pop();
+          const bitis = e.endTs ? fmtDT(e.endTs).split(' ').pop() : (e.status==='devam'?'devam ediyor':'—');
+          return `<div style="display:grid;grid-template-columns:110px 1fr 90px;align-items:center;gap:14px;padding:10px 0;border-top:1px solid var(--border)">
+            <div class="mono" style="font-size:12.5px;font-weight:600">${esc(baslangic)} – ${esc(bitis)}</div>
+            <div>
+              <div style="font-size:12.5px">${esc(e.talepNo||e.isEmriNo||'—')}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px"><span class="mono" style="color:var(--accent)">${esc((e.makine||'').split(' · ')[0]||'')}</span> ${esc((e.makine||'').split(' · ')[1]||'')}</div>
+            </div>
+            <div style="text-align:right;font-size:11px;color:${e.status==='duruş'?'var(--warn)':e.status==='tamamlandi'?'var(--success)':'var(--text-muted)'}">${e.status==='duruş'?'Duruşta':e.status==='tamamlandi'?'Tamamlandı':'Devam'}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="analiz-chart-box" style="align-self:start">
+        <div style="font-size:14.5px;font-weight:700;margin-bottom:8px">Gün Özeti</div>
+        ${[
+          { label:'Net çalışma', value:fmtDur(d0.workMin*60000), color:'var(--success)' },
+          { label:'Duruş', value:fmtDur(d0.durusMin*60000), color:'var(--warn)' },
+          { label:'Fazla mesai', value: d0.overtimeMin>0 ? fmtDur(d0.overtimeMin*60000) : '—', color:'var(--accent)' },
+          { label:'Makine sayısı', value:String(d0.machines.length), color:'var(--text)' }
+        ].map(o=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:11px 0;border-top:1px solid var(--border)"><span style="font-size:12.5px;color:var(--text-muted)">${o.label}</span><span class="mono" style="font-size:14px;font-weight:700;color:${o.color}">${o.value}</span></div>`).join('')}
+      </div>
+    </div>`;
+  }
+  return html;
+}
+/* Analiz sekmesi — "Tadilat" görünümü: mevcut tadilat.js altyapısı (tadilatArray,
+   tadilatOperasyonlarArray, tadilatTamamlandiMi) ve zaten var olan tablo çizicileri
+   (renderDevamEdenTalepTablosu / renderTamamlananTalepTablosu — bkz. dosyanın başı) üzerine
+   kurulu, sadece KPI özetiyle sarmalanmış bir görünüm. Ayrı bir veri modeli icat edilmedi. */
+function renderAnalizTadilat(){
+  const q = tadilatAnalizArama.trim().toLowerCase();
+  const matchesFilter = (t) => {
+    if(tadilatAnalizAtolyeFilter!=='tumu' && (t.atolye||'imalat')!==tadilatAnalizAtolyeFilter) return false;
+    if(!q) return true;
+    const malzemeAdi = getTalepInfo(t.uKodu)?.malzemeAdi || '';
+    return `${t.uKodu} ${t.aciklama} ${malzemeAdi} ${t.talepEdenKisi||''}`.toLowerCase().includes(q);
+  };
+  const all = tadilatArray().filter(matchesFilter);
+  const devamEdenler = all.filter(t=>!tadilatTamamlandiMi(t));
+  const tamamlananlar = all.filter(t=>tadilatTamamlandiMi(t)).sort((a,b)=>{
+    const aOps=tadilatOperasyonlarArray(a), bOps=tadilatOperasyonlarArray(b);
+    return (bOps[bOps.length-1]?.bitisTs||0) - (aOps[aOps.length-1]?.bitisTs||0);
+  });
+  const durumCounts = { bekliyor:0, uretimde:0, duraklatildi:0, ara:0 };
+  let enUzunGecenMs = 0;
+  devamEdenler.forEach(t=>{
+    const ops = tadilatOperasyonlarArray(t);
+    const aktifOp = tadilatAktifOperasyon(t);
+    const duraklatilmisOp = !aktifOp ? ops.find(o=>o.status==='duruş') : null;
+    if(aktifOp) durumCounts.uretimde++;
+    else if(duraklatilmisOp) durumCounts.duraklatildi++;
+    else if(ops.length>0) durumCounts.ara++;
+    else durumCounts.bekliyor++;
+    const gecenMs = aktifOp ? (nowTick-aktifOp.baslamaTs) : (t.olusturmaTs ? (nowTick-t.olusturmaTs) : 0);
+    if(gecenMs>enUzunGecenMs) enUzunGecenMs = gecenMs;
+  });
+  const son20 = tamamlananlar.slice(0,20);
+
+  const kpi = (label, value, color, sub) => `<div class="analiz-chart-box">
+    <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">${label}</div>
+    <div class="mono" style="font-size:26px;font-weight:700;margin-top:8px;color:${color}">${value}</div>
+    ${sub?`<div style="font-size:10.5px;color:var(--text-muted);margin-top:4px">${sub}</div>`:''}
+  </div>`;
+
+  return `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:14px">
+      ${kpi('Açık Talep', devamEdenler.length, 'var(--accent)', 'toplam işlenmeyi bekleyen')}
+      ${kpi('İşlemde', durumCounts.uretimde, 'var(--success)', 'makinede işlem görüyor')}
+      ${kpi('Bekliyor / Duraklatıldı', durumCounts.bekliyor+durumCounts.duraklatildi+durumCounts.ara, 'var(--warn)', 'sırada ya da duraklatılmış')}
+      ${kpi('En Uzun Süredir Açık', enUzunGecenMs>0?fmtDur(enUzunGecenMs):'—', 'var(--danger)', 'en kritik bekleyen/işlemde')}
+    </div>
+    <div class="analiz-chart-box" style="margin-bottom:14px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input type="text" placeholder="🔍 U Kodu, malzeme ya da açıklama ara…" value="${esc(tadilatAnalizArama)}" oninput="setTadilatAnalizArama(this.value)" style="flex:1;min-width:220px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="chip ${tadilatAnalizAtolyeFilter==='tumu'?'active':''}" onclick="setTadilatAnalizAtolyeFilter('tumu')">Tümü</button>
+          <button class="chip ${tadilatAnalizAtolyeFilter==='imalat'?'active':''}" onclick="setTadilatAnalizAtolyeFilter('imalat')">${ico('factory',14)} İmalat Atölye</button>
+          <button class="chip ${tadilatAnalizAtolyeFilter==='tadilat'?'active':''}" onclick="setTadilatAnalizAtolyeFilter('tadilat')">${ico('wrench',14)} Tadilat Atölye</button>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="analiz-chart-box">
+        <div style="font-size:14.5px;font-weight:700;margin-bottom:2px">Bekleyen İşler · Aktif İşler</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">${devamEdenler.length} talep · en uzun süredir açık olan üstte · satıra tıkla</div>
+        ${renderDevamEdenTalepTablosu(devamEdenler, true)}
+      </div>
+      <div class="analiz-chart-box">
+        <div style="font-size:14.5px;font-weight:700;margin-bottom:2px">Tamamlanan İşler</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Son ${son20.length} kayıt (toplam ${tamamlananlar.length}) · satıra tıkla</div>
+        ${renderTamamlananTalepTablosu(son20)}
+      </div>
+    </div>
+  `;
+}
+/* Analiz sekmesi — "Saha Ekranı" görünümü: atölyeye asılacak bir TV/kiosk için, uzaktan da
+   okunabilecek büyük rakamlarla ÖZET bir pano. Tamamen bugünün gerçek verisiyle (computeAnalizData
+   + canlı makine durumları) besleniyor, ayrı bir hesap yok. */
+function renderAnalizSaha(){
+  const bugun = dateKey(Date.now());
+  const todayData = computeAnalizData(bugun, bugun, 'tumu');
+  const t = todayData.totals;
+  const liveEntries = [...entriesArray(), ...buildTadilatSynthetic()].filter(e=>!isFasonMachine(e.makine));
+  const liveMachines = allMachines().filter(m=>!isFasonMachine(m.code));
+  let calisiyor=0, durusta=0;
+  liveMachines.forEach(m=>{
+    const label = `${m.code} · ${m.name}`;
+    const running = !!tadilatAktifOnMachine(label) || liveEntries.some(e=>e.makine===label && e.status==='devam');
+    const stopped = !running && liveEntries.some(e=>e.makine===label && e.status==='duruş');
+    if(running) calisiyor++; else if(stopped) durusta++;
+  });
+  const uzun = uzunDurusluKayitlar();
+  const machineRank = todayData.perMachine.slice().sort((a,b)=>b.verimlilik-a.verimlilik);
+  const top5 = machineRank.slice(0,5);
+  const adetBugun = todayData.perMachine.reduce((s,m)=>s+m.entries.reduce((ss,e)=>ss+(Number(e.adet)||0),0),0);
+  const durusReasonToday = {};
+  collectDurusEvents(todayData.perMachine.flatMap(m=>m.entries)).forEach(ev=>{
+    if(!Number.isFinite(ev.sureMs)||ev.sureMs<=0) return;
+    durusReasonToday[ev.neden] = (durusReasonToday[ev.neden]||0) + ev.sureMs;
+  });
+  const topReason = Object.entries(durusReasonToday).sort((a,b)=>b[1]-a[1])[0];
+  const verimColor = t.verimlilik>=70?'var(--success)':t.verimlilik>=40?'var(--warn)':'var(--danger)';
+
+  return `<div style="padding:8px 4px">
+    <div style="display:grid;grid-template-columns:1fr 1.7fr;gap:20px;margin-bottom:20px">
+      <div class="analiz-chart-box" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px">
+        <div style="font-size:14px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.4px;font-weight:600">Bugünkü Verimlilik</div>
+        <div style="width:220px;height:220px;border-radius:50%;background:conic-gradient(${verimColor} 0% ${t.verimlilik}%, var(--panel-alt) ${t.verimlilik}% 100%);display:flex;align-items:center;justify-content:center;margin:22px 0 6px">
+          <div style="width:175px;height:175px;border-radius:50%;background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center">
+            <div class="mono" style="font-size:52px;font-weight:700;color:${verimColor}">%${t.verimlilik}</div>
+          </div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:16px">
+        <div class="analiz-chart-box" style="border-left:4px solid var(--success);display:flex;flex-direction:column;justify-content:center">
+          <div style="font-size:12.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:600">Çalışan Makine</div>
+          <div class="mono" style="font-size:44px;font-weight:700;margin-top:6px;color:var(--success)">${calisiyor}/${liveMachines.length}</div>
+        </div>
+        <div class="analiz-chart-box" style="border-left:4px solid var(--warn);display:flex;flex-direction:column;justify-content:center">
+          <div style="font-size:12.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:600">Duruşta</div>
+          <div class="mono" style="font-size:44px;font-weight:700;margin-top:6px;color:var(--warn)">${durusta}</div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px">${uzun.length} tanesi eşik üzeri</div>
+        </div>
+        <div class="analiz-chart-box" style="border-left:4px solid var(--accent);display:flex;flex-direction:column;justify-content:center">
+          <div style="font-size:12.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:600">Bugün Üretilen</div>
+          <div class="mono" style="font-size:44px;font-weight:700;margin-top:6px;color:var(--accent)">${adetBugun}</div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px">adet</div>
+        </div>
+        <div class="analiz-chart-box" style="border-left:4px solid var(--danger);display:flex;flex-direction:column;justify-content:center">
+          <div style="font-size:12.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:600">En Çok Duruş</div>
+          <div class="mono" style="font-size:26px;font-weight:700;margin-top:6px;color:var(--danger)">${topReason?fmtDur(topReason[1]):'—'}</div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px">${topReason?esc(topReason[0]):'bugün duruş yok'}</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px">
+      <div class="analiz-chart-box">
+        <div style="font-size:18px;font-weight:700;margin-bottom:14px">Şu An Duruşta</div>
+        ${uzun.length===0 ? `<div style="color:var(--text-muted);padding:14px 0">Eşiği aşan duruş yok.</div>` : uzun.slice(0,5).map(u=>`
+          <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-top:1px solid var(--border)">
+            <div class="mono" style="font-size:20px;font-weight:700;color:var(--accent);width:86px">${esc((u.makine||'').split(' · ')[0]||'—')}</div>
+            <div style="flex:1"><div style="font-size:14.5px;font-weight:600">${esc(u.neden||'—')}</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px">${esc(u.isEmriNo||'')} · ${esc(u.operatorName||u.operatorUsername||'')}</div></div>
+            <div class="mono" style="font-size:22px;font-weight:700;color:var(--danger)">${fmtDur(u.ms)}</div>
+          </div>`).join('')}
+      </div>
+      <div class="analiz-chart-box">
+        <div style="font-size:18px;font-weight:700;margin-bottom:14px">Günün En İyileri</div>
+        ${top5.length===0 ? `<div style="color:var(--text-muted);padding:14px 0">Bugün veri yok.</div>` : top5.map((m,i)=>`
+          <div style="display:grid;grid-template-columns:28px 90px 1fr 56px;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--border)">
+            <div style="font-size:14px;color:var(--text-muted)">#${i+1}</div>
+            <div class="mono" style="font-size:15px;font-weight:700">${m.code}</div>
+            <div style="height:12px;background:var(--panel-alt);border-radius:4px;overflow:hidden"><div style="height:100%;width:${m.verimlilik}%;background:var(--success);border-radius:4px"></div></div>
+            <div class="mono" style="font-size:17px;font-weight:700;text-align:right;color:var(--success)">%${m.verimlilik}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
 }
 function renderAdmin(){
   const viewToTabKey = { report:'rapor', matrix:'matrix', completed:'completed', analiz:'analiz', tadilatYonetim:'tadilat' };
@@ -394,6 +792,15 @@ function renderAdmin(){
               <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;padding-left:10px;border-left:1px solid var(--border)">
                 <input type="checkbox" style="width:auto" ${(adminTabPermissions[code]?.['uzunDurusUyari'])!==false?'checked':''} onchange="setAdminTabPermission('${code}','uzunDurusUyari', this.checked)"> ${ico('alert',14)} Uzun Duruş Uyarısı
               </label>
+              ${(adminTabPermissions[code]?.['analiz'])!==false ? `
+              <div style="width:100%;display:flex;flex-wrap:wrap;gap:10px;padding:8px 0 0 10px;border-left:1px solid var(--border);margin-left:1px">
+                <span style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;width:100%">Analiz — görünümler</span>
+                ${ANALIZ_VIEW_DEFS.map(v=>`
+                  <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer">
+                    <input type="checkbox" style="width:auto" ${(adminTabPermissions[code]?.analizViews?.[v.key])!==false?'checked':''} onchange="setAnalizViewPermission('${code}','${v.key}', this.checked)"> ${esc(v.label)}
+                  </label>
+                `).join('')}
+              </div>` : ''}
             </div>
           `).join('')}
         </div>`}`;
@@ -840,6 +1247,24 @@ function renderAdmin(){
     }
     body += `</div>`;
   } else if(view==='analiz'){
+    const visibleAnalizViews = ANALIZ_VIEW_DEFS.filter(v=>isAnalizViewVisible(v.key));
+    if(!visibleAnalizViews.some(v=>v.key===analizRole)){
+      analizRole = visibleAnalizViews[0] ? visibleAnalizViews[0].key : analizRole;
+    }
+    const analizRoleBar = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      ${visibleAnalizViews.map(v=>`<button class="chip ${analizRole===v.key?'active':''}" style="font-size:13px;padding:9px 16px" onclick="setAnalizRole('${v.key}')">${esc(v.label)}</button>`).join('')}
+    </div>`;
+    if(visibleAnalizViews.length===0){
+      body = `<div class="analiz-wrap"><div style="text-align:center;color:var(--text-muted);padding:60px 20px">Analiz sekmesindeki hiçbir görünüm için yetkin yok.</div></div>`;
+    } else if(analizRole==='sef'){
+      body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizSefLive()}</div>`;
+    } else if(analizRole==='kisi'){
+      body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizKisiBazli()}</div>`;
+    } else if(analizRole==='tadilat'){
+      body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizTadilat()}</div>`;
+    } else if(analizRole==='saha'){
+      body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizSaha()}</div>`;
+    } else {
     const data = computeAnalizData(analizFrom, analizTo, analizAtolyeFilter);
     lastAnalizData = data; // initAnalizCharts (app.js) bunu kullanır — bkz. catalog.js'teki not
     const t = data.totals;
@@ -855,7 +1280,52 @@ function renderAdmin(){
     const adetSource = hasFilter ? filteredList : data.perMachine;
     const adetTotal = adetSource.reduce((sum,m)=>sum + m.entries.reduce((s,e)=>s+(Number(e.adet)||0),0), 0);
 
+    // Günlük trend şeridi: her operatörün gün gün dökümü (data.perOperator[].days) zaten
+    // aynı ham kayıtlardan (rangeEntries) hesaplanmış çalışma/duruş/fazla mesai içeriyor —
+    // bunları tarihe göre toplayıp TÜM ATÖLYE için günlük bir özet çıkarıyoruz. Ayrı bir
+    // "kullanılabilirlik" hesabına girmiyoruz (o gün kaç makine kullanıldığı belirsiz
+    // olduğundan uydurma bir yüzde üretmemek için) — sadece gerçek çalışma/duruş dakikaları.
+    const dailyAgg = {};
+    data.perOperator.forEach(op=>op.days.forEach(d=>{
+      (dailyAgg[d.tarih] ||= { workMin:0, durusMin:0, overtimeMin:0 });
+      dailyAgg[d.tarih].workMin += d.workMin;
+      dailyAgg[d.tarih].durusMin += d.durusMin;
+      dailyAgg[d.tarih].overtimeMin += d.overtimeMin;
+    }));
+    const dailyTrend = Object.keys(dailyAgg).sort().map(tarih=>({ tarih, ...dailyAgg[tarih] }));
+    const dailyMax = Math.max(...dailyTrend.map(d=>d.workMin+d.durusMin), 1);
+
+    // Duruş Pareto — kümülatif %80 eşiğine kadar olan nedenler kayıpların çoğunu üretiyor.
+    const paretoList = Object.entries(durusReasonTotals).map(([neden,ms])=>({neden,ms})).sort((a,b)=>b.ms-a.ms);
+    const paretoTotalMs = paretoList.reduce((s,x)=>s+x.ms,0) || 1;
+    let paretoCum = 0;
+    const pareto = paretoList.map(x=>{
+      paretoCum += x.ms;
+      const cumPct = Math.round(paretoCum/paretoTotalMs*100);
+      const pct = Math.round(x.ms/paretoTotalMs*100);
+      return { ...x, pct, cumPct, kritik: (cumPct-pct) < 80 };
+    });
+
+    // Makine verimlilik sıralaması, yüksekten düşüğe.
+    const machineRank = data.perMachine.slice().sort((a,b)=>b.verimlilik-a.verimlilik);
+
+    // Şu an açık (devam/duruş) iş emirleri — bu sistemde rota kaç adım / teslim tarihi gibi
+    // alanlar hiç tutulmadığından, tasarımdaki fiktif "İş Emri İlerleme" tablosu yerine
+    // buraya GERÇEK, o an açık olan işler konuyor.
+    const acikIsler = entriesArray()
+      .filter(e => (e.status==='devam'||e.status==='duruş') && !isFasonMachine(e.makine))
+      .sort((a,b) => (a.status==='duruş')-(b.status==='duruş') || a.startTs-b.startTs)
+      .slice(0, 8);
+
+    // Veri kalitesi / dikkat kartları — sadece gerçekten tespit edilen anomaliler, uydurma yok.
+    const anomaliler = [];
+    if(data.anyPhysicalAnomaly) anomaliler.push({ title:'Fiziksel süre anomalisi tespit edildi', body:'En az bir makine/kişi için, o günden gerçekte geçen süreden fazla çalışma hesaplandı — muhtemelen uzun süredir kapatılmamış eski bir kayıt var. Aşağıdaki detaylı tablolardaki uyarı ikonunu taşıyan satırlara bak.', color:'var(--danger)' });
+    data.perMachine.filter(m=>m.verimlilikAnomali).forEach(m=>anomaliler.push({ title:`${m.code} — ham verimlilik %100'ü aştı`, body:`Ham hesap %${m.verimlilikRaw} çıktı, %100'e kırpıldı. Muhtemelen çakışan ya da unutulmuş açık bir kayıt var.`, color:'var(--warn)' }));
+    anomaliler.push({ title:'Fason makineler analiz dışı', body:'Dış tedarikçiye gönderilen (fason) makineler kapasite hesabına girmiyor — dış süre kendi mesaimizle kıyaslanamaz.', color:'var(--gunsonu)' });
+    if(anomaliler.length===1) anomaliler.unshift({ title:'Belirgin bir veri anomalisi yok', body:'Bu tarih aralığında otomatik tespit edilen bir tutarsızlık bulunmuyor.', color:'var(--success)' });
+
     body = `<div class="analiz-wrap">
+      ${analizRoleBar}
       <div class="filter-bar" style="border-bottom:none;padding-left:0;padding-right:0;flex-wrap:wrap;align-items:center">
         <label style="font-size:11.5px;color:var(--text-muted)">Başlangıç</label>
         <input type="date" class="filter-input" value="${esc(analizFrom)}" onchange="setAnalizFrom(this.value)">
@@ -872,24 +1342,119 @@ function renderAdmin(){
         </div>
       </div>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Standart mesai: kullanılan her gün için ${WORKDAY_MINUTES} dk (08:00~${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}) · ${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}'dan sonrası fazla mesai sayılır</div>
-      <div class="sub-tabs">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:14px">
+        <div class="analiz-chart-box" style="border-left:3px solid ${t.verimlilik>=70?'var(--success)':t.verimlilik>=40?'var(--warn)':'var(--danger)'}">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">Verimlilik KPI</div>
+          <div class="mono" style="font-size:38px;font-weight:700;line-height:1;margin-top:8px;color:${t.verimlilik>=70?'var(--success)':t.verimlilik>=40?'var(--warn)':'var(--danger)'}">%${t.verimlilik}${t.verimlilikAnomali?` <span style="font-size:14px;color:var(--danger)" title="Ham hesap %${t.verimlilikRaw} çıktı — 100'ü aşan kısım veri anomalisi olabilir">${ico('alert',14)} %${t.verimlilikRaw}</span>`:''}</div>
+          <div style="height:6px;background:var(--panel-alt);border-radius:3px;margin-top:12px;overflow:hidden"><div style="height:100%;width:${t.verimlilik}%;background:${t.verimlilik>=70?'var(--success)':t.verimlilik>=40?'var(--warn)':'var(--danger)'};border-radius:3px"></div></div>
+          <div style="font-size:10.5px;color:var(--text-muted);margin-top:7px">Çalışma / Kullanılabilirlik · ${fmtDur(t.workMin*60000)} / ${fmtDur(t.availMin*60000)}</div>
+        </div>
+        <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">Toplam Çalışma</div><div class="mono" style="font-size:22px;font-weight:700;margin-top:10px;color:var(--success)">${fmtDur(t.workMin*60000)}</div></div>
+        <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">Toplam Duruş</div><div class="mono" style="font-size:22px;font-weight:700;margin-top:10px;color:var(--warn)">${fmtDur(t.durusMin*60000)}</div></div>
+        <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">Toplam Adet${hasFilter?' (Seçili)':''}</div><div class="mono" style="font-size:22px;font-weight:700;margin-top:10px;color:var(--accent)">${adetTotal}</div></div>
+        <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">Fazla Mesai</div><div class="mono" style="font-size:22px;font-weight:700;margin-top:10px;color:${t.overtimeMin>0?'var(--danger)':'var(--text-muted)'}">${t.overtimeMin>0?t.overtimeMin+' dk':'—'}</div></div>
+      </div>
+      ${dailyTrend.length>1 ? `
+      <div class="analiz-chart-box" style="margin-bottom:14px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px">
+          <div style="font-size:14.5px;font-weight:700">Günlük Çalışma / Duruş Trendi</div>
+          <div style="display:flex;gap:16px;font-size:11.5px;color:var(--text-muted)">
+            <span style="display:flex;align-items:center;gap:6px"><i style="width:9px;height:9px;border-radius:2px;background:var(--success);display:inline-block"></i>Çalışma</span>
+            <span style="display:flex;align-items:center;gap:6px"><i style="width:9px;height:9px;border-radius:2px;background:var(--warn);display:inline-block"></i>Duruş</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:8px;height:170px;padding-top:14px;overflow-x:auto">
+          ${dailyTrend.map(d=>{
+            const workPct = Math.round(d.workMin/dailyMax*100), durusPct = Math.round(d.durusMin/dailyMax*100);
+            const dLabel = d.tarih.slice(5).split('-').reverse().join('.');
+            return `<div style="flex:0 0 34px;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="${esc(d.tarih)} · Çalışma ${fmtDur(d.workMin*60000)} · Duruş ${fmtDur(d.durusMin*60000)}">
+              <div style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;border-radius:4px;overflow:hidden;background:var(--panel-alt)">
+                <div style="height:${100-workPct-durusPct}%"></div>
+                <div style="height:${durusPct}%;background:var(--warn);opacity:.85"></div>
+                <div style="height:${workPct}%;background:var(--success)"></div>
+              </div>
+              <div class="mono" style="text-align:center;font-size:9.5px;color:var(--text-muted);margin-top:6px">${dLabel}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
+      ${data.anyPhysicalAnomaly ? `<div style="display:flex;align-items:center;gap:8px;background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12.5px;color:var(--warn)">${ico('alert',14)} Bu tarih aralığında en az bir makine/kişi için, o günden gerçekte geçen süreden fazla çalışma hesaplandı (muhtemelen uzun süredir kapatılmamış eski bir kayıt var) — ilgili satırlardaki ${ico('alert',12)} ikonuna bak.</div>` : ''}
+      ${data.perMachine.length===0 ? '' : `
+      <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:14px;margin-bottom:14px">
+        <div class="analiz-chart-box">
+          <div style="font-size:14.5px;font-weight:700">Duruş Pareto</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:2px 0 14px">Kümülatif %80 eşiğine kadar olan nedenler kayıpların çoğunu üretiyor</div>
+          ${pareto.length===0 ? `<div style="color:var(--text-muted);font-size:12.5px">Bu aralıkta duruş kaydı yok.</div>` : pareto.slice(0,8).map(p=>`
+            <div style="padding:7px 0">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:5px">
+                <span style="font-size:12.5px;font-weight:${p.kritik?'600':'400'};color:${p.kritik?'var(--text)':'var(--text-muted)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.neden)}</span>
+                <span style="display:flex;gap:12px;flex-shrink:0">
+                  <span class="mono" style="font-size:12.5px;font-weight:600">${fmtDur(p.ms)}</span>
+                  <span class="mono" style="font-size:11.5px;color:var(--text-muted)">%${p.cumPct}</span>
+                </span>
+              </div>
+              <div style="height:10px;background:var(--panel-alt);border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${p.pct}%;background:${p.kritik?'var(--warn)':'var(--border)'};border-radius:3px"></div>
+              </div>
+            </div>`).join('')}
+        </div>
+        <div class="analiz-chart-box">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <div style="font-size:14.5px;font-weight:700">Makine Verimliliği</div>
+            <div style="font-size:11px;color:var(--text-muted)">${machineRank.length} makine</div>
+          </div>
+          <div style="margin-top:12px;max-height:322px;overflow-y:auto;padding-right:4px">
+            ${machineRank.map(m=>`
+              <div style="display:grid;grid-template-columns:56px 1fr 42px;align-items:center;gap:10px;padding:5px 0">
+                <div class="mono" style="font-size:12px;color:var(--accent);font-weight:600">${m.code}</div>
+                <div style="height:13px;background:var(--panel-alt);border-radius:3px;overflow:hidden;position:relative">
+                  <div style="height:100%;width:${m.verimlilik}%;background:${m.verimlilik>=70?'var(--success)':m.verimlilik>=40?'var(--warn)':'var(--danger)'};border-radius:3px"></div>
+                  <div style="position:absolute;left:7px;top:0;bottom:0;display:flex;align-items:center;font-size:10px;color:var(--text);opacity:.8;white-space:nowrap;overflow:hidden">${esc(m.name)}</div>
+                </div>
+                <div class="mono" style="font-size:12px;font-weight:700;text-align:right;color:${m.verimlilik>=70?'var(--success)':m.verimlilik>=40?'var(--warn)':'var(--danger)'}">%${m.verimlilik}</div>
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:20px">
+        <div class="analiz-chart-box">
+          <div style="font-size:14.5px;font-weight:700">Şu An Açık İşler</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:2px 0 14px">O an devam eden ya da duraklatılmış olan iş emirleri</div>
+          ${acikIsler.length===0 ? `<div style="color:var(--text-muted);font-size:12.5px">Şu an açık iş yok.</div>` : `
+          <div class="table-wrap" style="padding:0"><table><thead><tr><th>İş Emri</th><th>Makine</th><th>Operatör</th><th style="text-align:right">Durum</th></tr></thead><tbody>
+            ${acikIsler.map(e=>`<tr>
+              <td class="mono" style="color:var(--accent)">${esc(e.talepNo||e.isEmriNo)}</td>
+              <td class="mono">${esc((e.makine||'').split(' · ')[0]||'—')}</td>
+              <td style="font-size:12.5px">${esc(e.operatorName||e.operatorUsername||'—')}</td>
+              <td style="text-align:right">${e.status==='duruş' ? `<span style="color:var(--warn)">Duruşta · ${esc(e.duruşNedeni||'')}</span>` : `<span style="color:var(--success)">${fmtElapsed(nowTick-e.startTs)}</span>`}</td>
+            </tr>`).join('')}
+          </tbody></table></div>`}
+        </div>
+        <div class="analiz-chart-box">
+          <div style="font-size:14.5px;font-weight:700">Veri Kalitesi ve Dikkat</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:2px 0 14px">Rakamlara güvenmeden önce bakılacaklar</div>
+          ${anomaliler.map(a=>`
+            <div style="display:flex;gap:12px;padding:12px;border:1px solid ${a.color}44;background:${a.color}14;border-radius:10px;margin-bottom:9px">
+              <div style="width:5px;border-radius:3px;background:${a.color};flex-shrink:0"></div>
+              <div><div style="font-size:12.5px;font-weight:600;color:${a.color}">${esc(a.title)}</div><div style="font-size:11.5px;color:var(--text-muted);margin-top:3px;line-height:1.5">${esc(a.body)}</div></div>
+            </div>`).join('')}
+        </div>
+      </div>`}
+      <div style="border-top:1px solid var(--border);padding-top:14px">
+        <button class="btn-ghost" onclick="toggleAnalizDetay()">${analizDetayOpen?`${ico('chevronUp',13)} Detaylı analiz araçlarını gizle`:`${ico('chevronDown',13)} Detaylı analiz araçları (Makine / Kişi / Duruş / Mesai)`}</button>
+      </div>`;
+
+    if(!analizDetayOpen){
+      body += `</div>`;
+    } else {
+    body += `
+      <div class="sub-tabs" style="margin-top:18px">
         <button class="sub-tab-btn ${analizSubTab==='genel'?'active':''}" onclick="setAnalizSubTab('genel')">Genel Analiz</button>
         <button class="sub-tab-btn ${analizSubTab==='makine'?'active':''}" onclick="setAnalizSubTab('makine')">Makine Bazlı Analiz</button>
         <button class="sub-tab-btn ${analizSubTab==='kisi'?'active':''}" onclick="setAnalizSubTab('kisi')">Kişi Bazlı Analiz</button>
         <button class="sub-tab-btn ${analizSubTab==='durus'?'active':''}" onclick="setAnalizSubTab('durus')">Duruş Analizi</button>
         <button class="sub-tab-btn ${analizSubTab==='mesai'?'active':''}" onclick="setAnalizSubTab('mesai')">Mesai Analizi</button>
-      </div>
-
-      <div class="modal-stats" style="margin-bottom:20px">
-        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--success)">${fmtDur(t.workMin*60000)}</div><div class="modal-stat-label">Toplam Çalışma</div></div>
-        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--warn)">${fmtDur(t.durusMin*60000)}</div><div class="modal-stat-label">Toplam Duruş</div></div>
-        <div class="modal-stat-box"><div class="modal-stat-num">${t.availMin} dk</div><div class="modal-stat-label">Toplam Kullanılabilirlik</div></div>
-        <div class="modal-stat-box"><div class="modal-stat-num" style="color:${t.verimlilik>=70?'var(--success)':t.verimlilik>=40?'var(--warn)':'var(--danger)'}">%${t.verimlilik}${t.verimlilikAnomali?(' '+ico('alert',12)):''}</div><div class="modal-stat-label">Verimlilik KPI${t.verimlilikAnomali?` <span style="color:var(--danger)" title="Ham hesap %${t.verimlilikRaw} çıktı — 100'ü aşan kısım veri anomalisi olabilir, kontrol et">(${ico('alert',12)} %${t.verimlilikRaw})</span>`:''}</div></div>
-        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--accent)">${adetTotal}</div><div class="modal-stat-label">Toplam Adet${hasFilter?' (Seçili Makine)':''}</div></div>
-        ${t.overtimeMin>0 ? `<div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--danger)">${t.overtimeMin} dk</div><div class="modal-stat-label">Toplam Fazla Mesai</div></div>` : ''}
-      </div>
-      ${data.anyPhysicalAnomaly ? `<div style="display:flex;align-items:center;gap:8px;background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12.5px;color:var(--warn)">${ico('alert',14)} Bu tarih aralığında en az bir makine/kişi için, o günden gerçekte geçen süreden fazla çalışma hesaplandı (muhtemelen uzun süredir kapatılmamış eski bir kayıt var) — ilgili satırlardaki ${ico('alert',12)} ikonuna bak.</div>` : ''}`;
-
+      </div>`;
     if(data.perMachine.length===0){
       body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Bu tarihte kayıt yok.</div></div>`;
     } else if(analizSubTab==='genel'){
@@ -1080,6 +1645,8 @@ function renderAdmin(){
       </tbody></table></div>`}
       </div>`;
     }
+    }
+    }
   } else if(view==='tadilatYonetim'){
     const renderBekleyenCard = (t) => {
       const expanded = tadilatExpandedIds.has(t.id);
@@ -1118,8 +1685,6 @@ function renderAdmin(){
         <button class="tab-btn ${tadilatSubTab==='talepler'?'active':''}" onclick="setTadilatSubTab('talepler')">Talepler</button>
         ${(session.isSuperAdmin || session.isSef || session.isUretimSef) ? `<button class="tab-btn ${tadilatSubTab==='canli'?'active':''}" onclick="setTadilatSubTab('canli')">📍 Devam Eden</button>` : ''}
         ${canViewTadilatAnaliz() ? `<button class="tab-btn ${tadilatSubTab==='analiz'?'active':''}" onclick="setTadilatSubTab('analiz')">${ico('chart',14)} Analiz</button>` : ''}
-        ${canViewYoneticiAnalizi() ? `<button class="tab-btn ${tadilatSubTab==='yonetimGecmis'?'active':''}" onclick="setTadilatSubTab('yonetimGecmis')">${ico('chart',14)} Yönetici Analizi — Geçmiş</button>` : ''}
-        ${canViewYoneticiAnalizi() ? `<button class="tab-btn ${tadilatSubTab==='yonetimCanli'?'active':''}" onclick="setTadilatSubTab('yonetimCanli')">🔴 Yönetici Analizi — Güncel</button>` : ''}
       </div>`;
     if(tadilatSubTab==='canli' && (session.isSuperAdmin || session.isSef || session.isUretimSef)){
       const myAtolyelerCanli = getUserAtolyeler(session.username);
@@ -1146,159 +1711,11 @@ function renderAdmin(){
       <div style="font-size:12px;color:var(--text-muted);margin-top:10px">${aktifler.length} tadilat şu an aktif.</div>
     `;
     } else if(tadilatSubTab==='analiz' && canViewTadilatAnaliz()){
-      const A = computeTadilatAnaliz(tadilatAnalizFrom, tadilatAnalizTo);
-      const tamamlananlar = tadilatArray().filter(t=>tadilatTamamlandiMi(t)).sort((a,b)=>{
-        const aOps=tadilatOperasyonlarArray(a), bOps=tadilatOperasyonlarArray(b);
-        return (bOps[bOps.length-1]?.bitisTs||0) - (aOps[aOps.length-1]?.bitisTs||0);
-      });
-      // Üretim şefleri/müdürü sadece tamamlananları değil, henüz bitmemiş talepleri de (talep
-      // ne zaman açıldı, tadilata ne zaman başlandı, şu ana kadar ne kadar geçti) aynı zaman
-      // damgalarıyla takip edebilsin diye — "Tamamlanan Talepler" tablosunun canlı/bitmemiş hali.
-      const devamEdenler = tadilatArray().filter(t=>!tadilatTamamlandiMi(t)).sort((a,b)=>a.olusturmaTs-b.olusturmaTs);
       body += `
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Analizi</div>
-      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;max-width:640px">Tamamlanmış tadilat operasyonlarının süre (duruş hariç, net) ve kişi bazlı kırılımı.</div>
-      <div class="filter-bar" style="border-bottom:none;padding:0;flex-wrap:wrap;align-items:center;margin-bottom:18px">
-        <label style="font-size:11.5px;color:var(--text-muted)">Başlangıç</label>
-        <input type="date" class="filter-input" value="${esc(tadilatAnalizFrom)}" onchange="setTadilatAnalizFrom(this.value)">
-        <label style="font-size:11.5px;color:var(--text-muted)">Bitiş</label>
-        <input type="date" class="filter-input" value="${esc(tadilatAnalizTo)}" onchange="setTadilatAnalizTo(this.value)">
-        <button class="chip" onclick="setTadilatAnalizPreset(7)">Son 7 Gün</button>
-        <button class="chip" onclick="setTadilatAnalizPreset(30)">Son 30 Gün</button>
-        <button class="chip" onclick="clearTadilatAnalizFilter()">Tüm Zamanlar</button>
-      </div>
-
-      <div class="admin-stats" style="margin-bottom:22px">
-        <span><b style="color:var(--accent)">${fmtDur(A.toplamMs)}</b> toplam tadilat süresi</span>
-        <span><b style="color:var(--accent)">${A.opCount}</b> tamamlanmış operasyon</span>
-        <span><b style="color:var(--success)">${fmtDur(A.byAtolye.imalat.ms)}</b> İmalat Atölye (${A.byAtolye.imalat.count} op.)</span>
-        <span><b style="color:var(--warn)">${fmtDur(A.byAtolye.tadilat.ms)}</b> Tadilat Atölye (${A.byAtolye.tadilat.count} op.)</span>
-        ${A.gecisToplamMs>0 ? `<span><b style="color:var(--tadilat-info)">${fmtDur(A.gecisToplamMs)}</b> toplam geçiş süresi <span style="opacity:.7;font-weight:400">(kesinti sırasında karar verme, duruşa sayılmadı)</span></span>` : ''}
-      </div>
-
-      <div class="sec-h" style="margin-top:0">Kişi Bazlı Çalışma</div>
-      <div class="table-wrap" style="margin-bottom:26px"><table><thead><tr><th>Operatör</th><th>Toplam Süre</th><th>Operasyon</th><th>İmalat Atölye</th><th>Tadilat Atölye</th><th>Geçiş Süresi</th></tr></thead><tbody>
-        ${A.byPerson.length===0 ? `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px">Veri yok.</td></tr>` : A.byPerson.map(p=>`
-          <tr>
-            <td class="mono">${esc(p.username)} · ${esc(p.name)}</td>
-            <td style="color:var(--accent);font-weight:600">${fmtDur(p.ms)}</td>
-            <td style="text-align:center">${p.count}</td>
-            <td>${fmtDur(p.imalatMs)}</td>
-            <td>${fmtDur(p.tadilatMs)}</td>
-            <td style="color:var(--tadilat-info)">${A.gecisByPerson[p.username] ? fmtDur(A.gecisByPerson[p.username]) : '—'}</td>
-          </tr>
-        `).join('')}
-      </tbody></table></div>
-
-      <div class="sec-h" style="margin-top:0">Günlük Çalışma Dakikası</div>
-      <div class="table-wrap" style="margin-bottom:26px"><table><thead><tr><th>Tarih</th><th>İmalat Atölye</th><th>Tadilat Atölye</th><th>Toplam</th><th>Operasyon</th></tr></thead><tbody>
-        ${A.byDay.length===0 ? `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Veri yok.</td></tr>` : A.byDay.map(d=>`
-          <tr>
-            <td class="mono">${esc(d.gun)}</td>
-            <td>${fmtDur(d.imalatMs)}</td>
-            <td>${fmtDur(d.tadilatMs)}</td>
-            <td style="color:var(--accent);font-weight:600">${fmtDur(d.toplamMs)}</td>
-            <td style="text-align:center">${d.count}</td>
-          </tr>
-        `).join('')}
-      </tbody></table></div>
-
-      <div style="font-size:13px;font-weight:600;margin-bottom:8px">Bekleyen / Devam Eden Talepler — Detay (${devamEdenler.length})</div>
-      <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px">Henüz tamamlanmamış talepler — "Bekleme" ve "Geçen Süre" canlı olarak sayılıyor.</div>
-      ${renderDevamEdenTalepTablosu(devamEdenler, false)}
-
-      ${renderTamamlananTalepTablosu(tamamlananlar)}
+      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:900px">Analiz sekmesindeki "Tadilat" görünümüyle aynı (bkz. renderAnalizTadilat) — açık/tamamlanan talep KPI'ları dahil, bir satıra tıklayınca açılış→başlama→bitiş akış şeması açılır.</div>
+      ${renderAnalizTadilat()}
       ${beklemeDetayId ? renderBeklemeDetayModal() : ''}`;
-    } else if(tadilatSubTab==='yonetimGecmis' && canViewYoneticiAnalizi()){
-      // Tadilat Analizi'ndeki (kendi personelini takip eden) görünümden AYRI — bu, üretim
-      // yönetiminin talep bazlı geçmişi (KPI + tam liste) takip etmesi için. Veri zamanla çok
-      // birikeceği için (kullanıcı notu) tarih filtresi burada GERÇEKTEN tabloyu daraltıyor —
-      // Tadilat Analizi'ndeki aynı filtre chip'leri sadece üstteki KPI'ları etkiliyordu, tabloyu
-      // değil; burada ikisi de aynı filtreye göre süzülüyor.
-      const tamamlananlarTum = tadilatArray().filter(t=>tadilatTamamlandiMi(t)).sort((a,b)=>{
-        const aOps=tadilatOperasyonlarArray(a), bOps=tadilatOperasyonlarArray(b);
-        return (bOps[bOps.length-1]?.bitisTs||0) - (aOps[aOps.length-1]?.bitisTs||0);
-      });
-      const aramaQ = yoneticiGecmisArama.trim().toLowerCase();
-      const gecmisFiltreli = tamamlananlarTum.filter(t=>{
-        const dk = dateKey(t.olusturmaTs||0);
-        if(tadilatAnalizFrom && dk<tadilatAnalizFrom) return false;
-        if(tadilatAnalizTo && dk>tadilatAnalizTo) return false;
-        if(yoneticiAnalizAtolyeFilter!=='tumu' && (t.atolye||'imalat')!==yoneticiAnalizAtolyeFilter) return false;
-        if(aramaQ && !(String(t.uKodu||'').toLowerCase().includes(aramaQ) || String(t.aciklama||'').toLowerCase().includes(aramaQ) || String(t.kisaAciklama||'').toLowerCase().includes(aramaQ))) return false;
-        return true;
-      });
-      const beklemeVals = gecmisFiltreli.map(t=>{
-        const ilkOp = tadilatOperasyonlarArray(t)[0];
-        return (t.olusturmaTs && ilkOp?.baslamaTs) ? Math.max(0, ilkOp.baslamaTs-t.olusturmaTs) : null;
-      }).filter(v=>v!=null);
-      const sureVals = gecmisFiltreli.map(t=>tadilatOperasyonlarArray(t).reduce((s,o)=>s+((o.bitisTs&&o.baslamaTs)?tadilatOpDurationBreakdown(o).netMs:0),0));
-      const ortalamaBeklemeMs = beklemeVals.length ? beklemeVals.reduce((a,b)=>a+b,0)/beklemeVals.length : 0;
-      const enUzunBeklemeMs = beklemeVals.length ? Math.max(...beklemeVals) : 0;
-      const ortalamaSureMs = sureVals.length ? sureVals.reduce((a,b)=>a+b,0)/sureVals.length : 0;
-      body += `
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px">
-        <div>
-          <div style="font-size:16px;font-weight:600;margin-bottom:6px">Yönetici Analizi — Geçmiş</div>
-          <div style="font-size:12.5px;color:var(--text-muted);max-width:680px">Tamamlanmış tüm tadilat taleplerinin geçmişi — talebin açılışından bitişine kadar tüm zaman damgalarıyla. Veri zamanla büyüyeceği için aşağıdaki tarih filtresi tabloyu da daraltır.</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-shrink:0">
-          <button class="chip ${yoneticiAnalizAtolyeFilter==='tumu'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setYoneticiAnalizAtolyeFilter('tumu')">Tümü</button>
-          <button class="chip ${yoneticiAnalizAtolyeFilter==='imalat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setYoneticiAnalizAtolyeFilter('imalat')">${ico('factory',14)} İmalat Atölye</button>
-          <button class="chip ${yoneticiAnalizAtolyeFilter==='tadilat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setYoneticiAnalizAtolyeFilter('tadilat')">${ico('wrench',14)} Tadilat Atölye</button>
-        </div>
-      </div>
-      <div class="filter-bar" style="border-bottom:none;padding:0;flex-wrap:wrap;align-items:center;margin-bottom:18px;margin-top:12px">
-        <label style="font-size:11.5px;color:var(--text-muted)">Başlangıç</label>
-        <input type="date" class="filter-input" value="${esc(tadilatAnalizFrom)}" onchange="setTadilatAnalizFrom(this.value)">
-        <label style="font-size:11.5px;color:var(--text-muted)">Bitiş</label>
-        <input type="date" class="filter-input" value="${esc(tadilatAnalizTo)}" onchange="setTadilatAnalizTo(this.value)">
-        <button class="chip" onclick="setTadilatAnalizPreset(7)">Son 7 Gün</button>
-        <button class="chip" onclick="setTadilatAnalizPreset(30)">Son 30 Gün</button>
-        <button class="chip" onclick="clearTadilatAnalizFilter()">Tüm Zamanlar</button>
-        <input type="text" placeholder="🔍 U Kodu ya da parça/işlem ara..." value="${esc(yoneticiGecmisArama)}" oninput="setYoneticiGecmisArama(this.value)" style="flex:1;min-width:220px;padding:9px 12px;font-size:13px">
-      </div>
-      <div class="modal-stats" style="margin-bottom:20px">
-        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--accent)">${gecmisFiltreli.length}</div><div class="modal-stat-label">Tamamlanan Talep</div></div>
-        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--warn)">${fmtDur(ortalamaBeklemeMs)}</div><div class="modal-stat-label">Ortalama Bekleme</div></div>
-        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--danger)">${fmtDur(enUzunBeklemeMs)}</div><div class="modal-stat-label">En Uzun Bekleme</div></div>
-        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--success)">${fmtDur(ortalamaSureMs)}</div><div class="modal-stat-label">Ortalama İşlem Süresi</div></div>
-      </div>
-      ${renderTamamlananTalepTablosu(gecmisFiltreli)}
-      ${beklemeDetayId ? renderBeklemeDetayModal() : ''}`;
-    } else if(tadilatSubTab==='yonetimCanli' && canViewYoneticiAnalizi()){
-      // "Güncel Bekleyenler" — canlı üretim izleme mantığıyla aynı: anık açık
-      // talepler, en uzun bekleyen/en çok süredir işlemde olan en üstte — geçmiş tabloya göre
-      // farklı bir okuma modu (bekleyen bir sorunu HIZLI görmek için), o yüzden ayrı sekme.
-      const devamEdenlerCanli = tadilatArray().filter(t=>!tadilatTamamlandiMi(t) && (yoneticiAnalizAtolyeFilter==='tumu' || (t.atolye||'imalat')===yoneticiAnalizAtolyeFilter));
-      const canliBilgi = devamEdenlerCanli.map(t=>{
-        const ops = tadilatOperasyonlarArray(t);
-        const aktifOp = tadilatAktifOperasyon(t);
-        return { t, aktifOp, ilkOp: ops[0] };
-      });
-      const isleniyorSayisi = canliBilgi.filter(x=>x.aktifOp).length;
-      const bekliyorSayisi = canliBilgi.length - isleniyorSayisi;
-      const gecenMsListesi = canliBilgi.map(({t,aktifOp,ilkOp})=> aktifOp ? (nowTick-aktifOp.baslamaTs) : (ilkOp ? (nowTick-t.olusturmaTs) : 0));
-      const enUzunGecenMs = gecenMsListesi.length ? Math.max(...gecenMsListesi) : 0;
-      body += `
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px">
-        <div>
-          <div style="font-size:16px;font-weight:600;margin-bottom:6px">Yönetici Analizi — Güncel Bekleyenler</div>
-          <div style="font-size:12.5px;color:var(--text-muted);max-width:680px">Şu an açık olan (bekleyen/duraklatılmış/devam eden) tüm talepler — en uzun süredir bekleyen/işlemde olan en üstte. Bu sayfa canlıdır, otomatik güncellenir.</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-shrink:0">
-          <button class="chip ${yoneticiAnalizAtolyeFilter==='tumu'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setYoneticiAnalizAtolyeFilter('tumu')">Tümü</button>
-          <button class="chip ${yoneticiAnalizAtolyeFilter==='imalat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setYoneticiAnalizAtolyeFilter('imalat')">${ico('factory',14)} İmalat Atölye</button>
-          <button class="chip ${yoneticiAnalizAtolyeFilter==='tadilat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setYoneticiAnalizAtolyeFilter('tadilat')">${ico('wrench',14)} Tadilat Atölye</button>
-        </div>
-      </div>
-      <div class="modal-stats" style="margin-bottom:20px;margin-top:12px">
-        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--tadilat-info)">${devamEdenlerCanli.length}</div><div class="modal-stat-label">Açık Talep</div></div>
-        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--success)">${isleniyorSayisi}</div><div class="modal-stat-label">İşlemde</div></div>
-        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--warn)">${bekliyorSayisi}</div><div class="modal-stat-label">Bekliyor / Duraklatıldı</div></div>
-        <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--danger)">${fmtDur(enUzunGecenMs)}</div><div class="modal-stat-label">En Uzun Süredir Açık</div></div>
-      </div>
-      ${renderDevamEdenTalepTablosu(devamEdenlerCanli, true)}`;
     } else {
       body += `
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Talepleri</div>
@@ -1458,7 +1875,7 @@ function renderAdmin(){
     body += `</tbody></table></div>${entryDetailId ? renderEntryDetailModal() : ''}`;
   }
 
-  return `<div class="root-wide theme-${resolvedTheme()}">${header}${body}${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}</div>`;
+  return `<div class="root-wide theme-${resolvedTheme()}">${header}${body}${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}${tadilatAkisModalId ? renderTadilatAkisModal() : ''}</div>`;
 }
 function setReportFilterFieldLight(field, val){ reportFilter[field]=val; renderTableOnly(); }
 function renderTableOnly(){ render(); } // basit yaklaşım: filtre değişince tam yeniden çizim yeterli hızda çalışır

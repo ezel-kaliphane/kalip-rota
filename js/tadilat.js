@@ -184,16 +184,6 @@ function canCreateTadilat(){
 // SuperAdmin ile sınırlı değil — Şef/Üretim Şefi/Admin/SuperAdmin hepsi görebiliyor. Talep açma/
 // alma yetkisi bundan ayrı (canCreateTadilat), Şef ve izinli diğer hesaplar hâlâ talep açabilir.
 function canViewTadilatAnaliz(){ return !!(session && (session.isSef || session.isUretimSef || session.isAdmin || session.isSuperAdmin)); }
-// Yönetici Analizi (Geçmiş özet/KPI + Güncel Bekleyenler) — Tadilat Analizi'nden ayrı, daha
-// detaylı ve büyüyen veriye göre tasarlanmış bir görünüm. Şimdilik SADECE SuperAdmin görüyor;
-// Bekleme Detayı yetkisiyle aynı desen — ileride başka rollere açmak için kod değişikliği
-// GEREKMEZ, ilgili operatörün Firebase'deki "permYoneticiAnalizi" alanını true yapman yeterli.
-function canViewYoneticiAnalizi(){
-  if(!session) return false;
-  if(session.isSuperAdmin) return true;
-  const op = STATE.operators[session.username]||{};
-  return op.permYoneticiAnalizi===true;
-}
 function toggleTadilatYetkisi(code){
   const op = STATE.operators[code] || {};
   const effectiveNow = op.permTadilatOlustur===true ? true : (op.permTadilatOlustur===false ? false : !!(op.isSef || op.isUretimSef));
@@ -752,6 +742,20 @@ function setCompletedViewMode(v){ completedViewMode = v; render(); }
 let analizFrom = dateKey(Date.now());
 let analizTo = analizFrom;
 let analizSubTab = 'genel';
+let analizRole = 'yonetici'; // 'yonetici' | 'sef' | 'kisi' | 'tadilat' | 'saha' — bkz. ANALIZ_VIEW_DEFS
+function setAnalizRole(r){
+  if(!isAnalizViewVisible(r)){ toast('Bu görünüm için yetkin yok'); return; }
+  analizRole = r; render();
+}
+let analizDetayOpen = false; // Yönetim görünümündeki eski Makine/Kişi/Duruş/Mesai tablolarını aç/kapa
+function toggleAnalizDetay(){ analizDetayOpen = !analizDetayOpen; render(); }
+let analizKisiGun = 0; // 0=bugün, 1=dün, ... — Kişi Bazlı görünümündeki gün seçici
+let analizKisiSecili = null; // seçili operatörün kullanıcı adı — Kişi Bazlı görünümündeki detay paneli
+function setAnalizKisiGun(o){ analizKisiGun = o; analizKisiSecili = null; render(); }
+function selectAnalizKisi(username){ analizKisiSecili = username; render(); }
+let tadilatAkisModalId = null; // "Detay" ile açılan iş açıldı→başlandı→bitti akış şeması (bkz. renderTadilatAkisModal)
+function openTadilatAkis(id){ tadilatAkisModalId = id; render(); }
+function closeTadilatAkis(){ tadilatAkisModalId = null; render(); }
 let sendMsgOpen = false;
 let gecmisFrom = '', gecmisTo = '', gecmisSearch = '';
 function setGecmisSearch(v){ gecmisSearch=v; render(); }
@@ -859,10 +863,10 @@ let analizSelectedOperator = null; // Kişi Bazlı Analiz'de detayı açık olan
 let analizMiniSort = 'alpha'; // 'alpha' | 'calisma' | 'renk'
 let analizAtolyeFilter = 'tumu'; // 'tumu' | 'imalat' | 'tadilat' — tüm Analiz sekmesini makinenin atölyesine göre süzer
 function setAnalizAtolyeFilter(v){ analizAtolyeFilter = v; analizSelectedMachines = new Set(); render(); }
-let yoneticiAnalizAtolyeFilter = 'tumu'; // 'tumu' | 'imalat' | 'tadilat' — Yönetici Analizi (Geçmiş/Güncel) sekmelerini talebin atölyesine göre süzer
-function setYoneticiAnalizAtolyeFilter(v){ yoneticiAnalizAtolyeFilter = v; render(); }
-let yoneticiGecmisArama = ''; // Yönetici Analizi — Geçmiş: U Kodu ya da işlem/parça açıklamasında arama
-function setYoneticiGecmisArama(v){ yoneticiGecmisArama = v; render(); }
+let tadilatAnalizAtolyeFilter = 'tumu'; // 'tumu' | 'imalat' | 'tadilat' — renderAnalizTadilat'ı talebin atölyesine göre süzer
+function setTadilatAnalizAtolyeFilter(v){ tadilatAnalizAtolyeFilter = v; render(); }
+let tadilatAnalizArama = ''; // renderAnalizTadilat: U Kodu / malzeme / açıklama araması
+function setTadilatAnalizArama(v){ tadilatAnalizArama = v; render(); }
 function setAnalizMiniSort(v){ analizMiniSort = v; render(); }
 function toggleAnalizMachineFilter(code){
   if(analizSelectedMachines.has(code)) analizSelectedMachines.delete(code);

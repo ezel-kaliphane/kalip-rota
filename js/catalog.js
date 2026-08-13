@@ -352,6 +352,32 @@ function setAdminTabPermission(username, key, val){
   if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
   DB.ref(`adminTabPermissions/${username}/${key}`).set(val);
 }
+/* ===================== ANALİZ SEKMESİ — ALT GÖRÜNÜM ERİŞİMİ =====================
+   Analiz sekmesinin içinde birden fazla rol bazlı görünüm var (Yönetim, Atölye Şefi, Kişi
+   Bazlı, Tadilat, Saha Ekranı). ADMIN_TAB_DEFS'teki 'analiz' izni sadece sekmenin KENDİSİNİ
+   açıp kapatıyor — burada AYRICA, sekme açıksa bu görünümlerden HANGİLERİNİ göreceğini
+   kullanıcı bazında ayrı ayrı belirliyoruz. 'analiz' sekmesi zaten kapalıysa alt görünümlerin
+   hiçbiri görünmez (üst izin önce kontrol edilir). SuperAdmin her zaman hepsini görür.
+*/
+const ANALIZ_VIEW_DEFS = [
+  { key:'yonetici', label:'Yönetim' },
+  { key:'sef', label:'Atölye Şefi' },
+  { key:'kisi', label:'Kişi Bazlı' },
+  { key:'tadilat', label:'Tadilat' },
+  { key:'saha', label:'Saha Ekranı' },
+];
+function isAnalizViewVisible(key){
+  if(!session) return false;
+  if(session.isSuperAdmin) return true;
+  if(!isAdminTabVisible('analiz')) return false;
+  const mine = adminTabPermissions[session.username]?.analizViews;
+  if(!mine) return true; // hiç ayar girilmemiş -> varsayılan hepsi görünür
+  return mine[key] !== false;
+}
+function setAnalizViewPermission(username, key, val){
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
+  DB.ref(`adminTabPermissions/${username}/analizViews/${key}`).set(val);
+}
 function tadilatBolumOptions(){ return Object.keys(getBolumKurallari()); }
 function canManageBolumKurallari(){
   if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return false; }
