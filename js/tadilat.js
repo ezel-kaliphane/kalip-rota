@@ -388,7 +388,23 @@ function carryGunSonuToOtherPausedTadilatOps(username, excludeKey){
       const extra = op.duruşTs ? Math.max(0, now - op.duruşTs) : 0;
       const duruşToplamMs = (op.duruşToplamMs||0) + extra;
       const durusLog = appendDurusLog(op.durusLog, op.duruşNedeni, extra, op.duruşTs);
-      DB.ref(`tadilatlar/${t.id}/operasyonlar/${op.id}`).update({ duruşNedeni: GUN_SONU_REASON, duruşTs: now, duruşToplamMs, durusLog });
+      // gunSonuOncesiNeden: bkz. operations.js'teki aynı alan — bu operasyonun cascade ile mi
+      // (gerçek bir önceki nedeni var) yoksa doğrudan mı Gün Sonu'na düştüğünü ayırt eder.
+      DB.ref(`tadilatlar/${t.id}/operasyonlar/${op.id}`).update({ duruşNedeni: GUN_SONU_REASON, duruşTs: now, duruşToplamMs, durusLog, gunSonuOncesiNeden: op.duruşNedeni });
+    });
+  });
+}
+// carryGunSonuToOtherPausedTadilatOps'un tersi — operations.js'teki wakeOtherGunSonuEntries ile
+// aynı mantık, tadilat operasyonları için: operatör fiilen çalışmaya döndüğünde, cascade ile
+// Gün Sonu'na düşmüş operasyonları gerçek nedenlerine geri döndürüp yeniden GERÇEK duruş
+// saymaya başlatır.
+function wakeOtherGunSonuTadilatOps(username, excludeKey){
+  const now = Date.now();
+  tadilatArray().forEach(t=>{
+    tadilatOperasyonlarArray(t).forEach(op=>{
+      const key = t.id+'_'+op.id;
+      if(op.operatorUsername!==username || op.status!=='duruş' || key===excludeKey || op.duruşNedeni!==GUN_SONU_REASON || !op.gunSonuOncesiNeden) return;
+      DB.ref(`tadilatlar/${t.id}/operasyonlar/${op.id}`).update({ duruşNedeni: op.gunSonuOncesiNeden, duruşTs: now, gunSonuOncesiNeden: null });
     });
   });
 }
@@ -421,6 +437,10 @@ function devamEtTadilatDurus(){
     // reddedilirse hiçbir uyarı çıkmadan operasyon duruşta kalıyordu.
     toast('Tadilata devam ediliyor');
     render();
+    // Operatör fiilen çalışmaya döndü — elinde cascade ile Gün Sonu'na düşmüş başka iş/tadilat
+    // varsa gerçek nedenlerine geri döndür (bkz. operations.js'teki aynı desen).
+    wakeOtherGunSonuEntries(session.username, []);
+    wakeOtherGunSonuTadilatOps(session.username, t.id+'_'+op.id);
   }).catch(err=>{ console.error('devamEtTadilatDurus hatası', err); toast('Devam ettirilemedi: '+(err&&err.message||'hata')); });
 }
 // "Diğer tadilata geçebilirsin" uyarısında yanlışlıkla duraklattıysa ya da vazgeçtiyse, direkt

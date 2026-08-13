@@ -295,7 +295,25 @@ function carryGunSonuToOtherPausedEntries(username, excludeIds){
     const extra = e.duruşTs ? Math.max(0, now - e.duruşTs) : 0;
     const duruşToplamMs = (e.duruşToplamMs||0) + extra;
     const durusLog = appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
-    DB.ref('entries/'+e.id).update({ duruşNedeni: GUN_SONU_REASON, duruşTs: now, duruşToplamMs, durusLog });
+    // "gunSonuOncesiNeden": bu kaydın GERÇEKTEN kendi isteğiyle mi (operatör bu işe bilerek Gün
+    // Sonu verdi) yoksa CASCADE ile mi (unutulmuş başka bir duruş) Gün Sonu'na düştüğünü ayırt
+    // etmek için — bkz. wakeOtherGunSonuEntries. Sadece bu alanı taşıyan kayıtlar, operatör
+    // BAŞKA bir işine dönüp çalışmaya başlayınca otomatik olarak eski (gerçek) nedenine geri
+    // döner; doğrudan Gün Sonu verilmiş bir kayıtta bu alan yok, o operatör kendisi dönene kadar
+    // Gün Sonu'nda kalır (çünkü onun "eskiden" gerçek bir duruş nedeni yoktu, aktif çalışıyordu).
+    DB.ref('entries/'+e.id).update({ duruşNedeni: GUN_SONU_REASON, duruşTs: now, duruşToplamMs, durusLog, gunSonuOncesiNeden: e.duruşNedeni });
+  });
+}
+// carryGunSonuToOtherPausedEntries'in tersi: operatör HERHANGİ bir işini devam ettirdiğinde
+// (yani artık fiilen çalışmaya döndüğünde), elinde cascade ile Gün Sonu'na düşmüş (gerçek bir
+// önceki nedeni olan) başka kayıt varsa, onu kendi gerçek nedenine geri döndürüp BU ANDAN
+// itibaren yeniden GERÇEK duruş saymaya başlatır — yoksa o kayıt operatör gündüz boyu çalışsa
+// bile "Gün Sonu" limbo'sunda donuk kalır, gerçekten bekleyen bir iş görünmez/raporlanmaz olur.
+function wakeOtherGunSonuEntries(username, excludeIds){
+  const now = Date.now();
+  const excluded = excludeIds instanceof Set ? excludeIds : new Set(excludeIds||[]);
+  entriesArray().filter(e => e.operatorUsername===username && e.status==='duruş' && e.duruşNedeni===GUN_SONU_REASON && e.gunSonuOncesiNeden && !excluded.has(e.id)).forEach(e=>{
+    DB.ref('entries/'+e.id).update({ duruşNedeni: e.gunSonuOncesiNeden, duruşTs: now, gunSonuOncesiNeden: null });
   });
 }
 function confirmDurus(id){
@@ -353,6 +371,10 @@ function devamEt(id){
   DB.ref('entries/'+id).update({ status:'devam', duruşTs:null, duruşNedeni:null, duruşToplamMs, excludedMs, durusLog, excludedLog })
     .catch(err=>{ console.error('devamEt hatası', err); toast('Devam ettirilemedi: '+(err&&err.message||'hata')); });
   toast('Operasyona devam ediliyor');
+  // Operatör fiilen çalışmaya döndü — elinde cascade ile Gün Sonu'na düşmüş başka iş/tadilat
+  // varsa (bkz. carryGunSonuToOtherPausedEntries), onları da gerçek nedenlerine geri döndür.
+  wakeOtherGunSonuEntries(session.username, [id]);
+  wakeOtherGunSonuTadilatOps(session.username, null);
 }
 function silKayit(id){ DB.ref('entries/'+id).remove(); }
 
@@ -394,6 +416,8 @@ function devamGrup(groupId){
     DB.ref('entries/'+e.id).update({ status:'devam', duruşTs:null, duruşNedeni:null, duruşToplamMs, excludedMs, durusLog, excludedLog });
   });
   toast('Tüm iş emirleri devam ediyor');
+  wakeOtherGunSonuEntries(session.username, members.map(e=>e.id));
+  wakeOtherGunSonuTadilatOps(session.username, null);
 }
 function bitirGrup(groupId){
   const members = groupMembersOf(groupId);
