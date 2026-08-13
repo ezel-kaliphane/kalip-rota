@@ -32,8 +32,9 @@ function render(){
     try { selStart = activeEl.selectionStart; selEnd = activeEl.selectionEnd; } catch(e){}
   }
 
-  if(!session){ app.innerHTML = renderLogin(); return; }
+  if(!session){ app.innerHTML = renderLogin(); renderBubble(); return; }
   app.innerHTML = session.isAdmin ? renderAdmin() : renderOperator();
+  renderBubble(); // baloncuk #app'ten bağımsız kendi kökünde — bkz. js/bubble.js
   scrollSel.forEach((sel,i) => { if(savedScroll[i]!=null){ const el = document.querySelector(sel); if(el) el.scrollTop = savedScroll[i]; } });
   if(savedWinScroll>0) window.scrollTo(0, savedWinScroll);
 
@@ -57,6 +58,7 @@ let analizTickCounter = 0;
 let lastPointerDownAt = 0;
 document.addEventListener('pointerdown', ()=>{ lastPointerDownAt = Date.now(); }, true);
 function isUserInteracting(){
+  if(bubbleDragging) return true; // baloncuk sürüklenirken tam render, DOM'u sıfırlayıp sürüklemeyi keser
   if(editingActiveId) return true;
   // DÜZELTME: Eskiden sadece "Diğer" yazarken meşgul sayılıyordu — panel açıkken (neden
   // seçerken, aşağı kaydırıp onay butonuna ulaşmaya çalışırken) ATÖLYEDEKİ BAŞKA BİR
@@ -87,6 +89,11 @@ function renderLiveBits(){
   // Ama bir form açıkken (düzenleme, duruş nedeni yazma, serbest mesaj, aktif input/select) tam render
   // odağı (focus) kaybettiriyor / açık dropdown'ı kapatıyor — o an atla.
   if(isUserInteracting()) return;
+  // Baloncuğun dakika sayacı bağımsız güncelleniyor — aşağıdaki koşul sadece belirli ekranlarda
+  // tam render tetikler, ama baloncuk her ekranda görünür olduğu için süresi hep taze kalmalı.
+  // renderBubble() elemanı yeniden OLUŞTURMADIĞI için (bkz. js/bubble.js) bunun her saniye
+  // çağrılması animasyonu bozmuyor, sadece rakamı güncelliyor.
+  if(!bubbleDragging) renderBubble();
   if(activeDetailId || activeGroupId || (session && !session.isAdmin && (view==='list' || (view==='tadilat' && myActiveTadilatSession()))) || (session && session.isAdmin && (view==='matrix' || (view==='tadilatYonetim' && tadilatSubTab==='canli')))){ render(); return; }
   // Analiz'deki sayılar artık duraklamış işler için canlı hesaplanıyor, ama grafikleri (Chart.js)
   // her saniye yeniden çizmek titremeye sebep olur — o yüzden burayı daha seyrek (15 sn) yeniliyoruz.
@@ -105,6 +112,8 @@ window.addEventListener('DOMContentLoaded', ()=>{
     return;
   }
   initFirebase();
+  loadBubblePos();
+  setupBubbleDrag();
   render();
 
   // K2 (klavye/duruş modalı): --kb, o an açık olan sanal klavyenin yüksekliğini tutan bir CSS

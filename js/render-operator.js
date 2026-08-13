@@ -49,7 +49,7 @@ function renderOperator(){
         <div class="lock-timer" style="color:var(--warn)">${op.duruşTs ? fmtElapsed(nowTick-op.duruşTs) : '—:—'}</div>
         <div class="lock-meta">${op.duruşTs ? 'duruş süresi' : 'seçim yapılıyor — duruş henüz başlamadı'}</div>
         <div class="durus-reason-box" style="${isTadDurus?'color:var(--tadilat-info);background:var(--tadilat-med);border-color:var(--tadilat-border)':''}">${isTadDurus?(ico('wrench',13)+' '):''}"${esc(op.duruşNedeni)}"</div>
-        <div class="lock-actions" style="display:flex;gap:10px;margin-top:24px">
+        <div class="lock-actions lock-actions-nav-clear" style="display:flex;gap:10px;margin-top:24px">
           <button class="btn-start" style="width:auto;padding:13px 26px" onclick="devamEtTadilatDurus()">${ico('play',14)} Duraklatmayı Devam Ettir</button>
         </div>
         ${isTadDurus ? `<div style="font-size:11.5px;color:var(--text-muted);margin-top:18px;max-width:320px;text-align:center">İstersen Tadilat sekmesinden bekleyen başka bir işi alıp devam edebilirsin — bu iş burada duraklatılmış kalır, bitirdiğinde otomatik geri döneceksin.</div>` : ''}
@@ -73,7 +73,7 @@ function renderOperator(){
           <div class="lock-meta">${mine.bolum?`${esc(mine.bolum)} · `:''}${mine.adet?`Adet: ${esc(mine.adet)}`:''}</div>
           ${mine.aciklama ? `<div class="lock-note">"${esc(mine.aciklama)}"</div>` : ''}
           <div style="font-size:12px;color:var(--text-muted);margin-top:16px;max-width:320px;text-align:center">Bitirirken seç: bu iş tamamen bitti mi, yoksa devamı gelecek mi?</div>
-          <div class="lock-actions lock-actions-col" style="display:flex;flex-direction:column;gap:10px;margin-top:14px;width:100%;max-width:340px">
+          <div class="lock-actions lock-actions-col lock-actions-nav-clear" style="display:flex;flex-direction:column;gap:10px;margin-top:14px;width:100%;max-width:340px">
             <button class="btn-primary" style="padding:14px" onclick="tadilatBitir('${mine.id}','${op.id}',true)">${ico('stop',14)} Tamamen Bitir <span style="font-weight:400;opacity:.85">(Son Operasyon)</span></button>
             <button style="padding:14px;font-size:14px;border-radius:10px;border:2px solid var(--gunsonu);background:var(--gunsonu-med);color:var(--gunsonu);font-weight:700;cursor:pointer" onclick="tadilatBitir('${mine.id}','${op.id}',false)">${ico('pause',14)} Bu Operasyonu Bitir <span style="opacity:.85;font-weight:600">(Devamı Var)</span></button>
             <button class="btn-ghost" onclick="openTadilatDurusPicker()">${ico('clock',14)} Duraklat <span style="opacity:.7;font-weight:400">(daha acil bir iş çıktıysa)</span></button>

@@ -325,8 +325,7 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 /* =============== MOBİL YERLEŞİM (v27) — alt gezinme çubuğu, aktif iş şeridi, nefes payı =============== */
 .logo-plate{display:inline-flex;align-items:center;background:#fff;border-radius:10px;padding:7px 11px;line-height:0}
 .logo-plate img{height:24px;width:auto;display:block}
-.bottom-nav,.active-strip{display:none}
-@keyframes stripPulse{0%{opacity:1}50%{opacity:.35}100%{opacity:1}}
+.bottom-nav,.active-bubble{display:none}
 @media (max-width:768px){
   html,body{font-size:15px}
   .root-mobile > .tabs{display:none}
@@ -338,21 +337,46 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .bn-lbl{font-size:12.5px;font-weight:600;letter-spacing:-.2px}
   .bn-badge{position:absolute;top:4px;right:10px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:9px;padding:0 5px;line-height:1.6}
 
-  .active-strip{display:flex;align-items:center;gap:11px;position:fixed;left:10px;right:10px;bottom:96px;max-width:460px;margin:0 auto;background:var(--accent-dim);border:1px solid var(--accent);border-radius:16px;padding:11px 14px;z-index:399;box-shadow:0 8px 24px rgba(0,0,0,.28);cursor:pointer}
-  .as-dot{width:9px;height:9px;border-radius:50%;background:var(--success);flex-shrink:0;animation:stripPulse 1.6s infinite}
-  .as-dot.warn{background:var(--warn);animation:none}
-  .as-main{flex:1;min-width:0}
-  .as-code{font-size:14px;font-weight:700;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .as-sub{font-size:11.5px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .as-time{font-size:17px;font-weight:700;flex-shrink:0}
+  /* AKTİF İŞ BALONCUĞU — eskiden altta sabit bir şerit (.active-strip) olarak duruyordu ve bazı
+     ekranlarda (ör. Tadilat aktif ekranındaki 3 butonlu sütun) o ekranın kendi fixed butonlarının
+     üzerine biniyordu. Artık operatörün dikeyde istediği yere sürükleyip bırakabildiği, yatayda
+     ise her zaman ekranın SOL ya da SAĞ kenarına yapışan (mobil şebeke operatörü uygulamalarındaki
+     "chat head" gibi) yuvarlak bir baloncuk. Konumu localStorage'da saklanıyor
+     (bkz. js/bubble.js: loadBubblePos/saveBubblePos/snapEdge). */
+  .active-bubble{display:flex;position:fixed;width:64px;height:64px;border-radius:50%;
+    background:var(--panel);box-shadow:0 8px 22px rgba(0,0,0,.4);
+    z-index:399;align-items:center;justify-content:center;flex-direction:column;cursor:grab;
+    touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none}
+  .active-bubble:active{cursor:grabbing}
+  .active-bubble.bubble-snap{transition:left .22s cubic-bezier(.34,1.56,.64,1),top .22s ease}
+  .active-bubble::before,.active-bubble::after{content:'';position:absolute;inset:0;border-radius:50%;pointer-events:none}
+  .active-bubble::before{border:3px solid var(--bc);opacity:.35}
+  /* Kenarlığın kendisi bir saat yelkovanı gibi sürekli dönen, aynı zamanda nefes alır gibi
+     soluklaşıp-parlayan (klavye aydınlatmalarındaki tek renk fade efekti gibi) canlı kuyruk.
+     DÜZELTME (takılıp en başa atlama sorunu): Eskiden baloncuk saniyede bir tam render() ile
+     DOM'dan silinip yeniden oluşuyordu — animasyon her seferinde 0. kareden başladığı için
+     2.6 sn'lik turu HİÇBİR ZAMAN tamamlayamıyor, hep aynı dilimde "takılı" görünüyordu. Artık
+     baloncuk kendi kalıcı köküne (bkz. #bubble-root, js/bubble.js: renderBubble()) SADECE BİR KEZ
+     ekleniyor, sonraki güncellemeler var(--bc) gibi özellikleri değiştiriyor ama elemanın
+     kendisini yeniden oluşturmuyor — animasyon tarayıcının kendi zaman çizelgesinde gerçekten
+     kesintisiz akıyor. */
+  .active-bubble::after{background:conic-gradient(from 0deg,var(--bc) 0deg,var(--bc) 55deg,transparent 100deg,transparent 360deg);
+    -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 3px));
+    mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 3px));
+    animation:bubbleSweep 2.6s linear infinite,bubbleFade 2.1s ease-in-out infinite}
+  @keyframes bubbleSweep{to{transform:rotate(360deg)}}
+  @keyframes bubbleFade{0%,100%{opacity:.5}50%{opacity:1}}
+  .bubble-time{font-size:17px;font-weight:800;color:var(--text);line-height:1.05}
+  .bubble-unit{font-size:9.5px;font-weight:700;color:var(--text-muted);letter-spacing:.3px}
+  .bubble-badge{position:absolute;top:-4px;right:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:9px;padding:1px 5px;line-height:1.5;box-shadow:0 0 0 2px var(--bg)}
 
-  /* O3 düzeltmesi: eskiden burası sabit 196px (bottom-nav + aktif iş şeridi ikisi de varmış
-     gibi) bırakıyordu — aktif iş yokken şerit hiç render olmuyor (bottomStripHtml() boş
-     string dönüyor), o zaman listenin altında ekranın dörtte biri kadar boş, ölü alan
-     kalıyordu. Artık şerit varsa/yoksa değişkenle hesaplanıyor, safe-area de dahil. */
-  .root-mobile{--nav-h:98px;--strip-h:0px}
-  .root-mobile:has(.active-strip){--strip-h:78px}
-  .root-mobile .body-pad{padding:18px 18px calc(var(--nav-h) + var(--strip-h) + env(safe-area-inset-bottom) + 18px)}
+  /* O3 düzeltmesi: eskiden burası sabit 196px (bottom-nav + aktif iş şeridi ikisi de varmış gibi)
+     bırakıyordu — aktif iş yokken şerit hiç render olmuyordu, o zaman listenin altında ekranın
+     dörtte biri kadar boş, ölü alan kalıyordu. Artık sadece bottom-nav'ın gerçek yüksekliği +
+     safe-area kadar boşluk bırakılıyor. NOT: Baloncuk artık sabit konumlu (fixed) ve yüzüyor —
+     sayfa akışında hiç yer kaplamadığı için eski --strip-h payına gerek kalmadı. */
+  .root-mobile{--nav-h:98px}
+  .root-mobile .body-pad{padding:18px 18px calc(var(--nav-h) + env(safe-area-inset-bottom) + 18px)}
   .root-mobile .lock-screen{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 
   .card{padding:16px 18px;border-radius:16px;margin-bottom:14px}
@@ -378,6 +402,22 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .lock-actions > button{flex:1;min-height:58px;font-size:16px;font-weight:700;white-space:nowrap}
   .lock-actions-col > button{width:100%}
 
+  /* DÜZELTME (Tadilat ekranında "Duraklat" butonuna basılamıyor): Tadilat ekranı, diğer
+     sekmelerden (Makineler/Geçmiş gibi) farklı olarak kendi aksiyon butonlarını GÖSTERİRKEN
+     aynı anda alttaki gezinme çubuğu (bottom-nav) da ekranda kalıyor — normal kilit ekranında
+     (tek iş detayı) bottom-nav hiç yok, o yüzden orada sorun çıkmıyordu. Burada ise yukarıdaki
+     14px'lik varsayılan boşluk, opak bottom-nav'ın (~84px) ARKASINDA kalıp özellikle sütunun
+     en alt butonunu (Duraklat) fiziksel olarak görünse bile tıklanamaz yapıyordu. Bu değiştirici,
+     butonları bottom-nav'ın yüksekliğini net şekilde temizleyecek kadar yukarı taşıyor. */
+  .lock-actions-nav-clear{bottom:calc(96px + env(safe-area-inset-bottom)) !important}
+  /* Butonlar yukarı taşındığı için içeriğin de o kadar altta bitmesi gerekiyor, yoksa bu sefer
+     sayfanın son satırları butonların arkasında kalıyor. Tek butonlu (duraklatıldı) ekran ile
+     3 butonlu sütun (aktif tadilat) ekranı farklı yükseklik gerektirdiği için ayrı ayrı.
+     NOT: Bu bilerek inline style değil — inline olsaydı bu kurallar geniş ekranda da (media
+     query dışında, lock-actions normal akıştayken) uygulanıp altta koca bir boşluk bırakırdı. */
+  .root-mobile .lock-screen:has(.lock-actions-nav-clear){padding-bottom:calc(200px + env(safe-area-inset-bottom))}
+  .root-mobile .lock-screen:has(.lock-actions-nav-clear.lock-actions-col){padding-bottom:calc(300px + env(safe-area-inset-bottom))}
+
   /* Geniş tablolar telefonda yatay kayıyor — satırın kimliğini kaybetmemek için ilk sütun
      (tarih / makine / kod) sabitleniyor, böylece sağa kaydırırken hangi satırda olduğun belli. */
   .table-wrap{position:relative;-webkit-overflow-scrolling:touch}
@@ -395,7 +435,7 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 @media print{
   @page{margin:12mm}
   html,body{background:#fff!important;color:#000!important;height:auto!important;overflow:visible!important}
-  .bottom-nav,.active-strip,.tabs,.sub-tabs,.filter-bar,.icon-btn,.icon-btn-labeled,.btn-primary,.btn-ghost,.del-btn,.chip,.modal-overlay,.toast,.toast-big{display:none!important}
+  .bottom-nav,.active-bubble,.tabs,.sub-tabs,.filter-bar,.icon-btn,.icon-btn-labeled,.btn-primary,.btn-ghost,.del-btn,.chip,.modal-overlay,.toast,.toast-big{display:none!important}
   .admin-header{position:static!important;border-bottom:2px solid #000;padding:0 0 8px!important}
   .admin-header .brand{color:#000!important}
   .root-mobile,.root-desktop,.body-pad,.matrix-wrap,.settings-wrap,.table-wrap{height:auto!important;max-height:none!important;overflow:visible!important;padding:0!important}

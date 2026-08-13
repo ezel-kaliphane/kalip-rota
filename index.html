@@ -32,6 +32,9 @@ const FIREBASE_CONFIG = {
 </head>
 <body>
 <div id="app"></div>
+<!-- Aktif iş baloncuğunun kalıcı kökü — #app her render'da baştan yazıldığı için baloncuk
+     bilerek onun DIŞINDA tutuluyor, yoksa dönen kenarlık animasyonu her saniye sıfırlanıyor. -->
+<div id="bubble-root"></div>
 <div id="toast" class="toast"></div>
 <div id="toast-big" class="toast-big"></div>
 
@@ -41,9 +44,10 @@ const FIREBASE_CONFIG = {
 <script src="js/firebase-push.js?v=1"></script>
 <script src="js/operations.js?v=1"></script>
 <script src="js/catalog.js?v=4"></script>
-<script src="js/render-common.js?v=2"></script>
-<script src="js/render-operator.js?v=1"></script>
+<script src="js/render-common.js?v=3"></script>
+<script src="js/render-operator.js?v=2"></script>
 <script src="js/render-admin.js?v=8"></script>
-<script src="js/app.js?v=1"></script>
+<script src="js/bubble.js?v=1"></script>
+<script src="js/app.js?v=2"></script>
 </body>
 </html>

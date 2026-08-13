@@ -888,30 +888,16 @@ function statusBadge(kind, label){
 }
 function entryStatusKind(e){ return e.status==='devam' ? 'calisiyor' : e.status==='duruş' ? 'durus' : 'tamam'; }
 
-function bottomStripHtml(){
-  const mine = (typeof myActiveEntries==='function') ? myActiveEntries() : [];
-  if(!mine || mine.length===0) return '';
-  const e = mine[0];
-  const durus = e.status==='duruş';
-  const t = durus ? (e.duruşTs ? fmtElapsed(nowTick-e.duruşTs) : '—') : fmtElapsed(nowTick-e.startTs);
-  const go = e.groupId ? `openGroupDetail('${e.groupId}')` : `openActiveDetail('${e.id}')`;
-  const extra = mine.length>1 ? ` · +${mine.length-1} iş` : '';
-  return `<div class="active-strip" onclick="${go}">
-    <span class="as-dot ${durus?'warn':''}"></span>
-    <div class="as-main">
-      <div class="as-code mono">${esc(e.talepNo || e.isEmriNo)} · ${esc(e.makine||'')}</div>
-      <div class="as-sub">${durus ? esc(e.duruşNedeni||'duruşta') : 'çalışıyor'}${extra}</div>
-    </div>
-    <div class="as-time mono">${t}</div>
-  </div>`;
-}
+// NOT: Eski bottomStripHtml() (altta sabit "aktif iş şeridi") kaldırıldı — yerini sürüklenebilir
+// aktif iş baloncuğu aldı, bkz. js/bubble.js. Baloncuk #app'ten bağımsız kendi kalıcı köküne
+// (#bubble-root) çizildiği için artık bottomNavHtml()'in döndürdüğü HTML'in parçası değil.
 function bottomNavHtml(){
   const isImalat = getUserAtolyeler(session.username).includes('imalat');
   const hasFason = !!(STATE.operators[session.username]||{}).fasonYetkisi;
   const tadBek = tadilatBekleyenlerCombined(session.username).length;
   const fasBek = hasFason ? fasonBekleyenCount() : 0;
   const item = (v,icoHtml,label,badge) => `<button class="bn-item ${view===v?'active':''}" onclick="setView('${v}')"><span class="bn-ico">${icoHtml}</span><span class="bn-lbl">${label}</span>${badge>0?`<span class="bn-badge">${badge}</span>`:''}</button>`;
-  return bottomStripHtml() + `<nav class="bottom-nav">
+  return `<nav class="bottom-nav">
     ${item('list',ico('factory',26),'Makineler',0)}
     ${item('gecmis',ico('history',26),'Geçmiş',0)}
     ${isImalat ? item('new',ico('plus',26),'Yeni',0) : ''}
