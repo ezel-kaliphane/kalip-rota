@@ -2,9 +2,13 @@
 // "Tamamlanan Talepler" tablosu birden fazla yerde (Tadilat Analizi sekmesi + Yönetici Analizi'nin
 // Geçmiş alt sekmesi) aynı şekilde kullanılıyor — tek yerden değiştirilsin diye ayrı fonksiyon.
 function renderTamamlananTalepTablosu(tamamlananlar){
+  // Excel butonu bir onclick metni olduğu için diziyi doğrudan geçemiyoruz; o an EKRANDA
+  // gösterilen (filtrelenmiş olabilen) listeyi burada saklayıp dışa aktarımın onu kullanmasını
+  // sağlıyoruz — yoksa ekranda 12 kayıt görünürken Excel'e 400 kayıt iniyordu.
+  lastTamamlananTalepListesi = tamamlananlar;
   return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
     <div style="font-size:13px;font-weight:600">Tamamlanan Talepler — Detay (${tamamlananlar.length})</div>
-    ${tamamlananlar.length>0 ? `<button class="btn-primary" style="width:auto;padding:8px 16px;font-size:12.5px" onclick="exportTadilatExcel()">⬇ Excel'e Aktar</button>` : ''}
+    ${tamamlananlar.length>0 ? `<button class="btn-primary" style="width:auto;padding:8px 16px;font-size:12.5px" onclick="exportTadilatExcel(lastTamamlananTalepListesi)">⬇ Excel'e Aktar</button>` : ''}
   </div>
   <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px">"Bekleme": talep açıldıktan sonra bir operatörün işi seçip başlamasına kadar geçen süre (Şef/Üretim Müdürü takibi için) — "Toplam Süre" ise operatörün fiilen çalıştığı (duruş hariç net) süre, bunlar farklı şeyler.</div>
   <div class="table-wrap"><table><thead><tr><th>Atölye</th><th>U Kodu</th><th>Adet</th><th>Talep Eden</th><th>Bölüm</th><th>İşlem</th><th>Talep Açıldı</th><th>İşe Başlandı</th><th>Bekleme</th><th>Op. Sayısı</th><th>Yapanlar</th><th>Makineler</th><th>Toplam Süre</th><th>Son Bitiş</th></tr></thead><tbody>
@@ -47,7 +51,13 @@ function renderDevamEdenTalepTablosu(devamEdenler, sortByUrgency){
     const durumTxt = aktifOp ? 'Devam Ediyor' : duraklatilmisOp ? 'Duraklatıldı' : ilkOp ? 'Ara Bekleme (devamı bekleniyor)' : 'Bekliyor';
     const durumColor = aktifOp ? 'var(--success)' : duraklatilmisOp ? 'var(--warn)' : 'var(--tadilat-info)';
     const beklemeMs = t.olusturmaTs ? Math.max(0, (ilkOp?.baslamaTs || nowTick) - t.olusturmaTs) : null;
-    const gecenMs = aktifOp ? (nowTick-aktifOp.baslamaTs) : (ilkOp ? (nowTick-t.olusturmaTs) : null);
+    // DÜZELTME: Eskiden `ilkOp ? ... : null` idi — yani HİÇ OPERASYONU OLMAYAN, tam da "Bekliyor"
+    // durumundaki talepler (bu sekmenin asıl konusu) "Geçen Süre" hesabının DIŞINDA kalıyordu:
+    // hücrede "—" görünüyor, "en uzun süredir açık" sıralamasında en alta düşüyor ve "En Uzun
+    // Süredir Açık" KPI'ı onları hiç görmüyordu. 3 gündür kimsenin almadığı bir talep, 5 dakikadır
+    // işlenen bir talebin altında kalıyordu. Artık operasyon yoksa talebin açılışından bu yana
+    // geçen süre kullanılıyor.
+    const gecenMs = aktifOp ? (nowTick-aktifOp.baslamaTs) : (t.olusturmaTs ? (nowTick-t.olusturmaTs) : null);
     return { t, ilkOp, durumTxt, durumColor, beklemeMs, gecenMs };
   });
   if(sortByUrgency) rowsData.sort((a,b)=>(b.gecenMs||0)-(a.gecenMs||0));
@@ -180,7 +190,7 @@ function renderAdmin(){
                 <option value="">— Varsayılan Makine yok —</option>
                 ${allMachines().map(m=>{ const label=`${m.code} · ${m.name}`; return `<option value="${esc(label)}" ${v.defaultMachine===label?'selected':''}>${esc(label)}</option>`; }).join('')}
               </select>
-              <button class="btn-ghost" style="white-space:nowrap;margin-left:auto" onclick="openMachineAccessModal('${code}')">${ico('wrench',14)} Makine Erişimi</button>
+              <button class="btn-ghost" style="white-space:nowrap;margin-left:auto" onclick="openMachineAccessModal('${escJs(code)}')">${ico('wrench',14)} Makine Erişimi</button>
             </div>
           `).join('')}
         </div>`;
@@ -255,7 +265,7 @@ function renderAdmin(){
               <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
                 <input type="checkbox" style="width:auto" ${v.permBildirimYonetimi?'checked':''} onchange="toggleUserPerm('${code}','permBildirimYonetimi')"> Bildirim Ayarlarını Yönetebilir
               </label>` : ''}
-              ${code===session.username ? `<span style="font-size:11.5px;color:var(--text-muted)">(bu hesap — silinemez)</span>` : `<button class="del-btn" onclick="deleteOperator('${code}')" title="Sil">${ico('trash',14)}</button>`}
+              ${code===session.username ? `<span style="font-size:11.5px;color:var(--text-muted)">(bu hesap — silinemez)</span>` : `<button class="del-btn" onclick="deleteOperator('${escJs(code)}')" title="Sil">${ico('trash',14)}</button>`}
             </div>
           `).join('')}
         </div>` ;
@@ -268,7 +278,7 @@ function renderAdmin(){
           <button class="btn-primary" onclick="addMachine()">+ Makineyi Ekle</button>
         </div>
         <div style="margin-top:24px;font-size:13px;font-weight:600;margin-bottom:8px">Mevcut Makineler (${allMachines().length})</div>
-        <div class="machine-grid">${allMachines().map(m=>`<div class="machine-chip" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</span><button class="del-btn" onclick="deleteMachine('${m.code}')" title="Sil">${ico('trash',14)}</button></div>`).join('')}</div>`;
+        <div class="machine-grid">${allMachines().map(m=>`<div class="machine-chip" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</span><button class="del-btn" onclick="deleteMachine('${escJs(m.code)}')" title="Sil">${ico('trash',14)}</button></div>`).join('')}</div>`;
     } else if(settingsSubTab==='veriListeleri'){
       const count = Object.keys(STATE.validIsEmri||{}).length;
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Veri Listeleri</div>
@@ -346,8 +356,8 @@ function renderAdmin(){
                 <option value="exclude" ${kural.mode==='exclude'?'selected':''}>Şunlar hariç hepsi</option>
               </select>
               <input id="bolum-prefixes-${ad}" placeholder="ör. B,V" value="${esc((kural.prefixes||[]).join(','))}" style="width:140px">
-              <button class="btn-ghost" onclick="saveBolumKural('${ad}', false)">💾 Kaydet</button>
-              ${!DEFAULT_BOLUM_KURALLARI[ad] ? `<button class="del-btn" onclick="deleteBolumKural('${ad}')" title="Sil">${ico('trash',14)}</button>` : ''}
+              <button class="btn-ghost" onclick="saveBolumKural('${escJs(ad)}', false)">💾 Kaydet</button>
+              ${!DEFAULT_BOLUM_KURALLARI[ad] ? `<button class="del-btn" onclick="deleteBolumKural('${escJs(ad)}')" title="Sil">${ico('trash',14)}</button>` : ''}
             </div>
           `).join('')}
         </div>
@@ -721,7 +731,7 @@ function renderAdmin(){
       const dotColor = tadilatHere ? 'var(--tadilat-info)' : running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
       const lastFinished = (!running&&!stopped&&!tadilatHere) ? machineEntries.slice().sort((a,b)=>b.startTs-a.startTs)[0] : null;
       const durusAlert = uzunDurusUyariEnabled() && stopped && stoppedEntries.some(e=>e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON && (nowTick-e.duruşTs)>=uzunDurusEsikMs());
-      body += `<div class="matrix-card${durusAlert?' durus-alert':''}" style="background:${bg};border-color:${durusAlert?'var(--danger)':border};position:relative" onclick="openMachineDetail('${m.code}')">
+      body += `<div class="matrix-card${durusAlert?' durus-alert':''}" style="background:${bg};border-color:${durusAlert?'var(--danger)':border};position:relative" onclick="openMachineDetail('${escJs(m.code)}')">
         ${durusAlert ? `<span class="durus-alert-badge" title="Uzun süredir duruşta">${ico('alert',14)}</span>` : ''}
         <div class="matrix-card-top"><span class="matrix-code">${m.code}</span><span class="matrix-dot" style="background:${dotColor}"></span></div>
         <div class="matrix-name">${esc(m.name)}</div>`;
@@ -814,7 +824,7 @@ function renderAdmin(){
         const blTag = bl ? ` <span style="color:var(--accent);font-weight:600;font-size:11.5px">[${BILESEN_LABEL[bl]}]</span>` : '';
         const talepNo = r.entries.find(e=>e.talepNo)?.talepNo || '';
         const uKodu = baseIsEmriNo(r.isEmriNo);
-        body += `<div class="completed-card" onclick="openRouteDetail('${r.isEmriNo.replace(/'/g,"\\'")}', ${r.finishedAt})">
+        body += `<div class="completed-card" onclick="openRouteDetail('${escJs(r.isEmriNo)}', ${r.finishedAt})">
           <div class="completed-header">
             <div>
               <span class="completed-id">${esc(talepNo || r.isEmriNo)} ${ico('check',12)}${blTag}</span>
@@ -939,7 +949,7 @@ function renderAdmin(){
               const selected = analizSelectedMachines.has(m.code);
               const md = data.perMachine.find(x=>x.code===m.code);
               const workText = md ? fmtDur(md.workMin*60000) : '0 dk';
-              return `<div class="analiz-mini-cell ${selected?'selected':''}" style="background:${bg}" onclick="toggleAnalizMachineFilter('${m.code}')" title="${m.code} · ${esc(m.name)}">
+              return `<div class="analiz-mini-cell ${selected?'selected':''}" style="background:${bg}" onclick="toggleAnalizMachineFilter('${escJs(m.code)}')" title="${m.code} · ${esc(m.name)}">
                 <div style="display:flex;align-items:flex-start;justify-content:space-between">
                   <span>${m.code}</span>
                   <span style="width:10px;height:10px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
@@ -1005,7 +1015,7 @@ function renderAdmin(){
       <div class="table-wrap" style="padding:0"><table><thead><tr>
         <th>Makine</th><th>Operatör(ler)</th><th>Çalışma</th><th>Duruş</th><th>Kullanılabilirlik</th><th>Verimlilik</th><th>Fazla Mesai</th>
       </tr></thead><tbody>
-        ${data.perMachine.map(m=>`<tr style="cursor:pointer" onclick="openMachineDetail('${m.code}')" title="Günlük detay ve zaman çizelgesini aç">
+        ${data.perMachine.map(m=>`<tr style="cursor:pointer" onclick="openMachineDetail('${escJs(m.code)}')" title="Günlük detay ve zaman çizelgesini aç">
           <td class="mono" style="color:var(--accent)">${m.code}<div style="font-size:11px;color:var(--text-muted);font-family:'Inter',sans-serif">${esc(m.name)}</div></td>
           <td style="font-size:12px">${m.operators.map(esc).join('<br>')}</td>
           <td>${fmtDur(m.workMin*60000)}${m.hasPhysicalAnomaly?` <span style="color:var(--danger)" title="Bu makinede, o günkü gerçek geçen süreden fazla çalışma hesaplandı — muhtemelen uzun süredir kapatılmamış eski bir kayıt var. Değer fiziksel üst sınıra çekildi, ama gerçek kaynağını (unutulmuş açık iş) bulup kapatman gerekiyor.">${ico('alert',14)}</span>`:''}</td>
@@ -1024,7 +1034,7 @@ function renderAdmin(){
         <th></th><th>Operatör</th><th>Çalışma</th><th>Duruş</th><th>Fazla Mesai</th><th>Makine Sayısı</th><th>Çalışılan Gün</th>
       </tr></thead><tbody>
         ${data.perOperator.map(op=>`
-        <tr style="cursor:pointer" onclick="setAnalizOperator('${esc(op.operatorUsername)}')">
+        <tr style="cursor:pointer" onclick="setAnalizOperator('${escJs(op.operatorUsername)}')">
           <td style="width:20px;color:var(--text-muted)">${analizSelectedOperator===op.operatorUsername?'▾':'▸'}</td>
           <td class="mono" style="color:var(--accent)">${esc(op.operatorUsername)}<div style="font-size:11px;color:var(--text-muted);font-family:'Inter',sans-serif">${esc(op.operatorName||'')}</div></td>
           <td>${fmtDur(op.workMin*60000)}${op.hasPhysicalAnomaly?` <span style="color:var(--danger)" title="Bu kişide, bir günde gerçek geçen süreden fazla çalışma hesaplandı — muhtemelen uzun süredir kapatılmamış eski bir kayıt var. Değer fiziksel üst sınıra çekildi, ama gerçek kaynağını (unutulmuş açık iş) bulup kapatman gerekiyor.">${ico('alert',14)}</span>`:''}</td>
@@ -1092,7 +1102,7 @@ function renderAdmin(){
           <div style="font-size:13px;margin-bottom:10px">${esc(t.aciklama)}</div>
           ${gecmis.length>0 ? `<div style="font-size:11.5px;color:var(--accent);margin-bottom:10px">${ico('repeat',13)} ${gecmis.length} operasyon tamamlandı (${gecmis.map(o=>esc(o.operatorName)).join(', ')}), devamı bekleniyor</div>` : ''}
           <div style="display:flex;gap:8px">
-            ${resimBulEnabled() ? `<button class="del-btn" onclick="event.stopPropagation(); resimBul('${esc(t.uKodu).replace(/'/g,"\\'")}')" title="Resim/Çizim Bul">${ico('camera',14)} Resim Bul</button>` : ''}
+            ${resimBulEnabled() ? `<button class="del-btn" onclick="event.stopPropagation(); resimBul('${escJs(t.uKodu)}')" title="Resim/Çizim Bul">${ico('camera',14)} Resim Bul</button>` : ''}
             ${canCreateTadilat() ? `<button class="del-btn" onclick="event.stopPropagation(); openTadilatEdit('${t.id}')" title="Düzelt">${ico('edit',14)} Düzelt</button>` : ''}
             ${session.isSuperAdmin ? `<button class="del-btn" onclick="event.stopPropagation(); deleteTadilat('${t.id}')" title="Talebi sil">${ico('trash',14)} Sil</button>` : ''}
           </div>
@@ -1205,7 +1215,7 @@ function renderAdmin(){
       ${renderDevamEdenTalepTablosu(devamEdenler, false)}
 
       ${renderTamamlananTalepTablosu(tamamlananlar)}
-      </div>${beklemeDetayId ? renderBeklemeDetayModal() : ''}`;
+      ${beklemeDetayId ? renderBeklemeDetayModal() : ''}`;
     } else if(tadilatSubTab==='yonetimGecmis' && canViewYoneticiAnalizi()){
       // Tadilat Analizi'ndeki (kendi personelini takip eden) görünümden AYRI — bu, üretim
       // yönetiminin talep bazlı geçmişi (KPI + tam liste) takip etmesi için. Veri zamanla çok
@@ -1262,7 +1272,7 @@ function renderAdmin(){
         <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--success)">${fmtDur(ortalamaSureMs)}</div><div class="modal-stat-label">Ortalama İşlem Süresi</div></div>
       </div>
       ${renderTamamlananTalepTablosu(gecmisFiltreli)}
-      </div>${beklemeDetayId ? renderBeklemeDetayModal() : ''}`;
+      ${beklemeDetayId ? renderBeklemeDetayModal() : ''}`;
     } else if(tadilatSubTab==='yonetimCanli' && canViewYoneticiAnalizi()){
       // "Güncel Bekleyenler" — canlı üretim izleme mantığıyla aynı: anık açık
       // talepler, en uzun bekleyen/en çok süredir işlemde olan en üstte — geçmiş tabloya göre
@@ -1295,8 +1305,7 @@ function renderAdmin(){
         <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--warn)">${bekliyorSayisi}</div><div class="modal-stat-label">Bekliyor / Duraklatıldı</div></div>
         <div class="modal-stat-box"><div class="modal-stat-num" style="color:var(--danger)">${fmtDur(enUzunGecenMs)}</div><div class="modal-stat-label">En Uzun Süredir Açık</div></div>
       </div>
-      ${renderDevamEdenTalepTablosu(devamEdenlerCanli, true)}
-      </div>`;
+      ${renderDevamEdenTalepTablosu(devamEdenlerCanli, true)}`;
     } else {
       body += `
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Talepleri</div>
@@ -1423,7 +1432,9 @@ function renderAdmin(){
         ${canEditReport() ? `<th style="width:36px"></th>` : ''}
         ${canDeleteReport() ? `<th style="width:36px"></th>` : ''}
       </tr></thead><tbody>`;
-    const reportColCount = 14 + (canDeleteReport()?1:0) + (canEditReport()?1:0);
+    // DÜZELTME: canDeleteReport() İKİ ayrı <th> ekliyor (baştaki seçim kutusu + sondaki sil
+    // sütunu), burada bir kez sayılıyordu — "kayıt yok" satırı bir sütun eksik kalıyordu.
+    const reportColCount = 14 + (canDeleteReport()?2:0) + (canEditReport()?1:0);
     if(fe.length===0){ body += `<tr><td colspan="${reportColCount}" style="text-align:center;color:var(--text-muted);padding:30px">Filtreyle eşleşen kayıt yok.</td></tr>`; }
     fe.forEach(e=>{
       const isDone = completedRoutes.has(e.id);

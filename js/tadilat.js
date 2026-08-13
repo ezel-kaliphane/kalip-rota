@@ -50,10 +50,16 @@ function computeTadilatAnaliz(fromDate, toDate){
         }
       }
       // Kesinti sırasında "hangi işi alacağım" kararı verilirken geçen süre — duruşa sayılmıyor,
-      // ayrı takip ediliyor (sadece SuperAdmin'in gördüğü bu Analiz ekranında).
-      if(o.gecisSureToplamMs){
-        gecisToplamMs += o.gecisSureToplamMs;
-        gecisByPerson[o.operatorUsername] = (gecisByPerson[o.operatorUsername]||0) + o.gecisSureToplamMs;
+      // ayrı takip ediliyor.
+      // DÜZELTME: Bu blok eskiden tarih aralığı kontrolünün DIŞINDAYDI — "Son 7 Gün" seçilse bile
+      // "Geçiş Süresi" göstergesi TÜM GEÇMİŞİN toplamını gösteriyordu (diğer tüm sayılar 7 güne
+      // göre daralırken). Artık aynı aralığa tabi.
+      if(o.gecisSureToplamMs && o.baslamaTs){
+        const gdk = dateKey(o.baslamaTs);
+        if((!fromDate || gdk>=fromDate) && (!toDate || gdk<=toDate)){
+          gecisToplamMs += o.gecisSureToplamMs;
+          gecisByPerson[o.operatorUsername] = (gecisByPerson[o.operatorUsername]||0) + o.gecisSureToplamMs;
+        }
       }
     });
   });
@@ -311,7 +317,7 @@ function renderTadilatEditModal(){
         <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px">Atölye: ${f.atolye==='tadilat'?(ico('wrench',14)+' Tadilat Atölye'):(ico('factory',14)+' İmalat Atölye')}</div>`}
         <div class="field"><label>Ne işlem yapılacak?</label><textarea id="tedit-aciklama" oninput="tadilatEditForm.aciklama=this.value" style="min-height:80px">${esc(f.aciklama)}</textarea></div>
         <div style="display:flex;gap:10px">
-          <button class="btn-primary" onclick="saveTadilatEdit('${t.id}')">${ico('check',14)} Kaydet</button>
+          <button class="btn-primary" onclick="saveTadilatEdit('${tadilatEditId}')">${ico('check',14)} Kaydet</button>
           <button class="btn-ghost" onclick="cancelTadilatEdit()">${ico('x',14)} Vazgeç</button>
         </div>
       </div>
@@ -370,21 +376,31 @@ function devamEtTadilatDurus(){
   if(!sess || sess.operasyon.status!=='duruş') return;
   const { tadilat: t, operasyon: op } = sess;
   const extra = op.duruşTs ? Math.max(0, Date.now()-op.duruşTs) : 0;
-  const duruşToplamMs = (op.duruşToplamMs||0) + extra;
-  const durusLog = (!isNaN(extra) && op.duruşNedeni!==GUN_SONU_REASON) ? appendDurusLog(op.durusLog, op.duruşNedeni, extra) : (op.durusLog||null);
+  const isGunSonu = op.duruşNedeni===GUN_SONU_REASON;
+  // DÜZELTME: Eskiden Gün Sonu beklemesi de KOŞULSUZ duruşToplamMs'e ekleniyordu (üretim
+  // işlerindeki bitir()/devamEt() ise excludedMs'e ayırıyor). Bu yüzden bir tadilat 17:30'da
+  // Gün Sonu ile duraklatılıp ertesi sabah devam ettirildiğinde, gece boyu geçen ~14.5 saat
+  // gerçek bir duruşmuş gibi raporlara giriyordu (Duruş Analizi'nde uydurma bir kalem).
+  // Artık üretim tarafıyla aynı ayrım yapılıyor ve excludedMs de yazılıyor.
+  const duruşToplamMs = (op.duruşToplamMs||0) + (isGunSonu?0:extra);
+  const excludedMs = (op.excludedMs||0) + (isGunSonu?extra:0);
+  const durusLog = (!isNaN(extra) && !isGunSonu) ? appendDurusLog(op.durusLog, op.duruşNedeni, extra, op.duruşTs) : (op.durusLog||null);
   // GÜN SONU süresini de (durusLog'a benzer şekilde) zaman damgalı ayrı bir listede tutuyoruz —
   // yoksa "hangi gün ne kadarı Gün Sonu'na ait" bilinemiyor, günlere bölünürken bu süre ya hiç
   // düşülmüyor (Özet tablosu şişiyor) ya da yanlış güne düşülüyor (Gantt'ta iş "hiç yapılmamış"
   // gibi sıfırlanıyor) — bkz. renderMachineModal'daki gün-bazlı bölme mantığı.
-  const excludedLog = (!isNaN(extra) && op.duruşNedeni===GUN_SONU_REASON) ? appendDurusLog(op.excludedLog, op.duruşNedeni, extra) : (op.excludedLog||null);
+  const excludedLog = (!isNaN(extra) && isGunSonu) ? appendDurusLog(op.excludedLog, op.duruşNedeni, extra, op.duruşTs) : (op.excludedLog||null);
   // Hiç gerçek duruş başlamadan (kesinti sonrası "hangi işi alacağım" kararı verilirken) direkt
   // "Devam Ettir"e basılırsa, o karar süresi de geçiş süresine (duruşa değil) ekleniyor.
   const gecisEk = (!op.duruşTs && op.gecisBaslangic) ? Math.max(0, Date.now()-op.gecisBaslangic) : 0;
   const gecisSureToplamMs = (op.gecisSureToplamMs||0) + gecisEk;
-  DB.ref(`tadilatlar/${t.id}/operasyonlar/${op.id}`).update({ status:'devam', duruşNedeni:null, duruşTs:null, gecisBaslangic:null, duruşToplamMs, gecisSureToplamMs, durusLog, excludedLog }).then(()=>{
-    toast('Duruş kaydedildi');
+  DB.ref(`tadilatlar/${t.id}/operasyonlar/${op.id}`).update({ status:'devam', duruşNedeni:null, duruşTs:null, gecisBaslangic:null, duruşToplamMs, excludedMs, gecisSureToplamMs, durusLog, excludedLog }).then(()=>{
+    // DÜZELTME: Buradaki mesaj eskiden duraklatma mesajının aynısıydı ("Duruş kaydedildi") —
+    // operatör yanlışlıkla tekrar duraklattığını sanabiliyordu. Ayrıca .catch yoktu: yazma
+    // reddedilirse hiçbir uyarı çıkmadan operasyon duruşta kalıyordu.
+    toast('Tadilata devam ediliyor');
     render();
-  });
+  }).catch(err=>{ console.error('devamEtTadilatDurus hatası', err); toast('Devam ettirilemedi: '+(err&&err.message||'hata')); });
 }
 // "Diğer tadilata geçebilirsin" uyarısında yanlışlıkla duraklattıysa ya da vazgeçtiyse, direkt
 // buradan iptal edip duraklattığı işe geri dönebilsin diye. Duraklatılan iş ya AKTİF BİR TADİLAT
@@ -467,10 +483,14 @@ function tadilatBitir(tadilatId, opId, sonOperasyon){
       const src = STATE.entries[op.kaynakEntryId];
       if(src && src.status==='duruş'){
         const extra = src.duruşTs ? Math.max(0, Date.now()-src.duruşTs) : 0;
-        const duruşToplamMs = (src.duruşToplamMs||0) + extra;
-        const durusLog = (src.duruşNedeni!==GUN_SONU_REASON) ? appendDurusLog(src.durusLog, src.duruşNedeni, extra) : (src.durusLog||null);
-        const excludedLog = (src.duruşNedeni===GUN_SONU_REASON) ? appendDurusLog(src.excludedLog, src.duruşNedeni, extra) : (src.excludedLog||null);
-        DB.ref('entries/'+op.kaynakEntryId).update({ duruşNedeni: TADILAT_SONRASI_REASON, duruşTs: Date.now(), duruşToplamMs, durusLog, excludedLog });
+        // DÜZELTME (bkz. devamEtTadilatDurus'taki aynı düzeltme): Gün Sonu süresi de koşulsuz
+        // duruşToplamMs'e ekleniyordu; artık üretim tarafıyla aynı şekilde excludedMs'e ayrılıyor.
+        const isGunSonuSrc = src.duruşNedeni===GUN_SONU_REASON;
+        const duruşToplamMs = (src.duruşToplamMs||0) + (isGunSonuSrc?0:extra);
+        const excludedMs = (src.excludedMs||0) + (isGunSonuSrc?extra:0);
+        const durusLog = !isGunSonuSrc ? appendDurusLog(src.durusLog, src.duruşNedeni, extra, src.duruşTs) : (src.durusLog||null);
+        const excludedLog = isGunSonuSrc ? appendDurusLog(src.excludedLog, src.duruşNedeni, extra, src.duruşTs) : (src.excludedLog||null);
+        DB.ref('entries/'+op.kaynakEntryId).update({ duruşNedeni: TADILAT_SONRASI_REASON, duruşTs: Date.now(), duruşToplamMs, excludedMs, durusLog, excludedLog });
         kaynakVarMi = true;
       }
     }

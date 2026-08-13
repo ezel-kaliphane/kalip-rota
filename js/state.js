@@ -10,6 +10,14 @@ async function sha256Hex(str){
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 const esc = s => (s==null?"":String(s)).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+// onclick="fn('DEĞER')" gibi, HTML ÖZNİTELİĞİ İÇİNDEKİ bir JS STRING'ine değer gömerken kullanılır.
+// DÜZELTME: Buralarda tek başına esc() kullanmak GÜVENLİ DEĞİL — esc() tek tırnağı &#39; yapar, ama
+// tarayıcı öznitelik değerindeki karakter referanslarını JS'i derlemeden ÖNCE çözer, yani &#39;
+// tekrar ' olur ve JS string'i erken kapanır: resimBul('U123'A') → SyntaxError, buton ölür
+// (kötü niyetli bir değerle kod enjeksiyonu da mümkün olur). Doğrusu: ÖNCE JS için kaçır
+// (ters bölü + tek tırnak), SONRA HTML için kaçır. Tarayıcı HTML kaçışını çözünce geriye
+// geçerli bir JS kaçışı (\') kalır.
+const escJs = s => esc(String(s==null?"":s).replace(/\\/g,"\\\\").replace(/'/g,"\\'"));
 const fmtDT = ts => new Date(ts).toLocaleString("tr-TR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"});
 const fmtDur = ms => { const m=Math.round(ms/60000); return m<60?`${m} dk`:`${Math.floor(m/60)} sa ${m%60} dk`; };
 const fmtElapsed = ms => { const s=Math.max(0,Math.floor(ms/1000)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60; const p=n=>String(n).padStart(2,"0"); return h>0?`${p(h)}:${p(m)}:${p(sec)}`:`${p(m)}:${p(sec)}`; };
@@ -83,6 +91,10 @@ function toggleMachineFason(code){
   DB.ref('machines_fason/'+code).set(!fasonMachines[code]);
 }
 function toggleFasonYetkisi(code){
+  // DÜZELTME: Komşu fonksiyonların (toggleMachineFason/setMachineAtolye/toggleUserAtolye) hepsinde
+  // olan yetki kontrolü burada atlanmıştı — fasonYetkisi, fason makinelerde başkasının işlerini
+  // görme/kapatma yetkisi verdiği için bu ciddi bir boşluktu.
+  if(!session || !(session.isSuperAdmin || session.isSef)){ toast('Bu işlem için yetkin yok'); return; }
   const op = STATE.operators[code] || {};
   DB.ref('operators/'+code+'/fasonYetkisi').set(!op.fasonYetkisi);
 }
@@ -326,7 +338,7 @@ function renderKismiAktarModal(){
         <div class="field"><label>Kaç adet hazır, bir sonraki operasyona aktarılsın?</label><input id="kismi-aktar-adet" inputmode="numeric" placeholder="ör. 200" oninput="this.value=this.value.replace(/\\D/g,'')" autofocus></div>
         <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:14px">Bu miktar mevcut kayıttan düşülür ve ayrı, bekleyen bir parti olarak işaretlenir. Aynı Talep No ile yeni bir kayıt açan (bir sonraki operasyonu yapacak) kişi otomatik olarak bu partiye bağlanır. Sen kalan adetle burada çalışmaya devam edersin.</div>
         <div style="display:flex;gap:10px">
-          <button class="btn-primary" onclick="confirmKismiAktar('${e.id}')">${ico('check',14)} Aktar</button>
+          <button class="btn-primary" onclick="confirmKismiAktar('${kismiAktarId}')">${ico('check',14)} Aktar</button>
           <button class="btn-ghost" onclick="cancelKismiAktar()">${ico('x',14)} Vazgeç</button>
         </div>
       </div>

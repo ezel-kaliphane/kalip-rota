@@ -66,7 +66,7 @@ function renderOperator(){
         body = `<div class="lock-screen" style="padding-top:40px">
           <div class="lock-label">TADİLAT — AKTİF</div>
           <div class="lock-id">${esc(mine.uKodu)}</div>
-          ${resimBulEnabled() ? `<button class="btn-ghost" style="margin-top:4px;padding:6px 14px;font-size:11.5px" onclick="resimBul('${esc(mine.uKodu).replace(/'/g,"\\'")}')">${ico('camera',14)} Resim/Çizim Bul</button>` : ''}
+          ${resimBulEnabled() ? `<button class="btn-ghost" style="margin-top:4px;padding:6px 14px;font-size:11.5px" onclick="resimBul('${escJs(mine.uKodu)}')">${ico('camera',14)} Resim/Çizim Bul</button>` : ''}
           <div class="lock-machine">${esc(op.makine||'—')}</div>
           <div class="lock-timer">${fmtElapsed(nowTick-op.baslamaTs)}</div>
           <div class="lock-meta">${fmtDT(op.baslamaTs)} itibarıyla devam ediyor${opsGecmis.length>0?` · Bu, ${opsGecmis.length+1}. operasyon`:''}</div>
@@ -93,7 +93,7 @@ function renderOperator(){
             <div style="font-size:12.5px;color:var(--text-muted);margin:6px 0 8px">${t.talepEdenKisi?`${esc(t.talepEdenKisi)} · `:''}${t.bolum?`${esc(t.bolum)} · `:''}${t.adet?`Adet: ${esc(t.adet)}`:''}</div>
             <div style="font-size:13px;margin-bottom:8px">${esc(t.aciklama)}</div>
             ${gecmis.length>0 ? `<div style="font-size:11.5px;color:var(--accent);margin-bottom:10px">${ico('repeat',13)} ${gecmis.length} operasyon tamamlandı, devamı bekleniyor</div>` : ''}
-            ${resimBulEnabled() ? `<button class="btn-ghost" style="padding:6px 14px;font-size:11.5px;margin-bottom:8px" onclick="event.stopPropagation(); resimBul('${esc(t.uKodu).replace(/'/g,"\\'")}')">${ico('camera',14)} Resim/Çizim Bul</button>` : ''}
+            ${resimBulEnabled() ? `<button class="btn-ghost" style="padding:6px 14px;font-size:11.5px;margin-bottom:8px" onclick="event.stopPropagation(); resimBul('${escJs(t.uKodu)}')">${ico('camera',14)} Resim/Çizim Bul</button>` : ''}
           ` : ''}
           ${secimAcik ? `
             <div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">

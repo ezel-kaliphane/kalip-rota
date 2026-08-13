@@ -172,8 +172,8 @@ function bitir(id){
   const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
   const duruşToplamMs = (e.duruşToplamMs||0) + (isGunSonu?0:extra);
   const excludedMs = (e.excludedMs||0) + (isGunSonu?extra:0);
-  const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra);
-  const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra) : (e.excludedLog||null);
+  const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
+  const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
   DB.ref('entries/'+id).update({ endTs: Date.now(), status:'tamamlandi', duruşToplamMs, excludedMs, durusLog, excludedLog, finishedByUsername: session.username, finishedByName: session.displayName });
   toast('Operasyon tamamlandı');
   if(activeDetailId===id){ activeDetailId=null; view='list'; }
@@ -317,13 +317,20 @@ function devamEt(id){
   const e = STATE.entries[id] || {};
   const machineBusy = !isFasonMachine(e.makine) && entriesArray().some(o => o.id!==id && o.makine===e.makine && o.status==='devam' && !(e.groupId && o.groupId===e.groupId));
   if(machineBusy){ toast('Bu makinede zaten aktif başka bir iş var. Önce onu bitir ya da duraklat.'); return; }
+  // DÜZELTME (duruş süresinin çift sayılması): Eskiden burada bitir()'deki gibi bir DURUM KONTROLÜ
+  // yoktu ve duruşTs hiç temizlenmiyordu. Operatör "Devam Ettir"e mobilde iki kez dokunduğunda
+  // (ilk dokunuştan sonra ekran 500ms/1sn boyunca yeniden çizilmediği için buton hâlâ oradadır)
+  // ikinci çağrı, kayıt zaten 'devam' olmasına rağmen bayat duruşTs'i tekrar işleyip aynı duruşu
+  // duruşToplamMs'e İKİNCİ KEZ ekliyor ve durusLog'a sahte bir olay daha yazıyordu.
+  if(e.status!=='duruş'){ toast('Bu iş zaten devam ediyor'); return; }
   const extra = e.duruşTs ? (Date.now() - e.duruşTs) : 0;
   const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
   const duruşToplamMs = (e.duruşToplamMs||0) + (isGunSonu?0:extra);
   const excludedMs = (e.excludedMs||0) + (isGunSonu?extra:0);
-  const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra);
-  const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra) : (e.excludedLog||null);
-  DB.ref('entries/'+id).update({ status:'devam', duruşToplamMs, excludedMs, durusLog, excludedLog });
+  const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
+  const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
+  DB.ref('entries/'+id).update({ status:'devam', duruşTs:null, duruşNedeni:null, duruşToplamMs, excludedMs, durusLog, excludedLog })
+    .catch(err=>{ console.error('devamEt hatası', err); toast('Devam ettirilemedi: '+(err&&err.message||'hata')); });
   toast('Operasyona devam ediliyor');
 }
 function silKayit(id){ DB.ref('entries/'+id).remove(); }
@@ -348,13 +355,17 @@ function devamGrup(groupId){
   if(machineBusy){ toast('Bu makinede zaten aktif başka bir iş var. Önce onu bitir ya da duraklat.'); return; }
   const now = Date.now();
   members.forEach(e=>{
+    // DÜZELTME (bkz. devamEt'teki aynı düzeltme): zaten devam eden bir üyeyi tekrar işlemek,
+    // bayat duruşTs yüzünden aynı duruşu ikinci kez sayıyordu. Grupta karışık durum oluşabiliyor
+    // (ör. tadilat dönüşünde sadece kaynak üye devam ettirilir), bu yüzden üye bazında kontrol.
+    if(e.status!=='duruş') return;
     const extra = e.duruşTs ? (now - e.duruşTs) : 0;
     const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
     const duruşToplamMs = (e.duruşToplamMs||0) + (isGunSonu?0:extra);
     const excludedMs = (e.excludedMs||0) + (isGunSonu?extra:0);
-    const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra);
-    const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra) : (e.excludedLog||null);
-    DB.ref('entries/'+e.id).update({ status:'devam', duruşToplamMs, excludedMs, durusLog, excludedLog });
+    const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
+    const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
+    DB.ref('entries/'+e.id).update({ status:'devam', duruşTs:null, duruşNedeni:null, duruşToplamMs, excludedMs, durusLog, excludedLog });
   });
   toast('Tüm iş emirleri devam ediyor');
 }
@@ -370,8 +381,13 @@ function bitirGrup(groupId){
     // Not: durusLog'a BÖLÜŞTÜRÜLMEMİŞ (tam) süre yazılıyor — çünkü fiziksel olarak makine
     // TEK bir süre kadar duraklamış, aşağıdaki "share" oranı sadece adet bazlı raporlama
     // amaçlı bir dağıtım, gerçek olayın kendisi değil.
-    const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra);
-    const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra) : (e.excludedLog||null);
+    // DÜZELTME: ts olarak duruşun BAŞLANGICI veriliyor. Eskiden ts hiç verilmediği için
+    // appendDurusLog her üye için ayrı ayrı Date.now() (= duruşun BİTİŞİ) yazıyordu; bu hem
+    // msOverlap'ın gün bölme hesabını kaydırıyor hem de collectDurusEvents'in grup tekilleştirme
+    // anahtarını (groupId|ts|sureMs|neden) üyeler arasında farklılaştırıp aynı fiziksel duruşun
+    // birden çok kez sayılmasına yol açabiliyordu.
+    const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
+    const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
     return { e, duruşToplamMs: (e.duruşToplamMs||0) + (isGunSonu?0:extra), excludedMs: (e.excludedMs||0) + (isGunSonu?extra:0), durusLog, excludedLog };
   });
   const totalAdet = withDurus.reduce((s,x)=>s+(Number(x.e.adet)||0), 0);

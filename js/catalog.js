@@ -451,7 +451,7 @@ function renderMalzemeAramaModal(){
           : results.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:30px 0">Eşleşme bulunamadı.</div>`
           : `<div style="max-height:50vh;overflow-y:auto">
             ${results.map(m=>`
-              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer" onclick="pickMalzeme('${m.kod.replace(/'/g,"\\'")}', '${m.aciklama.replace(/'/g,"\\'")}')">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer" onclick="pickMalzeme('${escJs(m.kod)}', '${escJs(m.aciklama)}')">
                 <div><span class="mono" style="color:var(--accent);font-weight:700">${esc(m.kod)}</span><div style="font-size:12.5px;color:var(--text-muted)">${esc(m.aciklama)}</div></div>
                 <span style="font-size:11.5px;color:var(--success)">Seç →</span>
               </div>
@@ -734,6 +734,7 @@ function setAnalizPreset(days){
 function buildTadilatSynthetic(){
   const out = [];
   tadilatArray().forEach(t=>{
+    let ilkOpYazildi = false;
     tadilatOperasyonlarArray(t).forEach(o=>{
       if(!o.makine || !o.baslamaTs) return;
       out.push({
@@ -741,11 +742,17 @@ function buildTadilatSynthetic(){
         status: o.status==='tamamlandi' ? 'tamamlandi' : (o.status==='duruş' ? 'duruş' : 'devam'),
         duruşToplamMs: o.duruşToplamMs||0, excludedMs: o.excludedMs||0,
         duruşNedeni: o.duruşNedeni||null, duruşTs: o.duruşTs||null,
+        durusLog: o.durusLog||null, excludedLog: o.excludedLog||null, // gerçek duruş NEDENLERİ raporlara geçsin diye
         operatorUsername: o.operatorUsername, operatorName: o.operatorName,
-        isEmriNo: t.uKodu, talepNo: t.uKodu, adet: t.adet||null,
+        isEmriNo: t.uKodu, talepNo: t.uKodu,
+        // DÜZELTME: Talebin TOPLAM adedi her operasyona ayrı ayrı yazılıyordu; Analiz'deki
+        // "Toplam Adet" kutusu ve Excel, 3 operasyonlu 500 adetlik bir talebi 1500 sayıyordu.
+        // Adet sadece İLK operasyona yazılıyor, sonrakiler aynı fiziksel parçanın devamı.
+        adet: ilkOpYazildi ? null : (t.adet||null),
         aciklama: t.kisaAciklama || t.aciklama || '',
         _isTadilat: true
       });
+      ilkOpYazildi = true;
     });
   });
   return out;
@@ -778,6 +785,15 @@ function entryDurationBreakdown(e){
 
 function computeAnalizData(fromDate, toDate, atolyeFilter){
   const tadilatSynthetic = buildTadilatSynthetic();
+  // DÜZELTME: Kullanıcı tarih kutusunu TEMİZLERSE (input type=date boşaltılabilir) fromDate/toDate
+  // '' oluyordu; new Date('T00:00:00') → NaN, ve NaN'lı her karşılaştırma false döndüğü için
+  // filtre tamamen devre dışı kalıp TÜM GEÇMİŞ dahil oluyordu. Üstelik rangeDayCount da NaN
+  // olduğundan tabloda "Kullanılabilirlik: NaN dk" ve Verimlilik %0 görünüyordu. Boş/geçersiz
+  // tarihi bugüne düşürüyoruz — filtre her zaman anlamlı bir aralıkla çalışsın.
+  const _bugun = dateKey(Date.now());
+  const _gecerliTarih = d => (typeof d==='string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d : _bugun;
+  fromDate = _gecerliTarih(fromDate); toDate = _gecerliTarih(toDate);
+  if(fromDate > toDate){ const _t = fromDate; fromDate = toDate; toDate = _t; }
   // E ve F düzeltmeleri için aralığın sınırlarını ms cinsinden de tutuyoruz.
   const rangeStartMs = new Date(fromDate+'T00:00:00').getTime();
   const rangeEndMs = new Date(toDate+'T00:00:00').getTime() + 86400000; // toDate'in SONU (ertesi günün başlangıcı)
@@ -867,8 +883,20 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
         dayDurusMs += eDurusMs;
         // Şu an duraklatılmış (ör. gün sonu bekleyen) bir iş "hâlâ çalışıyor" sayılıp
         // fazla mesai üretmesin — mesai aşımı sadece fiilen devam eden işler için hesaplanır.
-        if(e.status!=='duruş' && endClip > cutoffMs){
-          const otMs = endClip - Math.max(cutoffMs, e.startTs);
+        // DÜZELTME: Eskiden `endClip - Math.max(cutoffMs, e.startTs)` kullanılıyordu — bitiş ne
+        // GÜNÜN sonuna kelepçeleniyor ne de başlangıç o güne (effStartMs) sabitleniyordu. Çok
+        // günlü bir iş (ör. 3 Ağu 08:00 → 6 Ağu 09:00 fırın işi) tek bir günde 3800+ dk "fazla
+        // mesai" üretiyordu; availMs = aralık*540 + overtime olduğu için verimlilik de çöküyordu
+        // ve Mesai Analizi'nde hayalî satırlar çıkıyordu. Artık mesai penceresi SADECE bu günün
+        // 17:30–24:00 dilimiyle kesiştiği kadar sayılıyor ve o dilime denk gelen duruş/Gün Sonu
+        // süresi düşülüyor (duruştaki bir iş mesai üretmemeli — aşağıdaki eDurus/eExcluded payı).
+        const dayEndMs = Math.min(dStartMs + 86400000, rangeEndMs);
+        const otStart = Math.max(cutoffMs, effStartMs);
+        const otEnd = Math.min(endClip, dayEndMs);
+        if(otEnd > otStart){
+          const otDurusMs = entryDurusEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, otStart, otEnd), 0);
+          const otExclMs = entryExcludedEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, otStart, otEnd), 0);
+          const otMs = Math.max(0, (otEnd - otStart) - otDurusMs - otExclMs);
           if(otMs > 0){
             dayOvertimeMs += otMs;
             overtimeList.push({ makine: label, operatorUsername: e.operatorUsername, operatorName: e.operatorName, isEmriNo: e.isEmriNo, overtimeMin: Math.round(otMs/60000), tarih: dk });
@@ -963,8 +991,14 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
         dayData.byMachine[mCode].durusMs += eDurusMs;
         machineSet.add(mCode);
         dayWorkMs += eWorkMs; dayDurusMs += eDurusMs;
-        if(e.status!=='duruş' && endClip > cutoffMs){
-          const otMs = endClip - Math.max(cutoffMs, e.startTs);
+        // Kişi bazlı tarafta da aynı kelepçeleme düzeltmesi (bkz. byMachine tarafındaki açıklama).
+        const dayEndMs = Math.min(dStartMs + 86400000, rangeEndMs);
+        const otStart = Math.max(cutoffMs, effStartMs);
+        const otEnd = Math.min(endClip, dayEndMs);
+        if(otEnd > otStart){
+          const otDurusMs = entryDurusEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, otStart, otEnd), 0);
+          const otExclMs = entryExcludedEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, otStart, otEnd), 0);
+          const otMs = Math.max(0, (otEnd - otStart) - otDurusMs - otExclMs);
           if(otMs>0) dayOvertimeMs += otMs;
         }
       });
@@ -996,6 +1030,9 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
 // Atölye filtresi tablolarda doğru çalışırken grafikler hep TÜM makinelerin verisini
 // gösteriyordu (sayılar ile grafikler çelişiyordu).
 let lastAnalizData = null;
+// "Tamamlanan Talepler" tablosunun o an ekranda gösterdiği (filtrelenmiş olabilen) liste —
+// Excel dışa aktarımı bunu kullanır, bkz. renderTamamlananTalepTablosu / exportTadilatExcel.
+let lastTamamlananTalepListesi = null;
 let analizCharts = {};
 function destroyAnalizCharts(){ Object.values(analizCharts).forEach(c=>{ if(c) c.destroy(); }); analizCharts = {}; }
 function initAnalizCharts(data){
@@ -1134,7 +1171,12 @@ function computeBirlesmeGroups(){
     const bl = bilesenOfCode(r.isEmriNo);
     if(!bl) return;
     const base = baseIsEmriNo(r.isEmriNo);
-    (completedBySuffix[base] ||= {})[bl] = r;
+    // DÜZELTME: Burada koşulsuz atama vardı. computeCompletedRoutes() en yeniden en eskiye
+    // sıralı döndüğü için "son yazan kazanır" mantığı EN ESKİ turu saklıyordu — aynı U kodu
+    // ikinci kez üretime girdiğinde birleşme ekranı hâlâ aylar önceki turu gösteriyordu.
+    // Artık ilk (= en yeni) tur korunuyor.
+    const grp = (completedBySuffix[base] ||= {});
+    if(!grp[bl]) grp[bl] = r;
   });
   const runningBySuffix = {}; // base -> Set('ZARF'|'ELMAS') henüz tamamlanmamış ama kayıtlı
   entriesArray().forEach(e=>{
@@ -1247,10 +1289,17 @@ function exportExcel(){
   XLSX.writeFile(wb, `rota_disaaktarim_${dateKey(Date.now())}.xlsx`);
 }
 
-function exportTadilatExcel(){
+// DÜZELTME: Bu fonksiyon eskiden HER ZAMAN tüm zamanların/atölyelerin tamamını dışa aktarıyordu.
+// Oysa butonu barındıran tablo (renderTamamlananTalepTablosu) "Yönetici Analizi — Geçmiş"
+// sekmesinde tarih + atölye + arama filtresi uygulanmış bir listeyle çiziliyor ve başlığında
+// filtrelenmiş sayıyı ("Tamamlanan Talepler — Detay (12)") gösteriyordu. Kullanıcı 12 kayıt
+// beklerken 400 kayıt iniyordu. Artık ekranda gösterilen liste dışa aktarıma parametre olarak
+// geçiriliyor; parametresiz çağrılırsa (Tadilat Analizi sekmesi) eski davranış korunuyor.
+function exportTadilatExcel(list){
   if(!canViewTadilatAnaliz()) return;
   const rows = [];
-  tadilatArray().filter(t=>tadilatTamamlandiMi(t)).forEach(t=>{
+  const kaynak = Array.isArray(list) ? list : tadilatArray().filter(t=>tadilatTamamlandiMi(t));
+  kaynak.forEach(t=>{
     tadilatOperasyonlarArray(t).forEach((o,i)=>{
       const d = tadilatOpDurationBreakdown(o);
       // Bekleme = talep açıldıktan sonra bir operatörün işi seçip başlamasına kadar geçen süre

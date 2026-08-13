@@ -149,12 +149,27 @@ function machineDetailAllRows(code){
 }
 function exportMachineExcel(code){
   const m = allMachines().find(x=>x.code===code);
+  if(!m){ toast('Makine bulunamadı'); return; }
   let rows = machineDetailAllRows(code);
-  if(modalDateFilter) rows = rows.filter(e=>dateKey(e.startTs)===modalDateFilter);
+  // DÜZELTME: Ekrandaki tablo/Gantt "o günle KESİŞEN" kayıtları gösteriyor (bkz. aşağıdaki aynı
+  // isimli düzeltme), ama dışa aktarım hâlâ sadece "o gün BAŞLAYAN" kayıtları alıyordu. Üstelik
+  // butonun üzerindeki sayaç tablonun sayısını gösterdiği için ("Excel'e Aktar (1)") kullanıcı
+  // eksikliği fark etmiyordu: 05.08'de başlayıp 10.08'de biten bir iş, 10.08 seçiliyken tabloda
+  // görünüyor ama indirilen dosya boş geliyordu. Artık iki taraf aynı kuralı kullanıyor.
+  if(modalDateFilter){
+    const fDayStart = new Date(modalDateFilter+'T00:00:00').getTime();
+    const fDayEnd = fDayStart + 86400000;
+    rows = rows.filter(e=>{
+      const eEnd = e.endTs || nowTick;
+      return e.startTs < fDayEnd && eEnd >= fDayStart;
+    });
+  }
   const data = rows.map(e=>{
     const d = entryDurationBreakdown(e);
     return {
-    "Tür": e._isTadilat ? (ico('wrench',13)+' Tadilat') : 'Üretim',
+    // DÜZELTME: ico() bir SVG/HTML string'i döndürüyor; Excel hücresine ham markup yazılıyordu
+    // ("<svg class=... </svg> Tadilat"), sütun okunamaz ve filtrelenemez hale geliyordu.
+    "Tür": e._isTadilat ? 'Tadilat' : 'Üretim',
     "Tarih": new Date(e.startTs), "İş Talep No": e._isTadilat ? '' : (e.talepNo||''), "U Kodu (İş Emri No)": e.isEmriNo, "Malzeme Adı": e._isTadilat ? '' : (getTalepInfo(e.talepNo)?.malzemeAdi||''), "Malzeme Cinsi": e.malzemeCinsi||'', "Çap ve Boy": e.capBoy||'', "Adet": e.adet,
     "Operatör": `${e.operatorUsername} · ${e.operatorName}`,
     "Başlangıç": new Date(e.startTs), "Bitiş": e.endTs?new Date(e.endTs):"",
@@ -211,9 +226,12 @@ function renderEntryDetailModal(){
   const isDone = computeCompletedRouteIds().has(e.id);
   const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success-soft)';
   const statusLabel = isDone ? 'Rota Tamamlandı' : e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
-  const wallMs = e.endTs ? (e.endTs-e.startTs) : (e.status==='devam' ? (nowTick-e.startTs) : 0);
-  const durusMs = e.duruşToplamMs || 0;
-  const netMs = Math.max(0, wallMs - durusMs - (e.excludedMs||0));
+  // DÜZELTME: Eskiden burada `e.status==='devam'` dışındaki her kapanmamış kayıt için wallMs=0
+  // yazılıyordu — yani DURUŞTAKİ bir kaydın detayı açıldığında "Üretim Süresi 0 dk / Toplam 0 dk"
+  // görünüyordu (3 saat çalışılmış olsa bile). Ayrıca o an devam eden duruş süresi de duruşa
+  // eklenmiyordu. Artık bu hesabın tek doğru kaynağı olan ortak fonksiyonu kullanıyoruz.
+  const _d = entryDurationBreakdown(e);
+  const wallMs = _d.wallMs, durusMs = _d.durusMs, netMs = _d.netMs;
   const malzAdi = getTalepInfo(e.talepNo)?.malzemeAdi || '';
   const startedByUsername = e.startedByUsername || e.operatorUsername;
   const startedByName = e.startedByName || e.operatorName;
@@ -322,6 +340,10 @@ function renderBeklemeDetayModal(){
 }
 function renderMachineModal(){
   const m = allMachines().find(x=>x.code===machineModal);
+  // DÜZELTME: m undefined olabiliyordu — modal AÇIKKEN başka bir yönetici o makineyi gizler/silerse
+  // Firebase listener yeniden render tetikliyor ve aşağıdaki m.code okuması TypeError atıp TÜM
+  // yönetici ekranını boş bırakıyordu. Artık modal sessizce kapanıyor.
+  if(!m){ machineModal = null; return ''; }
   const allRows = machineDetailAllRows(machineModal);
 
   // DÜZELTME: Eskiden bir kaydın TÜM ömrü (ör. 5 gün süren, aralarda duraklamalarla dolu bir
@@ -729,7 +751,7 @@ function renderLockScreen(active){
           <div class="field"><label>İş Talep No</label><input id="edit-talepno" class="mono" value="${esc(editForm.talepNo)}"></div>
           <div class="field"><label>Malzeme Cinsi</label><input id="edit-malzeme-cinsi" value="${esc(editForm.malzemeCinsi)}"></div>
           <div class="field"><label>Çap ve Boy</label><input id="edit-cap-boy" value="${esc(editForm.capBoy)}"></div>
-          <div class="field"><label>Adet</label><input id="edit-adet" inputmode="numeric" value="${esc(editForm.adet)}" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+          <div class="field"><label>Adet</label><input id="edit-adet" inputmode="numeric" value="${esc(editForm.adet)}" oninput="this.value=this.value.replace(/\\D/g,'')"></div>
           <div class="field"><label>Not</label><textarea id="edit-not" style="min-height:60px">${esc(editForm.not)}</textarea></div>
           ${switchRow('edit-son-operasyon', editForm.sonOperasyon, 'Son Operasyon', 'Bitince iş rotası kapanır', {style:'margin-bottom:14px'})}
           <div style="display:flex;gap:10px">
