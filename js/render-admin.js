@@ -82,13 +82,11 @@ function renderDevamEdenTalepTablosu(devamEdenler, sortByUrgency){
    → Toplam Süre. Çok operasyonlu (ara bekleme geçirmiş) talepler zincire ekstra kutu olarak
    ekleniyor; tek operasyonlu, doğrudan biten sıradan bir talepte tam olarak istenen üç kutu
    (İş Açıldı / İşe Başlandı / İş Bitti) çıkıyor. */
-function renderTadilatAkisModal(){
-  const t = tadilatlar[tadilatAkisModalId];
-  if(!t){ tadilatAkisModalId = null; return ''; }
-  const ops = tadilatOperasyonlarArray(t);
-  const tamamlandi = tadilatTamamlandiMi(t);
-
-  const node = (title, color, tarihSaat, topLabel, bottomLabel) => `
+// İş akışı şeması (İş Açıldı → Başladı → Bitti tarzı) için ortak kutu/ok çizim yardımcıları —
+// hem Tadilat akış şeması (renderTadilatAkisModal) hem normal İş Emri akış şeması
+// (renderEntryAkisChain, bkz. render-common.js) AYNI görseli kullanıyor.
+function akisNodeHtml(title, color, tarihSaat, topLabel, bottomLabel){
+  return `
     <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:220px">
       <div style="font-size:12px;font-weight:700;color:${color};margin-bottom:8px;text-align:center;min-height:16px">${topLabel||''}</div>
       <div style="background:var(--panel-alt);border:2px solid ${color};border-radius:14px;padding:16px 18px;text-align:center;width:100%">
@@ -97,13 +95,22 @@ function renderTadilatAkisModal(){
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center;min-height:16px;max-width:210px">${bottomLabel||''}</div>
     </div>`;
-  const connector = (label, color) => `
+}
+function akisConnectorHtml(label, color){
+  return `
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;width:110px;padding-top:26px;gap:5px">
       <div style="font-size:11.5px;font-weight:700;color:${color};white-space:nowrap">${label}</div>
       <div style="width:100%;height:2px;background:${color};position:relative">
         <div style="position:absolute;right:-1px;top:-4px;width:0;height:0;border-left:8px solid ${color};border-top:5px solid transparent;border-bottom:5px solid transparent"></div>
       </div>
     </div>`;
+}
+function renderTadilatAkisModal(){
+  const t = tadilatlar[tadilatAkisModalId];
+  if(!t){ tadilatAkisModalId = null; return ''; }
+  const ops = tadilatOperasyonlarArray(t);
+  const tamamlandi = tadilatTamamlandiMi(t);
+  const node = akisNodeHtml, connector = akisConnectorHtml;
 
   const chain = [];
   chain.push(node('İş Açıldı', 'var(--accent)', t.olusturmaTs?fmtDT(t.olusturmaTs):'—', esc(t.talepEdenKisi||'—'), esc(t.aciklama||'')));

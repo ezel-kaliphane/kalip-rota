@@ -220,6 +220,36 @@ function renderTadilatHistoryDetailModal(){
     </div>
   </div>`;
 }
+// Normal İş Emri için Tadilat'takiyle AYNI görsel akış şeması (İşe Başlandı → [duruş/Gün Sonu
+// aralıkları] → Bitti) — kullanıcı Tadilat Analizi'ndeki bu görseli çok sevdiği için Rapor
+// ekranındaki (ve operatörün kendi kayıt detayındaki) İş Emri detayına da eklendi. Tadilat'ta
+// birden çok OPERASYON varken, burada tek bir kayıt İÇİNDE birden çok duruş/Gün Sonu aralığı
+// var — o yüzden zincir "duraklat → devam et" düğüm çiftleriyle ilerliyor.
+function renderEntryAkisChain(e){
+  const allEvents = [
+    ...entryDurusEvents(e).map(ev=>({...ev, tip:'duruş'})),
+    ...entryExcludedEvents(e).map(ev=>({...ev, tip:'gunsonu'}))
+  ].filter(ev=>Number.isFinite(ev.sureMs) && ev.sureMs>0).sort((a,b)=>a.ts-b.ts);
+
+  const chain = [];
+  chain.push(akisNodeHtml('İşe Başlandı', 'var(--accent)', fmtDT(e.startTs), esc(e.startedByName||e.startedByUsername||e.operatorName||e.operatorUsername||'—'), e.makine?esc(e.makine.split(' · ')[0]):''));
+  let cursor = e.startTs;
+  allEvents.forEach(ev=>{
+    const workMs = Math.max(0, ev.ts - cursor);
+    chain.push(akisConnectorHtml(fmtDur(workMs), 'var(--success)'));
+    const isGunSonu = ev.tip==='gunsonu';
+    chain.push(akisNodeHtml('Duraklatıldı', isGunSonu?'var(--gunsonu)':'var(--warn)', fmtDT(ev.ts), '', esc(ev.neden||'')));
+    chain.push(akisConnectorHtml(`${fmtDur(ev.sureMs)}${isGunSonu?' (Gün Sonu)':''}`, isGunSonu?'var(--gunsonu)':'var(--warn)'));
+    cursor = ev.ts + ev.sureMs;
+    chain.push(akisNodeHtml('Devam Edildi', 'var(--tadilat-info)', fmtDT(cursor), '', ''));
+  });
+  const stillRunning = e.status==='devam';
+  const lastWorkMs = Math.max(0, (e.endTs || (stillRunning ? nowTick : cursor)) - cursor);
+  chain.push(akisConnectorHtml(fmtDur(lastWorkMs), 'var(--success)'));
+  chain.push(akisNodeHtml(e.endTs ? 'İş Bitti' : (e.status==='duruş' ? 'Duraklatıldı' : 'Devam Ediyor'), e.endTs?'var(--success)':(e.status==='duruş'?'var(--warn)':'var(--accent)'), e.endTs?fmtDT(e.endTs):'—', '', ''));
+
+  return `<div style="display:flex;align-items:flex-start;gap:0;overflow-x:auto;padding:10px 4px 18px;margin-bottom:6px">${chain.join('')}</div>`;
+}
 function renderEntryDetailModal(){
   const e = STATE.entries[entryDetailId];
   if(!e){ entryDetailId=null; return ''; }
@@ -247,6 +277,7 @@ function renderEntryDetailModal(){
         <button class="icon-btn" onclick="closeEntryDetail()">${ico('x',14)}</button>
       </div>
       <div class="modal-body">
+        ${renderEntryAkisChain(e)}
         <div class="modal-stats" style="flex-wrap:nowrap;gap:10px">
           <div class="modal-stat-box" style="min-width:0;flex:1;padding:10px 8px"><div class="modal-stat-num" style="color:var(--success);font-size:16px">${fmtDur(netMs)}</div><div class="modal-stat-label" style="font-size:9.5px">Üretim Süresi</div></div>
           <div class="modal-stat-box" style="min-width:0;flex:1;padding:10px 8px"><div class="modal-stat-num" style="color:${durusMs>0?'var(--warn)':'var(--text-muted)'};font-size:16px">${fmtDur(durusMs)}</div><div class="modal-stat-label" style="font-size:9.5px">Duruş Süresi</div></div>
