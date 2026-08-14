@@ -700,7 +700,7 @@ function openReportEdit(id){
   if(!canEditReport()) return;
   const e = STATE.entries[id]; if(!e) return;
   reportEditId = id;
-  reportEditForm = { isEmriNo:e.isEmriNo||'', talepNo:e.talepNo||'', malzemeCinsi:e.malzemeCinsi||'', capBoy:e.capBoy||'', adet:e.adet||'', not:e.not||'', sonOperasyon:!!e.sonOperasyon, status:e.status||'tamamlandi' };
+  reportEditForm = { isEmriNo:e.isEmriNo||'', talepNo:e.talepNo||'', malzemeCinsi:e.malzemeCinsi||'', capBoy:e.capBoy||'', adet:e.adet||'', not:e.not||'', sonOperasyon:!!e.sonOperasyon, status:e.status||'tamamlandi', baslangic: tsToLocalInputStr(e.startTs), bitis: tsToLocalInputStr(e.endTs) };
   render();
 }
 function closeReportEdit(){ reportEditId = null; reportEditForm = null; render(); }
@@ -714,11 +714,22 @@ function saveReportEdit(){
   const not = (document.getElementById('redit-not')?.value||'').trim();
   const sonOperasyon = !!document.getElementById('redit-sonop')?.checked;
   const status = document.getElementById('redit-status')?.value||'tamamlandi';
+  const baslangicStr = document.getElementById('redit-baslangic')?.value;
+  const bitisStr = document.getElementById('redit-bitis')?.value;
   if(!isEmriNo){ toast('İş Emri No (U kodu) boş olamaz'); return; }
   if(adet && !/^\d+$/.test(adet)){ toast('Adet sadece rakam olmalı'); return; }
-  const patch = { isEmriNo, talepNo, malzemeCinsi, capBoy, adet, not, sonOperasyon, status };
-  if(status!=='devam' && !STATE.entries[reportEditId]?.endTs){ patch.endTs = STATE.entries[reportEditId]?.startTs || Date.now(); }
-  if(status==='devam'){ patch.endTs = null; }
+  if(!baslangicStr){ toast('Başlangıç zamanı boş olamaz'); return; }
+  const startTs = new Date(baslangicStr).getTime();
+  if(isNaN(startTs)){ toast('Başlangıç zamanı geçersiz'); return; }
+  const patch = { isEmriNo, talepNo, malzemeCinsi, capBoy, adet, not, sonOperasyon, status, startTs };
+  if(status==='tamamlandi'){
+    const endTs = bitisStr ? new Date(bitisStr).getTime() : Date.now();
+    if(isNaN(endTs)){ toast('Bitiş zamanı geçersiz'); return; }
+    if(endTs < startTs){ toast('Bitiş, başlangıçtan önce olamaz'); return; }
+    patch.endTs = endTs;
+  } else {
+    patch.endTs = null; // devam/duruş'ta bitiş olmaz — daha önce 'duruş' için de yanlışlıkla set edilebiliyordu
+  }
   DB.ref('entries/'+reportEditId).update(patch).then(()=>{
     toast('Kayıt güncellendi');
     closeReportEdit();
@@ -743,11 +754,15 @@ function renderReportEditModal(){
         </div>
         <div style="display:flex;gap:8px">
           <div class="field" style="flex:1"><label>Adet</label><input id="redit-adet" inputmode="numeric" value="${esc(f.adet)}"></div>
-          <div class="field" style="flex:1"><label>Durum</label><select id="redit-status">
+          <div class="field" style="flex:1"><label>Durum</label><select id="redit-status" onchange="reportEditForm.status=this.value; render()">
             <option value="devam" ${f.status==='devam'?'selected':''}>Devam Ediyor</option>
             <option value="duruş" ${f.status==='duruş'?'selected':''}>Duruşta</option>
             <option value="tamamlandi" ${f.status==='tamamlandi'?'selected':''}>Tamamlandı</option>
           </select></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div class="field" style="flex:1"><label>Başlangıç</label><input id="redit-baslangic" type="datetime-local" value="${f.baslangic}"></div>
+          ${f.status==='tamamlandi' ? `<div class="field" style="flex:1"><label>Bitiş</label><input id="redit-bitis" type="datetime-local" value="${f.bitis}"></div>` : ''}
         </div>
         <div class="field"><label>Not</label><input id="redit-not" value="${esc(f.not)}"></div>
         ${switchRow('redit-sonop', f.sonOperasyon, 'Son Operasyon', 'Bu rotanın son adımı mı', {style:'margin-bottom:14px'})}
