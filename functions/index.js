@@ -66,22 +66,57 @@ async function sendToOperator(username, title, body, tag, meta){
   return logAndReturn({ ok: successCount>0, reason: successCount>0 ? null : 'send-failed', successCount, failureCount: tokens.length-successCount });
 }
 
+/* Sessiz Saatler — Ayarlar'dan (js/state.js: toggleSessizSaatler/setSessizSaat) yönetilen, gece
+ * vardiyası olmayan işletmelerde belirli saatler arasında zamanlanmış fonksiyonların hiç veri
+ * çekmeden atlamasını sağlayan ortak kontrol. settings/sessizSaatlerEnabled kapalıysa (varsayılan)
+ * hep false döner — yani davranış değişmez. Gece yarısını aşan aralıkları da destekler (ör.
+ * 22:00 → 06:00). Şu an sadece uzunDurusUyarisi kullanıyor; ileride başka zamanlanmış
+ * fonksiyonlara (ör. gunBasiDurusHatirlatici) eklenmek istenirse burası paylaşılan yardımcı
+ * olarak kullanılabilir.
+ */
+function sessizSaattemi(settings){
+  if(!settings.sessizSaatlerEnabled) return false;
+  const baslangic = settings.sessizSaatBaslangic;
+  const bitis = settings.sessizSaatBitis;
+  if(!baslangic || !bitis) return false;
+  const nowIst = new Date(Date.now() + 3*60*60*1000); // UTC+3 (Türkiye sabit, DST yok)
+  const su = String(nowIst.getUTCHours()).padStart(2,'0')+':'+String(nowIst.getUTCMinutes()).padStart(2,'0');
+  if(baslangic <= bitis){
+    // normal aralık, örn. 08:00 -> 18:00
+    return su >= baslangic && su < bitis;
+  } else {
+    // gece yarısını aşan aralık, örn. 22:00 -> 06:00
+    return su >= baslangic || su < bitis;
+  }
+}
+
 exports.uzunDurusUyarisi = onSchedule({ schedule: 'every 1 minutes', region: 'europe-west1', timeZone: 'Europe/Istanbul' }, async () => {
+  // ÖNEMLİ (maliyet optimizasyonu): settings, ağır veri çekimlerinden ÖNCE tek başına okunuyor —
+  // uzunDurusUyariEnabled kapalıysa ya da Sessiz Saatler'e denk geliyorsa entries/tadilat
+  // sorgularına hiç gidilmeden çıkılıyor, o dakikanın indirme maliyeti sıfırlanıyor.
+  const settingsSnap = await db.ref('settings').get();
+  const settings = settingsSnap.val() || {};
+  if(settings.uzunDurusUyariEnabled === false) return; // varsayılan: açık
+  if(sessizSaattemi(settings)) return; // gece vardiyası yok, bu saatte hiç kontrol yapma
+
   // ÖNEMLİ (maliyet optimizasyonu): entries düğümü büyüdükçe, her dakika TAMAMINI indirmek
   // gereksiz Realtime Database "download" maliyeti yaratıyordu. Bunun yerine sunucu tarafında
   // sadece status='duruş' olan kayıtları filtreleyip çekiyoruz — zaten sadece onlarla
   // ilgileniyoruz. Bunun çalışması için Rules'da entries için ".indexOn": ["status"] tanımlı
   // olmalı (yoksa da çalışır ama Firebase loglarında "indekssiz sorgu" uyarısı çıkar).
-  const [settingsSnap, entriesSnap, tadilatlarSnap, notifiedEntriesSnap, notifiedTadilatSnap] = await Promise.all([
-    db.ref('settings').get(),
+  //
+  // tadilatlar düğümü için de aynı sorun vardı, ama iç içe operasyonlar/{opId}/status alanına
+  // RTDB'de orderByChild ile filtre uygulanamıyor (sadece bir seviye altına indeks konabilir).
+  // Bunun yerine js/tadilat.js, bir operasyon 'duruş'a her girdiğinde/çıktığında küçük bir
+  // denormalize düğüm olan tadilatDurustaOperasyonlar/{tadilatId}_{opId} altını güncel tutuyor —
+  // biz burada tüm tadilatlar ağacı yerine sadece bu küçük düğümü okuyoruz.
+  const [entriesSnap, tadilatDurustakilerSnap, notifiedEntriesSnap, notifiedTadilatSnap] = await Promise.all([
     db.ref('entries').orderByChild('status').equalTo('duruş').get(),
-    db.ref('tadilatlar').get(),
+    db.ref('tadilatDurustaOperasyonlar').get(),
     db.ref('pushNotified/entries').get(),
     db.ref('pushNotified/tadilat').get()
   ]);
 
-  const settings = settingsSnap.val() || {};
-  if(settings.uzunDurusUyariEnabled === false) return; // varsayılan: açık
   const esikMs = (Number(settings.uzunDurusEsikDk) || 30) * 60000;
   const now = Date.now();
 
@@ -107,29 +142,25 @@ exports.uzunDurusUyarisi = onSchedule({ schedule: 'every 1 minutes', region: 'eu
   }
   if(Object.keys(entryUpdates).length>0){ await db.ref().update(entryUpdates); }
 
-  const tadilatlar = tadilatlarSnap.val() || {};
+  const tadilatDurustakiler = tadilatDurustakilerSnap.val() || {};
   const notifiedTadilat = notifiedTadilatSnap.val() || {};
   const tadilatUpdates = {};
 
-  for(const [tadilatId, t] of Object.entries(tadilatlar)){
-    const ops = t.operasyonlar || {};
-    for(const [opId, op] of Object.entries(ops)){
-      if(op.status!=='duruş' || !op.duruşTs || op.duruşNedeni===GUN_SONU_REASON) continue;
-      if(now - op.duruşTs < esikMs) continue;
-      const key = tadilatId+'_'+opId;
-      const prev = notifiedTadilat[key];
-      if(prev && prev.duruşTs === op.duruşTs) continue;
-      const dk = Math.round((now - op.duruşTs)/60000);
-      const makineKisa = (op.makine||'').split(' · ')[0] || '';
-      await sendToOperator(
-        op.operatorUsername,
-        '⚠ Tadilat duruşu devam ediyor',
-        `${makineKisa} · ${t.uKodu||''} — "${op.duruşNedeni}" nedeniyle ${dk} dakikadır duruşta. Unutmadıysan devam et.`,
-        'uzun-durus-tadilat',
-        { kaynak: 'Duruş Uyarısı (Otomatik)' }
-      );
-      tadilatUpdates['pushNotified/tadilat/'+key] = { duruşTs: op.duruşTs, notifiedAt: now };
-    }
+  for(const [key, op] of Object.entries(tadilatDurustakiler)){
+    if(!op.duruşTs || op.duruşNedeni===GUN_SONU_REASON) continue;
+    if(now - op.duruşTs < esikMs) continue;
+    const prev = notifiedTadilat[key];
+    if(prev && prev.duruşTs === op.duruşTs) continue;
+    const dk = Math.round((now - op.duruşTs)/60000);
+    const makineKisa = (op.makine||'').split(' · ')[0] || '';
+    await sendToOperator(
+      op.operatorUsername,
+      '⚠ Tadilat duruşu devam ediyor',
+      `${makineKisa} · ${op.uKodu||''} — "${op.duruşNedeni}" nedeniyle ${dk} dakikadır duruşta. Unutmadıysan devam et.`,
+      'uzun-durus-tadilat',
+      { kaynak: 'Duruş Uyarısı (Otomatik)' }
+    );
+    tadilatUpdates['pushNotified/tadilat/'+key] = { duruşTs: op.duruşTs, notifiedAt: now };
   }
   if(Object.keys(tadilatUpdates).length>0){ await db.ref().update(tadilatUpdates); }
 });

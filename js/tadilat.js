@@ -121,6 +121,34 @@ function tadilatOperasyonlarArray(t){
   }
   return [];
 }
+// Maliyet optimizasyonu: functions/index.js'teki uzunDurusUyarisi artık her dakika tüm tadilatlar
+// ağacını indirmiyor, bunun yerine sadece 'duruş'ta olan operasyonların küçük bir kopyasını tutan
+// tadilatDurustaOperasyonlar/{tadilatId}_{opId} düğümünü okuyor (RTDB'de operasyonlar/{opId}/status
+// gibi iç içe bir alana orderByChild ile filtre uygulanamıyor, sadece bir seviye altına indeks
+// konabiliyor). O düğüm SADECE Cloud Function tarafında (Admin SDK, Rules'ı bypass eder) okunuyor;
+// buradaki YAZMA ise operatörün tarayıcısından (client SDK) gidiyor ve mevcut Rules'a tabi. Bu
+// yüzden index yazısını asıl operasyon yazısıyla AYNI atomik update()'e bağlamıyoruz — Rules bu
+// yeni düğüme (henüz) izin vermiyorsa bile duruş/devam/bitir akışı bundan etkilenmesin diye index
+// yazısı ayrı ve best-effort: başarısız olursa sessizce loglanır, sadece o an için maliyet
+// optimizasyonu devre dışı kalır, operatörün asıl işlemi ASLA engellenmez. Tüm operasyon
+// güncellemeleri doğrudan DB.ref(...).update(...) yerine bu fonksiyon üzerinden yapılmalı.
+function tadilatOpUpdate(t, op, opId, deltaFields){
+  const opPath = `tadilatlar/${t.id}/operasyonlar/${opId}`;
+  const mergedOp = { ...op, ...deltaFields };
+  const idxPath = 'tadilatDurustaOperasyonlar/'+t.id+'_'+opId;
+  const idxValue = mergedOp.status==='duruş' ? {
+    tadilatId: t.id, opId,
+    uKodu: t.uKodu || '',
+    makine: mergedOp.makine || '',
+    operatorUsername: mergedOp.operatorUsername || null,
+    duruşNedeni: mergedOp.duruşNedeni || null,
+    duruşTs: mergedOp.duruşTs || null
+  } : null;
+  return DB.ref(opPath).update(deltaFields).then(result => {
+    DB.ref(idxPath).set(idxValue).catch(err => console.warn('tadilatDurustaOperasyonlar index yazılamadı (Rules kontrolü gerekebilir):', err && err.message));
+    return result;
+  });
+}
 function tadilatAktifOperasyon(t){ return tadilatOperasyonlarArray(t).find(o=>o.status==='devam') || null; }
 // Bir makinede şu an aktif bir tadilat operasyonu var mı? Makine Matrisi'nde ayrı bir renk/durum
 // olarak göstermek için (üretim "entries" tablosunda hiç izi olmasa bile).
@@ -344,7 +372,7 @@ function confirmTadilatDurus(){
   // alacağına karar verirken geçen süre A'nın duruşuna sayılmasın diye. Bu "seçim süresi" ayrı
   // (gecisBaslangic) tutuluyor; yeni tadilat FİİLEN başladığı an gerçek duruş sayacı da başlıyor
   // (bkz. tadilatAl), o ana kadarki fark ise "gecisSureToplamMs" olarak (sadece SuperAdmin görür) kaydediliyor.
-  DB.ref(`tadilatlar/${t.id}/operasyonlar/${op.id}`).update({
+  tadilatOpUpdate(t, op, op.id, {
     status:'duruş', duruşNedeni: reason,
     duruşTs: isInterrupt ? null : Date.now(),
     gecisBaslangic: isInterrupt ? Date.now() : null
@@ -380,7 +408,7 @@ function carryGunSonuToOtherPausedTadilatOps(username, excludeKey){
       const durusLog = appendDurusLog(op.durusLog, op.duruşNedeni, extra, op.duruşTs);
       // gunSonuOncesiNeden: bkz. operations.js'teki aynı alan — bu operasyonun cascade ile mi
       // (gerçek bir önceki nedeni var) yoksa doğrudan mı Gün Sonu'na düştüğünü ayırt eder.
-      DB.ref(`tadilatlar/${t.id}/operasyonlar/${op.id}`).update({ duruşNedeni: GUN_SONU_REASON, duruşTs: now, duruşToplamMs, durusLog, gunSonuOncesiNeden: op.duruşNedeni });
+      tadilatOpUpdate(t, op, op.id, { duruşNedeni: GUN_SONU_REASON, duruşTs: now, duruşToplamMs, durusLog, gunSonuOncesiNeden: op.duruşNedeni });
     });
   });
 }
@@ -394,7 +422,7 @@ function wakeOtherGunSonuTadilatOps(username, excludeKey){
     tadilatOperasyonlarArray(t).forEach(op=>{
       const key = t.id+'_'+op.id;
       if(op.operatorUsername!==username || op.status!=='duruş' || key===excludeKey || op.duruşNedeni!==GUN_SONU_REASON || !op.gunSonuOncesiNeden) return;
-      DB.ref(`tadilatlar/${t.id}/operasyonlar/${op.id}`).update({ duruşNedeni: op.gunSonuOncesiNeden, duruşTs: now, gunSonuOncesiNeden: null });
+      tadilatOpUpdate(t, op, op.id, { duruşNedeni: op.gunSonuOncesiNeden, duruşTs: now, gunSonuOncesiNeden: null });
     });
   });
 }
@@ -421,7 +449,7 @@ function devamEtTadilatDurus(){
   // "Devam Ettir"e basılırsa, o karar süresi de geçiş süresine (duruşa değil) ekleniyor.
   const gecisEk = (!op.duruşTs && op.gecisBaslangic) ? Math.max(0, Date.now()-op.gecisBaslangic) : 0;
   const gecisSureToplamMs = (op.gecisSureToplamMs||0) + gecisEk;
-  DB.ref(`tadilatlar/${t.id}/operasyonlar/${op.id}`).update({ status:'devam', duruşNedeni:null, duruşTs:null, gecisBaslangic:null, duruşToplamMs, excludedMs, gecisSureToplamMs, durusLog, excludedLog }).then(()=>{
+  tadilatOpUpdate(t, op, op.id, { status:'devam', duruşNedeni:null, duruşTs:null, gecisBaslangic:null, duruşToplamMs, excludedMs, gecisSureToplamMs, durusLog, excludedLog }).then(()=>{
     // DÜZELTME: Buradaki mesaj eskiden duraklatma mesajının aynısıydı ("Duruş kaydedildi") —
     // operatör yanlışlıkla tekrar duraklattığını sanabiliyordu. Ayrıca .catch yoktu: yazma
     // reddedilirse hiçbir uyarı çıkmadan operasyon duruşta kalıyordu.
@@ -462,7 +490,7 @@ function tadilatAl(tadilatId, makine){
   if(kaynakTadGecerli){
     const kOp = kaynakTad.operasyon;
     const gecisSuresi = kOp.gecisBaslangic ? Math.max(0, now - kOp.gecisBaslangic) : 0;
-    DB.ref(`tadilatlar/${kaynakTad.tadilat.id}/operasyonlar/${kOp.id}`).update({
+    tadilatOpUpdate(kaynakTad.tadilat, kOp, kOp.id, {
       duruşTs: now, gecisBaslangic: null,
       gecisSureToplamMs: (kOp.gecisSureToplamMs||0) + gecisSuresi
     });
@@ -489,13 +517,12 @@ function tadilatAl(tadilatId, makine){
 function tadilatBitir(tadilatId, opId, sonOperasyon){
   const t = tadilatlar[tadilatId]; if(!t) return;
   const isLegacy = !t.operasyonlar && opId==='legacy';
-  const opRefPath = isLegacy ? null : `tadilatlar/${tadilatId}/operasyonlar/${opId}`;
   const op = tadilatOperasyonlarArray(t).find(o=>o.id===opId);
   if(!op){ toast('Operasyon bulunamadı'); return; }
   const bitisTs = Date.now();
   const writeP = isLegacy
     ? DB.ref('tadilatlar/'+tadilatId).update({ status:'tamamlandi', bitisTs }) // eski kayıt formatı
-    : DB.ref(opRefPath).update({ status:'tamamlandi', bitisTs, sonOperasyon: !!sonOperasyon });
+    : tadilatOpUpdate({ ...t, id: tadilatId }, op, opId, { status:'tamamlandi', bitisTs, sonOperasyon: !!sonOperasyon });
   writeP.then(()=>{
     let kaynakVarMi = false, kaynakTadilatVarMi = false;
     // Önce iç içe kesinti zinciri: duraklatılmış başka bir tadilat varsa ona dön.
