@@ -92,19 +92,52 @@ function sendManualPush(){
     toast('Gönderilemedi: '+(err.message||'bilinmeyen hata'));
   });
 }
+// Maliyet optimizasyonu: pushLog artık canlı dinlenmiyor (org'daki HERKESİN bildirim geçmişi
+// büyüdükçe, sadece kendi son-30'unu göstermek için her operatörün cihazına TAMAMI sürekli
+// indiriliyordu). Bunun yerine iki ayrı, kapsamı daraltılmış TEK SEFERLİK sorgu var: kişisel
+// geçmiş (loadMyPushHistory — giriş yapınca ve "Bildirimlerim" açılınca tazelenir) ve
+// SuperAdmin'in "Bildirim Gönder" ekranındaki tüm-kayıt özeti (loadPushLogHistory — o sekme
+// açılınca tazelenir). İkisi de artık CANLI değil — yeni bir bildirim geldiğinde rozet/liste
+// ANINDA değil, bir sonraki tazeleme noktasında güncellenir.
 function pushLogHistory(){
-  return Object.entries(STATE.pushLog||{}).map(([id,v])=>({id,...v})).sort((a,b)=>b.sentAt-a.sentAt).slice(0,50);
+  return Object.entries(STATE.pushLogAll||{}).map(([id,v])=>({id,...v})).sort((a,b)=>b.sentAt-a.sentAt).slice(0,50);
 }
 function myPushHistory(){
   if(!session) return [];
-  return Object.entries(STATE.pushLog||{}).map(([id,v])=>({id,...v})).filter(h=>h.toUsername===session.username).sort((a,b)=>b.sentAt-a.sentAt).slice(0,30);
+  return Object.entries(STATE.myPushHistory||{}).map(([id,v])=>({id,...v})).sort((a,b)=>b.sentAt-a.sentAt).slice(0,30);
 }
 function unreadPushCount(){ return myPushHistory().filter(h=>!h.read).length; }
+function loadMyPushHistory(){
+  if(!session) return;
+  DB.ref('pushLog').orderByChild('toUsername').equalTo(session.username).limitToLast(30).get().then(snap=>{
+    STATE.myPushHistory = snap.val() || {};
+    if(myPushHistoryModalOpen){
+      // Modal açıkken taze veri gelince görülenler hemen okundu sayılsın (eski davranışla aynı).
+      Object.entries(STATE.myPushHistory).forEach(([id,h])=>{ if(!h.read){ DB.ref('pushLog/'+id+'/read').set(true); h.read = true; } });
+    }
+    safeRender();
+  }).catch(err=>console.warn('Kişisel bildirim geçmişi okunamadı:', err));
+}
+function loadPushLogHistory(){
+  DB.ref('pushLog').orderByChild('sentAt').limitToLast(50).get().then(snap=>{
+    STATE.pushLogAll = snap.val() || {};
+    safeRender();
+  }).catch(err=>console.warn('Bildirim günlüğü okunamadı:', err));
+}
+// Maliyet optimizasyonu: messages de aynı sebeple canlı dinlenmiyordu — sadece canViewMessages()
+// olan (SuperAdmin / messagesAccess) hesaplar için, son 100 kayıtla sınırlı tek seferlik sorgu.
+// Erişimi olmayan kullanıcılar için hiç sorgu bile atılmıyor.
+function loadMessages(){
+  if(!canViewMessages()){ STATE.messages = {}; return; }
+  DB.ref('messages').orderByChild('ts').limitToLast(100).get().then(snap=>{
+    STATE.messages = snap.val() || {};
+    safeRender();
+  }).catch(err=>console.warn('Mesajlar okunamadı:', err));
+}
 let myPushHistoryModalOpen = false;
 function openMyPushHistoryModal(){
   myPushHistoryModalOpen = true;
-  // Açılınca tüm bildirimleri okundu say (rozet sıfırlansın / sadece görülmeyenler kalsın)
-  myPushHistory().forEach(h=>{ if(!h.read) DB.ref('pushLog/'+h.id+'/read').set(true); });
+  loadMyPushHistory(); // taze son-30'u çek; okundu işaretleme burada, taze veri gelince yapılır
   render();
 }
 function closeMyPushHistoryModal(){ myPushHistoryModalOpen = false; render(); }
@@ -137,6 +170,7 @@ function renderMyPushHistoryList(){
 }
 
 /* ===================== FIREBASE ===================== */
+let _scopedLoadsDone = false; // loadMyPushHistory/loadMessages bu oturumda bir kez tetiklendi mi
 function fbConfigured(){ return FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.databaseURL.indexOf('BURAYA')<0; }
 function initFirebase(){
   if(typeof firebase==='undefined'){ console.warn('Firebase SDK yüklenemedi (internet yok mu?)'); return false; }
@@ -153,20 +187,31 @@ function initFirebase(){
     DB.ref('operators').on('value', snap=>{
       STATE.operators = snap.val() || {};
       seedIfNeeded();
+      // Maliyet optimizasyonu: messages/pushLog artık canlı dinlenmiyor (bkz. loadMessages,
+      // loadMyPushHistory). canViewMessages() operators'a bağlı olduğu için, "hatırlanan" bir
+      // oturumla sayfa açılışında bu ikisini operators ilk yüklendiğinde bir kez tetikliyoruz;
+      // hatırlanmayan girişlerde doLogin() zaten kendi tetikliyor (_scopedLoadsDone o zaman true olur).
+      if(session && !_scopedLoadsDone){ _scopedLoadsDone = true; loadMyPushHistory(); loadMessages(); }
       safeRender();
     });
     DB.ref('entries').on('value', snap=>{
       STATE.entries = snap.val() || {};
       safeRender();
     });
-    DB.ref('machines_extra').on('value', snap=>{
+    // Maliyet optimizasyonu: aşağıdaki 6 düğüm nadiren değişen REFERANS listeleri — canlı
+    // dinlemeye ihtiyaçları yok, tek seferlik okunuyor. Bir admin bunları düzenlerse (bkz.
+    // js/catalog.js, js/operations.js) ilgili fonksiyon kendi yerel kopyasını da güncelleyip
+    // render() çağırıyor — o yüzden SAYFAYI YENİLEMEDEN kendi değişikliğini görüyor; sadece
+    // BAŞKA bir cihazdaki kullanıcı bir sonraki sayfa yenilemesinde günceli alır (bu tür nadir
+    // değişen listeler için kabul edilebilir bir gecikme).
+    DB.ref('machines_extra').get().then(snap=>{
       extraMachines = snap.val() || {};
       safeRender();
-    });
-    DB.ref('machines_hidden').on('value', snap=>{
+    }).catch(err=>console.warn('machines_extra okunamadı:', err));
+    DB.ref('machines_hidden').get().then(snap=>{
       hiddenMachines = snap.val() || {};
       safeRender();
-    });
+    }).catch(err=>console.warn('machines_hidden okunamadı:', err));
     DB.ref('machines_fason').on('value', snap=>{
       fasonMachines = snap.val() || {};
       safeRender();
@@ -175,50 +220,40 @@ function initFirebase(){
       machineAtolye = snap.val() || {};
       safeRender();
     });
-    DB.ref('messages').on('value', snap=>{
-      STATE.messages = snap.val() || {};
-      safeRender();
-    });
-    DB.ref('manualPushRequests').on('value', snap=>{
-      STATE.manualPushRequests = snap.val() || {};
-      safeRender();
-    });
+    // manualPushRequests: bilerek dinlenmiyor — client hiçbir yerde okumuyor (yazma push() ile
+    // olduğu için read-back gerekmiyor, gerçek gönderimi Cloud Function admin SDK ile yapıyor).
     DB.ref('tadilatOnHazirIstekler').on('value', snap=>{
       STATE.tadilatOnHazirIstekler = snap.val() || {};
       safeRender();
     });
-    DB.ref('pushLog').on('value', snap=>{
-      STATE.pushLog = snap.val() || {};
-      safeRender();
-    });
-    DB.ref('validIsEmri').on('value', snap=>{
+    DB.ref('validIsEmri').get().then(snap=>{
       STATE.validIsEmri = snap.val() || {};
       safeRender();
-    });
+    }).catch(err=>console.warn('validIsEmri okunamadı:', err));
     DB.ref('malzemeListesi').on('value', snap=>{
       malzemeListesi = snap.val() || {};
       safeRender();
     });
-    DB.ref('isMerkezleri').on('value', snap=>{
+    DB.ref('isMerkezleri').get().then(snap=>{
       isMerkezleri = snap.val() || {};
       safeRender();
-    });
+    }).catch(err=>console.warn('isMerkezleri okunamadı:', err));
     DB.ref('uretimPersoneli').on('value', snap=>{
       uretimPersoneli = snap.val() || {};
       safeRender();
     });
-    DB.ref('tadilatBolumKurallari').on('value', snap=>{
+    DB.ref('tadilatBolumKurallari').get().then(snap=>{
       tadilatBolumKurallari = snap.val() || {};
       safeRender();
-    });
+    }).catch(err=>console.warn('tadilatBolumKurallari okunamadı:', err));
     DB.ref('adminTabPermissions').on('value', snap=>{
       adminTabPermissions = snap.val() || {};
       safeRender();
     });
-    DB.ref('durusReasons').on('value', snap=>{
+    DB.ref('durusReasons').get().then(snap=>{
       STATE.durusReasons = snap.val() || [];
       safeRender();
-    });
+    }).catch(err=>console.warn('durusReasons okunamadı:', err));
     DB.ref('settings').on('value', snap=>{
       appSettings = snap.val() || {};
       safeRender();
@@ -275,11 +310,21 @@ async function doLogin(){
   session = { username: uname, displayName: op.displayName, isAdmin: !!op.isAdmin, isSuperAdmin: !!op.isSuperAdmin, isSef: !!op.isSef, isUretimSef: !!op.isUretimSef };
   if(remember){ save('rota_remember', true); save('rota_session', session); }
   else { save('rota_remember', false); save('rota_session', null); }
+  _scopedLoadsDone = true;
+  loadMyPushHistory();
+  loadMessages();
   view = session.isAdmin ? ((session.isSef || session.isUretimSef) ? 'matrix' : 'report') : 'list';
   if(!session.isAdmin) newForm.makine = op.defaultMachine || '';
   render();
 }
-function doLogout(){ session=null; save('rota_session', null); save('rota_remember', false); view='list'; render(); }
+function doLogout(){
+  session=null; save('rota_session', null); save('rota_remember', false); view='list';
+  // Paylaşılan bir cihazda bir sonraki kullanıcıya önceki kişinin bildirim/mesaj geçmişi
+  // sızmasın diye (aksi halde bir sonraki login tetiklenene kadar eski veri ekranda kalırdı).
+  STATE.myPushHistory = {}; STATE.pushLogAll = {}; STATE.messages = {};
+  _scopedLoadsDone = false;
+  render();
+}
 let tadilatForceBekleyen = false; // "Tadilat duruşu" ile duraklattıktan hemen sonra bekleyen listeyi göstermeye zorlar
 function setView(v){
   if(tadilatForceBekleyen && v!=='tadilat'){ toast('Lütfen gireceğiniz tadilat işini seçin ya da iptal edin'); return; }

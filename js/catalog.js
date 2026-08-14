@@ -195,9 +195,14 @@ function uploadIsMerkezleri(){
       const count = Object.keys(list).length;
       if(count===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
       DB.ref('isMerkezleri').set(list).then(()=>{
+        isMerkezleri = list; // artık canlı dinlenmiyor (bkz. firebase-push.js) — yerel kopyayı da güncelle
         toast(`${count} iş merkezi kodu yüklendi`);
         if(statusEl) statusEl.textContent = `${count} kayıt başarıyla yüklendi (sayfa: ${sheetName}).`;
         fileInput.value = '';
+        render();
+      }).catch(err=>{
+        console.error(err);
+        if(statusEl) statusEl.textContent = 'Kaydedilemedi, tekrar deneyin: '+(err&&err.message||'hata');
       });
     } catch(err){
       console.warn(err);
@@ -209,7 +214,10 @@ function uploadIsMerkezleri(){
 function clearIsMerkezleri(){
   if(!canManageIsMerkezleri()) return;
   if(!confirm('İş merkezi listesini tamamen silmek istediğinize emin misiniz?')) return;
-  DB.ref('isMerkezleri').remove();
+  DB.ref('isMerkezleri').remove().then(()=>{
+    isMerkezleri = {};
+    render();
+  }).catch(err=>{ console.error(err); toast('Silinemedi, tekrar deneyin: '+(err&&err.message||'hata')); });
 }
 /* ===================== ÜRETİM PERSONELİ LİSTESİ =====================
    İş Merkezi Listesi ile aynı mantık: SuperAdmin Excel yükler, kişi kafasına göre isim
@@ -394,14 +402,19 @@ function saveBolumKural(ad, isNew){
   if((mode==='include'||mode==='exclude') && prefixes.length===0){ toast('En az bir harf/önek girin (ör. B veya B,V)'); return; }
   if(isNew && getBolumKurallari()[adInput]){ toast('Bu bölüm zaten var'); return; }
   DB.ref('tadilatBolumKurallari/'+adInput).set({ mode, prefixes }).then(()=>{
+    tadilatBolumKurallari[adInput] = { mode, prefixes }; // artık canlı dinlenmiyor — yerel kopyayı da güncelle
     toast('Bölüm kuralı kaydedildi');
     if(isNew){ ['bolum-yeni-ad','bolum-yeni-prefixes'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; }); }
-  });
+    render();
+  }).catch(err=>{ console.error(err); toast('Kaydedilemedi, tekrar deneyin: '+(err&&err.message||'hata')); });
 }
 function deleteBolumKural(ad){
   if(!canManageBolumKurallari()) return;
   if(DEFAULT_BOLUM_KURALLARI[ad]){ toast('Varsayılan bölümler silinemez, sadece düzenlenebilir'); return; }
-  DB.ref('tadilatBolumKurallari/'+ad).remove();
+  DB.ref('tadilatBolumKurallari/'+ad).remove().then(()=>{
+    delete tadilatBolumKurallari[ad];
+    render();
+  }).catch(err=>{ console.error(err); toast('Silinemedi, tekrar deneyin: '+(err&&err.message||'hata')); });
 }
 function bolumMakineFilter(bolum){
   const kurallar = getBolumKurallari();
@@ -538,9 +551,14 @@ function uploadIsEmriListesi(){
       const codeCount = Object.keys(codes).length;
       if(codeCount===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
       DB.ref('validIsEmri').set(codes).then(()=>{
+        STATE.validIsEmri = codes; // artık canlı dinlenmiyor (bkz. firebase-push.js) — yerel kopyayı da güncelle
         toast(`${codeCount} İş Talep No yüklendi`);
         if(statusEl) statusEl.textContent = `${codeCount} kayıt başarıyla yüklendi (sayfa: ${sheetName})${malzKoduIdx!==-1?' · malzeme bilgisi de eşleştirildi':''}.`;
         fileInput.value = '';
+        render();
+      }).catch(err=>{
+        console.error(err);
+        if(statusEl) statusEl.textContent = 'Kaydedilemedi, tekrar deneyin: '+(err&&err.message||'hata');
       });
     } catch(err){
       console.warn(err);
@@ -552,8 +570,11 @@ function uploadIsEmriListesi(){
 function clearIsEmriListesi(){
   if(!canManageIsEmriList()) return;
   if(!confirm('İş emri listesini tamamen silmek istediğine emin misin? Bu, doğrulamayı devre dışı bırakır (herkes serbestçe iş emri no girebilir).')) return;
-  DB.ref('validIsEmri').remove();
-  toast('Liste temizlendi');
+  DB.ref('validIsEmri').remove().then(()=>{
+    STATE.validIsEmri = {};
+    toast('Liste temizlendi');
+    render();
+  }).catch(err=>{ console.error(err); toast('Silinemedi, tekrar deneyin: '+(err&&err.message||'hata')); });
 }
 function addDurusReason(){
   if(!requireSuperAdmin()) return;
@@ -563,9 +584,12 @@ function addDurusReason(){
   const list = (STATE.durusReasons && STATE.durusReasons.length>0) ? STATE.durusReasons : DEFAULT_DURUS_REASONS;
   if(list.includes(val)){ toast('Bu neden zaten listede'); return; }
   const updated = [...list, val];
-  DB.ref('durusReasons').set(updated);
-  toast('Eklendi');
-  if(input) input.value = '';
+  DB.ref('durusReasons').set(updated).then(()=>{
+    STATE.durusReasons = updated; // artık canlı dinlenmiyor (bkz. firebase-push.js) — yerel kopyayı da güncelle
+    toast('Eklendi');
+    if(input) input.value = '';
+    render();
+  }).catch(err=>{ console.error(err); toast('Kaydedilemedi, tekrar deneyin: '+(err&&err.message||'hata')); });
 }
 /* ===================== TADİLAT — HAZIR İSTEK ŞABLONLARI =====================
    SuperAdmin'in Ayarlar → Veri Listeleri'nden yönettiği, tadilat talebi oluştururken
@@ -642,8 +666,11 @@ function removeDurusReason(i){
   const list = (STATE.durusReasons && STATE.durusReasons.length>0) ? STATE.durusReasons : DEFAULT_DURUS_REASONS;
   if(!confirm(`"${list[i]}" nedenini silmek istediğine emin misin?`)) return;
   const updated = list.filter((_,idx)=>idx!==i);
-  DB.ref('durusReasons').set(updated);
-  toast('Silindi');
+  DB.ref('durusReasons').set(updated).then(()=>{
+    STATE.durusReasons = updated;
+    toast('Silindi');
+    render();
+  }).catch(err=>{ console.error(err); toast('Silinemedi, tekrar deneyin: '+(err&&err.message||'hata')); });
 }
 function editDurusReason(i){
   if(!requireSuperAdmin()) return;
@@ -653,15 +680,24 @@ function editDurusReason(i){
   if(newVal===list[i]) return; // değişmemiş
   if(list.includes(newVal)){ toast('Bu neden zaten listede'); return; }
   const updated = list.slice(); updated[i] = newVal;
-  DB.ref('durusReasons').set(updated);
-  toast('Güncellendi');
+  DB.ref('durusReasons').set(updated).then(()=>{
+    STATE.durusReasons = updated;
+    toast('Güncellendi');
+    render();
+  }).catch(err=>{ console.error(err); toast('Güncellenemedi, tekrar deneyin: '+(err&&err.message||'hata')); });
 }
 function deleteMachine(code){
   if(!requireSuperAdmin()) return;
   if(!confirm(code+' makinesini silmek istediğine emin misin? Geçmiş kayıtlar etkilenmez, sadece yeni seçimlerde görünmez.')) return;
-  if(extraMachines[code]){ DB.ref('machines_extra/'+code).remove(); }
-  else { DB.ref('machines_hidden/'+code).set(true); }
-  toast(code+' silindi');
+  // machines_extra/machines_hidden artık canlı dinlenmiyor (bkz. firebase-push.js) — yazma
+  // başarılı olduktan SONRA yerel kopyayı da güncelliyoruz, yoksa admin kendi silme işlemini
+  // sayfa yenilemeden görmez; başarısız olursa yerel kopya (ve dolayısıyla ekran) hiç değişmez.
+  const writeP = extraMachines[code] ? DB.ref('machines_extra/'+code).remove() : DB.ref('machines_hidden/'+code).set(true);
+  writeP.then(()=>{
+    if(extraMachines[code]) delete extraMachines[code]; else hiddenMachines[code] = true;
+    toast(code+' silindi');
+    render();
+  }).catch(err=>{ console.error(err); toast('Silinemedi, tekrar deneyin: '+(err&&err.message||'hata')); });
 }
 function deleteOperator(code){
   if(!requireSuperAdmin()) return;

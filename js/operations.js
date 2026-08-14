@@ -507,7 +507,7 @@ function toggleMessagesAccess(code){
   const op = STATE.operators[code] || {};
   DB.ref('operators/'+code+'/messagesAccess').set(!op.messagesAccess);
 }
-function setSettingsSubTab(t){ settingsSubTab=t; render(); }
+function setSettingsSubTab(t){ settingsSubTab=t; if(t==='bildirimGonder') loadPushLogHistory(); render(); }
 
 async function addOperator(){
   const code = (document.getElementById('new-op-code').value||'').trim().toUpperCase();
@@ -529,10 +529,13 @@ function addMachine(){
   if(!code){ toast('Makine kodu girin'); return; }
   if(!name){ toast('Makine adı girin'); return; }
   if(allMachines().some(m=>m.code===code)){ toast(code+' zaten kayıtlı'); return; }
-  DB.ref('machines_extra/'+code).set({ name });
-  toast(code+' eklendi');
-  document.getElementById('new-mk-code').value='';
-  document.getElementById('new-mk-name').value='';
+  DB.ref('machines_extra/'+code).set({ name }).then(()=>{
+    extraMachines[code] = { name }; // artık canlı dinlenmiyor (bkz. firebase-push.js) — yerel kopyayı da güncelle
+    toast(code+' eklendi');
+    document.getElementById('new-mk-code').value='';
+    document.getElementById('new-mk-name').value='';
+    render();
+  }).catch(err=>{ console.error(err); toast('Eklenemedi, tekrar deneyin: '+(err&&err.message||'hata')); });
 }
 function requireSuperAdmin(){
   if(!session || !session.isSuperAdmin){ toast('Bu işlem için süper admin yetkisi gerekli'); return false; }

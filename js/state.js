@@ -41,7 +41,7 @@ function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){}
 function load(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
 
 /* ===================== DURUM (STATE) ===================== */
-let STATE = { operators: {}, entries: {}, messages: {}, validIsEmri: {}, durusReasons: [], manualPushRequests: {}, tadilatOnHazirIstekler: {}, pushLog: {} };
+let STATE = { operators: {}, entries: {}, messages: {}, validIsEmri: {}, durusReasons: [], tadilatOnHazirIstekler: {}, myPushHistory: {}, pushLogAll: {} };
 /* ===================== BİLEŞEN (KOVAN/KARBÜR) AYRIMI =====================
    Bazı malzemelerde kalıp iki farklı yarı mamulden oluşuyor (kovan/sıkma çemberi ve karbür),
    bunlar farklı rotalarda ayrı ayrı işlenip sonra shrink-fit ile birleşiyor. ERP (Canias)
