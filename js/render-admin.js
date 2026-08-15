@@ -491,6 +491,7 @@ function renderAdmin(){
   }
   const operatorEntries = Object.entries(STATE.operators).filter(([k,v])=>!v.isAdmin);
   const uzunDurusList = (uzunDurusUyariEnabled() && isAdminTabVisible('uzunDurusUyari')) ? uzunDurusluKayitlar() : [];
+  const uzunDevamEdenList = (uzunDevamEdenUyariEnabled() && isAdminTabVisible('uzunDevamEdenUyari')) ? uzunDevamEdenKayitlar() : [];
   const header = `
     <div class="admin-header">
       <div style="display:flex;align-items:center;gap:10px">${connDot()}<span style="font-size:20px">${ico('factory',14)}</span><span class="brand">ROTA TAKİP · YÖNETİCİ RAPORU</span></div>
@@ -499,6 +500,10 @@ function renderAdmin(){
         ${uzunDurusList.length>0 ? `<button class="icon-btn" style="position:relative;border-color:var(--danger);color:var(--danger)" onclick="openUzunDurusModal()" title="Uzun süredir duruşta olanlar">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
           <span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${uzunDurusList.length}</span>
+        </button>` : ''}
+        ${uzunDevamEdenList.length>0 ? `<button class="icon-btn" style="position:relative;border-color:var(--warn);color:var(--warn)" onclick="openUzunDevamEdenModal()" title="Uzun süredir devam ediyor görünen (kapatılmayı unutulmuş olabilir)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span style="position:absolute;top:-4px;left:-4px;background:var(--warn);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${uzunDevamEdenList.length}</span>
         </button>` : ''}
         ${canViewMessages() ? `<button class="icon-btn" style="position:relative" onclick="openMessagesModal()" title="Mesajlar">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M2 6l10 7 10-7"></path></svg>
@@ -513,6 +518,7 @@ function renderAdmin(){
       </div>
     </div>
     ${uzunDurusModalOpen ? renderUzunDurusModal() : ''}
+    ${uzunDevamEdenModalOpen ? renderUzunDevamEdenModal() : ''}
     ${messagesModalOpen ? renderMessagesModal() : ''}
     ${myPushHistoryModalOpen ? renderMyPushHistoryModal() : ''}
     <div class="tabs" style="padding:12px 24px 0">
@@ -799,6 +805,9 @@ function renderAdmin(){
               <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;padding-left:10px;border-left:1px solid var(--border)">
                 <input type="checkbox" style="width:auto" ${(adminTabPermissions[code]?.['uzunDurusUyari'])!==false?'checked':''} onchange="setAdminTabPermission('${code}','uzunDurusUyari', this.checked)"> ${ico('alert',14)} Uzun Duruş Uyarısı
               </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer">
+                <input type="checkbox" style="width:auto" ${(adminTabPermissions[code]?.['uzunDevamEdenUyari'])!==false?'checked':''} onchange="setAdminTabPermission('${code}','uzunDevamEdenUyari', this.checked)"> ${ico('alert',14)} Uzun Devam Eden Uyarısı
+              </label>
               ${(adminTabPermissions[code]?.['analiz'])!==false ? `
               <div style="width:100%;display:flex;flex-wrap:wrap;gap:10px;padding:8px 0 0 10px;border-left:1px solid var(--border);margin-left:1px">
                 <span style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;width:100%">Analiz — görünümler</span>
@@ -823,6 +832,7 @@ function renderAdmin(){
         </label>`;
     } else if(settingsSubTab==='uyarilar'){
       const esikDk = Math.round(uzunDurusEsikMs()/60000);
+      const esikSaat = Math.round(uzunDevamEdenEsikMs()/3600000);
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:16px">Bildirim Ayarları</div>
 
         <div style="font-size:14px;font-weight:600;margin-bottom:6px">1) Uzun Duruş Uyarısı</div>
@@ -895,6 +905,23 @@ function renderAdmin(){
           </div>
         </div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:2px;max-width:480px">Boş bırakılan bir saat alanı, o gün tipinde bildirimi tamamen kapatır.</div>
+        ` : ''}
+
+        <div style="font-size:14px;font-weight:600;margin-bottom:6px;margin-top:26px">4) Uzun Süredir Devam Eden Uyarısı</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;max-width:640px">Uzun Duruş Uyarısı'nın tersi senaryo için: bir iş/tadilat operasyonu hiç "Bitir"/"Duraklat" denmeden "Devam Ediyor" durumunda belirlediğiniz süreden fazla kalırsa (operatör kapatmayı unutmuş olabilir), üst barda ayrı bir uyarı rozeti çıkar. Kısa bir eşik burada yanlış alarm üretir (iş gerçekten sürüyor olabilir) — bu yüzden varsayılan eşik saat cinsinden ve çok daha yüksek.</div>
+        <label style="display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid ${uzunDevamEdenUyariEnabled()?'var(--success)':'var(--border)'};border-radius:10px;padding:14px 16px;margin-bottom:14px;cursor:pointer;max-width:480px">
+          <input type="checkbox" ${uzunDevamEdenUyariEnabled()?'checked':''} onchange="toggleUzunDevamEdenUyari()" style="width:auto;transform:scale(1.3)">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:${uzunDevamEdenUyariEnabled()?'var(--success)':'var(--text)'}">Uzun Süredir Devam Eden Uyarısını ${uzunDevamEdenUyariEnabled()?'Aktif':'Kapalı'}</div>
+            <div style="font-size:11.5px;color:var(--text-muted)">Kapalıyken hiçbir uyarı rozeti olmaz.</div>
+          </div>
+        </label>
+        ${uzunDevamEdenUyariEnabled() ? `
+        <div class="field" style="max-width:260px">
+          <label>Eşik (saat)</label>
+          <input type="number" min="1" max="48" value="${esikSaat}" onchange="setUzunDevamEdenEsikSaat(this.value)">
+        </div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;max-width:480px">Bir iş bu süreden fazla "Devam Ediyor" durumunda kalırsa uyarı tetiklenir. Varsayılan: 14 saat.</div>
         ` : ''}`;
     } else if(settingsSubTab==='bildirimlerim'){
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">${ico('bell',14)} Bildirimlerim</div>
