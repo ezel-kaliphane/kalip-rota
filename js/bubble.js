@@ -69,7 +69,7 @@ function renderBubble(){
   let mins, color, badgeCount, kind, entryId, groupId, titleText;
   if(target.kind==='entry'){
     const e = target.entries[0];
-    const ms = e.status==='duruş' ? (e.duruşTs ? nowTick-e.duruşTs : 0) : nowTick-e.startTs;
+    const ms = e.status==='duruş' ? (e.duruşTs ? nowTick-e.duruşTs : 0) : entryDurationBreakdown(e).netMs;
     mins = Math.max(0, Math.floor(ms/60000));
     color = activeBubbleColor(e);
     badgeCount = target.entries.length-1;
@@ -77,7 +77,7 @@ function renderBubble(){
     titleText = `${e.talepNo || e.isEmriNo} · ${e.makine||''}`;
   } else {
     const { tadilat: t, operasyon: op } = target.sess;
-    const ms = op.status==='duruş' ? (op.duruşTs ? nowTick-op.duruşTs : 0) : nowTick-op.baslamaTs;
+    const ms = op.status==='duruş' ? (op.duruşTs ? nowTick-op.duruşTs : 0) : tadilatOpDurationBreakdown(op).netMs;
     mins = Math.max(0, Math.floor(ms/60000));
     color = op.status==='duruş' ? (isTadilatRelated(op.duruşNedeni) ? 'var(--tadilat-info)' : 'var(--warn)') : 'var(--tadilat-info)';
     badgeCount = 0;

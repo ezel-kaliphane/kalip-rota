@@ -68,7 +68,7 @@ function renderOperator(){
           <div class="lock-id">${esc(mine.uKodu)}</div>
           ${resimBulEnabled() ? `<button class="btn-ghost" style="margin-top:4px;padding:6px 14px;font-size:11.5px" onclick="resimBul('${escJs(mine.uKodu)}')">${ico('camera',14)} Resim/Çizim Bul</button>` : ''}
           <div class="lock-machine">${esc(op.makine||'—')}</div>
-          <div class="lock-timer">${fmtElapsed(nowTick-op.baslamaTs)}</div>
+          <div class="lock-timer">${fmtElapsed(tadilatOpDurationBreakdown(op).netMs)}</div>
           <div class="lock-meta">${fmtDT(op.baslamaTs)} itibarıyla devam ediyor${opsGecmis.length>0?` · Bu, ${opsGecmis.length+1}. operasyon`:''}</div>
           <div class="lock-meta">${mine.bolum?`${esc(mine.bolum)} · `:''}${mine.adet?`Adet: ${esc(mine.adet)}`:''}</div>
           ${mine.aciklama ? `<div class="lock-note">"${esc(mine.aciklama)}"</div>` : ''}
@@ -142,7 +142,7 @@ function renderOperator(){
         if(g.members.length===1){
           const e = g.members[0];
           const dotColor = e.status==='duruş'?'var(--warn)':'var(--success)';
-          const subInfo = e.status==='duruş' ? `Duruşta: "${esc(e.duruşNedeni)}"` : `${fmtElapsed(nowTick-e.startTs)} · ${esc(e.operatorUsername)} başlattı`;
+          const subInfo = e.status==='duruş' ? `Duruşta: "${esc(e.duruşNedeni)}"` : `${fmtElapsed(entryDurationBreakdown(e).netMs)} · ${esc(e.operatorUsername)} başlattı`;
           return `<div class="card" style="cursor:pointer" onclick="openActiveDetail('${e.id}')">
             <div class="card-header"><span class="card-id">${esc(e.talepNo || e.isEmriNo)}</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
             ${e.talepNo ? `<div style="font-size:11px;color:var(--text-muted);margin:-4px 0 4px" class="mono">U kodu: ${esc(e.isEmriNo)}</div>` : ''}
@@ -156,7 +156,7 @@ function renderOperator(){
         return `<div class="card" style="cursor:pointer" onclick="openGroupDetail('${g.groupId}')">
           <div class="card-header"><span class="card-id">${g.members.length} İş Emri Aktif</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
           <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(makine)}</span></div>
-          <div class="op-foot">${g.members.map(m=>`${esc(m.talepNo || m.isEmriNo)} (${m.status==='duruş'?'duruşta':fmtElapsed(nowTick-m.startTs)})`).join(', ')}</div>
+          <div class="op-foot">${g.members.map(m=>`${esc(m.talepNo || m.isEmriNo)} (${m.status==='duruş'?'duruşta':fmtElapsed(entryDurationBreakdown(m).netMs)})`).join(', ')}</div>
         </div>`;
       }).join('')}
     </div>`;
@@ -273,7 +273,7 @@ function renderOperator(){
         const cand = machineHandoffCandidate(newForm.makine);
         if(!cand) return '';
         const groupCount = cand.groupId ? entriesArray().filter(x=>x.groupId===cand.groupId && (x.status==='devam'||x.status==='duruş')).length : 1;
-        const durumTxt = cand.status==='duruş' ? `Duruşta: "${esc(cand.duruşNedeni||'')}"` : `${fmtElapsed(nowTick-cand.startTs)} çalışıyor`;
+        const durumTxt = cand.status==='duruş' ? `Duruşta: "${esc(cand.duruşNedeni||'')}"` : `${fmtElapsed(entryDurationBreakdown(cand).netMs)} çalışıyor`;
         return `<div style="background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:12.5px;color:var(--warn);font-weight:600;margin-bottom:6px">${ico('alert',14)} Bu makinede yarım kalmış ${groupCount>1?`${groupCount} iş emri`:'bir iş'} var</div>
           <div style="font-size:13px;margin-bottom:2px"><span class="mono" style="color:var(--accent)">${esc(cand.talepNo || cand.isEmriNo)}</span>${groupCount>1?` +${groupCount-1} daha`:''} · ${esc(cand.operatorUsername)} · ${esc(cand.operatorName)}</div>
@@ -329,7 +329,7 @@ function renderOperator(){
       </div>
       ${myAll.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Bu aralıkta kayıt yok.</div>` : myAll.map(e=>{
         if(e._isTadilat){
-          const durT = e.endTs ? fmtDur(e.endTs-e.startTs) : fmtElapsed(nowTick-e.startTs)+' (sürüyor)';
+          const durT = e.endTs ? fmtDur(e.endTs-e.startTs) : fmtElapsed(entryDurationBreakdown(e).netMs)+' (sürüyor)';
           const statusLabelT = e.status==='tamamlandi' ? (e._sonOperasyon?'Tadilat Tamamlandı':'Operasyon Bitti (Devamı Var)') : 'Tadilat — Devam Ediyor';
           return `<div class="card" style="border-color:var(--tadilat-info);border-left:4px solid var(--tadilat-info);cursor:pointer" onclick="openTadilatHistoryDetail('${e.id}')">
             <div class="card-header"><span class="card-id" style="color:var(--tadilat-info)">${ico('wrench',14)} ${esc(e.isEmriNo)}</span><span class="card-meta">${dateKey(e.startTs)}</span></div>
@@ -341,7 +341,7 @@ function renderOperator(){
         }
         const statusColor = e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success)';
         const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
-        const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : (e.status==='devam' ? fmtElapsed(nowTick-e.startTs)+' (sürüyor)' : '—');
+        const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : (e.status==='devam' ? fmtElapsed(entryDurationBreakdown(e).netMs)+' (sürüyor)' : '—');
         return `<div class="card" style="cursor:pointer" onclick="openEntryDetail('${e.id}')">
           <div class="card-header"><span class="card-id">${esc(e.talepNo || e.isEmriNo)}</span><span class="card-meta">${dateKey(e.startTs)}</span></div>
           ${e.talepNo ? `<div style="font-size:11.5px;color:var(--text-muted);margin:-4px 0 4px" class="mono">U kodu: ${esc(e.isEmriNo)}</div>` : ''}
@@ -440,14 +440,14 @@ function renderOperator(){
       body += `<div class="card" style="cursor:pointer;border-color:${isPaused?'var(--warn)':'var(--tadilat-info)'};border-left:4px solid ${isPaused?'var(--warn)':'var(--tadilat-info)'}" onclick="setView('tadilat')">
         <div class="card-header"><span class="card-id" style="color:${isPaused?'var(--warn)':'var(--tadilat-info)'}">${ico('wrench',14)} ${esc(mt.uKodu)}</span><span class="matrix-dot" style="background:${isPaused?'var(--warn)':'var(--tadilat-info)'};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
         <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(mop.makine||'—')}</span></div>
-        <div class="op-foot">${isPaused ? (mop.duruşTs ? `${fmtElapsed(nowTick-mop.duruşTs)} duruşta · "${esc(mop.duruşNedeni)}"` : `seçim yapılıyor · "${esc(mop.duruşNedeni)}"`) : `${fmtElapsed(nowTick-mop.baslamaTs)} çalışıyor · Tadilat${mt.adet?` · Adet: ${esc(mt.adet)}`:''}`}</div>
+        <div class="op-foot">${isPaused ? (mop.duruşTs ? `${fmtElapsed(nowTick-mop.duruşTs)} duruşta · "${esc(mop.duruşNedeni)}"` : `seçim yapılıyor · "${esc(mop.duruşNedeni)}"`) : `${fmtElapsed(tadilatOpDurationBreakdown(mop).netMs)} çalışıyor · Tadilat${mt.adet?` · Adet: ${esc(mt.adet)}`:''}`}</div>
       </div>`;
     });
     groups.forEach(g=>{
       if(g.members.length===1){
         const e = g.members[0];
         const dotColor = e.status==='duruş'?'var(--warn)':'var(--success)';
-        const subInfo = e.status==='duruş' ? `Duruşta: "${esc(e.duruşNedeni)}"` : `${fmtElapsed(nowTick-e.startTs)} çalışıyor`;
+        const subInfo = e.status==='duruş' ? `Duruşta: "${esc(e.duruşNedeni)}"` : `${fmtElapsed(entryDurationBreakdown(e).netMs)} çalışıyor`;
         body += `<div class="card" style="cursor:pointer" onclick="openActiveDetail('${e.id}')">
           <div class="card-header"><span class="card-id">${esc(e.talepNo || e.isEmriNo)}</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
           ${e.talepNo ? `<div style="font-size:11px;color:var(--text-muted);margin:-4px 0 4px" class="mono">U kodu: ${esc(e.isEmriNo)}</div>` : ''}
@@ -461,7 +461,7 @@ function renderOperator(){
         body += `<div class="card" style="cursor:pointer" onclick="openGroupDetail('${g.groupId}')">
           <div class="card-header"><span class="card-id">${g.members.length} İş Emri Aktif</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
           <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(makine)}</span></div>
-          <div class="op-foot">${g.members.map(m=>`${esc(m.talepNo || m.isEmriNo)} (${m.status==='duruş'?'duruşta':fmtElapsed(nowTick-m.startTs)})`).join(', ')}</div>
+          <div class="op-foot">${g.members.map(m=>`${esc(m.talepNo || m.isEmriNo)} (${m.status==='duruş'?'duruşta':fmtElapsed(entryDurationBreakdown(m).netMs)})`).join(', ')}</div>
         </div>`;
       }
     });

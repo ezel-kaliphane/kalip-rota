@@ -281,15 +281,19 @@ function uzunDevamEdenKayitlar(){
   const esik = uzunDevamEdenEsikMs();
   const sonuc = [];
   entriesArray().forEach(e=>{
+    // Ham (nowTick-startTs) yerine NET süre kullanılıyor — yoksa gece boyu doğru şekilde
+    // "Gün Sonu" verilmiş (excludedMs'e düşmüş) bir iş, sabah normal devam ediyor olsa bile
+    // ham geçen süre eşiği aştığı için yanlışlıkla "unutulmuş" diye işaretlenirdi (bkz.
+    // entryDurationBreakdown — Analiz'de zaten kullanılan aynı net hesap).
     if(e.status==='devam' && e.startTs && !isFasonMachine(e.makine)){
-      const ms = nowTick - e.startTs;
+      const ms = entryDurationBreakdown(e).netMs;
       if(ms>=esik) sonuc.push({ tur:'entry', makine:e.makine, isEmriNo:e.isEmriNo||e.talepNo, operatorName:e.operatorName, operatorUsername:e.operatorUsername, ms, ref:e });
     }
   });
   tadilatArray().forEach(t=>{
     tadilatOperasyonlarArray(t).forEach(op=>{
       if(op.status==='devam' && op.baslamaTs && !isFasonMachine(op.makine)){
-        const ms = nowTick - op.baslamaTs;
+        const ms = tadilatOpDurationBreakdown(op).netMs;
         if(ms>=esik) sonuc.push({ tur:'tadilat', makine:op.makine, isEmriNo:t.uKodu, operatorName:op.operatorName, operatorUsername:op.operatorUsername, ms, ref:op });
       }
     });
