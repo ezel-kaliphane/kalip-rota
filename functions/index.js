@@ -255,6 +255,18 @@ exports.manuelBildirimGonder = onValueCreated(
  *
  * Cron yerine HER DAKİKA çalışıp "şu an, ayarlanan saate denk geliyor mu" diye bakıyoruz —
  * böylece saat, deploy gerekmeden Ayarlar ekranından anında değiştirilebiliyor.
+ *
+ * İKİNCİ KONTROL (status='devam'): "Uzun Duruş"un tam tersi senaryo için — bir iş hiç
+ * "Bitir"/"Duraklat" denmeden 'devam' durumunda bir önceki günden beri açık kalmış olabilir
+ * (operatör kapatmayı unutup gitmiş). Bilerek AYRI bir mesaj/tag ile gönderiliyor (duruş
+ * "makineyi devreye al" der, bu "hâlâ açık görünüyor, unuttun mu" der — farklı eylem
+ * gerektiriyorlar). Eşik olarak sabit bir süre yerine "bugünden ÖNCE başlamış mı" (gün sınırı)
+ * kullanılıyor — Gün Başı zaten günde bir kez, günün başında çalıştığı için en doğru ölçüt bu.
+ * Fason (dışarı gönderim) makineleri BİLİNÇLİ olarak dışlanıyor — orada 'devam' durumunun
+ * günlerce açık kalması bug değil, kayıp günü ölçmenin asıl yöntemi (bkz. js/state.js'teki
+ * uzunDevamEdenKayitlar() içindeki aynı gerekçe — gerçek veride FII01/OPRT14'te 88 kayıt hiç
+ * kapatılmadan biriktiği görüldü, bu kontrol olmadan her sabah o operatöre onlarca yanlış
+ * alarm giderdi).
  */
 exports.gunBasiDurusHatirlatici = onSchedule({ schedule: 'every 1 minutes', region: 'europe-west1', timeZone: 'Europe/Istanbul' }, async () => {
   const settingsSnap = await db.ref('settings').get();
@@ -274,10 +286,16 @@ exports.gunBasiDurusHatirlatici = onSchedule({ schedule: 'every 1 minutes', regi
   const claim = await alreadyRanRef.transaction(cur => cur ? undefined : true);
   if(!claim.committed) return; // bu gün için zaten çalıştı (ya da aynı dakika içinde ikinci tetiklenme)
 
-  const [entriesSnap, tadilatlarSnap] = await Promise.all([
+  const bugunBaslangicMs = Date.parse(bugun+'T00:00:00+03:00'); // Türkiye gününün başlangıcı (UTC epoch ms)
+
+  const [entriesSnap, devamEntriesSnap, tadilatlarSnap, fasonSnap] = await Promise.all([
     db.ref('entries').orderByChild('status').equalTo('duruş').get(),
-    db.ref('tadilatlar').get()
+    db.ref('entries').orderByChild('status').equalTo('devam').get(),
+    db.ref('tadilatlar').get(),
+    db.ref('machines_fason').get()
   ]);
+  const fasonMakineleri = fasonSnap.val() || {};
+  const isFason = (makine) => !!fasonMakineleri[(makine||'').split(' · ')[0]];
 
   const entries = entriesSnap.val() || {};
   for(const [entryId, e] of Object.entries(entries)){
@@ -292,19 +310,42 @@ exports.gunBasiDurusHatirlatici = onSchedule({ schedule: 'every 1 minutes', regi
     );
   }
 
+  const devamEntries = devamEntriesSnap.val() || {};
+  for(const [entryId, e] of Object.entries(devamEntries)){
+    if(e.status!=='devam' || !e.startTs || e.startTs>=bugunBaslangicMs || isFason(e.makine)) continue;
+    const makineKisa = (e.makine||'').split(' · ')[0] || '';
+    await sendToOperator(
+      e.operatorUsername,
+      '🌅 Günaydın — iş hâlâ açık görünüyor',
+      `${makineKisa} · ${e.isEmriNo||e.talepNo||''} — dünden beri "Devam Ediyor" durumunda. Hâlâ çalışıyorsan sorun yok, unuttuysan bitirmeyi/duraklatmayı unutma.`,
+      'gun-basi-devam-hatirlatici',
+      { kaynak: 'Gün Başı Hatırlatıcısı (Otomatik)' }
+    );
+  }
+
   const tadilatlar = tadilatlarSnap.val() || {};
   for(const [tadilatId, t] of Object.entries(tadilatlar)){
     const ops = t.operasyonlar || {};
     for(const [opId, op] of Object.entries(ops)){
-      if(op.status!=='duruş' || !op.duruşTs) continue;
-      const makineKisa = (op.makine||'').split(' · ')[0] || '';
-      await sendToOperator(
-        op.operatorUsername,
-        '🌅 Günaydın — makine duruşta',
-        `${makineKisa} · ${t.uKodu||''} — "${op.duruşNedeni||'—'}" nedeniyle duruşta bekliyor. Lütfen makineyi devreye alınız.`,
-        'gun-basi-hatirlatici',
-        { kaynak: 'Gün Başı Hatırlatıcısı (Otomatik)' }
-      );
+      if(op.status==='duruş' && op.duruşTs){
+        const makineKisa = (op.makine||'').split(' · ')[0] || '';
+        await sendToOperator(
+          op.operatorUsername,
+          '🌅 Günaydın — makine duruşta',
+          `${makineKisa} · ${t.uKodu||''} — "${op.duruşNedeni||'—'}" nedeniyle duruşta bekliyor. Lütfen makineyi devreye alınız.`,
+          'gun-basi-hatirlatici',
+          { kaynak: 'Gün Başı Hatırlatıcısı (Otomatik)' }
+        );
+      } else if(op.status==='devam' && op.baslamaTs && op.baslamaTs<bugunBaslangicMs && !isFason(op.makine)){
+        const makineKisa = (op.makine||'').split(' · ')[0] || '';
+        await sendToOperator(
+          op.operatorUsername,
+          '🌅 Günaydın — iş hâlâ açık görünüyor',
+          `${makineKisa} · ${t.uKodu||''} — dünden beri "Devam Ediyor" durumunda. Hâlâ çalışıyorsan sorun yok, unuttuysan bitirmeyi/duraklatmayı unutma.`,
+          'gun-basi-devam-hatirlatici',
+          { kaynak: 'Gün Başı Hatırlatıcısı (Otomatik)' }
+        );
+      }
     }
   }
 });
