@@ -700,7 +700,15 @@ function openReportEdit(id){
   if(!canEditReport()) return;
   const e = STATE.entries[id]; if(!e) return;
   reportEditId = id;
-  reportEditForm = { isEmriNo:e.isEmriNo||'', talepNo:e.talepNo||'', malzemeCinsi:e.malzemeCinsi||'', capBoy:e.capBoy||'', adet:e.adet||'', not:e.not||'', sonOperasyon:!!e.sonOperasyon, status:e.status||'tamamlandi', baslangic: tsToLocalInputStr(e.startTs), bitis: tsToLocalInputStr(e.endTs) };
+  const bilinenNedenler = getDurusReasons();
+  reportEditForm = {
+    isEmriNo:e.isEmriNo||'', talepNo:e.talepNo||'', malzemeCinsi:e.malzemeCinsi||'', capBoy:e.capBoy||'', adet:e.adet||'', not:e.not||'', sonOperasyon:!!e.sonOperasyon, status:e.status||'tamamlandi', baslangic: tsToLocalInputStr(e.startTs), bitis: tsToLocalInputStr(e.endTs),
+    // Kayıttaki mevcut neden hazır listede yoksa (ör. eski/serbest metin bir neden), "Diğer"
+    // seçilip kutuya o metin önceden dolduruluyor — admin açtığında mevcut neden sessizce
+    // değişmiş/kaybolmuş olmasın.
+    duruşNedeni: (e.duruşNedeni && bilinenNedenler.includes(e.duruşNedeni)) ? e.duruşNedeni : (e.duruşNedeni ? 'Diğer' : (bilinenNedenler[0]||'')),
+    duruşNedeniCustom: (e.duruşNedeni && !bilinenNedenler.includes(e.duruşNedeni)) ? e.duruşNedeni : ''
+  };
   render();
 }
 function closeReportEdit(){ reportEditId = null; reportEditForm = null; render(); }
@@ -722,6 +730,14 @@ function saveReportEdit(){
   const startTs = new Date(baslangicStr).getTime();
   if(isNaN(startTs)){ toast('Başlangıç zamanı geçersiz'); return; }
   const patch = { isEmriNo, talepNo, malzemeCinsi, capBoy, adet, not, sonOperasyon, status, startTs };
+  if(status==='duruş'){
+    // SuperAdmin'in, operatörün kullanıcısına girmeden yanlış işaretlenmiş bir duruş nedenini
+    // (ör. "Gün Sonu" olması gerekirken başka bir neden girilmiş) düzeltebilmesi için.
+    const durusNedeniSec = document.getElementById('redit-durusnedeni')?.value || '';
+    const durusNedeni = durusNedeniSec==='Diğer' ? (document.getElementById('redit-durusnedeni-custom')?.value||'').trim() : durusNedeniSec;
+    if(!durusNedeni){ toast('Duruş nedeni boş olamaz'); return; }
+    patch.duruşNedeni = durusNedeni;
+  }
   if(status==='tamamlandi'){
     const endTs = bitisStr ? new Date(bitisStr).getTime() : Date.now();
     if(isNaN(endTs)){ toast('Bitiş zamanı geçersiz'); return; }
@@ -764,6 +780,12 @@ function renderReportEditModal(){
           <div class="field" style="flex:1"><label>Başlangıç</label><input id="redit-baslangic" type="datetime-local" value="${f.baslangic}"></div>
           ${f.status==='tamamlandi' ? `<div class="field" style="flex:1"><label>Bitiş</label><input id="redit-bitis" type="datetime-local" value="${f.bitis}"></div>` : ''}
         </div>
+        ${f.status==='duruş' ? `
+        <div class="field"><label>Duruş Nedeni</label><select id="redit-durusnedeni" onchange="reportEditForm.duruşNedeni=this.value; render()">
+          ${getDurusReasons().map(r=>`<option value="${esc(r)}" ${f.duruşNedeni===r?'selected':''}>${esc(r)}</option>`).join('')}
+        </select></div>
+        ${f.duruşNedeni==='Diğer' ? `<div class="field"><label>Neden (serbest metin)</label><input id="redit-durusnedeni-custom" value="${esc(f.duruşNedeniCustom||'')}" oninput="reportEditForm.duruşNedeniCustom=this.value"></div>` : ''}
+        ` : ''}
         <div class="field"><label>Not</label><input id="redit-not" value="${esc(f.not)}"></div>
         ${switchRow('redit-sonop', f.sonOperasyon, 'Son Operasyon', 'Bu rotanın son adımı mı', {style:'margin-bottom:14px'})}
         <div style="display:flex;gap:10px">

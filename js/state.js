@@ -244,9 +244,10 @@ function renderUzunDurusModal(){
       </div>
       <div class="modal-body">
         ${list.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:30px 0">Şu an eşiği aşan duruş yok.</div>` : `
-        <div class="table-wrap" style="padding:0"><table><thead><tr><th>Makine</th><th>İş Emri</th><th>Operatör</th><th>Neden</th><th>Süre</th></tr></thead><tbody>
-          ${list.map(r=>`<tr><td class="mono" style="color:var(--accent)">${esc((r.makine||'').split(' · ')[0]||'—')}</td><td class="mono">${esc(r.isEmriNo||'—')}</td><td>${esc(r.operatorName||r.operatorUsername||'—')}</td><td style="color:var(--warn)">${esc(r.neden||'—')}</td><td style="font-weight:700;color:var(--danger)">${fmtDur(r.ms)}</td></tr>`).join('')}
-        </tbody></table></div>`}
+        <div class="table-wrap" style="padding:0"><table><thead><tr><th>Makine</th><th>İş Emri</th><th>Operatör</th><th>Neden</th><th>Süre</th>${session.isSuperAdmin?'<th></th>':''}</tr></thead><tbody>
+          ${list.map(r=>`<tr><td class="mono" style="color:var(--accent)">${esc((r.makine||'').split(' · ')[0]||'—')}</td><td class="mono">${esc(r.isEmriNo||'—')}</td><td>${esc(r.operatorName||r.operatorUsername||'—')}</td><td style="color:var(--warn)">${esc(r.neden||'—')}</td><td style="font-weight:700;color:var(--danger)">${fmtDur(r.ms)}</td>${session.isSuperAdmin?`<td>${r.tur==='entry'?`<button class="btn-ghost" style="padding:4px 10px;font-size:11px" onclick="closeUzunDurusModal(); openReportEdit('${escJs(r.ref.id)}')">Düzelt</button>`:''}</td>`:''}</tr>`).join('')}
+        </tbody></table></div>
+        ${session.isSuperAdmin ? `<div style="font-size:11px;color:var(--text-muted);margin-top:10px">"Düzelt" ile — operatörün kullanıcısına girmeden — bu kaydın durumunu/nedenini/saatlerini değiştirebilirsin (ör. yanlışlıkla farklı bir neden girilmiş bir duruşu "Gün Sonu"na çevirmek gibi). Tadilat operasyonları için bu düzeltme henüz desteklenmiyor.</div>` : ''}`}
       </div>
     </div>
   </div>`;
