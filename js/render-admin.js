@@ -1179,12 +1179,12 @@ function renderAdmin(){
       if(tadilatHere){
         const { tadilat: tt, operasyon: top } = tadilatHere;
         body += `<div class="matrix-sub" style="color:var(--tadilat-info);font-weight:700">${ico('wrench',14)} ${esc(tt.uKodu)}</div>
-          <div class="matrix-sub">${esc(top.operatorUsername)} · ${fmtElapsed(nowTick-top.baslamaTs)}</div>`;
+          <div class="matrix-sub">${esc(top.operatorUsername)} · ${fmtElapsed(tadilatOpDurationBreakdown(top).netMs)}</div>`;
       } else if(running){
         if(runningEntries.length===1){
           const info = runningEntries[0];
           body += `<div class="matrix-sub">${esc(info.talepNo || info.isEmriNo)} · ${esc(info.operatorUsername)}</div>
-            <div class="matrix-sub">${fmtElapsed(nowTick-info.startTs)} çalışıyor</div>`;
+            <div class="matrix-sub">${fmtElapsed(entryDurationBreakdown(info).netMs)} çalışıyor</div>`;
         } else {
           body += `<div class="matrix-sub" style="font-weight:700">${runningEntries.length} İş Emri Aktif</div>
             <div class="matrix-sub" style="opacity:.7">Detay için tıkla</div>`;
@@ -1460,7 +1460,7 @@ function renderAdmin(){
               <td class="mono" style="color:var(--accent)">${esc(e.talepNo||e.isEmriNo)}</td>
               <td class="mono">${esc((e.makine||'').split(' · ')[0]||'—')}</td>
               <td style="font-size:12.5px">${esc(e.operatorName||e.operatorUsername||'—')}</td>
-              <td style="text-align:right">${e.status==='duruş' ? `<span style="color:var(--warn)">Duruşta · ${esc(e.duruşNedeni||'')}</span>` : `<span style="color:var(--success)">${fmtElapsed(nowTick-e.startTs)}</span>`}</td>
+              <td style="text-align:right">${e.status==='duruş' ? `<span style="color:var(--warn)">Duruşta · ${esc(e.duruşNedeni||'')}</span>` : `<span style="color:var(--success)">${fmtElapsed(entryDurationBreakdown(e).netMs)}</span>`}</td>
             </tr>`).join('')}
           </tbody></table></div>`}
         </div>
@@ -1708,7 +1708,7 @@ function renderAdmin(){
       return `<div class="completed-card">
         <div class="completed-header">
           <span class="completed-id mono">${esc(t.uKodu)}</span>
-          <span class="completed-meta" style="color:var(--accent)">${esc(op.operatorUsername)} · ${esc(op.operatorName)} · ${fmtElapsed(nowTick-op.baslamaTs)}</span>
+          <span class="completed-meta" style="color:var(--accent)">${esc(op.operatorUsername)} · ${esc(op.operatorName)} · ${fmtElapsed(tadilatOpDurationBreakdown(op).netMs)}</span>
         </div>
         ${op.makine ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">${ico('factory',14)} ${esc(op.makine)}</div>` : ''}
       </div>`;
@@ -1737,7 +1737,7 @@ function renderAdmin(){
             <td>${esc(op.makine||'—')}</td>
             <td>${esc(op.operatorUsername)} · ${esc(op.operatorName)}</td>
             <td>${fmtDT(op.baslamaTs)}</td>
-            <td style="color:var(--tadilat-info);font-weight:700">${fmtElapsed(nowTick-op.baslamaTs)}</td>
+            <td style="color:var(--tadilat-info);font-weight:700">${fmtElapsed(tadilatOpDurationBreakdown(op).netMs)}</td>
             <td>${op.sonOperasyon?'—':'<span style="color:var(--warn)">Hayır, devamı gelecek</span>'}</td>
           </tr>
         `).join('')}

@@ -194,7 +194,7 @@ function renderTadilatHistoryDetailModal(){
   const t = tadilatlar[tadilatId];
   const op = t && t.operasyonlar && t.operasyonlar[opId];
   if(!t || !op){ tadilatHistoryDetailId=null; return ''; }
-  const dur = op.bitisTs ? fmtDur(op.bitisTs-op.baslamaTs) : fmtElapsed(nowTick-op.baslamaTs)+' (sürüyor)';
+  const dur = op.bitisTs ? fmtDur(op.bitisTs-op.baslamaTs) : fmtElapsed(tadilatOpDurationBreakdown(op).netMs)+' (sürüyor)';
   const statusLabel = op.status==='tamamlandi' ? (op.sonOperasyon?'Tadilat Tamamlandı':'Operasyon Bitti (Devamı Var)') : 'Tadilat — Devam Ediyor';
   return `<div class="modal-overlay" onclick="if(event.target===this) closeTadilatHistoryDetail()">
     <div class="modal-box" style="max-width:440px">
@@ -568,7 +568,7 @@ function renderMachineModal(){
         </tr></thead><tbody>
         ${(() => { const completedIdsForModal = computeCompletedRouteIds(); return rows.length===0 ? `<tr><td colspan="${8 + (canDeleteReport()?2:0) + (session.isSuperAdmin?1:0)}" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : rows.map(e=>{
           if(e._isTadilat){
-            const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : fmtElapsed(nowTick-e.startTs)+' (sürüyor)';
+            const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : fmtElapsed(entryDurationBreakdown(e).netMs)+' (sürüyor)';
             const statusLabel = e.status==='tamamlandi' ? (e._sonOperasyon?'Tadilat Tamamlandı':'Operasyon Bitti (Devamı Var)') : 'Tadilat — Devam Ediyor';
             return `<tr>
               ${canDeleteReport() ? `<td><input type="checkbox" ${modalSelectedIds.has(e.id)?'checked':''} onchange="toggleModalSelect('${e.id}')"></td>` : ''}
@@ -580,7 +580,7 @@ function renderMachineModal(){
           const isDone = completedIdsForModal.has(e.id);
           const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success-soft)';
           const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
-          const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : (e.status==='devam' ? fmtElapsed(nowTick-e.startTs)+' (sürüyor)' : '—');
+          const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : (e.status==='devam' ? fmtElapsed(entryDurationBreakdown(e).netMs)+' (sürüyor)' : '—');
           const malzAdi = e.malzemeCinsi || getTalepInfo(e.talepNo)?.malzemeAdi || '—';
           return `<tr style="${isDone?'background:var(--success-row)':''}">
             ${canDeleteReport() ? `<td><input type="checkbox" ${modalSelectedIds.has(e.id)?'checked':''} onchange="toggleModalSelect('${e.id}')"></td>` : ''}
@@ -715,7 +715,7 @@ function renderGroupScreen(groupId, groupMembers){
     <div class="lock-label" style="${anyDurus?'color:var(--warn)':''}">${anyDurus?'DURUŞTA':'ÇOKLU İŞ EMRİ'}</div>
     <div class="lock-id">${esc(makine)}</div>
     <div class="lock-machine">${groupMembers.map(e=>esc(e.talepNo || e.isEmriNo)).join(', ')}</div>
-    <div class="lock-timer" style="${anyDurus?'color:var(--warn)':''}">${anyDurus?fmtElapsed(nowTick-ref.duruşTs):fmtElapsed(nowTick-ref.startTs)}</div>
+    <div class="lock-timer" style="${anyDurus?'color:var(--warn)':''}">${anyDurus?fmtElapsed(nowTick-ref.duruşTs):fmtElapsed(entryDurationBreakdown(ref).netMs)}</div>
     <div class="lock-meta">${anyDurus?'duruş süresi (tüm iş emirleri için ortak)':`${groupMembers.length} iş emri bu makinede aynı anda aktif`}</div>
     ${anyDurus ? `<div class="durus-reason-box" style="${ref.duruşNedeni===GUN_SONU_REASON?'color:var(--gunsonu);background:var(--gunsonu-soft);border-color:var(--gunsonu-border)':isTadilatRelated(ref.duruşNedeni)?'color:var(--tadilat-info);background:var(--tadilat-soft);border-color:var(--tadilat-border)':''}">${ref.duruşNedeni===GUN_SONU_REASON?(ico('moon',13)+' '):isTadilatRelated(ref.duruşNedeni)?(ico('wrench',13)+' '):''}"${esc(ref.duruşNedeni)}"</div>` : ''}
     <div style="margin-top:20px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:8px;text-align:left">
@@ -831,7 +831,7 @@ function renderLockScreen(active){
       <div class="lock-id">${esc(active.talepNo || active.isEmriNo)}</div>
       ${active.talepNo ? `<div style="font-size:12px;color:var(--text-muted);margin-top:-4px" class="mono">U kodu: ${esc(active.isEmriNo)}</div>` : ''}
       <div class="lock-machine">${esc(active.makine)}</div>
-      <div class="lock-timer">${fmtElapsed(nowTick-active.startTs)}</div>
+      <div class="lock-timer">${fmtElapsed(entryDurationBreakdown(active).netMs)}</div>
       <div class="lock-meta">${fmtDT(active.startTs)} itibarıyla devam ediyor</div>
       ${active.adet ? `<div class="lock-meta">Adet: ${esc(active.adet)}</div>` : ''}
       ${active.not ? `<div class="lock-note">"${esc(active.not)}"</div>` : ''}
