@@ -251,6 +251,71 @@ function renderUzunDurusModal(){
     </div>
   </div>`;
 }
+/* ===================== UZUN SÜREDİR DEVAM EDEN UYARISI (opsiyonel modül) =====================
+   uzunDurusUyarisi'nin ayna görüntüsü ama TERSİ senaryo için: operatör bir işi/tadilat
+   operasyonunu "Bitir" ya da "Duraklat" demeden, status:'devam'da bırakıp gitmiş olabilir (ör.
+   eve giderken unutmuş). Bu durum ne uzunDurusluKayitlar()'da (sadece 'duruş' bakıyor) ne de
+   Gün Başı Hatırlatıcısı'nda (o da sadece 'duruş' bakıyor) hiç yakalanmıyordu — kayıt sessizce
+   günler boyu "aktif çalışıyor" gibi görünüp raporlarda hayali süre biriktirmeye devam ediyordu.
+   Eşik kasıtlı olarak duruş uyarısından çok daha yüksek (varsayılan 14 saat, normal bir vardiya +
+   tolerans) — 'devam'da 30 dakika gibi kısa bir eşik gerçekten çalışılan işler için sürekli yanlış
+   alarm üretirdi. Farklı bir mesaj/eylem gerektirdiği için uzunDurusUyarisi ile BİLEREK ayrı
+   tutuluyor (biri "makineyi devreye al" der, bu "hâlâ açık görünüyor, unuttun mu" demeli). */
+function uzunDevamEdenUyariEnabled(){ return appSettings.uzunDevamEdenUyariEnabled !== false; } // varsayılan: açık
+function uzunDevamEdenEsikMs(){ return (Number(appSettings.uzunDevamEdenEsikSaat) || 14) * 3600000; }
+function toggleUzunDevamEdenUyari(){
+  if(!canManageBildirimAyarlari()){ toast('Bu işlem için yetkin yok'); return; }
+  DB.ref('settings/uzunDevamEdenUyariEnabled').set(!uzunDevamEdenUyariEnabled());
+}
+function setUzunDevamEdenEsikSaat(v){
+  if(!canManageBildirimAyarlari()) return;
+  const n = Math.max(1, Math.min(48, parseInt(v,10)||14));
+  DB.ref('settings/uzunDevamEdenEsikSaat').set(n);
+}
+function uzunDevamEdenKayitlar(){
+  // Fason (dışarı gönderim) makineleri BİLİNÇLİ olarak dışlanıyor — bir iş fasonda günlerce
+  // 'devam' durumunda kalması bug değil, ne kadar süre kaybedildiğini ölçmenin asıl yöntemi.
+  // Gerçek veri: FII01/OPRT14'te 78 kayıt, hepsi bu desende — "unutulmuş iş" değil, fason'un
+  // doğası. Bu filtre olmadan alarm sürekli gürültü üretir ve gerçek unutulmuş kayıtları gizler.
+  if(!uzunDevamEdenUyariEnabled()) return [];
+  const esik = uzunDevamEdenEsikMs();
+  const sonuc = [];
+  entriesArray().forEach(e=>{
+    if(e.status==='devam' && e.startTs && !isFasonMachine(e.makine)){
+      const ms = nowTick - e.startTs;
+      if(ms>=esik) sonuc.push({ tur:'entry', makine:e.makine, isEmriNo:e.isEmriNo||e.talepNo, operatorName:e.operatorName, operatorUsername:e.operatorUsername, ms, ref:e });
+    }
+  });
+  tadilatArray().forEach(t=>{
+    tadilatOperasyonlarArray(t).forEach(op=>{
+      if(op.status==='devam' && op.baslamaTs && !isFasonMachine(op.makine)){
+        const ms = nowTick - op.baslamaTs;
+        if(ms>=esik) sonuc.push({ tur:'tadilat', makine:op.makine, isEmriNo:t.uKodu, operatorName:op.operatorName, operatorUsername:op.operatorUsername, ms, ref:op });
+      }
+    });
+  });
+  return sonuc.sort((a,b)=>b.ms-a.ms);
+}
+let uzunDevamEdenModalOpen = false;
+function openUzunDevamEdenModal(){ uzunDevamEdenModalOpen = true; render(); }
+function closeUzunDevamEdenModal(){ uzunDevamEdenModalOpen = false; render(); }
+function renderUzunDevamEdenModal(){
+  const list = uzunDevamEdenKayitlar();
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeUzunDevamEdenModal()">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div><div class="modal-title">${ico('alert',14)} Uzun Süredir Devam Ediyor</div><div class="modal-sub">Eşik: ${Math.round(uzunDevamEdenEsikMs()/3600000)} saat ve üzeri — muhtemelen kapatılmayı unutulmuş</div></div>
+        <button class="icon-btn" onclick="closeUzunDevamEdenModal()">${ico('x',14)}</button>
+      </div>
+      <div class="modal-body">
+        ${list.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:30px 0">Şu an eşiği aşan devam eden kayıt yok.</div>` : `
+        <div class="table-wrap" style="padding:0"><table><thead><tr><th>Makine</th><th>İş Emri</th><th>Operatör</th><th>Süre</th></tr></thead><tbody>
+          ${list.map(r=>`<tr><td class="mono" style="color:var(--accent)">${esc((r.makine||'').split(' · ')[0]||'—')}</td><td class="mono">${esc(r.isEmriNo||'—')}</td><td>${esc(r.operatorName||r.operatorUsername||'—')}</td><td style="font-weight:700;color:var(--danger)">${fmtDur(r.ms)}</td></tr>`).join('')}
+        </tbody></table></div>`}
+      </div>
+    </div>
+  </div>`;
+}
 function stockItemsArray(){ return Object.entries(stockItems).map(([id,v])=>({id, ...v})).sort((a,b)=>(a.kod||'').localeCompare(b.kod||'')); }
 function lotsArray(item){ return Object.entries(item.lots||{}).map(([id,v])=>({id, ...v})).sort((a,b)=>(b.boy||0)-(a.boy||0)); }
 // Bir isEmriNo için daha önce hiç kayıt açılmamışsa "ilk operasyon"dur — hammadde tüketimi
