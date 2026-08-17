@@ -52,10 +52,16 @@ async function enablePushNotifications(){
   }
   if(!pushConfigured()){ toast('Bildirim sistemi henüz kurulmadı (VAPID key eksik)'); return; }
   try{
-    const reg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+    // ÖNEMLİ: Notification.requestPermission() kullanıcının tıklamasıyla AYNI çağrı yığınına
+    // mümkün olduğunca yakın tetiklenmeli — aradan bir await (özellikle serviceWorker.register()
+    // gibi süre alabilen bir işlem) girerse, birçok mobil tarayıcı tıklamanın "geçerliliğinin"
+    // dolduğunu düşünüp gerçek izin penceresini HİÇ GÖSTERMEDEN sessizce 'default' döndürüyor —
+    // "toggle açılıp kendi kendine kapanıyor, hiçbir pencere çıkmıyor" belirtisinin sebebi bu.
+    // Bu yüzden izin isteği servis çalışanı kaydından ÖNCE yapılıyor.
     const perm = await Notification.requestPermission();
     pushPermissionState = perm;
     if(perm !== 'granted'){ toast('Bildirim izni verilmedi'); render(); return; }
+    const reg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
     const messaging = firebase.messaging();
     const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
     if(token){
