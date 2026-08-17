@@ -28,8 +28,8 @@ messaging.onBackgroundMessage((payload) => {
   const title = payload.data?.title || 'Rota Takip';
   const options = {
     body: payload.data?.body || '',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
     data: payload.data || {},
     tag: payload.data?.tag || 'rota-takip-uyari' // aynı tag'li bildirimler üst üste değil, güncellenerek gösterilir
   };

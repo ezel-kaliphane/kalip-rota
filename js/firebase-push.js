@@ -7,6 +7,21 @@ const VAPID_KEY = 'BCzH63ol7xwko9kjQRuDHDXK8IwyD5E3vq4TaP5Pd3W6bUay1BzR1J2lTcn1x
 function pushConfigured(){ return VAPID_KEY && VAPID_KEY.indexOf('BURAYA')<0; }
 let pushPermissionState = (typeof Notification!=='undefined') ? Notification.permission : 'unsupported'; // 'default' | 'granted' | 'denied' | 'unsupported'
 
+/* pushPermissionState==='denied' olduğunda gösterilen düzeltme talimatı — teknik olmayan bir
+   operatör için "telefon ayarlarından izin ver" tek başına yetersiz (nereye bakacağını
+   bilmiyor). Chrome (Android) ve Safari (iOS) için izin sıfırlama adımları TAMAMEN FARKLI
+   yerlerde olduğu için tarayıcıya göre ayrı, somut adımlar gösteriyoruz. */
+function pushBlockedInstructions(){
+  const ua = navigator.userAgent || '';
+  if(/iPad|iPhone|iPod/.test(ua)){
+    return 'Telefonun Uygulama Ayarları\'ndaki genel izin bundan AYRI — Safari\'nin kendi site izni hâlâ kapalı. Düzeltmek için: telefonun Ayarlar uygulamasını aç → aşağı kaydırıp bu uygulamayı ("Rota Takip") bul → Bildirimler → aç. (Ana ekranda uygulama yoksa önce Safari\'de Paylaş → "Ana Ekrana Ekle" ile yüklemen gerekir.)';
+  }
+  if(/Android/.test(ua)){
+    return 'Telefonun Uygulama Ayarları\'nda "İzin Verildi" görünse bile bu YETMEZ — Chrome\'un kendi site izni ayrı ve hâlâ engelli. Düzeltmek için: Chrome\'u aç (yüklü uygulama simgesinden değil) → bu siteye git → adres çubuğunun solundaki 🔒 simgesine dokun → İzinler → Bildirimler\'i "İzin Ver" yap → sonra bu uygulamayı kapatıp yeniden aç.';
+  }
+  return 'Tarayıcı bu site için bildirimi engellemiş. Tarayıcının adres çubuğundaki site bilgisi simgesine (🔒/ⓘ) dokunup site izinlerinden Bildirimler\'i "İzin Ver" yap, sonra sayfayı yenile.';
+}
+
 /* Bu cihaz için sabit bir kimlik — tarayıcının localStorage'ında kalıcı olarak saklanıyor.
    Token'lar artık bu ID'ye göre kaydediliyor (fcmTokens/{deviceId}: token), token değeri
    kendisine göre değil — böylece aynı cihazda "Bildirimleri Aç"a tekrar basılsa ya da FCM
