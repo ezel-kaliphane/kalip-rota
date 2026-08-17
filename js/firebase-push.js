@@ -50,7 +50,7 @@ function setupForegroundPushListener(){
       const tag = payload.data?.tag || 'rota-takip-uyari';
       if('serviceWorker' in navigator){
         navigator.serviceWorker.getRegistration().then(reg=>{
-          if(reg) reg.showNotification(title, { body, icon:'/icon-192.png', badge:'/icon-192.png', tag, data: payload.data||{} });
+          if(reg) reg.showNotification(title, { body, icon:'./icon-192.png', badge:'./icon-192.png', tag, data: payload.data||{} });
           else toast(title+': '+body); // service worker hiç kayıtlı değilse en azından uygulama içi bildirim göster
         });
       } else {

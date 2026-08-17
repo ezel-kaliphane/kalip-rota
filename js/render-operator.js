@@ -355,7 +355,7 @@ function renderOperator(){
     </div>`;
   } else if(view==='settings'){
     const chev = `<span class="chev">${ico('chevronRight',17)}</span>`;
-    const pushOn = pushPermissionState==='granted';
+    const pushOn = pushPermissionState==='granted' && !(STATE.operators[session.username]||{}).pushMuted;
     body = `<div class="body-pad">
       <div class="set-card" style="display:flex;align-items:center;gap:13px">
         <span class="avatar">${esc(initials(session.displayName))}</span>

@@ -42,10 +42,15 @@ function openTadilatRowEdit(rowId){
   const t = tadilatlar[tadilatId]; if(!t) return;
   const op = t.operasyonlar && t.operasyonlar[opId]; if(!op) return;
   tadilatRowEditId = rowId;
+  const bilinenNedenler = getDurusReasons();
   tadilatRowEditForm = {
     tadilatId, opId,
     baslangic: tsToLocalInputStr(op.baslamaTs), bitis: tsToLocalInputStr(op.bitisTs),
-    status: op.status||'devam', sonOperasyon: !!op.sonOperasyon
+    status: op.status||'devam', sonOperasyon: !!op.sonOperasyon,
+    // Kayıttaki mevcut neden hazır listede yoksa (ör. eski/serbest metin bir neden), "Diğer"
+    // seçilip kutuya o metin önceden dolduruluyor — entries düzelt modalindeki aynı pattern.
+    duruşNedeni: (op.duruşNedeni && bilinenNedenler.includes(op.duruşNedeni)) ? op.duruşNedeni : (op.duruşNedeni ? 'Diğer' : (bilinenNedenler[0]||'')),
+    duruşNedeniCustom: (op.duruşNedeni && !bilinenNedenler.includes(op.duruşNedeni)) ? op.duruşNedeni : ''
   };
   render();
 }
@@ -61,6 +66,12 @@ function saveTadilatRowEdit(){
   const baslamaTs = new Date(baslangicStr).getTime();
   if(isNaN(baslamaTs)){ toast('Başlangıç zamanı geçersiz'); return; }
   const patch = { status, sonOperasyon, baslamaTs };
+  if(status==='duruş'){
+    const durusNedeniSec = document.getElementById('trowedit-durusnedeni')?.value || '';
+    const durusNedeni = durusNedeniSec==='Diğer' ? (document.getElementById('trowedit-durusnedeni-custom')?.value||'').trim() : durusNedeniSec;
+    if(!durusNedeni){ toast('Duruş nedeni boş olamaz'); return; }
+    patch.duruşNedeni = durusNedeni;
+  }
   if(status==='tamamlandi'){
     const bitisTs = bitisStr ? new Date(bitisStr).getTime() : Date.now();
     if(isNaN(bitisTs)){ toast('Bitiş zamanı geçersiz'); return; }
@@ -87,9 +98,16 @@ function renderTadilatRowEditModal(){
         <div class="field"><label>Başlangıç</label><input id="trowedit-baslangic" type="datetime-local" value="${f.baslangic}"></div>
         <div class="field"><label>Durum</label><select id="trowedit-status" onchange="tadilatRowEditForm.status=this.value; render()">
           <option value="devam" ${f.status==='devam'?'selected':''}>Devam Ediyor</option>
+          <option value="duruş" ${f.status==='duruş'?'selected':''}>Duruşta</option>
           <option value="tamamlandi" ${f.status==='tamamlandi'?'selected':''}>Tamamlandı</option>
         </select></div>
         ${f.status==='tamamlandi' ? `<div class="field"><label>Bitiş</label><input id="trowedit-bitis" type="datetime-local" value="${f.bitis}"></div>` : ''}
+        ${f.status==='duruş' ? `
+        <div class="field"><label>Duruş Nedeni</label><select id="trowedit-durusnedeni" onchange="tadilatRowEditForm.duruşNedeni=this.value; render()">
+          ${getDurusReasons().map(r=>`<option value="${esc(r)}" ${f.duruşNedeni===r?'selected':''}>${esc(r)}</option>`).join('')}
+        </select></div>
+        ${f.duruşNedeni==='Diğer' ? `<div class="field"><label>Neden (serbest metin)</label><input id="trowedit-durusnedeni-custom" value="${esc(f.duruşNedeniCustom||'')}" oninput="tadilatRowEditForm.duruşNedeniCustom=this.value"></div>` : ''}
+        ` : ''}
         ${switchRow('trowedit-sonop', f.sonOperasyon, 'Son Operasyon', 'Bitince tadilat kapanır', {style:'margin-bottom:14px'})}
         <div style="display:flex;gap:10px">
           <button class="btn-primary" onclick="saveTadilatRowEdit()">${ico('check',14)} Kaydet</button>
@@ -911,9 +929,23 @@ function switchRow(id, checked, title, sub, opts){
 let pwOpen = false;
 function togglePwPanel(){ pwOpen = !pwOpen; render(); }
 function onPushToggle(el){
-  if(el.checked){ enablePushNotifications(); return; }
-  el.checked = true;
-  toast('Bildirimleri kapatmak için telefon/tarayıcı ayarlarını kullan');
+  // Notification.permission tarayıcı tarafından salt-okunur — JS ile geri alınamaz. Bu yüzden
+  // "kapatma" tarayıcı izniyle değil, uygulama tarafında bir sessize-alma bayrağıyla (operators/
+  // {kullanıcı}/pushMuted) yapılıyor; Cloud Function göndermeden önce bu bayrağa bakıyor
+  // (bkz. functions/index.js sendToOperator).
+  if(el.checked){
+    if(pushPermissionState==='granted'){
+      DB.ref('operators/'+session.username+'/pushMuted').remove();
+      toast('Bildirimler açıldı ✓');
+      render();
+    } else {
+      enablePushNotifications();
+    }
+    return;
+  }
+  DB.ref('operators/'+session.username+'/pushMuted').set(true);
+  toast('Bildirimler kapatıldı');
+  render();
 }
 function initials(name){ return String(name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase(); }
 function myRoleLabel(){ return session.isSuperAdmin ? 'Süper Admin' : session.isSef ? 'Şef' : session.isUretimSef ? 'Üretim Şef' : session.isAdmin ? 'Yönetici' : 'Operatör'; }
