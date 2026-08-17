@@ -329,6 +329,227 @@ function renderAnalizKisiBazli(){
   }
   return html;
 }
+/* Bir operatörün (computeAnalizData().perOperator elemanı) gün gün dökümünü — Çalışma/Duruş/
+   Boşta/Fazla Mesai/Kalan Mesai tablosu + her günün altında saatlik Gantt şeridi — HTML'e çevirir.
+   Hem "Kişi Bazlı Özet" tablosundaki açılır satırda hem de "Operatör Analizi" görünümünde birebir
+   aynı şekilde kullanılıyor, ayrı bir hesap/veri modeli icat edilmedi. */
+function renderOperatorGunGunTablosu(op){
+  return `<div class="table-wrap" style="padding:0"><table><thead><tr>
+      <th>Tarih</th><th>Makineler</th><th>Çalışma</th><th>Duruş</th><th>Boşta</th><th>Fazla Mesai</th><th>Kalan Mesai</th>
+    </tr></thead><tbody>
+      ${op.days.map(d=>{
+        const dStartMs = new Date(d.tarih+'T00:00:00').getTime();
+        const availMin = WORKDAY_MINUTES + d.overtimeMin;
+        const idleMin = Math.max(0, availMin - d.workMin - d.durusMin);
+        const segs = renderGanttSegmentsHtml(d.entries||[], dStartMs, dStartMs+86400000, e=>`${e.isEmriNo||e.talepNo||''} · ${e.makine||''}`);
+        return `<tr>
+        <td class="mono">${esc(d.tarih)}</td>
+        <td style="font-size:12px">${d.machines.map(m=>`<span class="mono" style="color:var(--accent)">${esc(m.code)}</span> (${fmtDur(m.workMin*60000)})`).join('<br>')}</td>
+        <td>${fmtDur(d.workMin*60000)}${d.hasPhysicalAnomaly?` <span style="color:var(--danger)" title="O gün, gerçek geçen süreden fazla çalışma hesaplandı — fiziksel üst sınıra çekildi.">${ico('alert',14)}</span>`:''}</td>
+        <td style="color:${d.durusMin>0?'var(--warn)':'inherit'}">${fmtDur(d.durusMin*60000)}</td>
+        <td style="color:var(--text-muted)">${fmtDur(idleMin*60000)}</td>
+        <td>${d.overtimeMin>0?`<span style="color:var(--danger);font-weight:600">${d.overtimeMin} dk</span>`:'—'}</td>
+        <td style="color:${d.kalanMin>0?'var(--text-muted)':'var(--success)'}">${d.kalanMin>0?fmtDur(d.kalanMin*60000):'Tamamlandı'}</td>
+      </tr>
+      <tr><td colspan="7" style="padding:2px 0 12px">
+        <div class="analiz-gantt-row" style="margin-bottom:0">
+          <div class="analiz-gantt-label" style="width:0"></div>
+          <div class="analiz-gantt-track">${segs}<div class="analiz-gantt-cutoff" style="left:${(WORKDAY_END_MINUTE/1440)*100}%"></div></div>
+        </div>
+      </td></tr>`;
+      }).join('')}
+    </tbody></table></div>
+    <div style="display:flex;gap:14px;font-size:11px;color:var(--text-muted);margin-top:8px;flex-wrap:wrap">
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--success);border-radius:2px;margin-right:4px"></span>Çalışma</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--warn);border-radius:2px;margin-right:4px"></span>Duruş</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--panel-alt);border:1px solid var(--border);border-radius:2px;margin-right:4px"></span>Boşta / kayıt yok</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#3a4148;border-radius:2px;margin-right:4px"></span>Gün Sonu (hariç tutulan)</span>
+    </div>`;
+}
+/* Analiz sekmesi — "Operatör Analizi" görünümü: tek bir operatörü seçip performansına derinlemesine
+   inmek için. Sol tarafta arama + tüm operatörlerin (computeAnalizData().perOperator) listesi
+   verimliliğe göre sıralı, sağda seçilinin dönem KPI'ları, günlük verimlilik trendi, duruş
+   nedenleri, makine kırılımı, bugünkü vardiya şeridi ve gün gün döküm (renderOperatorGunGunTablosu
+   ile Kişi Bazlı Özet'teki AYNI tablo/Gantt tekrar kullanılıyor). Ayrı bir veri modeli icat
+   edilmedi — hepsi computeAnalizData ve entriesArray'den; verimlilik formülü de Kişi Bazlı
+   sekmesindekiyle (çalışma/(çalışma+duruş)) BİLEREK aynı tutuldu, aksi halde aynı kişi için iki
+   ekranda iki farklı yüzde görünürdü.
+*/
+function renderAnalizOperator(){
+  const bugun = dateKey(Date.now());
+  const presetDays = { bugun:1, d7:7, d30:30 }[analizOperatorPeriod] || 7;
+  const fromDt = new Date(); fromDt.setHours(12,0,0,0); fromDt.setDate(fromDt.getDate()-(presetDays-1));
+  const fromKey = dateKey(fromDt.getTime());
+  const data = computeAnalizData(fromKey, bugun, 'tumu');
+  const periodLabel = { bugun:'Bugün', d7:'Son 7 gün', d30:'Son 30 gün' }[analizOperatorPeriod];
+  const verimOf = op => (op.workMin+op.durusMin)>0 ? Math.round(op.workMin/(op.workMin+op.durusMin)*100) : 0;
+  const ranked = data.perOperator.map(op=>({ op, verim: verimOf(op) })).sort((a,b)=>b.verim-a.verim);
+
+  const q = analizOperatorArama.trim().toLowerCase();
+  const filtered = !q ? ranked : ranked.filter(({op})=>{
+    const makineler = op.days.flatMap(d=>d.machines.map(m=>m.code)).join(' ');
+    return `${op.operatorName||''} ${op.operatorUsername||''} ${makineler}`.toLowerCase().includes(q);
+  });
+
+  if(analizOperatorSecili && !ranked.some(({op})=>op.operatorUsername===analizOperatorSecili)) analizOperatorSecili = null;
+  if(!analizOperatorSecili && ranked.length>0) analizOperatorSecili = ranked[0].op.operatorUsername;
+
+  const periodChips = `<div style="display:flex;gap:6px;flex-wrap:wrap">
+    ${[['bugun','Bugün'],['d7','Son 7 Gün'],['d30','Son 30 Gün']].map(([p,label])=>`<button class="chip ${analizOperatorPeriod===p?'active':''}" onclick="setAnalizOperatorPeriod('${p}')">${label}</button>`).join('')}
+  </div>`;
+
+  let html = `<div style="display:grid;grid-template-columns:270px 1fr;gap:14px;align-items:start">
+    <div class="analiz-chart-box" style="padding:12px">
+      <input type="text" placeholder="Operatör veya makine ara…" value="${esc(analizOperatorArama)}" oninput="setAnalizOperatorArama(this.value)" style="margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${filtered.length} operatör · ${periodLabel} · verimliliğe göre sıralı</div>
+      <div style="max-height:640px;overflow-y:auto;display:flex;flex-direction:column;gap:5px">
+        ${filtered.length===0 ? `<div style="color:var(--text-muted);font-size:12.5px;padding:14px 0;text-align:center">Sonuç yok.</div>` : filtered.map(({op,verim})=>{
+          const selected = op.operatorUsername===analizOperatorSecili;
+          const verimColor = verim>=70?'var(--success)':verim>=40?'var(--warn)':'var(--danger)';
+          return `<div onclick="setAnalizOperatorSecili('${escJs(op.operatorUsername)}')" style="cursor:pointer;padding:9px 10px;border-radius:8px;background:${selected?'var(--panel-alt)':'transparent'};border:1px solid ${selected?'var(--accent)':'transparent'}">
+            <div style="font-size:12.5px;font-weight:600">${esc(op.operatorName||op.operatorUsername)}</div>
+            <div class="mono" style="font-size:10.5px;color:var(--text-muted);margin-top:1px">${esc(op.operatorUsername)}</div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px">
+              <span style="font-size:10.5px;color:var(--text-muted)">${op.daysUsed} gün · ${op.machineCount} makine</span>
+              <span class="mono" style="font-size:12px;font-weight:700;color:${verimColor}">%${verim}</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div>`;
+
+  const sel = ranked.find(({op})=>op.operatorUsername===analizOperatorSecili);
+  if(!sel){
+    return html + `<div class="analiz-chart-box" style="text-align:center;color:var(--text-muted);padding:60px 20px">Bu dönemde hiç kayıt yok.</div></div></div>`;
+  }
+  const { op, verim } = sel;
+  const rank = ranked.findIndex(r=>r.op.operatorUsername===op.operatorUsername)+1;
+  const verimColor = verim>=70?'var(--success)':verim>=40?'var(--warn)':'var(--danger)';
+
+  // Canlı durum: şu an devam/duruşta bir üretim kaydı ya da aktif bir tadilat operasyonu var mı —
+  // ayrı bir "presence" alanı yok, mevcut entries/tadilat verisinden aynı anda türetiliyor.
+  const liveEntry = entriesArray().find(e=>e.operatorUsername===op.operatorUsername && (e.status==='devam'||e.status==='duruş'));
+  const liveTadilat = !liveEntry ? tadilatArray().map(t=>({t,o:tadilatAktifOperasyon(t)})).find(x=>x.o && x.o.operatorUsername===op.operatorUsername) : null;
+  let statusHtml;
+  if(liveEntry){
+    const label = liveEntry.status==='duruş' ? `Duruşta · ${esc(liveEntry.duruşNedeni||'')}` : 'Çalışıyor';
+    const color = liveEntry.status==='duruş' ? 'var(--warn)' : 'var(--success)';
+    statusHtml = `<span style="color:${color};font-weight:600">${label}</span> · ${esc((liveEntry.makine||'').split(' · ')[0]||'')} · ${esc(liveEntry.isEmriNo||liveEntry.talepNo||'')} · ${fmtElapsed(entryDurationBreakdown(liveEntry).netMs)}`;
+  } else if(liveTadilat){
+    statusHtml = `<span style="color:var(--tadilat-info);font-weight:600">Tadilatta</span> · ${esc(liveTadilat.t.uKodu)} · ${esc(liveTadilat.o.makine||'')} · ${fmtElapsed(tadilatOpDurationBreakdown(liveTadilat.o).netMs)}`;
+  } else {
+    statusHtml = `<span style="color:var(--text-muted)">Şu an açık kaydı yok</span>`;
+  }
+
+  const allEntries = op.days.flatMap(d=>d.entries||[]);
+  const tamamlanan = new Set(allEntries.filter(e=>e.status==='tamamlandi').map(e=>e.isEmriNo||e.talepNo)).size;
+  const tadilatSayisi = allEntries.filter(e=>e._isTadilat).length;
+
+  html += `<div class="analiz-chart-box" style="margin-bottom:14px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-size:18px;font-weight:700">${esc(op.operatorName||op.operatorUsername)}</div>
+          <div class="mono" style="font-size:11.5px;color:var(--text-muted);margin-top:2px">${esc(op.operatorUsername)} · atölye sırası #${rank} / ${ranked.length} · ${periodLabel}</div>
+        </div>
+        ${periodChips}
+      </div>
+      <div style="font-size:12.5px;margin-top:10px">${statusHtml}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px">
+      <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Verimlilik</div><div class="mono" style="font-size:24px;font-weight:700;margin-top:6px;color:${verimColor}">%${verim}</div></div>
+      <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Net Çalışma</div><div class="mono" style="font-size:24px;font-weight:700;margin-top:6px;color:var(--success)">${fmtDur(op.workMin*60000)}</div></div>
+      <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Duruş</div><div class="mono" style="font-size:24px;font-weight:700;margin-top:6px;color:var(--warn)">${fmtDur(op.durusMin*60000)}</div></div>
+      <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Fazla Mesai</div><div class="mono" style="font-size:24px;font-weight:700;margin-top:6px;color:${op.overtimeMin>0?'var(--danger)':'var(--text-muted)'}">${op.overtimeMin>0?fmtDur(op.overtimeMin*60000):'—'}</div></div>
+      <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Tamamlanan İş</div><div class="mono" style="font-size:24px;font-weight:700;margin-top:6px">${tamamlanan}${tadilatSayisi>0?` <span style="font-size:12px;color:var(--text-muted);font-weight:400">(${tadilatSayisi} tadilat)</span>`:''}</div></div>
+    </div>
+    ${op.hasPhysicalAnomaly?`<div style="display:flex;align-items:center;gap:8px;background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--warn)">${ico('alert',14)} Bu dönemde en az bir günde gerçek geçen süreden fazla çalışma hesaplandı — muhtemelen kapatılmamış eski bir kayıt var, aşağıdaki gün gün dökümde ${ico('alert',12)} işaretli günlere bak.</div>`:''}
+  `;
+
+  const daysAsc = op.days.slice().sort((a,b)=>a.tarih.localeCompare(b.tarih));
+  if(daysAsc.length>1){
+    html += `<div class="analiz-chart-box" style="margin-bottom:14px">
+      <div style="font-size:14.5px;font-weight:700;margin-bottom:2px">Günlük Verimlilik Trendi</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Çalışma / (Çalışma + Duruş) · gün bazında</div>
+      <div style="display:flex;align-items:flex-end;gap:8px;height:140px;padding-top:16px;overflow-x:auto">
+        ${daysAsc.map(d=>{
+          const v = (d.workMin+d.durusMin)>0 ? Math.round(d.workMin/(d.workMin+d.durusMin)*100) : 0;
+          const c = v>=70?'var(--success)':v>=40?'var(--warn)':'var(--danger)';
+          const dLabel = d.tarih.slice(5).split('-').reverse().join('.');
+          return `<div style="flex:0 0 34px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%" title="${esc(d.tarih)} · %${v}">
+            <div class="mono" style="font-size:10px;color:${c};margin-bottom:4px">%${v}</div>
+            <div style="width:100%;flex:1;display:flex;align-items:flex-end;background:var(--panel-alt);border-radius:4px;overflow:hidden">
+              <div style="width:100%;height:${v}%;background:${c}"></div>
+            </div>
+            <div class="mono" style="font-size:9.5px;color:var(--text-muted);margin-top:6px">${dLabel}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  const durusByReason = {};
+  collectDurusEvents(allEntries).forEach(ev=>{
+    if(!Number.isFinite(ev.sureMs) || ev.sureMs<=0) return;
+    durusByReason[ev.neden] = (durusByReason[ev.neden]||0) + ev.sureMs;
+  });
+  const durusList = Object.entries(durusByReason).map(([neden,ms])=>({neden,ms})).sort((a,b)=>b.ms-a.ms);
+  const durusMax = Math.max(...durusList.map(d=>d.ms), 1);
+
+  const machineAgg = {};
+  op.days.forEach(d=>d.machines.forEach(m=>{ machineAgg[m.code] = (machineAgg[m.code]||0) + m.workMin; }));
+  const machineList = Object.entries(machineAgg).map(([code,workMin])=>({code,workMin})).sort((a,b)=>b.workMin-a.workMin);
+  const machineMax = Math.max(...machineList.map(m=>m.workMin), 1);
+
+  html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="analiz-chart-box">
+      <div style="font-size:14.5px;font-weight:700;margin-bottom:2px">Duruş Nedenleri</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">${periodLabel} · toplam ${fmtDur(durusList.reduce((s,d)=>s+d.ms,0))}</div>
+      ${durusList.length===0 ? `<div style="color:var(--text-muted);font-size:12.5px">Bu dönemde duruş kaydı yok.</div>` : durusList.slice(0,8).map((d,i)=>`
+        <div style="padding:6px 0">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>${esc(d.neden)}</span><span class="mono" style="font-weight:600">${fmtDur(d.ms)}</span></div>
+          <div style="height:9px;background:var(--panel-alt);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.round(d.ms/durusMax*100)}%;background:${i===0?'var(--danger)':i<3?'var(--warn)':'var(--border)'};border-radius:3px"></div></div>
+        </div>`).join('')}
+    </div>
+    <div class="analiz-chart-box">
+      <div style="font-size:14.5px;font-weight:700;margin-bottom:2px">Makine Kırılımı</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">${periodLabel} · net çalışma süresi</div>
+      ${machineList.length===0 ? `<div style="color:var(--text-muted);font-size:12.5px">Bu dönemde makine kaydı yok.</div>` : machineList.map(m=>`
+        <div style="display:grid;grid-template-columns:56px 1fr 64px;align-items:center;gap:10px;padding:5px 0">
+          <div class="mono" style="font-size:12px;color:var(--accent);font-weight:600">${esc(m.code)}</div>
+          <div style="height:13px;background:var(--panel-alt);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.round(m.workMin/machineMax*100)}%;background:var(--accent)"></div></div>
+          <div class="mono" style="font-size:11.5px;text-align:right">${fmtDur(m.workMin*60000)}</div>
+        </div>`).join('')}
+    </div>
+  </div>`;
+
+  const bugunGun = op.days.find(d=>d.tarih===bugun);
+  if(bugunGun){
+    const dStartMs = new Date(bugun+'T00:00:00').getTime();
+    const segs = renderGanttSegmentsHtml(bugunGun.entries||[], dStartMs, dStartMs+86400000, e=>`${e.isEmriNo||e.talepNo||''} · ${e.makine||''}`);
+    html += `<div class="analiz-chart-box" style="margin-bottom:14px">
+      <div style="font-size:14.5px;font-weight:700;margin-bottom:10px">Bugünkü Vardiya Şeridi</div>
+      <div class="analiz-gantt-row" style="margin-bottom:6px">
+        <div class="analiz-gantt-label" style="width:0"></div>
+        <div style="position:relative;flex:1;height:16px">
+          ${[0,2,4,6,8,10,12,14,16,18,20,22].map(h=>`<span style="position:absolute;left:${(h*60/1440)*100}%;font-size:10px;color:var(--text-muted);transform:translateX(-50%)">${String(h).padStart(2,'0')}:00</span>`).join('')}
+        </div>
+      </div>
+      <div class="analiz-gantt-row">
+        <div class="analiz-gantt-label" style="width:0"></div>
+        <div class="analiz-gantt-track">${segs}<div class="analiz-gantt-cutoff" style="left:${(WORKDAY_END_MINUTE/1440)*100}%"></div></div>
+      </div>
+    </div>`;
+  }
+
+  html += `<div class="analiz-chart-box">
+    <div style="font-size:14.5px;font-weight:700;margin-bottom:10px">Gün Gün Döküm</div>
+    ${renderOperatorGunGunTablosu(op)}
+  </div>`;
+
+  html += `</div></div>`;
+  return html;
+}
 /* Analiz sekmesi — "Tadilat" görünümü: mevcut tadilat.js altyapısı (tadilatArray,
    tadilatOperasyonlarArray, tadilatTamamlandiMi) ve zaten var olan tablo çizicileri
    (renderDevamEdenTalepTablosu / renderTamamlananTalepTablosu — bkz. dosyanın başı) üzerine
@@ -1294,6 +1515,8 @@ function renderAdmin(){
       body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizSefLive()}</div>`;
     } else if(analizRole==='kisi'){
       body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizKisiBazli()}</div>`;
+    } else if(analizRole==='operator'){
+      body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizOperator()}</div>`;
     } else if(analizRole==='tadilat'){
       body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizTadilat()}</div>`;
     } else if(analizRole==='saha'){
@@ -1620,37 +1843,7 @@ function renderAdmin(){
         <tr><td colspan="7" style="padding:0;background:var(--bg)">
           <div style="padding:14px 16px 18px 40px">
             <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Gün gün dökümü — standart mesai: ${WORKDAY_MINUTES} dk. "Boşta": o günkü kullanılabilirlikten (standart mesai + fazla mesai) çalışma ve duruş süresi düşülünce kalan, hiçbir kayda denk gelmeyen süre.</div>
-            <div class="table-wrap" style="padding:0"><table><thead><tr>
-              <th>Tarih</th><th>Makineler</th><th>Çalışma</th><th>Duruş</th><th>Boşta</th><th>Fazla Mesai</th><th>Kalan Mesai</th>
-            </tr></thead><tbody>
-              ${op.days.map(d=>{
-                const dStartMs = new Date(d.tarih+'T00:00:00').getTime();
-                const availMin = WORKDAY_MINUTES + d.overtimeMin;
-                const idleMin = Math.max(0, availMin - d.workMin - d.durusMin);
-                const segs = renderGanttSegmentsHtml(d.entries||[], dStartMs, dStartMs+86400000, e=>`${e.isEmriNo||e.talepNo||''} · ${e.makine||''}`);
-                return `<tr>
-                <td class="mono">${esc(d.tarih)}</td>
-                <td style="font-size:12px">${d.machines.map(m=>`<span class="mono" style="color:var(--accent)">${esc(m.code)}</span> (${fmtDur(m.workMin*60000)})`).join('<br>')}</td>
-                <td>${fmtDur(d.workMin*60000)}${d.hasPhysicalAnomaly?` <span style="color:var(--danger)" title="O gün, gerçek geçen süreden fazla çalışma hesaplandı — fiziksel üst sınıra çekildi.">${ico('alert',14)}</span>`:''}</td>
-                <td style="color:${d.durusMin>0?'var(--warn)':'inherit'}">${fmtDur(d.durusMin*60000)}</td>
-                <td style="color:var(--text-muted)">${fmtDur(idleMin*60000)}</td>
-                <td>${d.overtimeMin>0?`<span style="color:var(--danger);font-weight:600">${d.overtimeMin} dk</span>`:'—'}</td>
-                <td style="color:${d.kalanMin>0?'var(--text-muted)':'var(--success)'}">${d.kalanMin>0?fmtDur(d.kalanMin*60000):'Tamamlandı'}</td>
-              </tr>
-              <tr><td colspan="7" style="padding:2px 0 12px">
-                <div class="analiz-gantt-row" style="margin-bottom:0">
-                  <div class="analiz-gantt-label" style="width:0"></div>
-                  <div class="analiz-gantt-track">${segs}<div class="analiz-gantt-cutoff" style="left:${(WORKDAY_END_MINUTE/1440)*100}%"></div></div>
-                </div>
-              </td></tr>`;
-              }).join('')}
-            </tbody></table></div>
-            <div style="display:flex;gap:14px;font-size:11px;color:var(--text-muted);margin-top:8px">
-              <span><span style="display:inline-block;width:10px;height:10px;background:var(--success);border-radius:2px;margin-right:4px"></span>Çalışma</span>
-              <span><span style="display:inline-block;width:10px;height:10px;background:var(--warn);border-radius:2px;margin-right:4px"></span>Duruş</span>
-              <span><span style="display:inline-block;width:10px;height:10px;background:var(--panel-alt);border:1px solid var(--border);border-radius:2px;margin-right:4px"></span>Boşta / kayıt yok</span>
-              <span><span style="display:inline-block;width:10px;height:10px;background:#3a4148;border-radius:2px;margin-right:4px"></span>Gün Sonu (hariç tutulan)</span>
-            </div>
+            ${renderOperatorGunGunTablosu(op)}
           </div>
         </td></tr>` : ''}
         `).join('')}

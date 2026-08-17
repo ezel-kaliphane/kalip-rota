@@ -817,6 +817,12 @@ let analizKisiGun = 0; // 0=bugün, 1=dün, ... — Kişi Bazlı görünümünde
 let analizKisiSecili = null; // seçili operatörün kullanıcı adı — Kişi Bazlı görünümündeki detay paneli
 function setAnalizKisiGun(o){ analizKisiGun = o; analizKisiSecili = null; render(); }
 function selectAnalizKisi(username){ analizKisiSecili = username; render(); }
+let analizOperatorSecili = null; // seçili operatörün kullanıcı adı — Operatör Analizi görünümü
+let analizOperatorPeriod = 'd7'; // 'bugun' | 'd7' | 'd30' — Operatör Analizi görünümündeki dönem seçici
+let analizOperatorArama = ''; // Operatör Analizi görünümündeki arama kutusu
+function setAnalizOperatorSecili(username){ analizOperatorSecili = username; render(); }
+function setAnalizOperatorPeriod(p){ analizOperatorPeriod = p; render(); }
+function setAnalizOperatorArama(v){ analizOperatorArama = v; render(); }
 let tadilatAkisModalId = null; // "Detay" ile açılan iş açıldı→başlandı→bitti akış şeması (bkz. renderTadilatAkisModal)
 function openTadilatAkis(id){ tadilatAkisModalId = id; render(); }
 function closeTadilatAkis(){ tadilatAkisModalId = null; render(); }

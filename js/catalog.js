@@ -371,6 +371,7 @@ const ANALIZ_VIEW_DEFS = [
   { key:'yonetici', label:'Yönetim' },
   { key:'sef', label:'Atölye Şefi' },
   { key:'kisi', label:'Kişi Bazlı' },
+  { key:'operator', label:'Operatör Analizi' },
   { key:'tadilat', label:'Tadilat' },
   { key:'saha', label:'Saha Ekranı' },
 ];
