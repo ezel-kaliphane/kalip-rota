@@ -929,7 +929,7 @@ function renderAdmin(){
         ${pushConfigured() ? `
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;max-width:480px">
           ${pushPermissionState==='granted' ? `<div style="color:var(--success);font-size:13px;font-weight:600;margin-bottom:6px">${ico('check',14)} Bu cihazda bildirimler açık</div><button class="btn-ghost" style="font-size:11.5px;padding:6px 12px" onclick="enablePushNotifications()">🔄 Yeniden senkronize et</button>`
-            : pushPermissionState==='denied' ? `<div style="color:var(--danger);font-size:12.5px">Bildirimlere tarayıcı ayarlarından izin vermemişsin — telefon/tarayıcı ayarlarından bu site için bildirimi manuel açman gerekiyor.</div>`
+            : pushPermissionState==='denied' ? `<div style="color:var(--danger);font-size:12.5px">${esc(pushBlockedInstructions())}</div>`
             : `<button class="btn-ghost" onclick="enablePushNotifications()">${ico('bell',14)} Bildirimleri Aç</button>`}
         </div>` : `<div style="font-size:12.5px;color:var(--text-muted)">Bildirim sistemi henüz kurulmadı (VAPID key eksik).</div>`}
         ${renderMyPushHistoryList()}`;
