@@ -911,9 +911,23 @@ function switchRow(id, checked, title, sub, opts){
 let pwOpen = false;
 function togglePwPanel(){ pwOpen = !pwOpen; render(); }
 function onPushToggle(el){
-  if(el.checked){ enablePushNotifications(); return; }
-  el.checked = true;
-  toast('Bildirimleri kapatmak için telefon/tarayıcı ayarlarını kullan');
+  // Notification.permission tarayıcı tarafından salt-okunur — JS ile geri alınamaz. Bu yüzden
+  // "kapatma" tarayıcı izniyle değil, uygulama tarafında bir sessize-alma bayrağıyla (operators/
+  // {kullanıcı}/pushMuted) yapılıyor; Cloud Function göndermeden önce bu bayrağa bakıyor
+  // (bkz. functions/index.js sendToOperator).
+  if(el.checked){
+    if(pushPermissionState==='granted'){
+      DB.ref('operators/'+session.username+'/pushMuted').remove();
+      toast('Bildirimler açıldı ✓');
+      render();
+    } else {
+      enablePushNotifications();
+    }
+    return;
+  }
+  DB.ref('operators/'+session.username+'/pushMuted').set(true);
+  toast('Bildirimler kapatıldı');
+  render();
 }
 function initials(name){ return String(name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase(); }
 function myRoleLabel(){ return session.isSuperAdmin ? 'Süper Admin' : session.isSef ? 'Şef' : session.isUretimSef ? 'Üretim Şef' : session.isAdmin ? 'Yönetici' : 'Operatör'; }

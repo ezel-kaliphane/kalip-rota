@@ -29,8 +29,10 @@ async function sendToOperator(username, title, body, tag, meta){
   };
 
   if(!username) return logAndReturn({ ok:false, reason:'no-username' });
-  const snap = await db.ref('operators/'+username+'/fcmTokens').get();
-  const tokensObj = snap.val();
+  const opSnap = await db.ref('operators/'+username).get();
+  const opVal = opSnap.val() || {};
+  if(opVal.pushMuted) return logAndReturn({ ok:false, reason:'muted' }); // operatör bildirimleri kendi ayarlarından kapatmış
+  const tokensObj = opVal.fcmTokens;
   if(!tokensObj) return logAndReturn({ ok:false, reason:'no-tokens' }); // bu operatör hiç bildirim açmamış
   // fcmTokens artık { deviceId: token } şeklinde tutuluyor (bkz. rota_takip.html — pushDeviceId).
   // Eski (geçiş öncesi) kayıtlarda token doğrudan key olarak durabilir; ikisini de destekleyelim:
