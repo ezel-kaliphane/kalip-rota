@@ -375,7 +375,7 @@ function renderOperator(){
       <div style="display:flex;flex-direction:column;gap:9px;margin-top:14px">
         ${pushConfigured() ? (
           pushPermissionState==='denied'
-            ? `<div class="set-card" style="border-color:var(--danger)"><div style="font-size:14px;font-weight:600;margin-bottom:4px">${ico('bell',15)} Bildirimler kapalı</div><div style="font-size:12px;color:var(--text-muted)">${esc(pushBlockedInstructions())}</div></div>`
+            ? `<div class="set-card" style="border-color:var(--danger)"><div style="font-size:14px;font-weight:600;margin-bottom:4px">${ico('bell',15)} Bildirimler kapalı</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">${esc(pushBlockedInstructions())}</div><button class="btn-ghost" style="font-size:12px;padding:6px 12px" onclick="enablePushNotifications()">🔄 Ayarı değiştirdim, tekrar dene</button></div>`
             : switchRow('set-push', pushOn, 'Bildirimler', pushOn ? 'Uzun duruş hatırlatması açık' : 'Uzun duruş hatırlatması', { ok:true, onchange:'onPushToggle(this)' })
         ) : ''}
         <button class="set-row" onclick="togglePwPanel()">${ico('lock',17)} Şifre değiştir ${pwOpen?'<span class="chev">−</span>':chev}</button>
