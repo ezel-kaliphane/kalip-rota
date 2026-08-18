@@ -1,0 +1,128 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "entries": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": ["status"],
+      "$entryId": {
+        ".write": true,
+        ".validate": "newData.hasChildren(['isEmriNo','makine','operatorUsername','startTs','status'])",
+        "isEmriNo":         { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 60" },
+        "makine":           { ".validate": "newData.isString() && newData.val().length < 120" },
+        "operatorUsername": { ".validate": "newData.isString() && newData.val().length < 40" },
+        "operatorName":     { ".validate": "newData.isString() && newData.val().length < 80" },
+        "adet":             { ".validate": "newData.isString() || newData.isNumber()" },
+        "startTs":          { ".validate": "newData.isNumber()" },
+        "endTs":            { ".validate": "newData.isNumber() || newData.val() == null" },
+        "status":           { ".validate": "newData.val() == 'devam' || newData.val() == 'duruş' || newData.val() == 'tamamlandi'" },
+        "$other":           { ".validate": true }
+      }
+    },
+    "operators": {
+      ".read": true,
+      ".write": false,
+      "$code": {
+        ".write": true,
+        "displayName":          { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 80" },
+        "password":             { ".validate": "newData.isString() && newData.val().length == 64" },
+        "defaultMachine":       { ".validate": "newData.isString()" },
+        "allowedMachines":      { ".validate": true },
+        "fasonYetkisi":         { ".validate": "newData.isBoolean()" },
+        "permTadilatOlustur":   { ".validate": "newData.isBoolean()" },
+        "multiJob":             { ".validate": "newData.isBoolean()" },
+        "cokluIsEmri":          { ".validate": "newData.isBoolean()" },
+        "messagesAccess":       { ".validate": "newData.isBoolean()" },
+        "atolyeImalat":         { ".validate": "newData.isBoolean()" },
+        "atolyeTadilat":        { ".validate": "newData.isBoolean()" },
+        "permReportEdit":       { ".validate": "newData.isBoolean()" },
+        "permReportDelete":     { ".validate": "newData.isBoolean()" },
+        "permBildirimYonetimi": { ".validate": "newData.isBoolean()" },
+        "fcmTokens":            { ".validate": true },
+        "isAdmin":              { ".validate": false },
+        "isSuperAdmin":         { ".validate": false },
+        "isSef":                { ".validate": false },
+        "$other":               { ".validate": false }
+      }
+    },
+    "messages": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": ["ts"],
+      "$msgId": {
+        ".write": true,
+        "$field": { ".validate": true }
+      }
+    },
+    "machines_extra": {
+      ".read": true,
+      ".write": false,
+      "$code": { ".write": true }
+    },
+    "machines_hidden": {
+      ".read": true,
+      ".write": false,
+      "$code": { ".write": true }
+    },
+    "machines_fason": {
+      ".read": true,
+      ".write": false,
+      "$code": { ".write": true }
+    },
+    "machines_atolye": {
+      ".read": true,
+      ".write": false,
+      "$code": { ".write": true }
+    },
+    "validIsEmri": { ".read": true, ".write": true },
+    "malzemeListesi": { ".read": true, ".write": true },
+    "durusReasons": { ".read": true, ".write": true },
+    "settings": { ".read": true, ".write": true },
+    "stockItems": {
+      ".read": true,
+      ".write": false,
+      "$itemId": { ".write": true }
+    },
+    "stockHareketleri": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": ["ts"],
+      "$hareketId": { ".write": true }
+    },
+    "tadilatlar": {
+      ".read": true,
+      ".write": false,
+      "$tadilatId": { ".write": true }
+    },
+    "tadilatDurustaOperasyonlar": {
+      ".read": true,
+      ".write": false,
+      "$key": { ".write": true }
+    },
+    "isMerkezleri": { ".read": true, ".write": true },
+    "tadilatBolumKurallari": { ".read": true, ".write": true },
+    "uretimPersoneli": { ".read": true, ".write": true },
+    "adminTabPermissions": { ".read": true, ".write": true },
+    "pushNotified": { ".read": false, ".write": false },
+    "manualPushRequests": {
+      ".read": true,
+      ".write": false,
+      "$reqId": {
+        ".write": true,
+        ".validate": "newData.hasChildren(['toUsername','body','requestedBy','requestedAt'])",
+        "toUsername":      { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 40" },
+        "title":           { ".validate": "newData.isString() || newData.val() == null" },
+        "body":            { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 500" },
+        "requestedBy":     { ".validate": "newData.isString()" },
+        "requestedByName": { ".validate": true },
+        "requestedAt":     { ".validate": "newData.isNumber()" },
+        "sent":            { ".validate": true },
+        "sentAt":          { ".validate": true },
+        "error":           { ".validate": true }
+      }
+    },
+    "tadilatOnHazirIstekler": { ".read": true, ".write": true },
+    "pushLog": { ".read": true, ".write": false, ".indexOn": ["toUsername", "sentAt"] }
+  }
+}

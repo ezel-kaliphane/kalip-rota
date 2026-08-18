@@ -140,9 +140,11 @@ function uploadMalzemeListesi(){
       const count = Object.keys(list).length;
       if(count===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
       DB.ref('malzemeListesi').set(list).then(()=>{
+        malzemeListesi = list; // artık canlı dinlenmiyor, yerel kopyayı biz güncelliyoruz
         toast(`${count} malzeme kodu yüklendi`);
         if(statusEl) statusEl.textContent = `${count} kayıt başarıyla yüklendi (sayfa: ${sheetName}).`;
         fileInput.value = '';
+        render();
       });
     } catch(err){
       console.warn(err);
@@ -155,6 +157,7 @@ function clearMalzemeListesi(){
   if(!canManageMalzemeListesi()) return;
   if(!confirm('Malzeme listesini tamamen silmek istediğinize emin misiniz?')) return;
   DB.ref('malzemeListesi').remove();
+  malzemeListesi = {}; render();
 }
 /* ===================== İŞ MERKEZİ LİSTESİ (Tadilat "Talep Edilen Makine" kaynağı) =====================
    Bu, uygulamanın kendi "allMachines()" (üretim/rota takip) makine listesinden TAMAMEN AYRI —
@@ -286,9 +289,11 @@ function uploadUretimPersoneli(){
       const count = Object.keys(list).length;
       if(count===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
       DB.ref('uretimPersoneli').set(list).then(()=>{
+        uretimPersoneli = list; // artık canlı dinlenmiyor, yerel kopyayı biz güncelliyoruz
         toast(`${count} personel yüklendi`);
         if(statusEl) statusEl.textContent = `${count} kayıt başarıyla yüklendi (sayfa: ${sheetName})${gorevIdx!==-1?' · bölüm otomatik çıkarıldı':''}.`;
         fileInput.value = '';
+        render();
       });
     } catch(err){
       console.warn(err);
@@ -301,6 +306,7 @@ function clearUretimPersoneli(){
   if(!canManageUretimPersoneli()) return;
   if(!confirm('Üretim personeli listesini tamamen silmek istediğinize emin misiniz?')) return;
   DB.ref('uretimPersoneli').remove();
+  uretimPersoneli = {}; render();
 }
 // Liste yüklüyse, girilen ismin listede birebir (büyük/küçük harf duyarsız) olmasını zorunlu kılar.
 // Liste boşsa (hiç yüklenmemişse) serbest yazıma izin verir.
@@ -608,14 +614,19 @@ function addTadilatOnHazirIstek(){
   if(!text){ toast('Şablon metni yaz'); return; }
   const hasParam = !!paramEl?.checked;
   if(hasParam && text.indexOf('{x}')<0){ toast('Sayısal değer istiyorsan metnin içine {x} yaz (ör: "...{x} mm...")'); return; }
-  DB.ref('tadilatOnHazirIstekler/'+uid()).set({ text, hasParam });
+  const id = uid();
+  DB.ref('tadilatOnHazirIstekler/'+id).set({ text, hasParam });
+  STATE.tadilatOnHazirIstekler[id] = { text, hasParam }; // artık canlı dinlenmiyor, yerel kopyayı biz güncelliyoruz
   toast('Eklendi');
   if(textEl) textEl.value=''; if(paramEl) paramEl.checked=false;
+  render();
 }
 function removeTadilatOnHazirIstek(id){
   if(!requireSuperAdmin()) return;
   if(!confirm('Bu hazır ifadeyi silmek istediğine emin misin?')) return;
   DB.ref('tadilatOnHazirIstekler/'+id).remove();
+  delete STATE.tadilatOnHazirIstekler[id];
+  render();
 }
 
 /* Talep oluşturma ekranındaki checklist state'i — hangi şablon seçili, parametreli olanların

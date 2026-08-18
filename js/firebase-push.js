@@ -155,6 +155,12 @@ function loadMessages(){
     safeRender();
   }).catch(err=>console.warn('Mesajlar okunamadı:', err));
 }
+function loadStockHareketleri(){
+  DB.ref('stockHareketleri').orderByChild('ts').limitToLast(20).get().then(snap=>{
+    stockHareketleri = snap.val() || {};
+    safeRender();
+  }).catch(err=>console.warn('Stok hareketleri okunamadı:', err));
+}
 let myPushHistoryModalOpen = false;
 function openMyPushHistoryModal(){
   myPushHistoryModalOpen = true;
@@ -233,36 +239,42 @@ function initFirebase(){
       hiddenMachines = snap.val() || {};
       safeRender();
     }).catch(err=>console.warn('machines_hidden okunamadı:', err));
-    DB.ref('machines_fason').on('value', snap=>{
+    // Maliyet optimizasyonu: aşağıdaki 5 düğüm de (machines_extra/machines_hidden'la aynı
+    // gerekçeyle) nadiren değişen REFERANS listeleri — canlı dinlemeye gerek yok, tek seferlik
+    // okunuyor. Yazan taraf kendi yerel kopyasını da güncelleyip render() çağırıyor (bkz.
+    // toggleMachineFason, setMachineAtolye, addTadilatOnHazirIstek/removeTadilatOnHazirIstek,
+    // malzeme/uretimPersoneli yükleme-silme fonksiyonları) — o yüzden yazan cihaz sayfayı
+    // yenilemeden kendi değişikliğini görür; başka bir cihaz bir sonraki sayfa yenilemesinde alır.
+    DB.ref('machines_fason').get().then(snap=>{
       fasonMachines = snap.val() || {};
       safeRender();
-    });
-    DB.ref('machines_atolye').on('value', snap=>{
+    }).catch(err=>console.warn('machines_fason okunamadı:', err));
+    DB.ref('machines_atolye').get().then(snap=>{
       machineAtolye = snap.val() || {};
       safeRender();
-    });
+    }).catch(err=>console.warn('machines_atolye okunamadı:', err));
     // manualPushRequests: bilerek dinlenmiyor — client hiçbir yerde okumuyor (yazma push() ile
     // olduğu için read-back gerekmiyor, gerçek gönderimi Cloud Function admin SDK ile yapıyor).
-    DB.ref('tadilatOnHazirIstekler').on('value', snap=>{
+    DB.ref('tadilatOnHazirIstekler').get().then(snap=>{
       STATE.tadilatOnHazirIstekler = snap.val() || {};
       safeRender();
-    });
+    }).catch(err=>console.warn('tadilatOnHazirIstekler okunamadı:', err));
     DB.ref('validIsEmri').get().then(snap=>{
       STATE.validIsEmri = snap.val() || {};
       safeRender();
     }).catch(err=>console.warn('validIsEmri okunamadı:', err));
-    DB.ref('malzemeListesi').on('value', snap=>{
+    DB.ref('malzemeListesi').get().then(snap=>{
       malzemeListesi = snap.val() || {};
       safeRender();
-    });
+    }).catch(err=>console.warn('malzemeListesi okunamadı:', err));
     DB.ref('isMerkezleri').get().then(snap=>{
       isMerkezleri = snap.val() || {};
       safeRender();
     }).catch(err=>console.warn('isMerkezleri okunamadı:', err));
-    DB.ref('uretimPersoneli').on('value', snap=>{
+    DB.ref('uretimPersoneli').get().then(snap=>{
       uretimPersoneli = snap.val() || {};
       safeRender();
-    });
+    }).catch(err=>console.warn('uretimPersoneli okunamadı:', err));
     DB.ref('tadilatBolumKurallari').get().then(snap=>{
       tadilatBolumKurallari = snap.val() || {};
       safeRender();
@@ -283,10 +295,11 @@ function initFirebase(){
       stockItems = snap.val() || {};
       safeRender();
     });
-    DB.ref('stockHareketleri').on('value', snap=>{
-      stockHareketleri = snap.val() || {};
-      safeRender();
-    });
+    // Maliyet optimizasyonu: stockHareketleri de pushLog'la aynı sebeple canlı dinlenmiyor —
+    // sadece Ayarlar → Malzeme Stoğu sekmesi son 20 hareketi gösteriyor (bkz. render-admin.js),
+    // o yüzden o sekme açılınca (loadStockHareketleri, setSettingsSubTab'da) tek seferlik,
+    // son-20'yle sınırlı bir sorgu yeterli. consumeStock() kendi yazdığı hareketi yerel
+    // kopyaya da ekleyip render() çağırıyor, o yüzden hareketi yapan cihaz anında görür.
     DB.ref('tadilatlar').on('value', snap=>{
       tadilatlar = snap.val() || {};
       safeRender();

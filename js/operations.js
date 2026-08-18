@@ -507,7 +507,7 @@ function toggleMessagesAccess(code){
   const op = STATE.operators[code] || {};
   DB.ref('operators/'+code+'/messagesAccess').set(!op.messagesAccess);
 }
-function setSettingsSubTab(t){ settingsSubTab=t; if(t==='bildirimGonder') loadPushLogHistory(); render(); }
+function setSettingsSubTab(t){ settingsSubTab=t; if(t==='bildirimGonder') loadPushLogHistory(); if(t==='stok') loadStockHareketleri(); render(); }
 
 async function addOperator(){
   const code = (document.getElementById('new-op-code').value||'').trim().toUpperCase();

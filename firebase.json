@@ -5,6 +5,9 @@
       "codebase": "default"
     }
   ],
+  "database": {
+    "rules": "database.rules.json"
+  },
   "hosting": {
     "public": ".",
     "ignore": [
@@ -13,7 +16,8 @@
       ".git/**",
       ".claude/**",
       "functions/**",
-      "node_modules/**"
+      "node_modules/**",
+      "database.rules.json"
     ],
     "headers": [
       {

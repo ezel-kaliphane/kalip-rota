@@ -88,7 +88,9 @@ function isFasonMachine(makineLabel){
 }
 function toggleMachineFason(code){
   if(!session || !(session.isSuperAdmin || session.isSef)){ toast('Bu işlem için yetkin yok'); return; }
-  DB.ref('machines_fason/'+code).set(!fasonMachines[code]);
+  const yeni = !fasonMachines[code];
+  DB.ref('machines_fason/'+code).set(yeni);
+  fasonMachines[code] = yeni; render(); // artık canlı dinlenmiyor, yerel kopyayı biz güncelliyoruz
 }
 function toggleFasonYetkisi(code){
   // DÜZELTME: Komşu fonksiyonların (toggleMachineFason/setMachineAtolye/toggleUserAtolye) hepsinde
@@ -105,6 +107,7 @@ function machineAtolyeOf(code){ return machineAtolye[code]==='tadilat' ? 'tadila
 function setMachineAtolye(code, val){
   if(!session || !(session.isSuperAdmin || session.isSef)){ toast('Bu işlem için yetkin yok'); return; }
   DB.ref('machines_atolye/'+code).set(val);
+  machineAtolye[code] = val; render(); // artık canlı dinlenmiyor, yerel kopyayı biz güncelliyoruz
 }
 // Personeli (hem sıradan operatörleri hem tadilat açabilen yönetici/şef hesaplarını) İmalat/Tadilat
 // Atölye'ye ata — artık ikili (ya bu ya o) değil, çoklu seçim: hiçbiri/biri/ikisi de işaretlenebilir
@@ -447,18 +450,22 @@ function consumeStock(itemId, lotId, miktar, meta){
     const yeniBoy = (Number(lot.boy)||0) - Number(miktar);
     DB.ref(`stockItems/${itemId}/lots/${lotId}/boy`).set(yeniBoy);
     const hid = uid();
-    DB.ref('stockHareketleri/'+hid).set({
+    const hareket = {
       itemId, lotId, itemKod: item.kod||'', itemIsim: `${item.cap||''} (${lot.boy}${item.birim||'mm'} çubuk)`, miktar: -Number(miktar), birim: item.birim||'mm',
       isEmriNo: meta.isEmriNo||'', talepNo: meta.talepNo||'', operatorUsername: session.username, operatorName: session.displayName, ts: Date.now()
-    });
+    };
+    DB.ref('stockHareketleri/'+hid).set(hareket);
+    stockHareketleri[hid] = hareket; // artık canlı dinlenmiyor (bkz. loadStockHareketleri), yerel kopyayı biz güncelliyoruz
   } else {
     const yeniMiktar = (Number(item.miktar)||0) - Number(miktar);
     DB.ref('stockItems/'+itemId+'/miktar').set(yeniMiktar);
     const hid = uid();
-    DB.ref('stockHareketleri/'+hid).set({
+    const hareket = {
       itemId, itemKod: item.kod||'', itemIsim: item.isim||'', miktar: -Number(miktar), birim: item.birim||'',
       isEmriNo: meta.isEmriNo||'', talepNo: meta.talepNo||'', operatorUsername: session.username, operatorName: session.displayName, ts: Date.now()
-    });
+    };
+    DB.ref('stockHareketleri/'+hid).set(hareket);
+    stockHareketleri[hid] = hareket;
   }
 }
 let stokAddTurState = 'adet';
