@@ -185,6 +185,7 @@ function renderOperator(){
           <div style="margin-bottom:10px">
           <div style="display:flex;gap:8px;align-items:flex-end">
             <div class="field" style="flex:1.3;margin-bottom:0"><label>İş Emri No (Talep No) ${i+1}</label><input id="nf-coklu-isemri-${i}" class="mono" placeholder="ör. 2607140006" value="${esc(it.isEmriNo)}" oninput="newForm.cokluItems[${i}].isEmriNo=this.value" onblur="render()"></div>
+            <button type="button" class="btn-ghost" style="padding:10px 12px" title="QR Kod Okut" onclick="openQrScanner(function(v){ newForm.cokluItems[${i}].isEmriNo=v; render(); })">${ico('camera',14)}</button>
             <div class="field" style="width:110px;margin-bottom:0"><label>Bileşen</label><select id="nf-coklu-bilesen-${i}" onchange="newForm.cokluItems[${i}].bilesen=this.value; render()">
               <option value="" ${!it.bilesen?'selected':''}>Tek Parça</option>
               <option value="ZARF" ${it.bilesen==='ZARF'?'selected':''}>_ZARF (Çelik)</option>
@@ -217,9 +218,10 @@ function renderOperator(){
         `}).join('')}
         <button type="button" class="btn-ghost" style="margin-bottom:14px" onclick="addCokluItem()">+ İş Emri Ekle</button>
       ` : `
-        <div style="display:flex;gap:8px">
-          <div class="field" style="flex:1"><label>İş Emri No (Talep No)</label><input id="nf-isemri" class="mono" placeholder="ör. 2607140006" value="${esc(newForm.isEmriNo)}" oninput="newForm.isEmriNo=this.value" onblur="render()"></div>
-          <div class="field" style="width:130px"><label>Bileşen</label><select id="nf-bilesen" onchange="newForm.bilesen=this.value; render()">
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <div class="field" style="flex:1;margin-bottom:0"><label>İş Emri No (Talep No)</label><input id="nf-isemri" class="mono" placeholder="ör. 2607140006" value="${esc(newForm.isEmriNo)}" oninput="newForm.isEmriNo=this.value" onblur="render()"></div>
+          <button type="button" class="btn-ghost" style="padding:10px 12px" title="QR Kod Okut" onclick="openQrScanner(function(v){ newForm.isEmriNo=v; render(); })">${ico('camera',14)}</button>
+          <div class="field" style="width:130px;margin-bottom:0"><label>Bileşen</label><select id="nf-bilesen" onchange="newForm.bilesen=this.value; render()">
             <option value="" ${!newForm.bilesen?'selected':''}>Tek Parça</option>
             <option value="ZARF" ${newForm.bilesen==='ZARF'?'selected':''}>_ZARF (Çelik)</option>
             <option value="ELMAS" ${newForm.bilesen==='ELMAS'?'selected':''}>_ELMAS (Karbür)</option>
