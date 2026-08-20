@@ -332,10 +332,11 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
     grid-template-columns:1fr!important;
   }
   /* Kişi Bazlı görünümündeki operatör satırları: sabit genişlikli isim/özet sütunları telefonda
-     ortadaki Gantt şeridini neredeyse hiç bırakmıyordu — daraltılıyor, saat ekseni de buna uyuyor. */
+     ortadaki Gantt şeridini neredeyse hiç bırakmıyordu — daraltılıyor. Saat ekseni artık aynı
+     .analiz-kisi-name/.analiz-kisi-info yer tutucularını kullandığı için ayrı bir kurala gerek
+     kalmadan otomatik uyuyor (bkz. renderAnalizKisiBazli). */
   .analiz-kisi-name{width:104px!important}
   .analiz-kisi-info{width:88px!important;font-size:10px!important}
-  .analiz-kisi-axis{padding-left:116px!important}
 }
 /* =============== MOBİL YERLEŞİM (v27) — alt gezinme çubuğu, aktif iş şeridi, nefes payı =============== */
 .logo-plate{display:inline-flex;align-items:center;background:#fff;border-radius:10px;padding:7px 11px;line-height:0}

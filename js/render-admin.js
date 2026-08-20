@@ -9,14 +9,19 @@ function uKoduHücresi(uKodu, color){
 // "Tadilat" görünümü hem Tadilat sekmesinin kendi "Analiz" alt sekmesi buradan besleniyor) aynı
 // şekilde kullanılıyor — tek yerden değiştirilsin diye ayrı fonksiyon. Satıra tıklamak akış
 // şemasını açar (bkz. renderTadilatAkisModal); ayrı bir "Detay" butonuna gerek yok.
-function renderTamamlananTalepTablosu(tamamlananlar){
+function renderTamamlananTalepTablosu(tamamlananlar, exportListesi){
   // Excel butonu bir onclick metni olduğu için diziyi doğrudan geçemiyoruz; o an EKRANDA
   // gösterilen (filtrelenmiş olabilen) listeyi burada saklayıp dışa aktarımın onu kullanmasını
-  // sağlıyoruz — yoksa ekranda 12 kayıt görünürken Excel'e 400 kayıt iniyordu.
-  lastTamamlananTalepListesi = tamamlananlar;
+  // sağlıyoruz. exportListesi opsiyonel: çağıran taraf ekranda kısaltılmış (ör. "son 20") bir
+  // liste gösterip Excel'e ARAMA/ATÖLYE filtresine uyan TÜM kayıtları aktarmak isterse ayrıca
+  // verir — veri zaten RTDB'den canlı dinlendiği için (tadilatlar düğümü tam indiriliyor) bunu
+  // tam listeyle yapmak ek bir Firebase okuması gerektirmez. Verilmezse (ör. eski davranış)
+  // ekrandaki liste neyse o dışa aktarılır.
+  const disaAktarListesi = exportListesi || tamamlananlar;
+  lastTamamlananTalepListesi = disaAktarListesi;
   return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;flex-wrap:wrap">
     <div style="font-size:11.5px;color:var(--text-muted)">"Bekleme": açılış→başlama · "İşlem Süresi": başlama→bitiş (duvar saati) · "Toplam Süre": açılış→bitiş. Satıra tıkla, adım adım akışı gör.</div>
-    ${tamamlananlar.length>0 ? `<button class="btn-primary" style="width:auto;padding:7px 14px;font-size:12px;flex-shrink:0" onclick="exportTadilatExcel(lastTamamlananTalepListesi)">⬇ Excel'e Aktar</button>` : ''}
+    ${disaAktarListesi.length>0 ? `<button class="btn-primary" style="width:auto;padding:7px 14px;font-size:12px;flex-shrink:0" onclick="exportTadilatExcel(lastTamamlananTalepListesi)">⬇ Excel'e Aktar (${disaAktarListesi.length})</button>` : ''}
   </div>
   <div class="table-wrap"><table><thead><tr><th>U Kodu</th><th>İşlem</th><th>Açılış</th><th>Başlama</th><th>Bekleme</th><th>Bitiş</th><th>İşlem Süresi</th><th>Toplam Süre</th></tr></thead><tbody>
     ${tamamlananlar.length===0 ? `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:16px">Henüz tamamlanan yok.</td></tr>` : tamamlananlar.map(t=>{
@@ -269,8 +274,20 @@ function renderAnalizKisiBazli(){
   if(rows.length===0){
     return html + `<div style="color:var(--text-muted);padding:30px 0;text-align:center">Bu günde kayıt yok.</div></div>`;
   }
-  html += `<div class="analiz-kisi-axis" style="display:flex;gap:12px;padding:0 0 4px 162px">
-      ${[0,2,4,6,8,10,12,14,16,18,20,22].map(h=>`<span style="position:relative;left:${(h*60/1440)*100}%;font-size:10px;color:var(--text-muted)">${String(h).padStart(2,'0')}:00</span>`).join('')}
+  // DÜZELTME: Bu eksen eskiden `display:flex; gap:12px` içinde her etikete AYRICA
+  // `position:relative; left:X%` uygulayarak çiziliyordu — relative konumlandırmada yüzde,
+  // etiketin akıştaki (flex ile yan yana dizilmiş) konumuna EKLENİYOR, ayrıca bu eksen kutusunun
+  // toplam genişliği alttaki gerçek `.analiz-gantt-track`'ten 152px (info sütunu 140px + gap 12px)
+  // daha genişti. İkisi birlikte saatlerin, özellikle geç saatlerin, sağa doğru giderek kaymasına
+  // yol açıyordu. Artık alttaki satırla BİREBİR AYNI kutu modelini (150px isim + esnek track +
+  // 140px bilgi) boş yer tutucularla tekrarlayıp, etiketleri "Genel Analiz" sekmesindeki gibi
+  // `position:absolute` ile track'in KENDİ genişliğine göre konumlandırıyoruz.
+  html += `<div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+      <div class="analiz-kisi-name" style="width:150px;flex-shrink:0"></div>
+      <div style="position:relative;flex:1;height:14px">
+        ${[0,2,4,6,8,10,12,14,16,18,20,22].map(h=>`<span style="position:absolute;left:${(h*60/1440)*100}%;font-size:10px;color:var(--text-muted);transform:translateX(-50%)">${String(h).padStart(2,'0')}:00</span>`).join('')}
+      </div>
+      <div class="analiz-kisi-info" style="width:140px;flex-shrink:0"></div>
     </div>`;
   rows.forEach(op=>{
     const d0 = op.days[0];
@@ -614,8 +631,8 @@ function renderAnalizTadilat(){
       </div>
       <div class="analiz-chart-box">
         <div style="font-size:14.5px;font-weight:700;margin-bottom:2px">Tamamlanan İşler</div>
-        <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Son ${son20.length} kayıt (toplam ${tamamlananlar.length}) · satıra tıkla</div>
-        ${renderTamamlananTalepTablosu(son20)}
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Ekranda son ${son20.length} kayıt gösteriliyor (toplam ${tamamlananlar.length}) · Excel tüm ${tamamlananlar.length} kaydı indirir · satıra tıkla</div>
+        ${renderTamamlananTalepTablosu(son20, tamamlananlar)}
       </div>
     </div>
   `;
