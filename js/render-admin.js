@@ -765,6 +765,7 @@ function renderAdmin(){
       ${isAdminTabVisible('completed') ? `<button class="tab-btn ${view==='completed'?'active':''}" onclick="setView('completed')">${ico('check',14)} Tamamlanan Kodlar</button>` : ''}
       ${!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz') ? `<button class="tab-btn ${view==='analiz'?'active':''}" onclick="setView('analiz')">${ico('chart',14)} Analiz</button>` : ''}
       ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="tab-btn ${view==='tadilatYonetim'?'active':''}" onclick="setView('tadilatYonetim')">${ico('wrench',14)} Tadilat</button>` : ''}
+      ${session.isSuperAdmin ? `<button class="tab-btn ${view==='takimStokYonetim'?'active':''}" onclick="setView('takimStokYonetim')">🔧 Takım Stok</button>` : ''}
     </div>`;
 
   let body = '';
@@ -783,7 +784,8 @@ function renderAdmin(){
         <button class="sub-tab-btn ${settingsSubTab==='durusReasons'?'active':''}" onclick="setSettingsSubTab('durusReasons')">Duruş Nedenleri</button>
         <button class="sub-tab-btn ${settingsSubTab==='tadilatSablonlari'?'active':''}" onclick="setSettingsSubTab('tadilatSablonlari')">Tadilat Hazır İfadeleri</button>
         <button class="sub-tab-btn ${settingsSubTab==='bolumKurallari'?'active':''}" onclick="setSettingsSubTab('bolumKurallari')">Tadilat Bölüm Kuralları</button>
-        <button class="sub-tab-btn ${settingsSubTab==='tabErisimi'?'active':''}" onclick="setSettingsSubTab('tabErisimi')">Sekme Erişimi (Yönetici)</button>` : ''}
+        <button class="sub-tab-btn ${settingsSubTab==='tabErisimi'?'active':''}" onclick="setSettingsSubTab('tabErisimi')">Sekme Erişimi (Yönetici)</button>
+        <button class="sub-tab-btn ${settingsSubTab==='takimStok'?'active':''}" onclick="setSettingsSubTab('takimStok')">🔧 Takım & Sarf Stok</button>` : ''}
         ${(session.isSuperAdmin||session.isSef) ? `
         <button class="sub-tab-btn ${settingsSubTab==='veriListeleri'?'active':''}" onclick="setSettingsSubTab('veriListeleri')">Veri Listeleri</button>
         <button class="sub-tab-btn ${settingsSubTab==='stok'?'active':''}" onclick="setSettingsSubTab('stok')">Malzeme Stoğu</button>` : ''}
@@ -834,6 +836,12 @@ function renderAdmin(){
               </label>
               <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
                 <input type="checkbox" style="width:auto" ${v.messagesAccess?'checked':''} onchange="toggleMessagesAccess('${code}')"> Mesaj Erişimi
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${v.permTakimStokGor?'checked':''} onchange="toggleUserPerm('${code}','permTakimStokGor')"> 🔧 Takım Stok: Görebilir/Çıkış
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${v.permTakimStokSayim?'checked':''} onchange="toggleUserPerm('${code}','permTakimStokSayim')"> 🔧 Takım Stok: Sayım
               </label>
               <select class="filter-input" style="width:200px" onchange="updateDefaultMachine('${code}', this.value)">
                 <option value="">— Varsayılan Makine yok —</option>
@@ -1336,6 +1344,8 @@ function renderAdmin(){
             </div>
           `).join('')}
         </div>`}`;
+    } else if(settingsSubTab==='takimStok'){
+      body += renderToolStokAdminSettings();
     }
     body += `</div>`;
   } else if(view==='matrix'){
@@ -2018,6 +2028,8 @@ function renderAdmin(){
       </div>`;
     }
     body += `</div>`;
+  } else if(view==='takimStokYonetim' && session.isSuperAdmin){
+    body = renderToolStokManagementScreen();
   } else {
     const entries = entriesArray();
     const statOperator = new Set(entries.map(e=>e.operatorUsername)).size;

@@ -988,6 +988,7 @@ function bottomNavHtml(){
     ${isImalat ? item('new',ico('plus',26),'Yeni',0) : ''}
     ${item('tadilat',ico('wrench',26),'Tadilat',tadBek)}
     ${hasFason ? item('fason',ico('box',26),'Fason',fasBek) : ''}
+    ${toolStokEnabled() && canSeeToolStok() ? `<button class="bn-item ${view==='takimStok'?'active':''}" onclick="setView('takimStok')"><span class="bn-ico" style="font-size:20px">🔧</span><span class="bn-lbl">Takım</span></button>` : ''}
     ${item('settings',ico('gear',26),'Ayarlar',0)}
   </nav>`;
 }

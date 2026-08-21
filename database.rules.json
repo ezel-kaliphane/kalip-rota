@@ -39,6 +39,8 @@
         "permReportEdit":       { ".validate": "newData.isBoolean()" },
         "permReportDelete":     { ".validate": "newData.isBoolean()" },
         "permBildirimYonetimi": { ".validate": "newData.isBoolean()" },
+        "permTakimStokGor":     { ".validate": "newData.isBoolean()" },
+        "permTakimStokSayim":   { ".validate": "newData.isBoolean()" },
         "fcmTokens":            { ".validate": true },
         "isAdmin":              { ".validate": false },
         "isSuperAdmin":         { ".validate": false },
@@ -123,6 +125,35 @@
       }
     },
     "tadilatOnHazirIstekler": { ".read": true, ".write": true },
-    "pushLog": { ".read": true, ".write": false, ".indexOn": ["toUsername", "sentAt"] }
+    "pushLog": { ".read": true, ".write": false, ".indexOn": ["toUsername", "sentAt"] },
+
+    "toolLocations": {
+      ".read": true,
+      ".write": false,
+      "$locId": { ".write": true }
+    },
+    "toolCatalog": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": ["canias"],
+      "$itemId": { ".write": true }
+    },
+    "toolStock": {
+      ".read": true,
+      ".write": false,
+      "$itemId": { ".write": true }
+    },
+    "toolMoves": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": ["ts", "itemId", "operatorUsername"],
+      "$moveId": { ".write": true }
+    },
+    "toolZimmet": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": ["durum", "operatorUsername", "itemId"],
+      "$zimmetId": { ".write": true }
+    }
   }
 }

@@ -34,10 +34,14 @@ function renderOperator(){
       <button class="tab-btn ${view==='gecmis'?'active':''}" onclick="setView('gecmis')">${ico('history',14)} Geçmiş</button>
       ${(STATE.operators[session.username]||{}).fasonYetkisi ? `<button class="tab-btn ${view==='fason'?'active':''}" onclick="setView('fason')">${ico('box',14)} Fason${fasonBekleyenCount()>0?` (${fasonBekleyenCount()})`:''}</button>` : ''}
       <button class="tab-btn ${view==='tadilat'?'active':''}" onclick="setView('tadilat')">${ico('wrench',14)} Tadilat${tadilatBekleyenlerCombined(session.username).length>0?` (${tadilatBekleyenlerCombined(session.username).length})`:''}</button>
+      ${toolStokEnabled() && canSeeToolStok() ? `<button class="tab-btn ${view==='takimStok'?'active':''}" onclick="setView('takimStok')">🔧 Takım Dolabı</button>` : ''}
     </div>`;
 
   let body = '';
-  if(view==='tadilat'){
+  if(view==='takimStok' && !(toolStokEnabled() && canSeeToolStok())){ view = 'list'; }
+  if(view==='takimStok'){
+    body = renderToolStokOperator();
+  } else if(view==='tadilat'){
     const sess = tadilatForceBekleyen ? null : myActiveTadilatSession();
     if(sess && sess.operasyon.status==='duruş'){
       const { tadilat: mine, operasyon: op } = sess;
