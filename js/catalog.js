@@ -1052,12 +1052,26 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
         const effStartMs = Math.max(e.startTs, dStartMs);
         const endClip = Math.min(e.endTs || nowTick, rangeEndMs); // F düzeltmesi
         const wallMs = Math.max(0, endClip - effStartMs);
-        let eDurusMs = e.duruşToplamMs || 0;
-        let eExcludedMs = e.excludedMs || 0;
+        const dayEndMs = Math.min(dStartMs + 86400000, rangeEndMs);
+        // GÜNE ORANTILI PAYLAŞIM DÜZELTMESİ: duruşToplamMs/excludedMs kaydın TÜM ömrüne ait
+        // kümülatif sayılar (ne zaman oluştuklarına dair zaman damgası yok). Eskiden bu toplam
+        // OLDUĞU GİBİ, kaydın dahil edildiği TEK güne (bugüne) yığılıyordu — kayıt günler önce
+        // başlamış, duruşu asıl geçmiş günlerde birikmiş olsa bile. Bu yüzden dünden (veya daha
+        // öncesinden) kalan, hâlâ açık duran kayıtlar bugünün özetinde "0 dk çalışma · 40+ saat
+        // duruş" gibi tek bir güne sığmayacak imkansız rakamlar üretiyordu. Artık günün payı,
+        // kaydın BİLİNEN TOPLAM süresi içindeki oranına göre bölünüyor — tek günlük kayıtlarda
+        // oran zaten %100 olduğundan davranış değişmiyor, çok günlü kayıtlarda ise her gün
+        // kendi payını alıyor.
+        const entryTotalMs = Math.max(1, endClip - e.startTs);
+        const share = wallMs / entryTotalMs;
+        let eDurusMs = Math.min(wallMs, (e.duruşToplamMs||0) * share);
+        let eExcludedMs = Math.min(Math.max(0, wallMs - eDurusMs), (e.excludedMs||0) * share);
         if(e.status==='duruş' && e.duruşTs){
-          const liveExtra = Math.max(0, nowTick - e.duruşTs);
-          if(e.duruşNedeni===GUN_SONU_REASON) eExcludedMs += liveExtra;
-          else eDurusMs += liveExtra;
+          // Canlı (hâlâ süren) duruş/Gün Sonu bekleyişi zaten gerçek bir zaman damgasına sahip —
+          // bunu da SADECE bu günle kesişen kısmı kadar sayıyoruz (bkz. otDurus'taki aynı mantık).
+          const liveExtra = msOverlap(e.duruşTs, Math.max(0, nowTick - e.duruşTs), dStartMs, dayEndMs);
+          if(e.duruşNedeni===GUN_SONU_REASON) eExcludedMs = Math.min(Math.max(0, wallMs-eDurusMs), eExcludedMs+liveExtra);
+          else eDurusMs = Math.min(wallMs, eDurusMs+liveExtra);
         }
         const eWorkMs = Math.max(0, wallMs - eDurusMs - eExcludedMs);
         const mCode = String(e.makine||'').split(' · ')[0] || '—';
@@ -1065,8 +1079,6 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
         dayData.byMachine[mCode].durusMs += eDurusMs;
         machineSet.add(mCode);
         dayWorkMs += eWorkMs; dayDurusMs += eDurusMs;
-        // Kişi bazlı tarafta da aynı kelepçeleme düzeltmesi (bkz. byMachine tarafındaki açıklama).
-        const dayEndMs = Math.min(dStartMs + 86400000, rangeEndMs);
         const otStart = Math.max(cutoffMs, effStartMs);
         const otEnd = Math.min(endClip, dayEndMs);
         if(otEnd > otStart){
@@ -1117,8 +1129,29 @@ function renderGanttSegmentsHtml(entries, dayStartMs, rangeEndMs, titleFn){
     const leftPct = Math.max(0,(startMin/1440)*100);
     const widthPct = Math.min(100-leftPct,(durMin/1440)*100);
     const totalMs = Math.max(0, segEndForSeg - segStart);
-    const durusMs = entryDurusEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, segStart, segEndForSeg), 0);
-    const exclMs = entryExcludedEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, segStart, segEndForSeg), 0);
+    // GÜNE ORANTILI PAYLAŞIM (bkz. computeAnalizData'daki aynı düzeltme): durusLog/excludedLog
+    // (zaman damgalı, gerçek olaylar) varsa segmentle kesişimi doğrudan hesaplıyoruz — bu zaten
+    // doğru. Ama log'u OLMAYAN eski kayıtlarda entryDurusEvents tek bir kümülatif "olayı" kaydın
+    // BAŞLANGICINA iğneliyor; kayıt bugünden önce başlamışsa bu iğne bugünün penceresiyle hiç
+    // kesişmiyor ve dünden kalan, aslında duruşta geçmiş bir iş segmenti sanki tam verimli
+    // çalışmış gibi TAMAMEN YEŞİL görünüyordu. Log yoksa toplamı, kaydın bilinen toplam süresi
+    // içindeki bu günün payına göre ORANTILI bölüyoruz.
+    const hasLoggedEvents = (Array.isArray(e.durusLog) && e.durusLog.length>0) || (Array.isArray(e.excludedLog) && e.excludedLog.length>0);
+    let durusMs, exclMs;
+    if(hasLoggedEvents){
+      durusMs = entryDurusEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, segStart, segEndForSeg), 0);
+      exclMs = entryExcludedEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, segStart, segEndForSeg), 0);
+    } else {
+      const entryTotalMs = Math.max(1, endClip - e.startTs);
+      const share = totalMs / entryTotalMs;
+      durusMs = Math.min(totalMs, (e.duruşToplamMs||0) * share);
+      exclMs = Math.min(Math.max(0, totalMs - durusMs), (e.excludedMs||0) * share);
+      if(e.status==='duruş' && e.duruşTs){
+        const liveExtra = msOverlap(e.duruşTs, Math.max(0, nowTick - e.duruşTs), segStart, segEndForSeg);
+        if(e.duruşNedeni===GUN_SONU_REASON) exclMs = Math.min(Math.max(0, totalMs-durusMs), exclMs+liveExtra);
+        else durusMs = Math.min(totalMs, durusMs+liveExtra);
+      }
+    }
     const workMs = Math.max(0, totalMs - durusMs - exclMs);
     const workPct = totalMs>0 ? Math.round(workMs/totalMs*100) : 0;
     const durusPct = totalMs>0 ? Math.round(durusMs/totalMs*100) : 0;

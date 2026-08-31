@@ -615,7 +615,7 @@ function renderAnalizTadilat(){
     </div>
     <div class="analiz-chart-box" style="margin-bottom:14px">
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <input type="text" placeholder="🔍 U Kodu, malzeme ya da açıklama ara…" value="${esc(tadilatAnalizArama)}" oninput="setTadilatAnalizArama(this.value)" style="flex:1;min-width:220px">
+        <input id="tadilat-analiz-arama" type="text" placeholder="🔍 U Kodu, malzeme ya da açıklama ara…" value="${esc(tadilatAnalizArama)}" oninput="setTadilatAnalizArama(this.value)" style="flex:1;min-width:220px">
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="chip ${tadilatAnalizAtolyeFilter==='tumu'?'active':''}" onclick="setTadilatAnalizAtolyeFilter('tumu')">Tümü</button>
           <button class="chip ${tadilatAnalizAtolyeFilter==='imalat'?'active':''}" onclick="setTadilatAnalizAtolyeFilter('imalat')">${ico('factory',14)} İmalat Atölye</button>
