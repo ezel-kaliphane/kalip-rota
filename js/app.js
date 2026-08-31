@@ -67,7 +67,14 @@ function isUserInteracting(){
   // bozabiliyordu — özellikle "aşağı kaydırırken tepeye sıçrama" şikayetinin en olası
   // kaynağı buydu. Artık panel TAMAMEN AÇIKKEN (neden seçilmiş olsun olmasın) hiçbir
   // arka plan yeniden çizimi araya girmiyor.
-  if(durusOpen) return true;
+  // EK DÜZELTME: Bu koruma eskiden sadece normal iş emri duruş panelini (durusOpen)
+  // kapsıyordu — Tadilat modülünün AYNI görünen duruş nedeni paneli ayrı bir bayrak
+  // (tadilatDurusPickerOpen) kullanıyor ve buraya hiç eklenmemişti. Sonuç: Tadilat'ta bu
+  // panel açıkken, özellikle operatörün aktif bir tadilat oturumu varsa (aşağıdaki
+  // renderLiveBits'teki view==='tadilat' dalı) her saniyelik tik hâlâ tam render tetikliyor
+  // ve panel listesindeki kaydırma konumu sürekli tepeye sıfırlanıyordu — "aşağı kaydırınca
+  // tepeye sıçrama" şikayeti aslında bu ikinci (Tadilat) yoldan hâlâ yaşanıyordu.
+  if(durusOpen || tadilatDurusPickerOpen) return true;
   if(sendMsgOpen) return true;
   if(tadilatMakineSecimId) return true;
   const ae = document.activeElement;
