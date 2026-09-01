@@ -50,6 +50,18 @@ let toolGirisQty = 1;
 let toolGirisNote = '';          // sipariş no buraya yazılır
 let toolGirisSiparisAcik = false;
 
+/* Hareket Geçmişi (SuperAdmin/görünürlük izni olanlar) — toolMoves ASLA toplu indirilmiyor,
+   sadece orderByChild('ts').limitToLast(50) ile sayfalanarak, ya da bir kalem/operatör
+   filtresi seçilince o filtreye özel indeksli bir sorguyla (bkz. görev talimatı §3.4). */
+let toolHistMoves = [];         // {id, itemId, canias, tip, miktar, ts, ...}[] — en yeni önce
+let toolHistOldestTs = null;    // sayfalama imleci (ts filtresiz moddayken)
+let toolHistHasMore = true;
+let toolHistLoading = false;
+let toolHistLoaded = false;
+let toolHistFilterItemId = '';
+let toolHistFilterOperator = '';
+let toolHistFilterTip = '';
+
 /* Aşama 2 — operatör "🔧 Takım Dolabı" ekranı state'i. Kasıtlı olarak "tüm kalemleri listele"
    YOK — sadece QR/kod ile bulunan TEK kalem tutuluyor (bkz. toolOpLookupByCode), bu yüzden
    toolCatalog/toolStock burada asla topluca doldurulmuyor. */
@@ -485,25 +497,33 @@ function renderToolStokAdminSettings(){
     </label>`;
 }
 
-/* ---------- render: üst seviye "🔧 Takım Stok" sekmesi (SuperAdmin) ----------
+/* ---------- render: üst seviye "🔧 Takım Stok" sekmesi ----------
    Kalem Listesi (arama + kategori/konum filtresi + toplu taşıma + satır içi düzenleme) +
-   Konumlar + Excel Yükle + Stok Girişi. */
+   Konumlar + Excel Yükle + Stok Girişi + Geçmiş. Görünürlük artık SuperAdmin'e sabit değil —
+   isAdminTabVisible/isTakimStokSubTabVisible ile kişi bazında ayarlanabiliyor (Ayarlar >
+   Sekme Erişimi). Yazma işlemleri yine de HER ZAMAN canManageToolStok() (SuperAdmin) ile
+   korunuyor — görünürlük izni verilen bir Yönetici/Şef ekranı görür ama düzenleyemez. */
 function renderToolStokManagementScreen(){
-  if(!canManageToolStok()) return `<div class="settings-wrap"><div style="color:var(--text-muted);font-size:12.5px">Bu ekran için SuperAdmin yetkisi gerekli.</div></div>`;
+  if(!isAdminTabVisible('takimStok')) return `<div class="settings-wrap"><div style="color:var(--text-muted);font-size:12.5px">Bu sekmeyi görme yetkin yok.</div></div>`;
   ensureToolCatalogLoaded(()=>safeRender());
   ensureToolStockLoaded(()=>safeRender());
   ensureToolLocationsLoaded(()=>safeRender());
 
-  let html = `<div class="settings-wrap">
-    <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
-      <button type="button" class="chip ${toolAdminSubView==='liste'?'active':''}" onclick="toolAdminSubView='liste'; render()">Kalem Listesi</button>
-      <button type="button" class="chip ${toolAdminSubView==='konumlar'?'active':''}" onclick="toolAdminSubView='konumlar'; render()">Konumlar</button>
-      <button type="button" class="chip ${toolAdminSubView==='excel'?'active':''}" onclick="toolAdminSubView='excel'; render()">Excel Yükle</button>
-      <button type="button" class="chip ${toolAdminSubView==='giris'?'active':''}" onclick="toolAdminSubView='giris'; render()">↓ Stok Girişi</button>
+  const visibleTabs = TAKIM_STOK_SUBTAB_DEFS.filter(t=>isTakimStokSubTabVisible(t.key));
+  if(!visibleTabs.some(t=>t.key===toolAdminSubView)){
+    toolAdminSubView = visibleTabs.length>0 ? visibleTabs[0].key : null;
+  }
+
+  let html = `<div class="settings-wrap">`;
+  if(!canManageToolStok()){
+    html += `<div style="font-size:12px;color:var(--text-muted);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px">👁 Sadece görüntüleme modundasın — kayıt/düzenleme işlemleri için SuperAdmin yetkisi gerekir.</div>`;
+  }
+  html += `<div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
+      ${visibleTabs.map(t=>`<button type="button" class="chip ${toolAdminSubView===t.key?'active':''}" onclick="toolAdminSubView='${t.key}'; render()">${t.key==='giris'?'↓ ':''}${esc(t.label)}</button>`).join('')}
     </div>`;
 
   if(!toolStokEnabled()){
-    html += `<div style="font-size:12.5px;color:var(--warn);background:var(--panel);border:1px solid var(--warn);border-radius:10px;padding:12px 14px;margin-bottom:16px">Modül şu an kapalı (Ayarlar → Takım & Sarf Stok'tan açabilirsin) — yönetim ekranı SuperAdmin için yine de çalışır, operatörler görmez.</div>`;
+    html += `<div style="font-size:12.5px;color:var(--warn);background:var(--panel);border:1px solid var(--warn);border-radius:10px;padding:12px 14px;margin-bottom:16px">Modül şu an kapalı (Ayarlar → Takım & Sarf Stok'tan açabilirsin) — yönetim ekranı yine de çalışır, operatörler görmez.</div>`;
   }
   if(toolCatalogError || toolStockError){
     html += `<div style="font-size:12.5px;color:var(--danger);background:var(--panel);border:1px solid var(--danger);border-radius:10px;padding:12px 14px">
@@ -516,10 +536,13 @@ function renderToolStokManagementScreen(){
     html += `<div style="font-size:12.5px;color:var(--text-muted)">Yükleniyor…</div></div>`;
     return html;
   }
-  if(toolAdminSubView==='liste') html += renderToolCatalogListAdmin();
+  if(!toolAdminSubView){
+    html += `<div style="font-size:12.5px;color:var(--text-muted)">Görebileceğin bir alt sekme yok.</div>`;
+  } else if(toolAdminSubView==='liste') html += renderToolCatalogListAdmin();
   else if(toolAdminSubView==='konumlar') html += renderToolLocationsAdmin();
   else if(toolAdminSubView==='excel') html += renderToolExcelUploadAdmin();
   else if(toolAdminSubView==='giris') html += renderToolGirisAdmin();
+  else if(toolAdminSubView==='gecmis') html += renderToolHistoryAdmin();
   html += `</div>`;
   return html;
 }
@@ -613,6 +636,7 @@ function renderToolCatalogListAdmin(){
         ${locs.map(l=>`<option value="${l.id}" ${toolBulkTargetLoc===l.id?'selected':''}>${esc(l.ad)}</option>`).join('')}
       </select>
       <button class="btn-primary" style="width:auto;padding:8px 14px" ${selectedCount===0?'disabled':''} onclick="bulkMoveToolItemsToLocation()">→ Seçilenleri Taşı</button>
+      <button class="btn-ghost" ${selectedCount===0?'disabled':''} onclick="printToolLabels()">🖨 Etiket Yazdır</button>
       ${selectedCount>0?`<button class="btn-ghost" onclick="toolBulkClearSelection()">Seçimi Temizle</button>`:''}
     </div>
     <div style="overflow-x:auto">
@@ -817,6 +841,210 @@ function renderToolGirisAdmin(){
         <button class="btn-primary" style="width:100%;padding:12px" onclick="doToolGiris()">✓ Girişi Kaydet</button>
       ` : ''}
     </div>`;
+}
+
+/* ---------- Etiket Yazdırma (SuperAdmin) ----------
+   "Kalem seçimi (tümü/konuma göre/kategoriye göre/tek tek)" — Kalem Listesi'ndeki mevcut
+   filtreler (kategori/konum/arama) + "tümünü seç" checkbox'ı ZATEN bu dört modu karşılıyor,
+   ayrı bir seçim ekranı kurmaya gerek yok: filtrele, tümünü seç (ya da satır satır işaretle),
+   sonra bu butona bas. QR üretimi CDN'den (qrcode-generator) SADECE bu pencerede, sadece bu
+   butona basılınca yükleniyor — ana uygulamanın açılış paketine hiç eklenmiyor. Ayrı bir
+   window.open() penceresinde basılıyor ki mevcut sayfanın @media print kurallarıyla çakışmasın.
+
+   Izgara ölçüleri kullanıcının verdiği örnek etiket şablonundan (KOD123213.docx) birebir
+   alındı — standart "21'li" A4 etiket kağıdı (63,5×38,1mm, 3 sütun × 7 satır, sütunlar arası
+   3mm boşluk, üst kenar 15,1mm, sol/sağ kenar 6,5mm, satırlar arası boşluksuz — Avery L7160 ile
+   aynı fiziksel ölçüler). Her sayfaya tam 21 etiket sığdırılıyor, fazlası otomatik yeni
+   sayfalara taşıyor (her sayfa kendi 15,1mm üst boşluğuyla YENİDEN başlıyor). */
+const TOOL_LABEL_COLS = 3, TOOL_LABEL_ROWS = 7, TOOL_LABEL_PER_PAGE = TOOL_LABEL_COLS*TOOL_LABEL_ROWS;
+function printToolLabels(){
+  if(!canManageToolStok()) return;
+  const ids = Object.keys(toolBulkSelected);
+  if(ids.length===0){ toast('Önce Kalem Listesi\'nden yazdırılacak kalemleri seçin'); return; }
+  const items = ids.map(id=>({ id, ...toolCatalog[id] })).filter(it=>it.canias);
+  if(items.length===0){ toast('Seçilen kalemler bulunamadı'); return; }
+
+  const w = window.open('', '_blank');
+  if(!w){ toast('Yazdırma penceresi açılamadı — popup engelleyiciyi kontrol edin'); return; }
+
+  const labelHtml = (it) => {
+    const locAd = it.locId && toolLocations[it.locId] ? toolLocations[it.locId].ad : '';
+    return `<div class="label">
+      <div class="qr" data-code="${esc(it.canias)}"></div>
+      <div class="info">
+        <div class="kod">${esc(it.canias)}</div>
+        <div class="ad">${esc(it.ad)}</div>
+        ${(locAd||it.goz) ? `<div class="konum">${esc(locAd)}${it.goz?` / ${esc(it.goz)}`:''}</div>` : ''}
+      </div>
+    </div>`;
+  };
+  const pages = [];
+  for(let i=0;i<items.length;i+=TOOL_LABEL_PER_PAGE) pages.push(items.slice(i,i+TOOL_LABEL_PER_PAGE));
+  const pagesHtml = pages.map(pageItems=>`<div class="page">${pageItems.map(labelHtml).join('')}</div>`).join('');
+
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Takım Etiketleri</title>
+    <style>
+      @page{ size:A4; margin:0; }
+      *{ box-sizing:border-box; }
+      body{ font-family:Arial,Helvetica,sans-serif; margin:0; }
+      .page{
+        width:210mm; height:297mm;
+        padding:15.1mm 6.5mm 0 6.5mm;
+        display:grid;
+        grid-template-columns:repeat(${TOOL_LABEL_COLS}, 63.5mm);
+        grid-auto-rows:38.1mm;
+        column-gap:3mm; row-gap:0mm;
+        page-break-after:always;
+      }
+      .page:last-child{ page-break-after:auto; }
+      .label{ width:63.5mm; height:38.1mm; padding:2mm; display:flex; gap:2mm; align-items:center; overflow:hidden; }
+      .qr{ flex-shrink:0; width:26mm; height:26mm; }
+      .qr svg{ width:100%; height:100%; display:block; }
+      .info{ min-width:0; overflow:hidden; }
+      .kod{ font-family:'Courier New',monospace; font-weight:700; font-size:11pt; }
+      .ad{ font-size:8pt; line-height:1.25; margin-top:1mm; max-height:3.2em; overflow:hidden; }
+      .konum{ font-size:7.5pt; color:#555; margin-top:1mm; }
+      .no-print{ font-family:Arial,sans-serif; padding:14px; }
+    </style></head>
+    <body>
+      <div class="no-print">Etiketler hazırlanıyor…</div>
+      <div id="pages" style="display:none">${pagesHtml}</div>
+    </body></html>`);
+  w.document.close();
+
+  const script = w.document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+  script.onload = () => {
+    try {
+      w.document.querySelectorAll('.qr').forEach(el=>{
+        const code = el.getAttribute('data-code');
+        const qr = w.qrcode(0, 'M');
+        qr.addData(code);
+        qr.make();
+        el.innerHTML = qr.createSvgTag({ cellSize:4, margin:0 });
+      });
+    } catch(e){ console.warn('QR üretilemedi:', e); }
+    const noPrint = w.document.querySelector('.no-print'); if(noPrint) noPrint.style.display='none';
+    const pagesEl = w.document.getElementById('pages'); if(pagesEl) pagesEl.style.display='block';
+    setTimeout(()=>{ w.focus(); w.print(); }, 150);
+  };
+  script.onerror = () => {
+    toast('QR kütüphanesi yüklenemedi (internet/CDN erişimi gerekli) — etiketler QR olmadan yazdırılabilir');
+    const noPrint = w.document.querySelector('.no-print'); if(noPrint) noPrint.style.display='none';
+    const pagesEl = w.document.getElementById('pages'); if(pagesEl) pagesEl.style.display='block';
+  };
+  w.document.body.appendChild(script);
+}
+
+/* ---------- Hareket Geçmişi (SuperAdmin/görünürlük izni olanlar, salt görüntüleme) ---------- */
+function toolHistApplyItemFilter(code){
+  code = String(code||'').trim().toUpperCase();
+  if(!code){ toolHistFilterItemId=''; loadToolHistory(true); return; }
+  const found = Object.entries(toolCatalog).find(([id,v])=>v.canias===code);
+  if(!found){ toast('Kod bulunamadı'); return; }
+  toolHistFilterItemId = found[0];
+  toolHistFilterOperator = '';
+  loadToolHistory(true);
+}
+function toolHistSetOperatorFilter(username){
+  toolHistFilterOperator = username;
+  toolHistFilterItemId = '';
+  loadToolHistory(true);
+}
+function toolHistSetTipFilter(tip){ toolHistFilterTip = tip; render(); }
+function toolHistClearFilters(){
+  toolHistFilterItemId = ''; toolHistFilterOperator = ''; toolHistFilterTip = '';
+  loadToolHistory(true);
+}
+function toolHistLoadMore(){ loadToolHistory(false); }
+
+function loadToolHistory(reset){
+  if(reset){ toolHistMoves = []; toolHistOldestTs = null; toolHistHasMore = true; }
+  if(toolHistLoading || !toolHistHasMore) return;
+  toolHistLoading = true;
+  render();
+  let q = DB.ref('toolMoves');
+  const filtered = !!(toolHistFilterItemId || toolHistFilterOperator);
+  if(toolHistFilterItemId) q = q.orderByChild('itemId').equalTo(toolHistFilterItemId);
+  else if(toolHistFilterOperator) q = q.orderByChild('operatorUsername').equalTo(toolHistFilterOperator);
+  else {
+    q = q.orderByChild('ts');
+    if(toolHistOldestTs) q = q.endAt(toolHistOldestTs - 1);
+  }
+  q.limitToLast(50).once('value').then(snap=>{
+    toolHistLoading = false;
+    const val = snap.val() || {};
+    const batch = Object.entries(val).map(([id,v])=>({id, ...v}));
+    batch.sort((a,b)=>b.ts-a.ts);
+    toolHistHasMore = filtered ? false : batch.length>=50;
+    const seen = new Set(toolHistMoves.map(m=>m.id));
+    toolHistMoves = [...toolHistMoves, ...batch.filter(m=>!seen.has(m.id))].sort((a,b)=>b.ts-a.ts);
+    if(batch.length>0) toolHistOldestTs = batch[batch.length-1].ts;
+    render();
+  }).catch(err=>{
+    toolHistLoading = false;
+    toast('Geçmiş yüklenemedi: '+(err.message||'bilinmeyen hata'));
+    render();
+  });
+}
+
+function exportToolHistoryExcel(){
+  const rows = (toolHistFilterTip ? toolHistMoves.filter(m=>m.tip===toolHistFilterTip) : toolHistMoves).map(m=>({
+    Tarih: fmtDT(m.ts), Kod: m.canias, Kalem: (toolCatalog[m.itemId]||{}).ad || '', Tip: m.tip, Miktar: m.miktar,
+    Öncesi: m.oncekiMiktar, Sonrası: m.sonrakiMiktar, Operatör: m.operatorName || m.operatorUsername || '',
+    Makine: m.makine || '', 'İş Emri': m.isEmriNo || '', Kaynak: m.kaynak || '', Not: m.aciklama || '',
+  }));
+  if(rows.length===0){ toast('Aktarılacak kayıt yok'); return; }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Hareketler');
+  XLSX.writeFile(wb, 'takim_stok_hareketleri.xlsx');
+}
+
+function renderToolHistoryAdmin(){
+  if(!toolHistLoaded){ toolHistLoaded = true; loadToolHistory(true); }
+  const rows = toolHistFilterTip ? toolHistMoves.filter(m=>m.tip===toolHistFilterTip) : toolHistMoves;
+  const opEntries = Object.entries(STATE.operators||{}).sort((a,b)=>(a[1].displayName||a[0]).localeCompare(b[1].displayName||b[0]));
+  const tipLabels = { cikis:'Çıkış', giris:'Giriş', sayim:'Sayım', iade:'İade', fire:'Fire' };
+  return `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+      <div class="sec-h" style="margin:0">Hareket Geçmişi (${rows.length})</div>
+      <button class="btn-ghost" onclick="exportToolHistoryExcel()">⬇ Excel'e Aktar</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:12px;max-width:640px">Kalem veya operatör filtresi seçilince o filtreye ait en son 50 kayıt gösterilir (sayfalama kapanır). Filtresizken en yeni 50 kayıtla başlar, "Daha Fazla Yükle" ile geriye doğru sayfalanır.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <input class="mono" placeholder="CANİAS kodu ile filtrele…" onkeydown="if(event.key==='Enter'){ toolHistApplyItemFilter(this.value); }" style="width:190px">
+      <select onchange="toolHistSetOperatorFilter(this.value)" style="width:180px">
+        <option value="">Tüm Operatörler</option>
+        ${opEntries.map(([code,v])=>`<option value="${code}" ${toolHistFilterOperator===code?'selected':''}>${esc(v.displayName||code)}</option>`).join('')}
+      </select>
+      <select onchange="toolHistSetTipFilter(this.value)" style="width:140px">
+        <option value="">Tüm Tipler</option>
+        ${Object.entries(tipLabels).map(([k,l])=>`<option value="${k}" ${toolHistFilterTip===k?'selected':''}>${l}</option>`).join('')}
+      </select>
+      ${(toolHistFilterItemId||toolHistFilterOperator||toolHistFilterTip) ? `<button class="btn-ghost" onclick="toolHistClearFilters()">Filtreleri Temizle</button>` : ''}
+    </div>
+    <div style="overflow-x:auto">
+    <table style="font-size:12px"><thead><tr>
+      <th>Tarih</th><th>Kalem</th><th>Tip</th><th>Miktar</th><th>Öncesi→Sonrası</th><th>Kim</th><th>Makine/İş Emri</th><th>Not</th>
+    </tr></thead><tbody>
+      ${rows.length===0 ? `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:16px">${toolHistLoading?'Yükleniyor…':'Hareket yok.'}</td></tr>` : rows.map(m=>{
+        const it = toolCatalog[m.itemId];
+        const tipLabel = tipLabels[m.tip] || m.tip;
+        const tipColor = m.tip==='cikis' ? 'var(--danger)' : (m.tip==='giris'||m.tip==='iade') ? 'var(--success)' : 'var(--text-muted)';
+        return `<tr>
+          <td>${fmtDT(m.ts)}</td>
+          <td class="mono">${esc(m.canias)}${it?`<div style="font-size:10px;color:var(--text-muted)">${esc(it.ad)}</div>`:''}</td>
+          <td style="color:${tipColor}">${tipLabel}</td>
+          <td style="color:${m.miktar<0?'var(--danger)':'var(--success)'}">${m.miktar>0?'+':''}${m.miktar}</td>
+          <td class="mono" style="font-size:11px">${m.oncekiMiktar}→${m.sonrakiMiktar}</td>
+          <td>${esc(m.operatorName||m.operatorUsername||'')}</td>
+          <td style="font-size:11px">${esc(m.makine||'')}${m.isEmriNo?` · ${esc(m.isEmriNo)}`:''}</td>
+          <td style="font-size:11px;color:var(--text-muted)">${esc(m.aciklama||'')}</td>
+        </tr>`;
+      }).join('')}
+    </tbody></table>
+    </div>
+    ${(!toolHistFilterItemId && !toolHistFilterOperator && toolHistHasMore) ? `<div style="text-align:center;margin-top:14px"><button class="btn-ghost" ${toolHistLoading?'disabled':''} onclick="toolHistLoadMore()">${toolHistLoading?'Yükleniyor…':'↓ Daha Fazla Yükle'}</button></div>` : ''}`;
 }
 
 /* ==================== AŞAMA 2 — OPERATÖR "🔧 TAKIM DOLABI" EKRANI ====================

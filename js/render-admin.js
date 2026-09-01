@@ -721,9 +721,9 @@ function renderAnalizSaha(){
   </div>`;
 }
 function renderAdmin(){
-  const viewToTabKey = { report:'rapor', matrix:'matrix', completed:'completed', analiz:'analiz', tadilatYonetim:'tadilat' };
+  const viewToTabKey = { report:'rapor', matrix:'matrix', completed:'completed', analiz:'analiz', tadilatYonetim:'tadilat', takimStokYonetim:'takimStok' };
   if(viewToTabKey[view] && !isAdminTabVisible(viewToTabKey[view])){
-    const tabKeyToView = { rapor:'report', matrix:'matrix', completed:'completed', analiz:'analiz', tadilat:'tadilatYonetim' };
+    const tabKeyToView = { rapor:'report', matrix:'matrix', completed:'completed', analiz:'analiz', tadilat:'tadilatYonetim', takimStok:'takimStokYonetim' };
     const fallbackKey = ADMIN_TAB_DEFS.map(t=>t.key).find(k=>isAdminTabVisible(k) && (k!=='tadilat' || canCreateTadilat()) && (k!=='analiz' || !(session.isSef || session.isUretimSef)));
     view = fallbackKey ? tabKeyToView[fallbackKey] : 'report';
   }
@@ -765,7 +765,7 @@ function renderAdmin(){
       ${isAdminTabVisible('completed') ? `<button class="tab-btn ${view==='completed'?'active':''}" onclick="setView('completed')">${ico('check',14)} Tamamlanan Kodlar</button>` : ''}
       ${!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz') ? `<button class="tab-btn ${view==='analiz'?'active':''}" onclick="setView('analiz')">${ico('chart',14)} Analiz</button>` : ''}
       ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="tab-btn ${view==='tadilatYonetim'?'active':''}" onclick="setView('tadilatYonetim')">${ico('wrench',14)} Tadilat</button>` : ''}
-      ${session.isSuperAdmin ? `<button class="tab-btn ${view==='takimStokYonetim'?'active':''}" onclick="setView('takimStokYonetim')">🔧 Takım Stok</button>` : ''}
+      ${isAdminTabVisible('takimStok') ? `<button class="tab-btn ${view==='takimStokYonetim'?'active':''}" onclick="setView('takimStokYonetim')">🔧 Takım Stok</button>` : ''}
     </div>`;
 
   let body = '';
@@ -1060,6 +1060,15 @@ function renderAdmin(){
                 ${ANALIZ_VIEW_DEFS.map(v=>`
                   <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer">
                     <input type="checkbox" style="width:auto" ${(adminTabPermissions[code]?.analizViews?.[v.key])!==false?'checked':''} onchange="setAnalizViewPermission('${code}','${v.key}', this.checked)"> ${esc(v.label)}
+                  </label>
+                `).join('')}
+              </div>` : ''}
+              ${(adminTabPermissions[code]?.['takimStok'])!==false ? `
+              <div style="width:100%;display:flex;flex-wrap:wrap;gap:10px;padding:8px 0 0 10px;border-left:1px solid var(--border);margin-left:1px">
+                <span style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;width:100%">Takım Stok — alt sekmeler</span>
+                ${TAKIM_STOK_SUBTAB_DEFS.map(v=>`
+                  <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer">
+                    <input type="checkbox" style="width:auto" ${(adminTabPermissions[code]?.takimStokViews?.[v.key])!==false?'checked':''} onchange="setTakimStokSubTabPermission('${code}','${v.key}', this.checked)"> ${esc(v.label)}
                   </label>
                 `).join('')}
               </div>` : ''}
@@ -2028,7 +2037,7 @@ function renderAdmin(){
       </div>`;
     }
     body += `</div>`;
-  } else if(view==='takimStokYonetim' && session.isSuperAdmin){
+  } else if(view==='takimStokYonetim' && isAdminTabVisible('takimStok')){
     body = renderToolStokManagementScreen();
   } else {
     const entries = entriesArray();

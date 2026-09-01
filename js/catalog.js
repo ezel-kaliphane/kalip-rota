@@ -354,6 +354,7 @@ const ADMIN_TAB_DEFS = [
   { key:'completed', label:'Tamamlanan Kodlar' },
   { key:'analiz', label:'Analiz' },
   { key:'tadilat', label:'Tadilat' },
+  { key:'takimStok', label:'Takım Stok' },
 ];
 function isAdminTabVisible(key){
   if(!session) return false;
@@ -392,6 +393,32 @@ function isAnalizViewVisible(key){
 function setAnalizViewPermission(username, key, val){
   if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
   DB.ref(`adminTabPermissions/${username}/analizViews/${key}`).set(val);
+}
+/* ===================== TAKIM STOK SEKMESİ — ALT SEKME ERİŞİMİ =====================
+   analizViews ile birebir aynı desen: ADMIN_TAB_DEFS'teki 'takimStok' izni sadece üst
+   sekmenin KENDİSİNİ açıp kapatıyor — burada AYRICA, sekme açıksa içindeki alt sekmelerden
+   (Kalem Listesi/Konumlar/Excel Yükle/Stok Girişi/Geçmiş) HANGİLERİNİ göreceğini kullanıcı
+   bazında belirliyoruz. Not: bu SADECE GÖRÜNÜRLÜK — yazma işlemleri (Excel yükleme, kalem/
+   konum düzenleme, stok girişi) her zaman canManageToolStok() ile SuperAdmin'e özel kalıyor,
+   görünürlük izni verilen bir Yönetici/Şef ekranı görebilir ama düzenleyemez (bkz. js/toolstock.js). */
+const TAKIM_STOK_SUBTAB_DEFS = [
+  { key:'liste', label:'Kalem Listesi' },
+  { key:'konumlar', label:'Konumlar' },
+  { key:'excel', label:'Excel Yükle' },
+  { key:'giris', label:'Stok Girişi' },
+  { key:'gecmis', label:'Geçmiş' },
+];
+function isTakimStokSubTabVisible(key){
+  if(!session) return false;
+  if(session.isSuperAdmin) return true;
+  if(!isAdminTabVisible('takimStok')) return false;
+  const mine = adminTabPermissions[session.username]?.takimStokViews;
+  if(!mine) return true; // hiç ayar girilmemiş -> varsayılan hepsi görünür
+  return mine[key] !== false;
+}
+function setTakimStokSubTabPermission(username, key, val){
+  if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
+  DB.ref(`adminTabPermissions/${username}/takimStokViews/${key}`).set(val);
 }
 function tadilatBolumOptions(){ return Object.keys(getBolumKurallari()); }
 function canManageBolumKurallari(){
