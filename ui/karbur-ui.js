@@ -82,6 +82,9 @@ function renderKarburPlan(){
   const showPlan = !!karburBasePlan;
   const t = karburPlanTotals(plan);
   const fireSecili = Object.keys(karburAssigns).length;
+  /* Stok yetmeyen kalem varsa KAYDET kapalı — kayıt stoğu eksiye düşüremez (bkz. js/karbur.js
+     KAYDET bölümü). Toplam üzerinden bakılır: aynı kalem birden fazla satırda geçebiliyor. */
+  const eksikler = showPlan ? karburPlanEksikleri(plan) : [];
 
   let html = `<div class="card" style="margin-bottom:14px">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px">İş emirleri — gerekli parçalar</div>
@@ -122,6 +125,7 @@ function renderKarburPlan(){
   html += renderKarburDelta();
   html += renderKarburBekleyen(plan);
   html += renderKarburHatalar(plan);
+  html += renderKarburEksik(eksikler);
   html += renderKarburDirect(plan);
   html += renderKarburAdetCikis(plan);
 
@@ -141,7 +145,9 @@ function renderKarburPlan(){
       <div style="flex:1"></div>
       <button type="button" class="btn-ghost" onclick="karburYazdir()">🖨 Kesim Raporu (A4 yatay)</button>
       ${canManageKarbur()
-        ? `<button type="button" class="btn-primary" ${karburBusy?'disabled':''} onclick="karburPlanKaydet()">${karburBusy?'Kaydediliyor…':'KAYDET'}</button>`
+        ? `<button type="button" class="btn-primary" ${(karburBusy||eksikler.length)?'disabled':''}
+             ${eksikler.length?'title="Stok yetersiz — yukarıdaki listeye bak"':''}
+             onclick="karburPlanKaydet()">${karburBusy?'Kaydediliyor…':(eksikler.length?'KAYDEDİLEMEZ — stok yetersiz':'KAYDET')}</button>`
         : ''}
     </div>
   </div>`;
@@ -257,6 +263,34 @@ function renderKarburHatalar(plan){
   return `<div class="card" style="margin-bottom:14px;border-color:var(--danger)">
     <div style="font-size:12px;font-weight:600;color:var(--danger);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Eksik/hatalı satırlar — plana alınmadı</div>
     ${plan.hatalar.map(d=>`<div style="font-size:12px;margin-bottom:4px"><b>${esc(d.r.isEmri||'—')}</b> — ${esc(d.hata)}</div>`).join('')}
+  </div>`;
+}
+
+/* Stok yetersizliği — kaydı durduran tek şey. Satır bazlı "yetersiz" rozetinden farklı:
+   burası kalem TOPLAMINA bakar, yani aynı kalem kesimsiz çıkış + adet çıkışı + kesim
+   satırlarına dağılmışsa toplamı görür.
+   Çözüm yolu bilinçli olarak "yine de kaydet" değil, sayım düzeltmesi: fiili sayı farklıysa
+   düzeltme `sayim` hareketi olarak kaydedilir ve kim ne zaman düzeltmiş belli olur. */
+function renderKarburEksik(eksikler){
+  const u = karburEksikUyari;
+  if(!eksikler.length && !u) return '';
+  const liste = eksikler.length ? eksikler : u.eksik;
+  return `<div class="card" style="margin-bottom:14px;border-color:var(--danger)">
+    <div style="font-size:12px;font-weight:600;color:var(--danger);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">
+      Stok yetersiz — kayıt yapılamaz</div>
+    ${(u && u.bayat) ? `<div style="font-size:12px;color:var(--warn);margin-bottom:8px">Sen planı hesapladıktan sonra stok değişmiş (başka biri kaydetmiş olabilir). Hiçbir düşüm yapılmadı — <b>HESAPLA</b>'ya basıp planı yenile.</div>` : ''}
+    <table class="tbl"><thead><tr><th>Kalem</th>
+      <th style="text-align:right">Gereken</th><th style="text-align:right">Mevcut</th><th style="text-align:right">Eksik</th></tr></thead><tbody>
+      ${liste.map(e => `<tr><td>${esc(e.kod)}${e.tur==='fire'?' <span style="font-size:10.5px;color:var(--text-muted)">(fire havuzu)</span>':''}</td>
+        <td style="text-align:right">${e.gereken}</td>
+        <td style="text-align:right">${e.mevcut}</td>
+        <td style="text-align:right;color:var(--danger)"><b>${e.gereken - e.mevcut}</b></td></tr>`).join('')}
+    </tbody></table>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.55">
+      Stok eksiye düşürülmez — buradaki fire havuzu, iş emri mm'si ve sayım farkı hep bu adetten türüyor.
+      Fiilen raftaki sayı farklıysa <b>Stok &amp; Fire</b> sekmesinden <b>sayım düzeltmesi</b> yap;
+      fark hareket olarak kaydedilir. Ya da planı küçültüp tekrar <b>HESAPLA</b>'ya bas.
+    </div>
   </div>`;
 }
 
@@ -544,7 +578,43 @@ function renderKarburGiris(){
   </div>`;
 }
 
-/* ==================== EXCEL YÜKLE ==================== */
+/* ==================== EXCEL YÜKLE ====================
+   Mevcut kalemlerin stok adedi için açık onay bloğu. Varsayılan KAPALI: Excel'in sessizce
+   stok ezmesi (aynı dosyanın ikinci yüklemesinde aradaki tüm çıkışların sıfırlanması) bu
+   yüzden mümkün değil. İşaretlenirse önce fark tablosu gösterilir. */
+function renderKarburExcelStokBloku(pv){
+  if(!pv.guncel) return '';                       // güncellenecek mevcut kalem yok
+  if(!pv.adetSutunuVar){
+    return `<div style="font-size:11.5px;color:var(--text-muted);background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+      Dosyada <b>ADET</b>/<b>MİKTAR</b> sütunu yok — stok adetlerine dokunulmayacak, yalnızca katalog güncellenecek.</div>`;
+  }
+  const f = pv.farklar || [];
+  let html = `<label style="display:flex;align-items:flex-start;gap:10px;background:var(--panel-alt);border:2px solid ${karburExcelStokGuncelle?'var(--warn)':'var(--border)'};border-radius:8px;padding:10px 12px;margin-bottom:12px;cursor:pointer">
+    <input type="checkbox" ${karburExcelStokGuncelle?'checked':''} onchange="karburSetExcelStokGuncelle(this.checked)" style="width:auto;transform:scale(1.2);margin-top:2px">
+    <div>
+      <div style="font-size:12.5px;font-weight:600;color:${karburExcelStokGuncelle?'var(--warn)':'var(--text)'}">Mevcut kalemlerin stok adedini de Excel'deki değere ayarla <span style="font-weight:400;color:var(--text-muted)">(sayım)</span></div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">İşaretlemezsen mevcut kalemlerin adedine <b>hiç dokunulmaz</b>; sadece katalog bilgisi güncellenir. İşaretlersen ${f.length} kalemin adedi değişir ve her biri <b>sayım hareketi</b> olarak Geçmiş'e yazılır.</div>
+    </div>
+  </label>`;
+  if(!karburExcelStokGuncelle) return html;
+  if(!f.length){
+    return html + `<div style="font-size:11.5px;color:var(--success);margin-bottom:12px">Excel'deki adetler sistemdekilerle aynı — değişecek bir şey yok.</div>`;
+  }
+  html += `<div style="border:1px solid var(--warn);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:600;color:var(--warn);margin-bottom:8px">Uygulanacak sayım farkları (${f.length})</div>
+    <table class="tbl"><thead><tr><th>Kod</th>
+      <th style="text-align:right">Sistemde</th><th style="text-align:right">Excel'de</th><th style="text-align:right">Fark</th></tr></thead><tbody>
+      ${f.slice(0,30).map(x=>`<tr><td>${esc(x.kod)}</td>
+        <td style="text-align:right">${x.sistem}</td>
+        <td style="text-align:right"><b>${x.excel}</b></td>
+        <td style="text-align:right;color:${x.excel<x.sistem?'var(--danger)':'var(--success)'}">${x.excel-x.sistem>0?'+':''}${x.excel-x.sistem}</td></tr>`).join('')}
+    </tbody></table>
+    ${f.length>30 ? `<div style="font-size:11px;color:var(--text-muted);margin-top:6px">…ve ${f.length-30} kalem daha</div>` : ''}
+    <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Excel'de adet hücresi <b>boş</b> olan kalemler bu listede yok — boş hücre "sıfır" değil, "bilgi yok" sayılır ve o kaleme dokunulmaz.</div>
+  </div>`;
+  return html;
+}
+
 function renderKarburExcel(){
   if(!canManageKarbur()) return `<div style="font-size:12.5px;color:var(--text-muted)">Excel yükleme için yetkin yok.</div>`;
   const pv = karburExcelPreview;
@@ -556,8 +626,11 @@ function renderKarburExcel(){
       <code>V10X156X3XST7</code>) dış çap · boy · delik olarak okunup <b>kesim planına</b>, diğerleri
       (ör. <code>S22X20X11X5XST7</code>) <b>adet olarak tüketilenlere</b> varsayılır — bu yalnızca
       varsayılan, hangi kalemin nereye ait olduğunu <b>Stok &amp; Fire</b> listesinden kendin
-      işaretleyebilirsin. Varsa <b>ADET</b>/<b>MİKTAR</b> sütunu stok adedi olarak alınır. Tüm sayfalar
-      taranır; mevcut kodlar güncellenir, <b>hiçbir kayıt silinmez</b>.
+      işaretleyebilirsin. Tüm sayfalar taranır, <b>hiçbir kayıt silinmez</b>.
+      <br><b>Stok adetleri:</b> Excel yeni kalem açarken <b>ADET</b>/<b>MİKTAR</b> sütununu başlangıç
+      adedi olarak yazar. <b>Mevcut</b> kalemlerin adedine varsayılan olarak dokunmaz — Excel'deki
+      sayıyı uygulamak istersen önizlemedeki kutuyu işaretle, ne değişeceğini önce fark tablosunda
+      görürsün ve her değişiklik <b>sayım hareketi</b> olarak kaydedilir.
     </div>
     <input type="file" accept=".xlsx,.xls" onchange="karburExcelSec(event)" style="width:auto">
   </div>`;
@@ -571,15 +644,18 @@ function renderKarburExcel(){
       <div><span style="display:block;font-size:11px;color:var(--text-muted)">Güncellenecek</span><b>${pv.guncel}</b></div>
       <div><span style="display:block;font-size:11px;color:var(--text-muted)">Kesime / Adete</span><b>${pv.kesim} / ${pv.adet}</b></div>
       <div><span style="display:block;font-size:11px;color:var(--text-muted)">Okunamayan kod</span><b style="color:${pv.hatali.length?'var(--danger)':'var(--text)'}">${pv.hatali.length}</b></div>
+      ${pv.tekrar ? `<div><span style="display:block;font-size:11px;color:var(--text-muted)">Tekrar eden kod</span><b>${pv.tekrar}</b></div>` : ''}
     </div>
     ${pv.hatali.length ? `<div style="font-size:11px;color:var(--danger);margin-bottom:10px">
       Format dışı kodlar atlanacak: ${pv.hatali.slice(0,8).map(h=>esc(h.kod)).join(', ')}${pv.hatali.length>8?' …':''}</div>` : ''}
+    ${pv.tekrar ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Aynı kod birden fazla satırda geçiyor — her kod için <b>son</b> satır geçerli sayıldı (aksi halde aynı kod için ikinci bir stok kalemi açılırdı).</div>` : ''}
+    ${renderKarburExcelStokBloku(pv)}
     <table class="tbl"><thead><tr><th>Kod</th><th>Ölçüler</th><th>Kalite</th><th>Varsayılan kullanım</th><th style="text-align:right">Adet</th></tr></thead><tbody>
       ${pv.satirlar.slice(0,25).map(s=>`<tr><td>${esc(s.kod)}</td>
         <td style="font-size:11px;color:var(--text-muted)">${(s.alanlar||[]).map(karburFmt).join(' × ')}${s.kullanim==='kesim'?` <span style="color:var(--text)">(Ø${karburFmt(s.disCap)} · boy ${karburFmt(s.boy)} · delik ${esc(s.delik)})</span>`:''}</td>
         <td>${esc(s.kalite)}</td>
         <td>${s.kullanim==='kesim'?`kesim planına girer <span style="font-size:10.5px;color:var(--text-muted)">(${s.tur==='cubuk'?'çubuk':'hazır parça'})</span>`:'adet olarak tüketilir'}</td>
-        <td style="text-align:right">${s.adet}</td></tr>`).join('')}
+        <td style="text-align:right">${s.adet == null ? '<span style="color:var(--text-muted)">—</span>' : s.adet}</td></tr>`).join('')}
     </tbody></table>
     ${pv.satirlar.length>25 ? `<div style="font-size:11px;color:var(--text-muted);margin-top:6px">…ve ${pv.satirlar.length-25} satır daha</div>` : ''}
     <div style="display:flex;gap:8px;margin-top:12px">

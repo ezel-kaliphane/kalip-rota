@@ -64,8 +64,10 @@ let karburAssigns = {};              // parçaKey -> fireId
 let karburRodPick = {};              // aileKey -> seçilen çubuk kodu (kullanıcı override)
 let karburPickerFor = null;          // fire seçici modalı açık olan parçaKey
 let karburSaveSummary = null;
+let karburEksikUyari = null;         // { eksik:[...], bayat } — stok yetmediği için durdurulan kayıt
 let karburBusy = false;
 let karburExcelPreview = null;
+let karburExcelStokGuncelle = false; // Excel'deki adetler mevcut kalemlere sayım olarak uygulansın mı
 let karburGirisKod = '', karburGirisAdet = '';
 let karburAdetRows = [];             // adet olarak verilecekler: { isEmri, katalogId, adet }
 let karburPlanNo = null;             // HESAPLA'da üretilir; kâğıt ile kayıt aynı numarayı taşır
@@ -435,30 +437,39 @@ function karburSetAdetRow(i, f, v){ if(karburAdetRows[i]) karburAdetRows[i][f] =
 function karburSetAdetRowSel(i, f, v){ if(!karburAdetRows[i]) return; karburAdetRows[i][f] = v; karburResetPlan(); render(); }
 
 function karburSetPay(v){ const n = karburNum(v); if(n >= 0) karburPay = n; karburResetPlan(); }
-function karburResetPlan(){ karburBasePlan = null; karburAssigns = {}; karburRodPick = {}; karburSaveSummary = null; karburPlanNo = null; }
+function karburResetPlan(){ karburBasePlan = null; karburAssigns = {}; karburRodPick = {}; karburSaveSummary = null; karburEksikUyari = null; karburPlanNo = null; }
 function karburHesapla(){ karburResetPlan(); karburPlanNo = karburYeniPlanNo(); karburBasePlan = karburComputePlan(); render(); }
 function karburPlanTemizle(){ karburRows = []; karburAdetRows = []; karburResetPlan(); render(); }
-function karburSetRodPick(key, kod){ karburRodPick[key] = kod; karburSaveSummary = null; render(); }
+function karburSetRodPick(key, kod){ karburRodPick[key] = kod; karburSaveSummary = null; karburEksikUyari = null; render(); }
 function karburOpenPicker(key){ karburPickerFor = key; render(); }
 function karburClosePicker(){ karburPickerFor = null; render(); }
 function karburPickFire(key, fireId){
   if(!karburBasePlan) karburBasePlan = karburComputePlan();
-  karburAssigns[key] = fireId; karburPickerFor = null; karburSaveSummary = null; render();
+  karburAssigns[key] = fireId; karburPickerFor = null; karburSaveSummary = null; karburEksikUyari = null; render();
 }
-function karburUndoAssign(key){ delete karburAssigns[key]; karburSaveSummary = null; render(); }
+function karburUndoAssign(key){ delete karburAssigns[key]; karburSaveSummary = null; karburEksikUyari = null; render(); }
 
 /* ==================== KAYDET ====================
    Stok düşümleri transaction ile yapılır. Çelik modülündeki consumeStock yerel değerden
    read-modify-write yapıyor (js/state.js:395) — iki kişi aynı anda kesim kaydederse bir düşüm
    kaybolur. Bu hata burada tekrarlanmıyor.
-   Yazılan hareketler iş emri bazlı mm tüketimini taşır (isEmriNo = <no>_ELMAS). */
-function karburPlanKaydet(){
-  if(!canManageKarbur() || karburBusy) return;
-  const plan = karburComputePlan();
-  const t = karburPlanTotals(plan);
-  if(!t.kesimsiz && !t.cubuk && !t.adetToplam && !Object.keys(karburAssigns).length){ toast('Kaydedilecek çıkış yok'); return; }
-  const planNo = karburPlanNo || karburYeniPlanNo();
+   Yazılan hareketler iş emri bazlı mm tüketimini taşır (isEmriNo = <no>_ELMAS).
 
+   ÜÇ KATMANLI NEGATİF STOK KORUMASI (bkz. karburEksikListesi):
+     1) Ekranda: eksik varsa KAYDET düğmesi kapalı, gerekçesi listelenir.
+     2) Kayıtta: önce yerel, sonra TAZE okunan stokla doğrulanır — eksik varsa hiçbir yazma yapılmaz.
+     3) Transaction içinde: sonuç negatife düşecekse işlem iptal edilir (araya giren başka bir
+        kayda karşı son savunma). İptal olursa commit olmuş kardeş düşümler geri alınır — aksi
+        halde kısmi düşüm kalır ve hiçbir hareket kaydı yazılmadığı için izi de bulunmaz.
+
+   Negatif stok yasak, çünkü buradaki her sayı (fire havuzu, iş emri mm'si, sayım farkı) stok
+   adedinden türüyor. Sayı fiilen yanlışsa doğru yol Stok & Fire'dan sayım düzeltmesidir: orada
+   fark `sayim` hareketi olarak kaydedilir ve kim ne zaman düzeltmiş belli olur. */
+
+/* Planı yazılacak hareketlere ve stok düşümlerine çevirir. SAF: hiçbir şey yazmaz, hiçbir
+   modül durumunu değiştirmez. Hem KAYDET hem de ekrandaki eksik kontrolü bu fonksiyonu
+   kullanır — iki ayrı toplama mantığı zamanla birbirinden ayrılmasın diye. */
+function karburCikisHazirla(plan){
   const cikisAdet = {};    // katalogId -> düşülecek adet
   const hareketler = [];   // yazılacak hareket kayıtları
   const fireDus = {};      // fireId -> tüketilen adet
@@ -534,20 +545,83 @@ function karburPlanKaydet(){
     }
   });
 
-  karburBusy = true; render();
+  return { cikisAdet, hareketler, fireDus, fireEkle, stokAciklama, hurdaMm };
+}
+
+/* Stok yetmeyen kalemleri döndürür. TOPLAM üzerinden bakar: aynı kalem birden fazla satırda
+   (kesimsiz çıkış + adet çıkışı + kesim) geçebiliyor ve her satır tek başına stoğa sığıyor
+   olsa bile toplamı aşabiliyordu — satır bazlı "yetersiz" rozeti bunu göremiyordu.
+   stokMap/fireMap dışarıdan veriliyor ki aynı fonksiyon hem yerel kopyayla (ekran) hem de
+   taze okunan veriyle (kayıt anı) çalışsın. */
+function karburEksikListesi(hazirlik, stokMap, fireMap){
+  const eksik = [];
+  Object.keys(hazirlik.cikisAdet).forEach(id => {
+    const gereken = hazirlik.cikisAdet[id];
+    const mevcut = Number(((stokMap || {})[id] || {}).adet) || 0;
+    if(gereken > mevcut){
+      const it = karburKatalogArray().find(k => k.id === id);
+      eksik.push({ tur: 'stok', kod: it ? it.kod : id, gereken, mevcut });
+    }
+  });
+  Object.keys(hazirlik.fireDus).forEach(id => {
+    const gereken = hazirlik.fireDus[id];
+    const f = (fireMap || {})[id] || {};
+    const mevcut = Number(f.adet) || 0;
+    if(gereken > mevcut){
+      eksik.push({ tur: 'fire', gereken, mevcut,
+        kod: 'Ø' + karburFmt(f.disCap) + ' ' + (f.kalite || '') + ' ' + karburFmt(f.boy) + ' mm fire' });
+    }
+  });
+  return eksik;
+}
+
+/* Ekranın kullandığı hâli — yerel kopyalarla, ağ trafiği yok. */
+function karburPlanEksikleri(plan){
+  return karburEksikListesi(karburCikisHazirla(plan), karburStok, karburFire);
+}
+
+function karburPlanKaydet(){
+  if(!canManageKarbur() || karburBusy) return;
+  const plan = karburComputePlan();
+  const t = karburPlanTotals(plan);
+  if(!t.kesimsiz && !t.cubuk && !t.adetToplam && !Object.keys(karburAssigns).length){ toast('Kaydedilecek çıkış yok'); return; }
+  const planNo = karburPlanNo || karburYeniPlanNo();
+
+  const hazirlik = karburCikisHazirla(plan);
+  const cikisAdet = hazirlik.cikisAdet, hareketler = hazirlik.hareketler,
+        fireDus = hazirlik.fireDus, fireEkle = hazirlik.fireEkle,
+        stokAciklama = hazirlik.stokAciklama, hurdaMm = hazirlik.hurdaMm;
+
+  /* 1. katman — yerel veriyle bak, ağa hiç çıkmadan durdur. */
+  const yerelEksik = karburEksikListesi(hazirlik, karburStok, karburFire);
+  if(yerelEksik.length){
+    karburEksikUyari = { eksik: yerelEksik, bayat: false };
+    toast('Stok yetersiz — kayıt yapılmadı');
+    render();
+    return;
+  }
+
+  karburBusy = true; karburEksikUyari = null; render();
   const now = Date.now();
 
-  const txs = Object.keys(cikisAdet).map(id =>
-    DB.ref('karburStok/' + id + '/adet').transaction(cur => (Number(cur) || 0) - cikisAdet[id])
-      .then(res => ({ id, tip: 'stok', ok: res.committed, sonraki: Number(res.snapshot && res.snapshot.val()) || 0 }))
-  );
-  const fireTxs = Object.keys(fireDus).map(id =>
-    DB.ref('karburFire/' + id + '/adet').transaction(cur => (Number(cur) || 0) - fireDus[id])
-      .then(res => ({ id, tip: 'fire', ok: res.committed }))
-  );
-
-  Promise.all(txs.concat(fireTxs)).then(results => {
-    if(results.some(r => !r.ok)){ karburBusy = false; toast('Stok düşülemedi, tekrar deneyin'); render(); return; }
+  /* 2. katman — TAZE stokla doğrula. Plan burada YENİDEN KURULMUYOR: ekrandakinden farklı bir
+     planı sessizce kaydetmek, yazdırılan kâğıt ile kaydı birbirinden ayırırdı. Bunun yerine
+     kullanıcıdan HESAPLA'ya basıp planı yenilemesi isteniyor. */
+  Promise.all([DB.ref('karburStok').once('value'), DB.ref('karburFire').once('value')]).then(snaps => {
+    const tazeStok = snaps[0].val() || {}, tazeFire = snaps[1].val() || {};
+    karburStok = tazeStok; karburFire = tazeFire;
+    karburStokReady = true; karburFireReady = true;
+    const tazeEksik = karburEksikListesi(hazirlik, tazeStok, tazeFire);
+    if(tazeEksik.length){
+      karburBusy = false;
+      karburEksikUyari = { eksik: tazeEksik, bayat: true };
+      toast('Stok bu arada değişmiş — kayıt yapılmadı');
+      render();
+      return null;
+    }
+    return karburStokDus(cikisAdet, fireDus);
+  }).then(results => {
+    if(!results) return;      // taze kontrolde durduysak devam etme
 
     const updates = {};
     results.forEach(r => {
@@ -670,7 +744,48 @@ function karburPlanKaydet(){
       render();
     }).catch(err => { karburBusy = false; toast('Kayıt hatası: ' + ((err && err.message) || 'bilinmeyen')); render(); });
     });   // fireHazirla.then
-  }).catch(err => { karburBusy = false; toast('Stok düşülemedi: ' + ((err && err.message) || 'bilinmeyen')); render(); });
+  }).catch(err => {
+    karburBusy = false;
+    /* Yerel kopya bayat kaldıysa kullanıcı eski sayıları görmesin */
+    ensureKarburStokLoaded(() => safeRender(), true);
+    ensureKarburFireLoaded(() => safeRender(), true);
+    toast('Stok düşülemedi: ' + ((err && err.message) || 'bilinmeyen'));
+    render();
+  });
+}
+
+/* Stok ve fire düşümlerini yapar. Her transaction sonucu negatife düşürecekse İPTAL edilir —
+   `undefined` döndürmek transaction'ı commit etmeden bırakır.
+
+   Kardeşlerden biri iptal olursa commit olmuş olanlar GERİ ALINIR: düşümler paralel koşuyor,
+   biri düşüp diğeri düşmezse ve akış orada kesilirse ortada hiçbir hareket kaydı olmayan kısmi
+   bir stok düşümü kalırdı — sayım tutmaz, izi de bulunmaz. Geri alma da transaction ile yapılır
+   ki bu arada başkasının yaptığı bir düşüm ezilmesin. */
+function karburStokDus(cikisAdet, fireDus){
+  const istekler = []
+    .concat(Object.keys(cikisAdet).map(id => ({ tip: 'stok', id, yol: 'karburStok/' + id + '/adet', miktar: cikisAdet[id] })))
+    .concat(Object.keys(fireDus).map(id => ({ tip: 'fire', id, yol: 'karburFire/' + id + '/adet', miktar: fireDus[id] })));
+
+  return Promise.all(istekler.map(x =>
+    DB.ref(x.yol).transaction(cur => {
+      const sonraki = (Number(cur) || 0) - x.miktar;
+      return sonraki < 0 ? undefined : sonraki;      // negatife düşecekse iptal
+    }).then(res => Object.assign({ ok: res.committed, sonraki: Number(res.snapshot && res.snapshot.val()) || 0 }, x))
+  )).then(results => {
+    const basarisiz = results.filter(r => !r.ok);
+    if(!basarisiz.length) return results;
+    const geriAl = results.filter(r => r.ok).map(r =>
+      DB.ref(r.yol).transaction(cur => (Number(cur) || 0) + r.miktar).catch(() => {})
+    );
+    return Promise.all(geriAl).then(() => {
+      const kodlar = basarisiz.map(r => {
+        if(r.tip === 'fire') return 'fire havuzu';
+        const it = karburKatalogArray().find(k => k.id === r.id);
+        return it ? it.kod : r.id;
+      });
+      throw new Error(kodlar.join(', ') + ' için stok yetmedi — hiçbir düşüm yapılmadı, HESAPLA ile planı yenile');
+    });
+  });
 }
 
 /* ==================== KATALOG & STOK YÖNETİMİ ==================== */
@@ -826,13 +941,15 @@ function karburExcelSec(ev){
   rd.onload = e => {
     try{
       const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-      const satirlar = [], hatali = [];
+      const okunan = [], hatali = [];
+      let adetSutunuVar = false;
       wb.SheetNames.forEach(sn => {
         const rowsRaw = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' });
         if(!rowsRaw.length) return;
         const head = (rowsRaw[0] || []).map(x => String(x).trim().toLowerCase());
         let kodIdx = head.findIndex(h => h.indexOf('kod') >= 0);
         const adetIdx = head.findIndex(h => h.indexOf('adet') >= 0 || h.indexOf('miktar') >= 0);
+        if(adetIdx >= 0) adetSutunuVar = true;
         const basla = kodIdx >= 0 ? 1 : 0;
         if(kodIdx < 0) kodIdx = 0;   // başlık satırı yoksa ilk sütun kod kabul edilir
         for(let i = basla; i < rowsRaw.length; i++){
@@ -840,61 +957,107 @@ function karburExcelSec(ev){
           if(!kod) continue;
           const p = karburParseKod(kod);
           if(!p){ hatali.push({ sheet: sn, kod }); continue; }
-          const adet = adetIdx >= 0
-            ? (parseInt(String((rowsRaw[i] || [])[adetIdx]).replace(/\D/g, ''), 10) || 0)
-            : 0;
-          satirlar.push(Object.assign(p, { adet, sheet: sn }));
+          /* adet: null = "Excel bu kalem için bir sayı söylemiyor" (sütun yok ya da hücre boş),
+             0 = "sıfır" — geçerli bir sayım değeri. Eskiden ikisi de 0 sayılıyordu; bu yüzden
+             biten bir kalemi Excel'le sıfırlamak imkânsız, dolu bir kalemi kazara ezmek ise
+             mümkündü. Şimdi ikisi ayrı. */
+          let adet = null;
+          if(adetIdx >= 0){
+            const ham = String((rowsRaw[i] || [])[adetIdx] == null ? '' : (rowsRaw[i] || [])[adetIdx]).trim();
+            if(ham !== ''){
+              const n = parseInt(ham.replace(/[^\d-]/g, ''), 10);
+              if(!isNaN(n) && n >= 0) adet = n;
+            }
+          }
+          okunan.push(Object.assign(p, { adet, sheet: sn }));
         }
       });
-      const mevcutKodlar = new Set(karburKatalogArray().map(k => k.kod));
+
+      /* Aynı kod birden fazla satırda/sayfada geçebiliyor (elle tutulan dosya). Tekilleştirilmezse
+         aynı kod için İKİ katalog düğümü açılıyordu — kod aynı, id farklı, stok ikiye bölünür.
+         Son görülen satır geçerli sayılır, kaç tekrar atlandığı önizlemede gösterilir. */
+      const teklesmis = new Map();
+      okunan.forEach(s => teklesmis.set(s.kod, s));
+      const satirlar = [...teklesmis.values()];
+
+      const mevcutMap = {};
+      karburKatalogArray().forEach(k => { mevcutMap[k.kod] = k; });
+      /* Mevcut kalemlerde Excel'in söylediği sayı sistemdekinden farklıysa: sayım farkı.
+         Kullanıcı onay kutusunu işaretlemedikçe UYGULANMAZ, yalnızca gösterilir. */
+      const farklar = satirlar
+        .filter(s => mevcutMap[s.kod] && s.adet != null && s.adet !== karburStokAdet(mevcutMap[s.kod].id))
+        .map(s => ({ kod: s.kod, id: mevcutMap[s.kod].id, sistem: karburStokAdet(mevcutMap[s.kod].id), excel: s.adet }));
+
       karburExcelPreview = {
-        satirlar, hatali,
-        yeni: satirlar.filter(s => !mevcutKodlar.has(s.kod)).length,
-        guncel: satirlar.filter(s => mevcutKodlar.has(s.kod)).length,
+        satirlar, hatali, farklar, adetSutunuVar,
+        tekrar: okunan.length - satirlar.length,
+        yeni: satirlar.filter(s => !mevcutMap[s.kod]).length,
+        guncel: satirlar.filter(s => mevcutMap[s.kod]).length,
         kesim: satirlar.filter(s => s.kullanim === 'kesim').length,
         adet:  satirlar.filter(s => s.kullanim === 'adet').length
       };
+      karburExcelStokGuncelle = false;   // her yeni dosyada kapalı başlar — bilerek işaretlenir
       render();
     }catch(err){ toast('Excel okunamadı: ' + ((err && err.message) || 'hata')); }
   };
   rd.readAsArrayBuffer(file);
 }
-function karburExcelIptal(){ karburExcelPreview = null; render(); }
+function karburExcelIptal(){ karburExcelPreview = null; karburExcelStokGuncelle = false; render(); }
+function karburSetExcelStokGuncelle(v){ karburExcelStokGuncelle = !!v; render(); }
+
+/* Excel ONAYLA — KATALOG aracı, stok aracı değil.
+
+   Mevcut bir kalemin stok adedine varsayılan olarak DOKUNULMAZ. Eskiden Excel'deki sayı sessizce
+   üzerine yazılıyor ve hiçbir hareket kaydı düşülmüyordu: aynı dosya ikinci kez yüklendiğinde
+   aradaki tüm çıkışlar sıfırlanıyor, izi de kalmıyordu.
+   Sayımı Excel'den yapmak yine mümkün — ama kullanıcı önizlemedeki kutuyu işaretleyerek,
+   ne değişeceğini fark tablosunda gördükten sonra. Uygulanan her değişiklik `sayim` hareketi
+   olarak yazılır (kaynak:'excel'), yani elle yapılan sayımla birebir aynı izi bırakır. */
 function karburExcelOnayla(){
   if(!canManageKarbur() || !karburExcelPreview || karburBusy) return;
   const now = Date.now(), updates = {}, mevcut = {};
   karburKatalogArray().forEach(k => { mevcut[k.kod] = k; });
-  let yeni = 0, guncellenen = 0;
+  const stokGuncelle = !!karburExcelStokGuncelle;
+  let yeni = 0, guncellenen = 0, sayimDuzeltilen = 0;
   karburExcelPreview.satirlar.forEach(s => {
     const ex = mevcut[s.kod];
     if(ex){
       updates['karburKatalog/' + ex.id + '/updatedTs'] = now;
-      if(s.adet > 0){
-        updates['karburStok/' + ex.id + '/adet'] = s.adet;
-        updates['karburStok/' + ex.id + '/sonHareketTs'] = now;
-      }
       guncellenen++;
+      if(!stokGuncelle || s.adet == null) return;      // adet'e dokunma
+      const onceki = karburStokAdet(ex.id);
+      if(onceki === s.adet) return;
+      updates['karburStok/' + ex.id + '/adet'] = s.adet;
+      updates['karburStok/' + ex.id + '/sonHareketTs'] = now;
+      const shid = DB.ref('karburHareketleri').push().key;
+      updates['karburHareketleri/' + shid] = { tip: 'sayim', katalogId: ex.id, kod: s.kod,
+        adet: s.adet - onceki, oncekiAdet: onceki, sonrakiAdet: s.adet, isEmriNo: '', mm: 0,
+        aciklama: 'Excel ile sayım düzeltmesi', kaynak: 'excel',
+        operatorUsername: session.username, operatorName: session.displayName, ts: now };
+      sayimDuzeltilen++;
       return;
     }
     const id = DB.ref('karburKatalog').push().key;
+    const baslangic = s.adet == null ? 0 : s.adet;
     updates['karburKatalog/' + id] = { kod: s.kod, onek: s.onek, alanlar: s.alanlar, disCap: s.disCap,
       boy: s.boy, delik: s.delik, kalite: s.kalite, tur: s.tur, kullanim: s.kullanim,
       aktif: true, updatedTs: now, updatedBy: session.username };
-    updates['karburStok/' + id] = { adet: s.adet || 0, sonHareketTs: now };
+    updates['karburStok/' + id] = { adet: baslangic, sonHareketTs: now };
     const hid = DB.ref('karburHareketleri').push().key;
-    updates['karburHareketleri/' + hid] = { tip: 'sayim', katalogId: id, kod: s.kod, adet: s.adet || 0,
-      oncekiAdet: 0, sonrakiAdet: s.adet || 0, isEmriNo: '', mm: 0, aciklama: 'Excel ile ilk yükleme',
+    updates['karburHareketleri/' + hid] = { tip: 'sayim', katalogId: id, kod: s.kod, adet: baslangic,
+      oncekiAdet: 0, sonrakiAdet: baslangic, isEmriNo: '', mm: 0, aciklama: 'Excel ile ilk yükleme',
       kaynak: 'excel', operatorUsername: session.username, operatorName: session.displayName, ts: now };
     yeni++;
   });
   karburBusy = true; render();
   karburChunkedUpdate(updates).then(() => {
     DB.ref('settings/karburKatalogVersion').set(firebase.database.ServerValue.increment(1));
-    karburBusy = false; karburExcelPreview = null;
+    karburBusy = false; karburExcelPreview = null; karburExcelStokGuncelle = false;
     karburKatalogReady = false; karburStokReady = false;
     ensureKarburKatalogLoaded(() => safeRender());
     ensureKarburStokLoaded(() => safeRender(), true);
-    toast(yeni + ' yeni kalem, ' + guncellenen + ' güncelleme');
+    toast(yeni + ' yeni kalem, ' + guncellenen + ' güncelleme' +
+      (sayimDuzeltilen ? ', ' + sayimDuzeltilen + ' sayım düzeltmesi' : ', stok adetlerine dokunulmadı'));
     render();
   }).catch(err => { karburBusy = false; toast('Yükleme hatası: ' + ((err && err.message) || 'hata')); render(); });
 }
