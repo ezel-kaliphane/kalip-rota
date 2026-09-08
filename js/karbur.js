@@ -901,10 +901,16 @@ function karburPlanIptalUygula(){
   }).then(iadeResults => {
     const updates = {};
     iadeResults.forEach(r => {
-      const it = r.tur === 'stok' ? karburKatalogArray().find(k => k.id === r.id) : null;
+      /* Etiket kaydın TÜRÜNDEN seçilir, katalogda bulunup bulunmamasından değil. Katalog kaydı
+         silinmiş bir stok kalemi olabilir — Console'dan elle silinen bir kalemin stok düğümü
+         geride kalıyor (sahada bir tanesi var) — ve kod bulunamayınca fire etiketi basmak
+         stok kaydını fire gibi gösterirdi. Kod yoksa düğüm id'si yazılır. */
+      const kodMetni = r.tur === 'stok'
+        ? ((karburKatalogArray().find(k => k.id === r.id) || {}).kod || r.id)
+        : karburFireKodu(karburFireById(r.id) || {});
       updates[(r.tur === 'stok' ? 'karburStok/' : 'karburFire/') + r.id + '/sonHareketTs'] = now;
       hareketler.push({ tip: 'iptal', [r.tur === 'stok' ? 'katalogId' : 'fireId']: r.id,
-        kod: it ? it.kod : karburFireKodu(karburFireById(r.id) || {}),
+        kod: kodMetni,
         adet: r.miktar, oncekiAdet: r.sonraki - r.miktar, sonrakiAdet: r.sonraki,
         isEmriNo: '', mm: 0, aciklama: 'plan geri alındı — stoğa iade' });
     });
