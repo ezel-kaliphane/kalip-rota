@@ -18,7 +18,10 @@ th{color:#7dd3fc}td:first-child,th:first-child{text-align:left}
 <div id="out"></div>
 <div id="stage"></div>
 <script src="../ui/morph.js"></script>
+<script src="../ui/live.js"></script>
 <script>
+(async () => {
+try {
 const out = document.getElementById('out'), stage = document.getElementById('stage');
 
 /* Gerçek Makine Matrisi ekranına benzer bir ağaç: makine kartları, her kartta satırlar,
@@ -129,7 +132,86 @@ let html3 = '<h3>Kalan maliyetin dağılımı (büyük ağaç, sayaçlar değiş
 }
 html3 += '</table>';
 out.insertAdjacentHTML('beforeend', html3);
+
+/* ---- live(): saniyelik tik tam render'a hiç girmezse ---- */
+/* ui/live.js, uygulamadaki global esc()'i kullanıyor — ölçütte onun yerine bunu koyuyoruz.
+   Async sarmalayıcının içinde olduğumuz için window'a açıkça yazmak zorunlu. */
+window.esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let tick = 0;
+function buildHtmlWithLive(machines, rowsPerCard){
+  liveReset();
+  let h = '';
+  for(let m = 0; m < machines; m++){
+    let rows = '';
+    for(let r = 0; r < rowsPerCard; r++){
+      const base = m*37 + r*11;
+      rows += `<div class="row"><span>İş Emri ${m*100+r}</span>`
+            + `<span class="badge">${(r%3===0)?'devam':'duruş'}</span>`
+            + live(()=> fmt(tick + base), 't') + `</div>`;
+    }
+    const tot = m;
+    h += `<div class="card" id="mk-${m}"><h4>MK${String(m).padStart(2,'0')} · Torna ${m}</h4>`
+       + `<div class="row"><span>Operatör</span><span>OP${m}</span></div>${rows}`
+       + `<div class="row"><span>Toplam</span>` + live(()=> fmt(tick*3 + tot), 't') + `</div></div>`;
+  }
+  return h;
+}
+
+let html4 = '<h3>Saniyelik tik: tam render mi, sadece sayaçlar mı</h3>'
+  + '<div style="color:#8b939b">Aynı ağaç, aynı değişen değerler. Fark, ui/live.js\'in kazandırdığı şey.</div>'
+  + '<table><tr><th>Ağaç</th><th>canlı sayaç</th><th>tam render (morph)</th><th>sadece refreshLive()</th><th>kazanç</th></tr>';
+for(const sc of SCENARIOS){
+  // tam render yolu
+  stage.innerHTML = buildHtmlWithLive(sc.machines, sc.rows);
+  const sayac = liveFns.length;
+  const full = timeIt('full', N, i => { tick = i; morphInto(stage, buildHtmlWithLive(sc.machines, sc.rows)); });
+  // sadece canlı düğüm güncelleme yolu
+  tick = 0;
+  stage.innerHTML = buildHtmlWithLive(sc.machines, sc.rows);
+  const onlyLive = timeIt('live', N, i => { tick = i; refreshLive(); });
+  html4 += `<tr><td>${sc.name}</td><td>${sayac}</td><td>${full.med.toFixed(2)} ms</td>`
+        + `<td>${onlyLive.med.toFixed(2)} ms</td><td class="win">${(full.med/onlyLive.med).toFixed(1)}×</td></tr>`;
+}
+html4 += '</table>';
+out.insertAdjacentHTML('beforeend', html4);
+
+/* ---- Görünürlük takibi: ekranda olmayan sayaçları atlamak ---- */
+/* Sahneyi gerçekten kısıtlı bir görüntü alanına koyuyoruz (telefon ekranı gibi), böylece
+   IntersectionObserver kartların çoğunu "dışarıda" işaretliyor. */
+const html5 = await (async () => {
+  const sc = { machines: 60, rows: 10, name: 'büyük (60 makine × 10 satır)' };
+  stage.style.cssText += ';height:420px;overflow:auto';
+  stage.innerHTML = buildHtmlWithLive(sc.machines, sc.rows);
+  const toplam = liveFns.length;
+
+  // 1) görünürlük takibi KAPALI (hepsi güncellenir)
+  liveOffscreen = new Set();
+  const hepsi = timeIt('hepsi', N, i => { tick = i; liveOffscreen = new Set(); refreshLive(); });
+
+  // 2) görünürlük takibi AÇIK — gözlemcinin ilk raporunu bekliyoruz
+  liveTrackVisibility();
+  await new Promise(r => setTimeout(r, 400));
+  const atlanan = liveOffscreen.size;
+  const sadeceGorunen = timeIt('gorunen', N, i => { tick = i; refreshLive(); });
+
+  stage.style.height = ''; stage.style.overflow = '';
+  return '<h3>Görünmeyen sayaçları atlamak (420px yüksekliğinde görüntü alanı)</h3>'
+    + '<table><tr><th>Yaklaşım</th><th>güncellenen sayaç</th><th>medyan</th><th>kazanç</th></tr>'
+    + `<tr><td>tüm sayaçlar</td><td>${toplam}</td><td>${hepsi.med.toFixed(2)} ms</td><td>—</td></tr>`
+    + `<tr><td>sadece ekranda olanlar</td><td>${toplam - atlanan}</td><td>${sadeceGorunen.med.toFixed(2)} ms</td>`
+    + `<td class="win">${(hepsi.med/sadeceGorunen.med).toFixed(1)}×</td></tr></table>`
+    + `<div style="color:#8b939b;margin-top:6px">${atlanan} sayaç ekran dışı olduğu için atlandı. `
+    + `Telefonda görüntü alanı daha da küçük, yani oran daha da lehimize.</div>`;
+})();
+out.insertAdjacentHTML('beforeend', html5);
 stage.innerHTML = '';
+} catch(err){
+  document.getElementById('out').insertAdjacentHTML('beforeend', `<div class="fail">ÖLÇÜT HATASI: ${err && err.stack || err}</div>`);
+}
+})();
+
+
 
 </script>
 </body></html>

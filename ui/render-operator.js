@@ -50,7 +50,7 @@ function renderOperator(){
         <div class="lock-label" style="color:var(--warn)">TADİLAT — DURAKLATILDI</div>
         <div class="lock-id">${esc(mine.uKodu)}</div>
         <div class="lock-machine">${esc(op.makine||'—')}</div>
-        <div class="lock-timer" style="color:var(--warn)">${op.duruşTs ? fmtElapsed(nowTick-op.duruşTs) : '—:—'}</div>
+        <div class="lock-timer" style="color:var(--warn)">${live(()=> op.duruşTs ? fmtElapsed(nowTick-op.duruşTs) : '—:—')}</div>
         <div class="lock-meta">${op.duruşTs ? 'duruş süresi' : 'seçim yapılıyor — duruş henüz başlamadı'}</div>
         <div class="durus-reason-box" style="${isTadDurus?'color:var(--tadilat-info);background:var(--tadilat-med);border-color:var(--tadilat-border)':''}">${isTadDurus?(ico('wrench',13)+' '):''}"${esc(op.duruşNedeni)}"</div>
         <div class="lock-actions lock-actions-nav-clear" style="display:flex;gap:10px;margin-top:24px">
@@ -72,7 +72,7 @@ function renderOperator(){
           <div class="lock-id">${esc(mine.uKodu)}</div>
           ${resimBulEnabled() ? `<button class="btn-ghost" style="margin-top:4px;padding:6px 14px;font-size:11.5px" onclick="resimBul('${escJs(mine.uKodu)}')">${ico('camera',14)} Resim/Çizim Bul</button>` : ''}
           <div class="lock-machine">${esc(op.makine||'—')}</div>
-          <div class="lock-timer">${fmtElapsed(tadilatOpDurationBreakdown(op).netMs)}</div>
+          <div class="lock-timer">${live(()=> fmtElapsed(tadilatOpDurationBreakdown(op).netMs))}</div>
           <div class="lock-meta">${fmtDT(op.baslamaTs)} itibarıyla devam ediyor${opsGecmis.length>0?` · Bu, ${opsGecmis.length+1}. operasyon`:''}</div>
           <div class="lock-meta">${mine.bolum?`${esc(mine.bolum)} · `:''}${mine.adet?`Adet: ${esc(mine.adet)}`:''}</div>
           ${mine.aciklama ? `<div class="lock-note">"${esc(mine.aciklama)}"</div>` : ''}
@@ -450,14 +450,14 @@ function renderOperator(){
       body += `<div class="card" style="cursor:pointer;border-color:${isPaused?'var(--warn)':'var(--tadilat-info)'};border-left:4px solid ${isPaused?'var(--warn)':'var(--tadilat-info)'}" onclick="setView('tadilat')">
         <div class="card-header"><span class="card-id" style="color:${isPaused?'var(--warn)':'var(--tadilat-info)'}">${ico('wrench',14)} ${esc(mt.uKodu)}</span><span class="matrix-dot" style="background:${isPaused?'var(--warn)':'var(--tadilat-info)'};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
         <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(mop.makine||'—')}</span></div>
-        <div class="op-foot">${isPaused ? (mop.duruşTs ? `${fmtElapsed(nowTick-mop.duruşTs)} duruşta · "${esc(mop.duruşNedeni)}"` : `seçim yapılıyor · "${esc(mop.duruşNedeni)}"`) : `${fmtElapsed(tadilatOpDurationBreakdown(mop).netMs)} çalışıyor · Tadilat${mt.adet?` · Adet: ${esc(mt.adet)}`:''}`}</div>
+        <div class="op-foot">${isPaused ? (mop.duruşTs ? `${live(()=> fmtElapsed(nowTick-mop.duruşTs))} duruşta · "${esc(mop.duruşNedeni)}"` : `seçim yapılıyor · "${esc(mop.duruşNedeni)}"`) : `${live(()=> fmtElapsed(tadilatOpDurationBreakdown(mop).netMs))} çalışıyor · Tadilat${mt.adet?` · Adet: ${esc(mt.adet)}`:''}`}</div>
       </div>`;
     });
     groups.forEach(g=>{
       if(g.members.length===1){
         const e = g.members[0];
         const dotColor = e.status==='duruş'?'var(--warn)':'var(--success)';
-        const subInfo = e.status==='duruş' ? `Duruşta: "${esc(e.duruşNedeni)}"` : `${fmtElapsed(entryDurationBreakdown(e).netMs)} çalışıyor`;
+        const subInfo = e.status==='duruş' ? `Duruşta: "${esc(e.duruşNedeni)}"` : `${live(()=> fmtElapsed(entryDurationBreakdown(e).netMs))} çalışıyor`;
         body += `<div class="card" style="cursor:pointer" onclick="openActiveDetail('${e.id}')">
           <div class="card-header"><span class="card-id">${esc(e.talepNo || e.isEmriNo)}</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
           ${e.talepNo ? `<div style="font-size:11px;color:var(--text-muted);margin:-4px 0 4px" class="mono">U kodu: ${esc(e.isEmriNo)}</div>` : ''}
@@ -471,7 +471,7 @@ function renderOperator(){
         body += `<div class="card" style="cursor:pointer" onclick="openGroupDetail('${g.groupId}')">
           <div class="card-header"><span class="card-id">${g.members.length} İş Emri Aktif</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
           <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(makine)}</span></div>
-          <div class="op-foot">${g.members.map(m=>`${esc(m.talepNo || m.isEmriNo)} (${m.status==='duruş'?'duruşta':fmtElapsed(entryDurationBreakdown(m).netMs)})`).join(', ')}</div>
+          <div class="op-foot">${g.members.map(m=>`${esc(m.talepNo || m.isEmriNo)} (${m.status==='duruş'?'duruşta':live(()=> fmtElapsed(entryDurationBreakdown(m).netMs))})`).join(', ')}</div>
         </div>`;
       }
     });

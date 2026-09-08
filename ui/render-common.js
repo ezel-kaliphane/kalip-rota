@@ -734,7 +734,7 @@ function renderGroupScreen(groupId, groupMembers){
     <div class="lock-label" style="${anyDurus?'color:var(--warn)':''}">${anyDurus?'DURUŞTA':'ÇOKLU İŞ EMRİ'}</div>
     <div class="lock-id">${esc(makine)}</div>
     <div class="lock-machine">${groupMembers.map(e=>esc(e.talepNo || e.isEmriNo)).join(', ')}</div>
-    <div class="lock-timer" style="${anyDurus?'color:var(--warn)':''}">${anyDurus?fmtElapsed(nowTick-ref.duruşTs):fmtElapsed(entryDurationBreakdown(ref).netMs)}</div>
+    <div class="lock-timer" style="${anyDurus?'color:var(--warn)':''}">${live(()=> anyDurus?fmtElapsed(nowTick-ref.duruşTs):fmtElapsed(entryDurationBreakdown(ref).netMs))}</div>
     <div class="lock-meta">${anyDurus?'duruş süresi (tüm iş emirleri için ortak)':`${groupMembers.length} iş emri bu makinede aynı anda aktif`}</div>
     ${anyDurus ? `<div class="durus-reason-box" style="${ref.duruşNedeni===GUN_SONU_REASON?'color:var(--gunsonu);background:var(--gunsonu-soft);border-color:var(--gunsonu-border)':isTadilatRelated(ref.duruşNedeni)?'color:var(--tadilat-info);background:var(--tadilat-soft);border-color:var(--tadilat-border)':''}">${ref.duruşNedeni===GUN_SONU_REASON?(ico('moon',13)+' '):isTadilatRelated(ref.duruşNedeni)?(ico('wrench',13)+' '):''}"${esc(ref.duruşNedeni)}"</div>` : ''}
     <div style="margin-top:20px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:8px;text-align:left">
@@ -820,7 +820,7 @@ function renderLockScreen(active){
         <div class="lock-id">${esc(active.talepNo || active.isEmriNo)}</div>
         ${active.talepNo ? `<div style="font-size:12px;color:var(--text-muted);margin-top:-4px" class="mono">U kodu: ${esc(active.isEmriNo)}</div>` : ''}
         <div class="lock-machine">${esc(active.makine)}</div>
-        <div class="lock-timer" style="color:var(--warn)">${fmtElapsed(nowTick-active.duruşTs)}</div>
+        <div class="lock-timer" style="color:var(--warn)">${live(()=> fmtElapsed(nowTick-active.duruşTs))}</div>
         <div class="lock-meta">duruş süresi</div>
         <div class="durus-reason-box" style="${active.duruşNedeni===GUN_SONU_REASON?'color:var(--gunsonu);background:var(--gunsonu-soft);border-color:var(--gunsonu-border)':isTadilatRelated(active.duruşNedeni)?'color:var(--tadilat-info);background:var(--tadilat-soft);border-color:var(--tadilat-border)':''}">${active.duruşNedeni===GUN_SONU_REASON?(ico('moon',13)+' '):isTadilatRelated(active.duruşNedeni)?(ico('wrench',13)+' '):''}"${esc(active.duruşNedeni)}"</div>
         <div class="lock-actions" style="display:flex;gap:10px;margin-top:28px">
@@ -850,7 +850,7 @@ function renderLockScreen(active){
       <div class="lock-id">${esc(active.talepNo || active.isEmriNo)}</div>
       ${active.talepNo ? `<div style="font-size:12px;color:var(--text-muted);margin-top:-4px" class="mono">U kodu: ${esc(active.isEmriNo)}</div>` : ''}
       <div class="lock-machine">${esc(active.makine)}</div>
-      <div class="lock-timer">${fmtElapsed(entryDurationBreakdown(active).netMs)}</div>
+      <div class="lock-timer">${live(()=> fmtElapsed(entryDurationBreakdown(active).netMs))}</div>
       <div class="lock-meta">${fmtDT(active.startTs)} itibarıyla devam ediyor</div>
       ${active.adet ? `<div class="lock-meta">Adet: ${esc(active.adet)}</div>` : ''}
       ${active.not ? `<div class="lock-note">"${esc(active.not)}"</div>` : ''}

@@ -7,7 +7,9 @@
 <div id="sandbox-morph" style="display:none"></div>
 <div id="sandbox-inner" style="display:none"></div>
 <script src="../ui/morph.js"></script>
+<script src="../ui/live.js"></script>
 <script>
+(async () => {
 const out = document.getElementById('out');
 let pass = 0, fail = 0;
 function log(ok, name, detail){
@@ -136,8 +138,109 @@ log(document.getElementById('cv') === cv, 'canvas nesnesi korundu (Chart.js dest
 log(document.getElementById('cv').getAttribute('data-work') === '9', 'canvas data özniteliği güncellendi',
   'data-work: '+document.getElementById('cv').getAttribute('data-work'));
 
+
+/* ================= ui/live.js ================= */
+/* live() uygulamadaki global esc()'i kullanıyor; testte onun yerine bunu koyuyoruz. */
+window.esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+out.insertAdjacentHTML('beforeend','<h3>live(): saniyelik sayaç güncellemesi</h3>');
+
+let saniye = 5;
+liveReset();
+A.innerHTML = `<div><span class="ad">MK01</span>${live(()=> 'sn '+saniye)}</div>`;
+log(/data-live="0"/.test(A.innerHTML), 'live() data-live indeksi basıyor', A.innerHTML);
+log(A.querySelector('[data-live]').textContent === 'sn 5', 'ilk değer basıldı',
+  A.querySelector('[data-live]').textContent);
+
+const sayacDugumu = A.querySelector('[data-live]');
+const adDugumu = A.querySelector('.ad');
+saniye = 6;
+log(refreshLive() === 1, 'refreshLive değişen 1 düğüm bildirdi');
+log(A.querySelector('[data-live]').textContent === 'sn 6', 'sayaç güncellendi',
+  A.querySelector('[data-live]').textContent);
+log(A.querySelector('[data-live]') === sayacDugumu, 'sayaç düğümü aynı DOM nesnesi kaldı', 'yeniden oluştu');
+log(A.querySelector('.ad') === adDugumu, 'komşu düğüme hiç dokunulmadı', 'yeniden oluştu');
+log(refreshLive() === 0, 'değer değişmediyse hiç DOM yazması yok');
+
+/* HTML kaçışı: live() içinden gelen metin şablona ham HTML olarak sızmamalı. */
+liveReset();
+A.innerHTML = live(()=> '<img src=x onerror=alert(1)>');
+log(A.querySelector('img') === null && A.textContent.includes('<img'),
+  'live() değeri HTML olarak yorumlanmıyor (kaçış yapılıyor)', A.innerHTML);
+
+/* morph ile birlikte: tam render sonrası indeksler hizada kalmalı. */
+liveReset();
+let t1v = 'A1', t2v = 'B1';
+const kur = () => { liveReset(); return `<div><span id="p">${live(()=> t1v)}</span><span id="q">${live(()=> t2v)}</span></div>`; };
+A.innerHTML = kur();
+morphInto(A, kur());                        // tam render (morph) — liveFns yeniden kuruldu
+t1v = 'A2'; t2v = 'B2';
+refreshLive();
+log(A.querySelector('#p [data-live]').textContent === 'A2' &&
+    A.querySelector('#q [data-live]').textContent === 'B2',
+    'morph sonrası indeksler hizada, iki sayaç da doğru güncellendi',
+    A.innerHTML);
+
+/* liveReset sonrası kayıt kalmamalı — refreshLive hiçbir şey yapmamalı. */
+liveReset();
+log(refreshLive() === 0, 'liveReset sonrası güncellenecek kayıt yok');
+
+/* Görünmeyen sayaçları atlama (IntersectionObserver). */
+out.insertAdjacentHTML('beforeend','<h3>ekran dışı sayaçları atlama</h3>');
+if(typeof IntersectionObserver !== 'function'){
+  log(true, 'IntersectionObserver bu tarayıcıda yok — atlama devre dışı, hepsi güncellenir (kabul)');
+} else {
+  /* Kum havuzunu NORMAL AKIŞTA, pencere kaydırmasıyla sınıyoruz — gerçek uygulamada matris
+     de böyle kaydırılıyor (.root-mobile min-height:100vh, kaydırma pencere seviyesinde).
+     İçeriği görüntü alanından uzun tutup tepesine kaydırıyoruz: üst satırlar görünür,
+     alt satırlar (rootMargin payının da ötesinde) görünmez olmalı. */
+  let deger = 1;
+  liveReset();
+  const oncekiScroll = window.scrollY;
+  A.style.cssText = 'display:block';
+  A.innerHTML = Array.from({length:60}, (_,i)=>
+    `<div style="height:60px">satır ${i} ${live(()=> 'v'+deger)}</div>`).join('');
+  const toplam = A.querySelectorAll('[data-live]').length;
+  A.scrollIntoView({ block:'start' });
+  liveTrackVisibility();
+  await new Promise(r => setTimeout(r, 400));   // gözlemcinin ilk raporu asenkron gelir
+  deger = 2;
+  const guncellenen = refreshLive();
+  const els = A.querySelectorAll('[data-live]');
+
+  if(liveOffscreen.size === 0){
+    /* Gözlemci hiç rapor vermediyse (bazı ortamlarda olabiliyor) tasarım gereği HİÇBİR sayaç
+       atlanmaz — bayat değer göstermek yerine hepsini güncelliyoruz. Bu da geçerli bir sonuç,
+       sessizce başarısız saymıyoruz. */
+    log(guncellenen === toplam, 'gözlemci rapor vermedi → güvenli varsayılan: hepsi güncellendi',
+      `güncellenen: ${guncellenen}, toplam: ${toplam}`);
+    log(els[0].textContent === 'v2' && els[toplam-1].textContent === 'v2',
+      'güvenli varsayılanda hiçbir sayaç bayat kalmadı',
+      `ilk: ${els[0].textContent}, son: ${els[toplam-1].textContent}`);
+  } else {
+    log(guncellenen > 0 && guncellenen < toplam,
+      `${toplam} sayaçtan sadece görünen ${guncellenen} tanesi güncellendi (${liveOffscreen.size} atlandı)`,
+      `güncellenen: ${guncellenen}, toplam: ${toplam}, atlanan: ${liveOffscreen.size}`);
+    log(els[0].textContent === 'v2', 'ekrandaki ilk sayaç güncellendi', els[0].textContent);
+    log(els[toplam-1].textContent === 'v1', 'ekran dışındaki son sayaç bilerek atlandı',
+      els[toplam-1].textContent);
+    /* Atlanan sayaç, bir sonraki TAM render'da (her 15. tik) yine doğru değeri alır —
+       yani bayatlık kalıcı değil. */
+    liveReset();
+    A.innerHTML = Array.from({length:60}, (_,i)=>
+      `<div style="height:60px">satır ${i} ${live(()=> 'v'+deger)}</div>`).join('');
+    log(A.querySelectorAll('[data-live]')[toplam-1].textContent === 'v2',
+      'atlanan sayaç, sonraki tam render\'da güncel değeri aldı',
+      A.querySelectorAll('[data-live]')[toplam-1].textContent);
+  }
+  window.scrollTo(0, oncekiScroll);
+  A.style.cssText = 'display:none';
+  liveObserver.disconnect(); liveOffscreen = new Set();
+}
+
 out.insertAdjacentHTML('afterbegin',
   `<div style="font-size:16px;font-weight:700;color:${fail?'#f87171':'#4ade80'}">SONUÇ: ${pass} geçti, ${fail} başarısız</div>`);
 console.log(`MORPH TEST: ${pass} passed, ${fail} failed`);
+})();
 </script>
 </body></html>

@@ -6,9 +6,13 @@
    sonra seçim hatırlanır; kapatmak için ?perf=0 ile aç.
 
    Ekranın sol üstünde şunu gösterir:
-     yapı  — HTML string'ini üretmek (JS hesap maliyeti) kaç ms sürdü
-     yama  — bunu DOM'a uygulamak kaç ms sürdü  ← eski innerHTML yönteminde asıl pahalı kısım
-     10sn  — son 10 saniyede kaç render oldu, ortalaması ve en kötüsü */
+     yapı       — HTML string'ini üretmek (JS hesap maliyeti) kaç ms sürdü
+     yama       — bunu DOM'a uygulamak kaç ms sürdü  ← eski innerHTML'de asıl pahalı kısım
+     10sn       — son 10 saniyede kaç TAM render oldu, ortalaması ve en kötüsü
+     canlı tik  — saniyelik tik'in maliyeti ve kaç sayaç yazıldı (bkz. ui/live.js).
+                  Üstteki "tam render" satırıyla kıyaslanınca kazanç doğrudan görünür.
+     ekran dışı — kaç sayaç görünmediği için atlandı. 0 ise IntersectionObserver rapor
+                  vermiyor demektir ve güvenli varsayılan devrede: hepsi güncellenir. */
 let perfEnabled = false;
 try {
   const q = new URLSearchParams(location.search).get('perf');
@@ -19,22 +23,43 @@ try {
 
 let perfSamples = []; // {t, buildMs, paintMs}
 let perfBox = null;
+let perfLastLive = null; // {ms, changed}
+function perfEnsureBox(){
+  if(perfBox) return perfBox;
+  perfBox = document.createElement('div');
+  perfBox.style.cssText = 'position:fixed;top:0;left:0;z-index:99999;background:rgba(0,0,0,.8);color:#7dd3fc;font:11px/1.45 ui-monospace,monospace;padding:5px 8px;white-space:pre;pointer-events:none;border-bottom-right-radius:6px';
+  document.body.appendChild(perfBox);
+  return perfBox;
+}
+function perfPaintBox(head){
+  const box = perfEnsureBox();
+  let txt = head;
+  if(perfSamples.length){
+    const total = perfSamples.map(s => s.buildMs + s.paintMs);
+    const avg = total.reduce((a,b)=>a+b,0) / total.length;
+    txt += `\n10sn: ${perfSamples.length} tam render · ort ${avg.toFixed(1)} · en kötü ${Math.max(...total).toFixed(1)} ms`;
+  }
+  if(perfLastLive){
+    txt += `\ncanlı tik: ${perfLastLive.ms.toFixed(2)} ms · ${perfLastLive.changed}/${perfLastLive.total} sayaç yazıldı`;
+    /* Ekran dışı atlama gerçekten devreye giriyor mu? IntersectionObserver bazı ortamlarda
+       hiç rapor vermiyor; o durumda atlanan 0 kalır ve hepsi güncellenir (güvenli varsayılan).
+       Bu satır, telefonda hangisinin geçerli olduğunu gösteriyor. */
+    txt += `\nekran dışı atlanan: ${perfLastLive.skipped}`;
+  }
+  box.textContent = txt;
+}
 function perfRecord(buildMs, paintMs){
   const now = Date.now();
   perfSamples.push({ t: now, buildMs, paintMs });
   while(perfSamples.length && now - perfSamples[0].t > 10000) perfSamples.shift();
-  if(!perfBox){
-    perfBox = document.createElement('div');
-    perfBox.style.cssText = 'position:fixed;top:0;left:0;z-index:99999;background:rgba(0,0,0,.8);color:#7dd3fc;font:11px/1.45 ui-monospace,monospace;padding:5px 8px;white-space:pre;pointer-events:none;border-bottom-right-radius:6px';
-    document.body.appendChild(perfBox);
-  }
-  const total = perfSamples.map(s => s.buildMs + s.paintMs);
-  const avg = total.reduce((a,b)=>a+b,0) / total.length;
-  const worst = Math.max(...total);
   const mode = localStorage.getItem('rota_render') === 'innerhtml' ? 'innerHTML' : 'morph';
-  perfBox.textContent =
-    `${mode}  yapı ${buildMs.toFixed(1)}  yama ${paintMs.toFixed(1)} ms\n` +
-    `10sn: ${perfSamples.length} render · ort ${avg.toFixed(1)} · en kötü ${worst.toFixed(1)} ms`;
+  perfPaintBox(`${mode}  TAM RENDER  yapı ${buildMs.toFixed(1)}  yama ${paintMs.toFixed(1)} ms`);
+}
+/* Saniyelik tik'in maliyeti. Kıyas için üstteki "tam render" satırıyla yan yana duruyor —
+   aradaki fark, ui/live.js ile kazanılan şeyin ta kendisi. */
+function perfRecordLive(ms, changed){
+  perfLastLive = { ms, changed, total: liveFns.length, skipped: liveOffscreen.size };
+  perfPaintBox(perfBox && perfBox.textContent ? perfBox.textContent.split('\n')[0] : 'canlı tik');
 }
 
 /* ===================== ANA RENDER =====================
@@ -89,11 +114,13 @@ function render(){
   }
 
   if(!session){ paintApp(app, renderLogin()); renderBubble(); return; }
+  liveReset(); // canlı sayaç kayıtları her render'da sıfırdan toplanır — bkz. ui/live.js
   const html = session.isAdmin ? renderAdmin() : renderOperator();
   const t1 = perfEnabled ? performance.now() : 0;
   paintApp(app, html);
   const t2 = perfEnabled ? performance.now() : 0;
   if(perfEnabled) perfRecord(t1 - t0, t2 - t1);
+  liveTrackVisibility(); // hangi canlı sayaç ekranda, hangisi değil — bkz. ui/live.js
   renderBubble(); // baloncuk #app'ten bağımsız kendi kökünde — bkz. js/bubble.js
   scrollSel.forEach((sel,i) => { if(savedScroll[i]!=null){ const el = document.querySelector(sel); if(el) el.scrollTop = savedScroll[i]; } });
   if(savedWinScroll>0) window.scrollTo(0, savedWinScroll);
@@ -112,6 +139,11 @@ function render(){
   }
 }
 let analizTickCounter = 0;
+/* Canlı sayaç ekranlarında kaç tik'te bir tam render yapılacağı. Metin güncellemesiyle
+   yakalanmayan yapısal değişiklikler (uzun duruş eşiğinin aşılması, "Çalışma Süresine Göre"
+   sıralamasının değişmesi) en fazla bu kadar gecikir. */
+const LIVE_FULL_EVERY = 15;
+let liveTickCounter = 0;
 // Firebase'den arka planda gelen HERHANGİ bir güncelleme (başka bir kullanıcının işlemi bile
 // olsa) tüm ekranı yeniden çiziyordu — bu da o an açık olan bir <select>/<input> dropdown'ını ya
 // da yazılmakta olan bir form alanını anında kapatıp sıfırlıyordu. Kullanıcı bir alanla aktif
@@ -164,7 +196,28 @@ function renderLiveBits(){
   // renderBubble() elemanı yeniden OLUŞTURMADIĞI için (bkz. js/bubble.js) bunun her saniye
   // çağrılması animasyonu bozmuyor, sadece rakamı güncelliyor.
   if(!bubbleDragging) renderBubble();
-  if(activeDetailId || activeGroupId || (session && !session.isAdmin && (view==='list' || (view==='tadilat' && myActiveTadilatSession()))) || (session && session.isAdmin && (view==='matrix' || (view==='tadilatYonetim' && tadilatSubTab==='canli')))){ render(); return; }
+  /* Bu ekranlarda saniyede bir değişen tek şey geçen süre sayaçlarıdır. Eskiden bunun için
+     TAM render yapılıyordu (tüm kayıtlar üzerinde toplamalar yeniden hesaplanıp ekran baştan
+     üretiliyordu). Artık sadece kayıtlı canlı düğümlerin metni güncelleniyor — bkz. ui/live.js.
+     Eşik aşımı / sıralama değişimi gibi YAPISAL değişiklikler metin güncellemesiyle
+     yakalanmadığı için her LIVE_FULL_EVERY tik'te bir tam render yine yapılıyor. */
+  if(activeDetailId || activeGroupId || (session && !session.isAdmin && (view==='list' || (view==='tadilat' && myActiveTadilatSession()))) || (session && session.isAdmin && (view==='matrix' || (view==='tadilatYonetim' && tadilatSubTab==='canli')))){
+    /* Detay modalları gün bazlı toplamlar / akış zinciri gibi saniyede bir değişen TÜRETİLMİŞ
+       değerler gösteriyor ve bunlar live() ile sarılmadı (tek tek metin değil, hesaplanmış
+       tablolar). Böyle bir modal açıkken eski davranışı — her tik tam render — aynen
+       koruyoruz; yoksa modaldeki sayılar 15 saniye bayat kalırdı. Modal kapalıyken hızlı
+       yol devrede. */
+    const modalAcik = !!(machineModal || activeDetailId || activeGroupId || beklemeDetayId);
+    /* live() hiç kullanılmayan bir ekranda (ör. Tadilat > Canlı) güncellenecek düğüm yok —
+       orada da tam render'a düşüyoruz, yoksa sayaçlar hiç ilerlemez. */
+    if(modalAcik || liveFns.length === 0){ render(); return; }
+    liveTickCounter++;
+    if(liveTickCounter >= LIVE_FULL_EVERY){ liveTickCounter = 0; render(); return; }
+    const tl = perfEnabled ? performance.now() : 0;
+    const changed = refreshLive();
+    if(perfEnabled) perfRecordLive(performance.now() - tl, changed);
+    return;
+  }
   // Analiz'deki sayılar artık duraklamış işler için canlı hesaplanıyor, ama grafikleri (Chart.js)
   // her saniye yeniden çizmek titremeye sebep olur — o yüzden burayı daha seyrek (15 sn) yeniliyoruz.
   if(session && session.isAdmin && view==='analiz'){

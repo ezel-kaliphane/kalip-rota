@@ -1497,12 +1497,12 @@ function renderAdmin(){
       if(tadilatHere){
         const { tadilat: tt, operasyon: top } = tadilatHere;
         body += `<div class="matrix-sub" style="color:var(--tadilat-info);font-weight:700">${ico('wrench',14)} ${esc(tt.uKodu)}</div>
-          <div class="matrix-sub">${esc(top.operatorUsername)} · ${fmtElapsed(tadilatOpDurationBreakdown(top).netMs)}</div>`;
+          <div class="matrix-sub">${esc(top.operatorUsername)} · ${live(()=> fmtElapsed(tadilatOpDurationBreakdown(top).netMs))}</div>`;
       } else if(running){
         if(runningEntries.length===1){
           const info = runningEntries[0];
           body += `<div class="matrix-sub">${esc(info.talepNo || info.isEmriNo)} · ${esc(info.operatorUsername)}</div>
-            <div class="matrix-sub">${fmtElapsed(entryDurationBreakdown(info).netMs)} çalışıyor</div>`;
+            <div class="matrix-sub">${live(()=> fmtElapsed(entryDurationBreakdown(info).netMs))} çalışıyor</div>`;
         } else {
           body += `<div class="matrix-sub" style="font-weight:700">${runningEntries.length} İş Emri Aktif</div>
             <div class="matrix-sub" style="opacity:.7">Detay için tıkla</div>`;
