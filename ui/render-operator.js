@@ -237,6 +237,12 @@ function renderOperator(){
             else if(Object.keys(STATE.validIsEmri||{}).length>0) lines.push(`<div style="font-size:11.5px;color:var(--warn)">${ico('alert',14)} Bu talep no listede bulunamadı</div>`);
           }
           if(newForm.bilesen) lines.push(`<div style="font-size:11.5px;color:var(--text-muted)">Kaydedilecek kod: <b class="mono" style="color:var(--accent)">${esc(newForm.isEmriNo||'…')}${BILESEN_SUFFIX[newForm.bilesen]}</b></div>`);
+          /* Karbür kesim planı varsa tek satırlık şerit — planlamacının yaptığı plan makinenin
+             başında da görünsün. Kayıt yoksa hiçbir şey basmaz; okuma hedefli ve tek seferlik. */
+          if(typeof karburOzetSerit === 'function'){
+            const kSerit = karburOzetSerit(newForm.isEmriNo);
+            if(kSerit) lines.push(kSerit);
+          }
           if(!newForm.bilesen && newForm.isEmriNo){
             const incomplete = incompleteBilesenBranches(newForm.isEmriNo);
             if(incomplete.length>0){

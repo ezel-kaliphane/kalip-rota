@@ -17,7 +17,9 @@
       ".claude/**",
       "functions/**",
       "node_modules/**",
-      "database.rules.json"
+      "database.rules.json",
+      ".firebase/**",
+      "*.md"
     ],
     "headers": [
       {

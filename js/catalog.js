@@ -323,7 +323,8 @@ const ADMIN_TAB_DEFS = [
   { key:'completed', label:'Tamamlanan Kodlar' },
   { key:'analiz', label:'Analiz' },
   { key:'tadilat', label:'Tadilat' },
-  { key:'takimStok', label:'Takım Stok' },
+  { key:'takimStok', label:'Stok · Takım & Sarf' },
+  { key:'karbur', label:'Stok · Karbür' },
 ];
 function isAdminTabVisible(key){
   if(!session) return false;

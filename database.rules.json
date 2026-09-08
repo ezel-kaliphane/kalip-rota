@@ -154,6 +154,35 @@
       ".write": false,
       ".indexOn": ["durum", "operatorUsername", "itemId"],
       "$zimmetId": { ".write": true }
+    },
+
+    "karburKatalog": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": ["kod"],
+      "$itemId": { ".write": true }
+    },
+    "karburStok": {
+      ".read": true,
+      ".write": false,
+      "$itemId": { ".write": true }
+    },
+    "karburFire": {
+      ".read": true,
+      ".write": false,
+      "$fireId": { ".write": true }
+    },
+    "karburHareketleri": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": ["ts", "isEmriNo", "katalogId", "planNo"],
+      "$hareketId": { ".write": true }
+    },
+    "karburIsEmriOzet": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": ["sonTs"],
+      "$isEmriNo": { ".write": true }
     }
   }
 }

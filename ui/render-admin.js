@@ -720,13 +720,148 @@ function renderAnalizSaha(){
     </div>
   </div>`;
 }
+/* Malzeme Stoğu (çelik hammadde) ekranı. Önce Ayarlar > "Malzeme Stoğu" alt sekmesindeydi;
+   kullanıcı isteğiyle üst seviye "Stok" sekmesinin üç bölümünden biri oldu. İçerik aynen taşındı. */
+/* Ayarlar > "Malzeme Stoğu": SADECE modül aç/kapa anahtarı — kullanıcı isteğiyle burada kaldı.
+   Kalem yönetimi ve tüketim geçmişi üst seviye "Stok > Malzeme (çelik)" bölümünde
+   (aynı ayrım Takım Stok'ta da var: renderToolStokAdminSettings vs renderToolStokManagementScreen). */
+function renderMalzemeStokAyarlar(){
+  return `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Malzeme Stoğu <span style="font-size:11.5px;font-weight:400;color:var(--text-muted)">(opsiyonel modül)</span></div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:640px">Hammadde tüketimi sadece bir iş emrinin <b>ilk operasyonunda</b> sorulur — aynı iş emrinin sonraki adımlarında tekrar sorulmaz, çünkü malzeme zaten ilk kesimde tüketilmiştir.</div>
+        <label style="display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid ${stockEnabled()?'var(--success)':'var(--border)'};border-radius:10px;padding:14px 16px;margin-bottom:22px;cursor:pointer;max-width:480px">
+          <input type="checkbox" ${stockEnabled()?'checked':''} onchange="toggleStockTracking()" style="width:auto;transform:scale(1.3)">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:${stockEnabled()?'var(--success)':'var(--text)'}">Malzeme Stok Takibini ${stockEnabled()?'Aktif':'Kapalı'}</div>
+            <div style="font-size:11.5px;color:var(--text-muted)">Kapatırsan bu modülle ilgili hiçbir alan/ekran operatörlere görünmez, hiçbir stok işlemi yapılmaz — tek tuşla tamamen devre dışı kalır.</div>
+          </div>
+        </label>
+        <div style="font-size:12px;color:var(--text-muted);max-width:640px">Stok kalemi yönetimi ve tüketim geçmişi için üst menüdeki <b>Stok → Malzeme (çelik)</b> bölümüne bak.</div>`;
+}
+
+function renderMalzemeStokScreen(){
+      const items = stockItemsArray();
+      const recentMoves = Object.entries(stockHareketleri).map(([id,v])=>({id,...v})).sort((a,b)=>b.ts-a.ts).slice(0,20);
+      return `        ${!stockEnabled() ? `<div style="font-size:12.5px;color:var(--text-muted)">Modül kapalı — <b>Ayarlar → Malzeme Stoğu</b>'ndan açtığında stok kalemi yönetimi ve tüketim geçmişi burada görünür.</div>` : `
+        <div style="max-width:640px;margin-bottom:22px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">Yeni Stok Kalemi Ekle</div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <button type="button" class="chip ${stokAddTurState==='adet'?'active':''}" onclick="stokAddTurState='adet'; render()">Adet Takip <span style="font-size:10.5px;opacity:.8">(dikdörtgen/kare — 86x100x55 gibi)</span></button>
+            <button type="button" class="chip ${stokAddTurState==='boy'?'active':''}" onclick="stokAddTurState='boy'; render()">Boy Takip <span style="font-size:10.5px;opacity:.8">(Ø'li çubuklar — birden fazla çubuk/lot olabilir)</span></button>
+          </div>
+          ${stokAddTurState==='boy' ? `
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input id="stok-kod" placeholder="Malzeme kodu (ör. 2344)" style="flex:1;min-width:140px">
+              <input id="stok-cap" placeholder="Çap (ör. Ø18)" style="width:120px">
+              <select id="stok-birim-boy" style="width:90px"><option value="mm">mm</option><option value="cm">cm</option></select>
+              <input id="stok-ilk-boy" type="number" placeholder="İlk çubuğun boyu" style="width:150px">
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Aynı kod+çap için sonradan başka çubuk (lot) eklemek istersen, aşağıdaki listeden o kalemin altına "+ Yeni Çubuk" ile ekleyebilirsin.</div>
+          ` : `
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input id="stok-kod" placeholder="Kod (ör. 86x100x55)" style="flex:1;min-width:140px">
+              <input id="stok-isim" placeholder="İsim (opsiyonel)" style="flex:1.5;min-width:180px">
+              <select id="stok-birim" style="width:100px"><option value="adet">Adet</option><option value="kg">Kg</option></select>
+              <input id="stok-miktar" type="number" placeholder="Başlangıç miktarı" style="width:140px">
+              <select id="stok-mode" style="width:170px"><option value="oto">Otomatik (Adet kadar)</option><option value="manuel">Manuel (operatör girer)</option></select>
+            </div>
+          `}
+          <button class="btn-primary" style="width:auto;padding:10px 18px;margin-top:10px" onclick="addStockItem()">+ Ekle</button>
+        </div>
+        <div class="sec-h" style="margin-top:0">Stok Kalemleri (${items.length})</div>
+        <div class="op-settings-table" style="margin-bottom:26px">
+          ${items.length===0 ? `<div style="font-size:12.5px;color:var(--text-muted);padding:12px 4px">Henüz stok kalemi eklenmedi.</div>` : items.map(it=>{
+            if(it.tur==='boy'){
+              const lots = lotsArray(it);
+              return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                  <div><span class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)}</span> <span style="color:var(--text-muted);font-size:12.5px">${esc(it.cap||'')} · Boy Takip · ${lots.length} çubuk</span></div>
+                  <button class="del-btn" onclick="deleteStockItem('${it.id}')" title="Kalemi tamamen sil">${ico('trash',14)}</button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
+                  ${lots.length===0 ? `<div style="font-size:12px;color:var(--text-muted)">Çubuk yok.</div>` : lots.map(lot=>`
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <input type="number" value="${lot.boy}" style="width:110px" onchange="updateStockLot('${it.id}','${lot.id}',this.value)">
+                      <span style="font-size:12px;color:var(--text-muted)">${esc(it.birim||'mm')}</span>
+                      <button class="del-btn" onclick="deleteStockLot('${it.id}','${lot.id}')" title="Bu çubuğu sil">${ico('trash',14)}</button>
+                    </div>
+                  `).join('')}
+                </div>
+                <div style="display:flex;gap:8px">
+                  <input id="stok-yeni-boy-${it.id}" type="number" placeholder="Yeni çubuk boyu" style="width:150px">
+                  <button class="btn-ghost" style="padding:8px 14px;font-size:12.5px" onclick="addStockLot('${it.id}')">+ Yeni Çubuk</button>
+                </div>
+              </div>`;
+            }
+            return `<div class="op-settings-row" style="flex-wrap:wrap;gap:10px">
+              <div style="min-width:140px"><div class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)}</div><div style="font-size:11.5px;color:var(--text-muted)">${esc(it.isim||'')}</div></div>
+              <input type="number" value="${it.miktar}" style="width:110px" onchange="updateStockItemField('${it.id}','miktar',this.value)" title="Mevcut miktar">
+              <span style="font-size:12px;color:var(--text-muted)">${esc(it.birim||'adet')}</span>
+              <select onchange="updateStockItemField('${it.id}','mode',this.value)" style="width:170px">
+                <option value="oto" ${it.mode==='oto'?'selected':''}>Otomatik (Adet kadar)</option>
+                <option value="manuel" ${it.mode==='manuel'?'selected':''}>Manuel (operatör girer)</option>
+              </select>
+              <button class="del-btn" onclick="deleteStockItem('${it.id}')" title="Sil">${ico('trash',14)}</button>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="sec-h" style="margin-top:0">Son Stok Hareketleri</div>
+        <table><thead><tr><th>Tarih</th><th>Kalem</th><th>Miktar</th><th>İş Emri</th><th>Kim</th></tr></thead><tbody>
+          ${recentMoves.length===0 ? `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Henüz hareket yok.</td></tr>` : recentMoves.map(m=>`
+            <tr><td>${fmtDT(m.ts)}</td><td class="mono">${esc(m.itemKod)}${m.itemIsim?` <span style="color:var(--text-muted)">· ${esc(m.itemIsim)}</span>`:''}</td><td style="color:${m.miktar<0?'var(--danger)':'var(--success)'}">${m.miktar>0?'+':''}${m.miktar} ${esc(m.birim||'')}</td><td class="mono">${esc(m.talepNo||m.isEmriNo||'—')}</td><td>${esc(m.operatorName||'')}</td></tr>
+          `).join('')}
+        </tbody></table>`}`;
+}
+
+/* ==================== STOK SEKMESİ (üç bölüm) ====================
+   Kullanıcı isteği: tek "Stok" sekmesi, içinde 1) takım stok 2) karbür stok 3) malzeme stok.
+   VERİ KATMANI YİNE AYRI — bu yalnızca gezinme birleştirmesi. Üç modül kendi node'larında
+   kalır (toolCatalog* / karbur* / stockItems*), hiçbiri veri paylaşmaz. Yetkiler değişmedi:
+   takım ve karbür için mevcut sekme izinleri, malzeme için canManageStock() (SuperAdmin+Şef). */
+const STOK_BOLUMLERI = [
+  { key:'takim',   label:'🔧 Takım & Sarf', gor:()=>isAdminTabVisible('takimStok') },
+  { key:'karbur',  label:'◆ Karbür',        gor:()=>isAdminTabVisible('karbur') },
+  { key:'malzeme', label:'Malzeme (çelik)', gor:()=>canManageStock() }
+];
+let stokSubView = 'takim';
+let malzemeHareketYuklendi = false;
+function stokErisimVar(){ return STOK_BOLUMLERI.some(b=>b.gor()); }
+/* stockHareketleri canlı dinlenmiyor (maliyet optimizasyonu — bkz. js/firebase-push.js:271-275),
+   bu yüzden malzeme bölümü ilk açıldığında tek seferlik okunuyor. Eskiden bu tetikleyici
+   setSettingsSubTab('stok') içindeydi; o alt sekme kaldırıldığı için buraya taşındı. */
+function malzemeHareketGerekli(){
+  if(malzemeHareketYuklendi) return;
+  malzemeHareketYuklendi = true;
+  loadStockHareketleri();
+}
+function setStokSubView(v){
+  stokSubView = v;
+  if(v==='malzeme') malzemeHareketGerekli();
+  render();
+}
+function renderStokScreen(){
+  const gorunur = STOK_BOLUMLERI.filter(b=>b.gor());
+  if(!gorunur.length) return `<div class="settings-wrap"><div style="color:var(--text-muted);font-size:12.5px">Stok ekranlarına erişim yetkin yok.</div></div>`;
+  if(!gorunur.some(b=>b.key===stokSubView)) stokSubView = gorunur[0].key;
+  if(stokSubView==='malzeme') malzemeHareketGerekli();
+  let html = `<div class="sub-tabs" style="padding:14px 24px 0">
+    ${gorunur.map(b=>`<button class="sub-tab-btn ${stokSubView===b.key?'active':''}" onclick="setStokSubView('${b.key}')">${esc(b.label)}</button>`).join('')}
+  </div>`;
+  if(stokSubView==='takim')       html += renderToolStokManagementScreen();
+  else if(stokSubView==='karbur') html += renderKarburScreen();
+  else                            html += `<div class="settings-wrap">${renderMalzemeStokScreen()}</div>`;
+  return html;
+}
+
 function renderAdmin(){
-  const viewToTabKey = { report:'rapor', matrix:'matrix', completed:'completed', analiz:'analiz', tadilatYonetim:'tadilat', takimStokYonetim:'takimStok' };
+  const viewToTabKey = { report:'rapor', matrix:'matrix', completed:'completed', analiz:'analiz', tadilatYonetim:'tadilat', takimStokYonetim:'takimStok' };   // Stok sekmesi uc bolumlu, asagida ayrica ele aliniyor
   if(viewToTabKey[view] && !isAdminTabVisible(viewToTabKey[view])){
-    const tabKeyToView = { rapor:'report', matrix:'matrix', completed:'completed', analiz:'analiz', tadilat:'tadilatYonetim', takimStok:'takimStokYonetim' };
+    const tabKeyToView = { rapor:'report', matrix:'matrix', completed:'completed', analiz:'analiz', tadilat:'tadilatYonetim', takimStok:'stokYonetim', karbur:'stokYonetim' };
     const fallbackKey = ADMIN_TAB_DEFS.map(t=>t.key).find(k=>isAdminTabVisible(k) && (k!=='tadilat' || canCreateTadilat()) && (k!=='analiz' || !(session.isSef || session.isUretimSef)));
     view = fallbackKey ? tabKeyToView[fallbackKey] : 'report';
   }
+  /* Stok sekmesi üç bölümden (takım / karbür / malzeme) oluşuyor; hiçbirine erişimi olmayan
+     biri sekmeyi görmemeli, state üzerinden de girememeli. */
+  if(view==='stokYonetim' && !stokErisimVar()) view = 'report';
   const operatorEntries = Object.entries(STATE.operators).filter(([k,v])=>!v.isAdmin);
   const uzunDurusList = (uzunDurusUyariEnabled() && isAdminTabVisible('uzunDurusUyari')) ? uzunDurusluKayitlar() : [];
   const uzunDevamEdenList = (uzunDevamEdenUyariEnabled() && isAdminTabVisible('uzunDevamEdenUyari')) ? uzunDevamEdenKayitlar() : [];
@@ -765,7 +900,7 @@ function renderAdmin(){
       ${isAdminTabVisible('completed') ? `<button class="tab-btn ${view==='completed'?'active':''}" onclick="setView('completed')">${ico('check',14)} Tamamlanan Kodlar</button>` : ''}
       ${!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz') ? `<button class="tab-btn ${view==='analiz'?'active':''}" onclick="setView('analiz')">${ico('chart',14)} Analiz</button>` : ''}
       ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="tab-btn ${view==='tadilatYonetim'?'active':''}" onclick="setView('tadilatYonetim')">${ico('wrench',14)} Tadilat</button>` : ''}
-      ${isAdminTabVisible('takimStok') ? `<button class="tab-btn ${view==='takimStokYonetim'?'active':''}" onclick="setView('takimStokYonetim')">🔧 Takım Stok</button>` : ''}
+      ${stokErisimVar() ? `<button class="tab-btn ${view==='stokYonetim'?'active':''}" onclick="setView('stokYonetim')">${ico('box',14)} Stok</button>` : ''}
     </div>`;
 
   let body = '';
@@ -785,7 +920,8 @@ function renderAdmin(){
         <button class="sub-tab-btn ${settingsSubTab==='tadilatSablonlari'?'active':''}" onclick="setSettingsSubTab('tadilatSablonlari')">Tadilat Hazır İfadeleri</button>
         <button class="sub-tab-btn ${settingsSubTab==='bolumKurallari'?'active':''}" onclick="setSettingsSubTab('bolumKurallari')">Tadilat Bölüm Kuralları</button>
         <button class="sub-tab-btn ${settingsSubTab==='tabErisimi'?'active':''}" onclick="setSettingsSubTab('tabErisimi')">Sekme Erişimi (Yönetici)</button>
-        <button class="sub-tab-btn ${settingsSubTab==='takimStok'?'active':''}" onclick="setSettingsSubTab('takimStok')">🔧 Takım & Sarf Stok</button>` : ''}
+        <button class="sub-tab-btn ${settingsSubTab==='takimStok'?'active':''}" onclick="setSettingsSubTab('takimStok')">🔧 Takım & Sarf Stok</button>
+        <button class="sub-tab-btn ${settingsSubTab==='karbur'?'active':''}" onclick="setSettingsSubTab('karbur')">◆ Karbür Stok</button>` : ''}
         ${(session.isSuperAdmin||session.isSef) ? `
         <button class="sub-tab-btn ${settingsSubTab==='veriListeleri'?'active':''}" onclick="setSettingsSubTab('veriListeleri')">Veri Listeleri</button>
         <button class="sub-tab-btn ${settingsSubTab==='stok'?'active':''}" onclick="setSettingsSubTab('stok')">Malzeme Stoğu</button>` : ''}
@@ -1233,87 +1369,6 @@ function renderAdmin(){
             <td>${h.sent===true?`<span style="color:var(--success)">${ico('check',14)} Gönderildi</span>`:h.sent===false?`<span style="color:var(--danger)" title="${esc(h.reason||'')}">${ico('x',14)} Başarısız${h.reason==='no-tokens'?' (izin yok)':''}</span>`:`<span style="color:var(--text-muted)">… bekliyor</span>`}</td>
           </tr>`).join('')}
         </tbody></table></div>`; })()}`;
-    } else if(settingsSubTab==='stok'){
-      const items = stockItemsArray();
-      const recentMoves = Object.entries(stockHareketleri).map(([id,v])=>({id,...v})).sort((a,b)=>b.ts-a.ts).slice(0,20);
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Malzeme Stoğu <span style="font-size:11.5px;font-weight:400;color:var(--text-muted)">(opsiyonel modül)</span></div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:640px">Hammadde tüketimi sadece bir iş emrinin <b>ilk operasyonunda</b> sorulur — aynı iş emrinin sonraki adımlarında tekrar sorulmaz, çünkü malzeme zaten ilk kesimde tüketilmiştir.</div>
-        <label style="display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid ${stockEnabled()?'var(--success)':'var(--border)'};border-radius:10px;padding:14px 16px;margin-bottom:22px;cursor:pointer;max-width:480px">
-          <input type="checkbox" ${stockEnabled()?'checked':''} onchange="toggleStockTracking()" style="width:auto;transform:scale(1.3)">
-          <div>
-            <div style="font-size:14px;font-weight:600;color:${stockEnabled()?'var(--success)':'var(--text)'}">Malzeme Stok Takibini ${stockEnabled()?'Aktif':'Kapalı'}</div>
-            <div style="font-size:11.5px;color:var(--text-muted)">Kapatırsan bu modülle ilgili hiçbir alan/ekran operatörlere görünmez, hiçbir stok işlemi yapılmaz — tek tuşla tamamen devre dışı kalır.</div>
-          </div>
-        </label>
-        ${!stockEnabled() ? `<div style="font-size:12.5px;color:var(--text-muted)">Modül kapalı. Açtığında aşağıdaki stok kalemi yönetimi ve tüketim geçmişi görünür olacak.</div>` : `
-        <div style="max-width:640px;margin-bottom:22px">
-          <div style="font-size:13px;font-weight:600;margin-bottom:10px">Yeni Stok Kalemi Ekle</div>
-          <div style="display:flex;gap:8px;margin-bottom:10px">
-            <button type="button" class="chip ${stokAddTurState==='adet'?'active':''}" onclick="stokAddTurState='adet'; render()">Adet Takip <span style="font-size:10.5px;opacity:.8">(dikdörtgen/kare — 86x100x55 gibi)</span></button>
-            <button type="button" class="chip ${stokAddTurState==='boy'?'active':''}" onclick="stokAddTurState='boy'; render()">Boy Takip <span style="font-size:10.5px;opacity:.8">(Ø'li çubuklar — birden fazla çubuk/lot olabilir)</span></button>
-          </div>
-          ${stokAddTurState==='boy' ? `
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <input id="stok-kod" placeholder="Malzeme kodu (ör. 2344)" style="flex:1;min-width:140px">
-              <input id="stok-cap" placeholder="Çap (ör. Ø18)" style="width:120px">
-              <select id="stok-birim-boy" style="width:90px"><option value="mm">mm</option><option value="cm">cm</option></select>
-              <input id="stok-ilk-boy" type="number" placeholder="İlk çubuğun boyu" style="width:150px">
-            </div>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Aynı kod+çap için sonradan başka çubuk (lot) eklemek istersen, aşağıdaki listeden o kalemin altına "+ Yeni Çubuk" ile ekleyebilirsin.</div>
-          ` : `
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <input id="stok-kod" placeholder="Kod (ör. 86x100x55)" style="flex:1;min-width:140px">
-              <input id="stok-isim" placeholder="İsim (opsiyonel)" style="flex:1.5;min-width:180px">
-              <select id="stok-birim" style="width:100px"><option value="adet">Adet</option><option value="kg">Kg</option></select>
-              <input id="stok-miktar" type="number" placeholder="Başlangıç miktarı" style="width:140px">
-              <select id="stok-mode" style="width:170px"><option value="oto">Otomatik (Adet kadar)</option><option value="manuel">Manuel (operatör girer)</option></select>
-            </div>
-          `}
-          <button class="btn-primary" style="width:auto;padding:10px 18px;margin-top:10px" onclick="addStockItem()">+ Ekle</button>
-        </div>
-        <div class="sec-h" style="margin-top:0">Stok Kalemleri (${items.length})</div>
-        <div class="op-settings-table" style="margin-bottom:26px">
-          ${items.length===0 ? `<div style="font-size:12.5px;color:var(--text-muted);padding:12px 4px">Henüz stok kalemi eklenmedi.</div>` : items.map(it=>{
-            if(it.tur==='boy'){
-              const lots = lotsArray(it);
-              return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-                  <div><span class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)}</span> <span style="color:var(--text-muted);font-size:12.5px">${esc(it.cap||'')} · Boy Takip · ${lots.length} çubuk</span></div>
-                  <button class="del-btn" onclick="deleteStockItem('${it.id}')" title="Kalemi tamamen sil">${ico('trash',14)}</button>
-                </div>
-                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
-                  ${lots.length===0 ? `<div style="font-size:12px;color:var(--text-muted)">Çubuk yok.</div>` : lots.map(lot=>`
-                    <div style="display:flex;align-items:center;gap:8px">
-                      <input type="number" value="${lot.boy}" style="width:110px" onchange="updateStockLot('${it.id}','${lot.id}',this.value)">
-                      <span style="font-size:12px;color:var(--text-muted)">${esc(it.birim||'mm')}</span>
-                      <button class="del-btn" onclick="deleteStockLot('${it.id}','${lot.id}')" title="Bu çubuğu sil">${ico('trash',14)}</button>
-                    </div>
-                  `).join('')}
-                </div>
-                <div style="display:flex;gap:8px">
-                  <input id="stok-yeni-boy-${it.id}" type="number" placeholder="Yeni çubuk boyu" style="width:150px">
-                  <button class="btn-ghost" style="padding:8px 14px;font-size:12.5px" onclick="addStockLot('${it.id}')">+ Yeni Çubuk</button>
-                </div>
-              </div>`;
-            }
-            return `<div class="op-settings-row" style="flex-wrap:wrap;gap:10px">
-              <div style="min-width:140px"><div class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)}</div><div style="font-size:11.5px;color:var(--text-muted)">${esc(it.isim||'')}</div></div>
-              <input type="number" value="${it.miktar}" style="width:110px" onchange="updateStockItemField('${it.id}','miktar',this.value)" title="Mevcut miktar">
-              <span style="font-size:12px;color:var(--text-muted)">${esc(it.birim||'adet')}</span>
-              <select onchange="updateStockItemField('${it.id}','mode',this.value)" style="width:170px">
-                <option value="oto" ${it.mode==='oto'?'selected':''}>Otomatik (Adet kadar)</option>
-                <option value="manuel" ${it.mode==='manuel'?'selected':''}>Manuel (operatör girer)</option>
-              </select>
-              <button class="del-btn" onclick="deleteStockItem('${it.id}')" title="Sil">${ico('trash',14)}</button>
-            </div>`;
-          }).join('')}
-        </div>
-        <div class="sec-h" style="margin-top:0">Son Stok Hareketleri</div>
-        <table><thead><tr><th>Tarih</th><th>Kalem</th><th>Miktar</th><th>İş Emri</th><th>Kim</th></tr></thead><tbody>
-          ${recentMoves.length===0 ? `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Henüz hareket yok.</td></tr>` : recentMoves.map(m=>`
-            <tr><td>${fmtDT(m.ts)}</td><td class="mono">${esc(m.itemKod)}${m.itemIsim?` <span style="color:var(--text-muted)">· ${esc(m.itemIsim)}</span>`:''}</td><td style="color:${m.miktar<0?'var(--danger)':'var(--success)'}">${m.miktar>0?'+':''}${m.miktar} ${esc(m.birim||'')}</td><td class="mono">${esc(m.talepNo||m.isEmriNo||'—')}</td><td>${esc(m.operatorName||'')}</td></tr>
-          `).join('')}
-        </tbody></table>`}`;
     } else if(settingsSubTab==='durusReasons'){
       const list = (STATE.durusReasons && STATE.durusReasons.length>0) ? STATE.durusReasons : DEFAULT_DURUS_REASONS;
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Duruş Nedenleri</div>
@@ -1355,6 +1410,10 @@ function renderAdmin(){
         </div>`}`;
     } else if(settingsSubTab==='takimStok'){
       body += renderToolStokAdminSettings();
+    } else if(settingsSubTab==='karbur'){
+      body += renderKarburAdminSettings();
+    } else if(settingsSubTab==='stok'){
+      body += renderMalzemeStokAyarlar();
     }
     body += `</div>`;
   } else if(view==='matrix'){
@@ -2037,8 +2096,8 @@ function renderAdmin(){
       </div>`;
     }
     body += `</div>`;
-  } else if(view==='takimStokYonetim' && isAdminTabVisible('takimStok')){
-    body = renderToolStokManagementScreen();
+  } else if(view==='stokYonetim' && stokErisimVar()){
+    body = renderStokScreen();
   } else {
     const entries = entriesArray();
     const statOperator = new Set(entries.map(e=>e.operatorUsername)).size;
@@ -2140,7 +2199,7 @@ function renderAdmin(){
     body += `</tbody></table></div>${entryDetailId ? renderEntryDetailModal() : ''}`;
   }
 
-  return `<div class="root-wide theme-${resolvedTheme()}">${header}${body}${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}${tadilatAkisModalId ? renderTadilatAkisModal() : ''}</div>`;
+  return `<div class="root-wide theme-${resolvedTheme()}">${header}${body}${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}${tadilatAkisModalId ? renderTadilatAkisModal() : ''}${karburPickerFor ? renderKarburPicker() : ''}</div>`;
 }
 function setReportFilterFieldLight(field, val){ reportFilter[field]=val; renderTableOnly(); }
 function renderTableOnly(){ render(); } // basit yaklaşım: filtre değişince tam yeniden çizim yeterli hızda çalışır
