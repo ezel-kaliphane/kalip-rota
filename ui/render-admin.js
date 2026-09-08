@@ -853,7 +853,9 @@ function renderStokScreen(){
 }
 
 function renderAdmin(){
-  const viewToTabKey = { report:'rapor', matrix:'matrix', completed:'completed', analiz:'analiz', tadilatYonetim:'tadilat', takimStokYonetim:'takimStok' };   // Stok sekmesi uc bolumlu, asagida ayrica ele aliniyor
+  /* Stok sekmesi uc bolumlu (takim / karbur / malzeme), asagida `stokYonetim` olarak ayrica ele
+     aliniyor — bu yuzden burada karsiligi yok. */
+  const viewToTabKey = { report:'rapor', matrix:'matrix', completed:'completed', analiz:'analiz', tadilatYonetim:'tadilat' };
   if(viewToTabKey[view] && !isAdminTabVisible(viewToTabKey[view])){
     const tabKeyToView = { rapor:'report', matrix:'matrix', completed:'completed', analiz:'analiz', tadilat:'tadilatYonetim', takimStok:'stokYonetim', karbur:'stokYonetim' };
     const fallbackKey = ADMIN_TAB_DEFS.map(t=>t.key).find(k=>isAdminTabVisible(k) && (k!=='tadilat' || canCreateTadilat()) && (k!=='analiz' || !(session.isSef || session.isUretimSef)));

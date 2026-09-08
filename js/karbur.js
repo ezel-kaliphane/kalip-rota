@@ -668,15 +668,27 @@ function karburPlanKaydet(){
     fireGrupListe.forEach(a => {
       const mevcut = karburFireArray().find(f => f.disCap === a.disCap && f.delik === a.delik &&
         f.kalite === a.kalite && Math.abs(f.boy - a.boy) < 0.001);
+      let fid;
       if(mevcut){
         fireArtis[mevcut.id] = (fireArtis[mevcut.id] || 0) + a.sayi;
         updates['karburFire/' + mevcut.id + '/sonHareketTs'] = now;   // artırılan kayıtta da tarih tazelenir
-        return;
+        fid = mevcut.id;
+      }else{
+        const id = DB.ref('karburFire').push().key;
+        const rec = { disCap: a.disCap, delik: a.delik, kalite: a.kalite, boy: a.boy, adet: a.sayi, sonHareketTs: now };
+        updates['karburFire/' + id] = rec;
+        karburFire[id] = rec;
+        fid = id;
       }
-      const id = DB.ref('karburFire').push().key;
-      const rec = { disCap: a.disCap, delik: a.delik, kalite: a.kalite, boy: a.boy, adet: a.sayi, sonHareketTs: now };
-      updates['karburFire/' + id] = rec;
-      karburFire[id] = rec;
+      /* Planın ÜRETTİĞİ artık da kayda geçiyor. İki sebep: (1) geçmişte plan başına yalnızca
+         "ne gitti" görünüyor, "ne geri geldi" görünmüyordu; (2) plan geri alınırken hangi havuz
+         kaydından ne düşüleceği başka türlü bilinemez — plan saklanmıyor, artıklar da fungible
+         olduğu için sonradan türetilemez.
+         Havuz düğümüne "bu plandan geldi" diye bir alan YAZILMIYOR: aynı düğüm başka planların
+         artıklarıyla da artıyor, tek bir plan numarası orada yanıltıcı olurdu. Doğru yer bu
+         hareket kaydı. */
+      hareketler.push({ tip: 'fire_uretim', fireId: fid, kod: karburFireKodu(a), boy: a.boy,
+        adet: a.sayi, isEmriNo: '', mm: a.boy * a.sayi, aciklama: 'kesimden artan' });
     });
 
     hareketler.forEach(h => {
@@ -737,6 +749,10 @@ function karburPlanKaydet(){
       const kaydedilenOzet = karburSaveSummary;
       karburRows = []; karburAdetRows = []; karburResetPlan();
       karburSaveSummary = kaydedilenOzet;      // resetPlan ozeti siliyor, kayit sonrasi gorunsun
+      /* Operatör ekranındaki "karbür çıkışı yapıldı" şeridi bu iş emirleri için önbellekte
+         "kayıt yok" olarak duruyor olabilir — önbellek kalıcı, süresi dolmuyor. Temizlenmezse
+         kaydı yapan cihazda şerit sayfa yenilenene kadar görünmüyordu. */
+      Object.keys(ozetEk).forEach(base => { delete karburOzetCache[base]; });
       /* Yazan cihaz kendi yazdığını görsün — yerel kopyalar tazelenir */
       ensureKarburStokLoaded(() => safeRender(), true);
       ensureKarburFireLoaded(() => safeRender(), true);
@@ -785,6 +801,182 @@ function karburStokDus(cikisAdet, fireDus){
       });
       throw new Error(kodlar.join(', ') + ' için stok yetmedi — hiçbir düşüm yapılmadı, HESAPLA ile planı yenile');
     });
+  });
+}
+
+/* ==================== PLAN GERİ ALMA ====================
+   Terminal başında yanlış iş emri no'su ya da yanlış adet girilmesi kaçınılmaz. Geri dönüşü
+   olmadığında tek çare stok için elle sayım, iş emri özeti içinse hiçbir şeydi — özet yalnızca
+   topluyor, azaltma yolu yok.
+
+   KAYIT SİLİNMEZ, TERS KAYIT YAZILIR (muhasebedeki gibi): plana ait hareketler `iptalTs` ile
+   işaretlenir, geri alınan her düğüm için `tip:'iptal'` hareketi yazılır. Geçmiş ekranı planı
+   iptal edilmiş olarak gösterir, ne yapıldığı okunabilir kalır.
+
+   SIRA ÖNEMLİ: önce havuzdan DÜŞÜLECEKLER (planın ürettiği artıklar) yapılır, çünkü tek
+   başarısız olabilecek adım odur — o artık bu arada başka bir işte kullanılmış olabilir.
+   karburStokDus zaten negatife düşecekse iptal edip commit olan kardeşleri geri alıyor; aynı
+   makineyi kullanıyoruz. Ancak ondan sonra iadeler yapılır.
+
+   ESKİ PLANLAR: `fire_uretim` kayıtları bu sürümle geldi. Daha önce kaydedilmiş planlarda
+   artıkların hangi havuz düğümüne gittiği bilinmiyor — o planlar geri alınırken stok ve özet
+   düzeltilir, havuzdaki artık kullanıcıya bildirilip elle düzeltmesi istenir. Sessizce
+   bırakılmaz. */
+let karburIptalOnay = null;        // { planNo, kayitlar, stokEkle, fireEkle, fireDus, ozetDus, uyari }
+let karburIptalYukleniyor = false;
+
+function karburPlanIptalVazgec(){ karburIptalOnay = null; render(); }
+
+/* Planın hareketlerini okur ve ne yapılacağını çıkarır — HİÇBİR ŞEY YAZMAZ. */
+function karburPlanIptalIste(planNo){
+  if(!canManageKarbur() || karburIptalYukleniyor || karburBusy) return;
+  karburIptalYukleniyor = true; karburIptalOnay = null; render();
+  DB.ref('karburHareketleri').orderByChild('planNo').equalTo(planNo).once('value').then(snap => {
+    karburIptalYukleniyor = false;
+    const kayitlar = Object.entries(snap.val() || {}).map(([id, x]) => ({ id, ...x }));
+    if(!kayitlar.length){ toast('Bu plana ait hareket bulunamadı'); render(); return; }
+    if(kayitlar.some(h => h.iptalTs || h.tip === 'iptal')){ toast('Bu plan zaten geri alınmış'); render(); return; }
+
+    const stokEkle = {};   // katalogId -> iade edilecek adet
+    const fireEkle = {};   // fireId    -> iade edilecek adet (planın TÜKETTİĞİ fire)
+    const fireDus  = {};   // fireId    -> havuzdan düşülecek adet (planın ÜRETTİĞİ artık)
+    const ozetDus  = {};   // ana iş emri no -> { mm, parca }
+
+    kayitlar.forEach(h => {
+      const adet = Number(h.adet) || 0;
+      if(h.tip === 'fire_uretim'){ if(adet > 0) fireDus[h.fireId] = (fireDus[h.fireId] || 0) + adet; }
+      else if(adet < 0){
+        /* Stok değişimi olan her kayıt: kesim / kesimsiz / adet_cikis (katalogId) ve
+           fire_kullanim (fireId). 'tahsis' kayıtlarında adet yok, kendiliğinden dışarıda kalır. */
+        if(h.katalogId) stokEkle[h.katalogId] = (stokEkle[h.katalogId] || 0) + (-adet);
+        else if(h.fireId) fireEkle[h.fireId] = (fireEkle[h.fireId] || 0) + (-adet);
+      }
+      if(h.isEmriNo){
+        const base = karburBaseIsEmri(h.isEmriNo);
+        if(base){
+          const o = (ozetDus[base] = ozetDus[base] || { mm: 0, parca: 0 });
+          o.mm += Number(h.mm) || 0;
+          o.parca += Number(h.parca) || 0;
+        }
+      }
+    });
+
+    const cubukVar = kayitlar.some(h => h.tip === 'kesim');
+    const uretimVar = kayitlar.some(h => h.tip === 'fire_uretim');
+    karburIptalOnay = { planNo, kayitlar, stokEkle, fireEkle, fireDus, ozetDus,
+      /* Eski plan: kesim yapılmış ama artıkların nereye gittiği kayıtlı değil. */
+      uyari: (cubukVar && !uretimVar) ? 'artik-bilinmiyor' : null };
+    render();
+  }).catch(err => {
+    karburIptalYukleniyor = false;
+    toast('Plan okunamadı: ' + ((err && err.message) || 'hata'));
+    render();
+  });
+}
+
+function karburPlanIptalUygula(){
+  const o = karburIptalOnay;
+  if(!o || !canManageKarbur() || karburBusy) return;
+  karburBusy = true; render();
+  const now = Date.now();
+  const hareketler = [];
+
+  /* 1) Önce havuzdan düşülecekler — tek başarısız olabilecek adım. Planın ürettiği artık bu
+        arada başka bir işte kullanılmışsa havuzda yok; o zaman hiçbir şey yapılmadan durulur. */
+  karburStokDus({}, o.fireDus).then(dusResults => {
+    dusResults.forEach(r => {
+      hareketler.push({ tip: 'iptal', fireId: r.id, kod: karburFireKodu(karburFireById(r.id) || {}),
+        adet: -r.miktar, oncekiAdet: r.sonraki + r.miktar, sonrakiAdet: r.sonraki,
+        isEmriNo: '', mm: 0, aciklama: 'plan geri alındı — kesimden artan havuzdan çıkarıldı' });
+    });
+
+    /* 2) İadeler. Bunlar artırma olduğu için negatife düşme riski yok, iptal edilemezler. */
+    const iadeler = []
+      .concat(Object.keys(o.stokEkle).map(id => ({ tur: 'stok', id, yol: 'karburStok/' + id + '/adet', miktar: o.stokEkle[id] })))
+      .concat(Object.keys(o.fireEkle).map(id => ({ tur: 'fire', id, yol: 'karburFire/' + id + '/adet', miktar: o.fireEkle[id] })));
+    return Promise.all(iadeler.map(x =>
+      DB.ref(x.yol).transaction(cur => (Number(cur) || 0) + x.miktar)
+        .then(res => Object.assign({ sonraki: Number(res.snapshot && res.snapshot.val()) || 0 }, x))
+    ));
+  }).then(iadeResults => {
+    const updates = {};
+    iadeResults.forEach(r => {
+      const it = r.tur === 'stok' ? karburKatalogArray().find(k => k.id === r.id) : null;
+      updates[(r.tur === 'stok' ? 'karburStok/' : 'karburFire/') + r.id + '/sonHareketTs'] = now;
+      hareketler.push({ tip: 'iptal', [r.tur === 'stok' ? 'katalogId' : 'fireId']: r.id,
+        kod: it ? it.kod : karburFireKodu(karburFireById(r.id) || {}),
+        adet: r.miktar, oncekiAdet: r.sonraki - r.miktar, sonrakiAdet: r.sonraki,
+        isEmriNo: '', mm: 0, aciklama: 'plan geri alındı — stoğa iade' });
+    });
+
+    /* 3) Orijinal kayıtlar iptal olarak işaretlenir — silinmez, çift geri almayı da bu engeller. */
+    o.kayitlar.forEach(h => {
+      updates['karburHareketleri/' + h.id + '/iptalTs'] = now;
+      updates['karburHareketleri/' + h.id + '/iptalBy'] = session.username;
+    });
+    hareketler.forEach(h => {
+      const id = DB.ref('karburHareketleri').push().key;
+      updates['karburHareketleri/' + id] = Object.assign({
+        planNo: o.planNo, kaynak: 'iptal', operatorUsername: session.username,
+        operatorName: session.displayName, ts: now
+      }, h);
+    });
+
+    /* 4) İş emri özeti azaltılır; sıfıra inen kayıt tamamen silinir (o iş emrine karbür
+          çıkmamış sayılır, operatör şeridi de kaybolmalı). */
+    const ozetTxs = Object.keys(o.ozetDus).map(base =>
+      DB.ref('karburIsEmriOzet/' + base).transaction(cur => {
+        if(!cur) return cur;
+        const mm = Math.round(((Number(cur.mm) || 0) - o.ozetDus[base].mm) * 100) / 100;
+        const parca = (Number(cur.parca) || 0) - o.ozetDus[base].parca;
+        if(mm <= 0.001 && parca <= 0) return null;          // null = düğümü sil
+        return {
+          mm: Math.max(0, mm), parca: Math.max(0, parca),
+          /* Son plan iptal edilen plansa artık ona işaret etmek yanlış olur; önceki plan
+             numarası bilinmediği için alan düşürülür. */
+          sonPlanNo: cur.sonPlanNo === o.planNo ? null : cur.sonPlanNo,
+          sonTs: now
+        };
+      })
+    );
+
+    return Promise.all(ozetTxs).then(() => karburChunkedUpdate(updates));
+  }).then(() => {
+    karburBusy = false;
+    const planNo = karburIptalOnay ? karburIptalOnay.planNo : '';
+    Object.keys(o.ozetDus).forEach(base => { delete karburOzetCache[base]; });
+    karburIptalOnay = null;
+    ensureKarburStokLoaded(() => safeRender(), true);
+    ensureKarburFireLoaded(() => safeRender(), true);
+    loadKarburHareketleri(200);
+    toast(planNo + ' geri alındı');
+    render();
+  }).catch(err => {
+    karburBusy = false;
+    ensureKarburStokLoaded(() => safeRender(), true);
+    ensureKarburFireLoaded(() => safeRender(), true);
+    toast('Geri alınamadı: ' + ((err && err.message) || 'hata'));
+    render();
+  });
+}
+
+/* ==================== İŞ EMRİ TÜKETİM RAPORU ====================
+   karburIsEmriOzet zaten denormalize ve sonTs index'li — "son N iş emri ne kadar karbür yedi"
+   tek küçük sorgu. Canlı dinleyici yok, hareketler taranmıyor. */
+let karburOzetListe = null, karburOzetListeYukleniyor = false, karburOzetListeHata = null;
+function loadKarburIsEmriOzet(limit){
+  if(karburOzetListeYukleniyor) return;
+  karburOzetListeYukleniyor = true; karburOzetListeHata = null;
+  DB.ref('karburIsEmriOzet').orderByChild('sonTs').limitToLast(limit || 150).once('value').then(snap => {
+    karburOzetListeYukleniyor = false;
+    karburOzetListe = Object.entries(snap.val() || {})
+      .map(([no, x]) => ({ no, ...x }))
+      .sort((a, b) => (b.sonTs || 0) - (a.sonTs || 0));
+    safeRender();
+  }).catch(err => {
+    karburOzetListeYukleniyor = false;
+    karburOzetListeHata = (err && err.message) || 'okuma hatası';
+    safeRender();
   });
 }
 
@@ -850,54 +1042,101 @@ function karburStokGiris(){
   }).catch(err => { karburBusy = false; toast('Giriş hatası: ' + ((err && err.message) || 'hata')); render(); });
 }
 
-/* Sayım düzeltmesi — mutlak değere set, fark hareket olarak yazılır */
+/* Sayım düzeltmesi — mutlak değere set, fark hareket olarak yazılır.
+
+   Yeni adet mutlak yazılır (sayımın anlamı bu: "rafta şu kadar var"), ama `oncekiAdet` ve fark
+   TRANSACTION'IN GÖRDÜĞÜ değerden alınır, yerel kopyadan değil. Yerel `karburStok` canlı
+   dinlenmiyor; başka biri arada çıkış yaptıysa yeni adet yine doğru yazılırdı ama hareketteki
+   önceki/fark yanlış olurdu — stok doğru, denetim izi yalan. Aynı hatanın kayıt yolundaki hâli
+   KAYDET bölümünde kapatılmıştı. */
 function karburSayimSet(katalogId, yeniAdetRaw){
-  if(!canManageKarbur()) return;
+  if(!canManageKarbur() || karburBusy) return;
   const yeni = parseInt(yeniAdetRaw, 10);
   if(isNaN(yeni) || yeni < 0) return;
   const it = karburKatalogArray().find(k => k.id === katalogId);
   if(!it) return;
-  const onceki = karburStokAdet(katalogId);
-  if(onceki === yeni) return;
-  const now = Date.now();
-  const hid = DB.ref('karburHareketleri').push().key;
-  const updates = {};
-  updates['karburStok/' + katalogId + '/adet'] = yeni;
-  updates['karburStok/' + katalogId + '/sonHareketTs'] = now;
-  updates['karburHareketleri/' + hid] = { tip: 'sayim', katalogId, kod: it.kod, adet: yeni - onceki,
-    oncekiAdet: onceki, sonrakiAdet: yeni, isEmriNo: '', mm: 0, aciklama: 'sayım düzeltmesi', kaynak: 'elle',
-    operatorUsername: session.username, operatorName: session.displayName, ts: now };
-  DB.ref().update(updates).then(() => {
-    karburStok[katalogId] = { adet: yeni, sonHareketTs: now };
-    toast(it.kod + ': ' + onceki + ' → ' + yeni);
-    render();
-  }).catch(err => toast('Güncellenemedi: ' + ((err && err.message) || 'hata')));
+  if(karburStokAdet(katalogId) === yeni) return;      // yerel kopyaya göre değişiklik yok, boşuna yazma
+  karburBusy = true; render();
+  let onceki = 0;
+  DB.ref('karburStok/' + katalogId + '/adet').transaction(cur => { onceki = Number(cur) || 0; return yeni; }).then(res => {
+    karburBusy = false;
+    if(!res.committed){ toast('Güncellenemedi, tekrar deneyin'); render(); return; }
+    if(onceki === yeni){ karburStok[katalogId] = { adet: yeni, sonHareketTs: (karburStok[katalogId]||{}).sonHareketTs }; render(); return; }
+    const now = Date.now();
+    const hid = DB.ref('karburHareketleri').push().key;
+    const updates = {};
+    updates['karburStok/' + katalogId + '/sonHareketTs'] = now;
+    updates['karburHareketleri/' + hid] = { tip: 'sayim', katalogId, kod: it.kod, adet: yeni - onceki,
+      oncekiAdet: onceki, sonrakiAdet: yeni, isEmriNo: '', mm: 0, aciklama: 'sayım düzeltmesi', kaynak: 'elle',
+      operatorUsername: session.username, operatorName: session.displayName, ts: now };
+    return DB.ref().update(updates).then(() => {
+      karburStok[katalogId] = { adet: yeni, sonHareketTs: now };
+      toast(it.kod + ': ' + onceki + ' → ' + yeni);
+      render();
+    });
+  }).catch(err => { karburBusy = false; toast('Güncellenemedi: ' + ((err && err.message) || 'hata')); render(); });
 }
 
-/* Fire havuzu elle düzeltme — parça kırılır, sistem dışı kullanılır, sayım farkı çıkar */
+function karburFireKodu(f){ return 'Ø' + karburFmt(f.disCap) + ' ' + (f.kalite || '') + ' ' + karburFmt(f.boy) + ' mm fire'; }
+
+/* Fire havuzu elle düzeltme — parça kırılır, sistem dışı kullanılır, sayım farkı çıkar.
+   `oncekiAdet` karburSayimSet ile aynı gerekçeyle transaction'ın gördüğü değerden alınır. */
 function karburFireSet(fireId, yeniAdetRaw){
-  if(!canManageKarbur()) return;
+  if(!canManageKarbur() || karburBusy) return;
   const yeni = parseInt(yeniAdetRaw, 10);
   if(isNaN(yeni) || yeni < 0) return;
   const f = karburFireById(fireId);
   if(!f) return;
-  const onceki = Number(f.adet) || 0;
-  if(onceki === yeni) return;
-  const now = Date.now();
-  const hid = DB.ref('karburHareketleri').push().key;
-  const updates = {};
-  updates['karburFire/' + fireId + '/adet'] = yeni;
-  updates['karburFire/' + fireId + '/sonHareketTs'] = now;
-  updates['karburHareketleri/' + hid] = { tip: 'fire_sayim', fireId,
-    kod: 'Ø' + karburFmt(f.disCap) + ' ' + f.kalite + ' ' + karburFmt(f.boy) + 'mm fire',
-    adet: yeni - onceki, oncekiAdet: onceki, sonrakiAdet: yeni, isEmriNo: '', mm: 0,
-    aciklama: 'fire sayım düzeltmesi', kaynak: 'elle',
-    operatorUsername: session.username, operatorName: session.displayName, ts: now };
-  DB.ref().update(updates).then(() => {
-    karburFire[fireId] = { disCap: f.disCap, delik: f.delik, kalite: f.kalite, boy: f.boy, adet: yeni, sonHareketTs: now };
-    toast('Fire güncellendi');
-    render();
-  }).catch(err => toast('Güncellenemedi: ' + ((err && err.message) || 'hata')));
+  if((Number(f.adet) || 0) === yeni) return;
+  karburBusy = true; render();
+  let onceki = 0;
+  DB.ref('karburFire/' + fireId + '/adet').transaction(cur => { onceki = Number(cur) || 0; return yeni; }).then(res => {
+    karburBusy = false;
+    if(!res.committed){ toast('Güncellenemedi, tekrar deneyin'); render(); return; }
+    karburFire[fireId] = Object.assign({}, karburFire[fireId], { adet: yeni });
+    if(onceki === yeni){ render(); return; }
+    const now = Date.now();
+    const hid = DB.ref('karburHareketleri').push().key;
+    const updates = {};
+    updates['karburFire/' + fireId + '/sonHareketTs'] = now;
+    updates['karburHareketleri/' + hid] = { tip: 'fire_sayim', fireId, kod: karburFireKodu(f),
+      adet: yeni - onceki, oncekiAdet: onceki, sonrakiAdet: yeni, isEmriNo: '', mm: 0,
+      aciklama: 'fire sayım düzeltmesi', kaynak: 'elle',
+      operatorUsername: session.username, operatorName: session.displayName, ts: now };
+    return DB.ref().update(updates).then(() => {
+      karburFire[fireId] = { disCap: f.disCap, delik: f.delik, kalite: f.kalite, boy: f.boy, adet: yeni, sonHareketTs: now };
+      toast('Fire güncellendi: ' + onceki + ' → ' + yeni);
+      render();
+    });
+  }).catch(err => { karburBusy = false; toast('Güncellenemedi: ' + ((err && err.message) || 'hata')); render(); });
+}
+
+/* Var olan bir fire ölçüsüne EKLEME — mutlak sayım değil, artış. Eskiden karburFireSet'e
+   (yerel adet + yeni adet) hesaplanıp veriliyordu: yerel kopya bayatsa aradaki değişiklik
+   siliniyordu. Artış transaction ile yapılır, hareket de `fire_giris` olarak yazılır —
+   çünkü bu bir sayım düzeltmesi değil, havuza giren malzeme. */
+function karburFireArtir(fireId, adet){
+  const f = karburFireById(fireId);
+  if(!f || !(adet > 0) || karburBusy) return;
+  karburBusy = true; render();
+  DB.ref('karburFire/' + fireId + '/adet').transaction(cur => (Number(cur) || 0) + adet).then(res => {
+    karburBusy = false;
+    if(!res.committed){ toast('Eklenemedi, tekrar deneyin'); render(); return; }
+    const sonraki = Number(res.snapshot.val()) || 0, now = Date.now();
+    const hid = DB.ref('karburHareketleri').push().key;
+    const updates = {};
+    updates['karburFire/' + fireId + '/sonHareketTs'] = now;
+    updates['karburHareketleri/' + hid] = { tip: 'fire_giris', fireId, kod: karburFireKodu(f),
+      adet, oncekiAdet: sonraki - adet, sonrakiAdet: sonraki, isEmriNo: '', mm: 0,
+      aciklama: 'fire havuzuna elle giriş', kaynak: 'elle',
+      operatorUsername: session.username, operatorName: session.displayName, ts: now };
+    return DB.ref().update(updates).then(() => {
+      karburFire[fireId] = { disCap: f.disCap, delik: f.delik, kalite: f.kalite, boy: f.boy, adet: sonraki, sonHareketTs: now };
+      karburFireFormTemizle();
+      toast('Fire eklendi (yeni: ' + sonraki + ')');
+      render();
+    });
+  }).catch(err => { karburBusy = false; toast('Eklenemedi: ' + ((err && err.message) || 'hata')); render(); });
 }
 
 /* Fire havuzuna elle ekleme (ilk kurulum / fiziksel sayım) */
@@ -910,24 +1149,26 @@ function karburFireEkle(){
   if(!(disCap > 0) || !(boy > 0) || adet <= 0){ toast('Çap, boy ve adet gerekli'); return; }
   const mevcut = karburFireArray().find(f => f.disCap === disCap && f.delik === delik &&
     f.kalite === kalite && Math.abs(f.boy - boy) < 0.001);
-  if(mevcut){ karburFireSet(mevcut.id, (Number(mevcut.adet) || 0) + adet); return; }
+  if(mevcut){ karburFireArtir(mevcut.id, adet); return; }
   const id = DB.ref('karburFire').push().key, now = Date.now();
   const rec = { disCap, delik, kalite, boy, adet, sonHareketTs: now };
   const hid = DB.ref('karburHareketleri').push().key;
   const updates = {};
   updates['karburFire/' + id] = rec;
-  updates['karburHareketleri/' + hid] = { tip: 'fire_giris', fireId: id,
-    kod: 'Ø' + karburFmt(disCap) + ' ' + kalite + ' ' + karburFmt(boy) + 'mm fire',
+  updates['karburHareketleri/' + hid] = { tip: 'fire_giris', fireId: id, kod: karburFireKodu(rec),
     adet, oncekiAdet: 0, sonrakiAdet: adet, isEmriNo: '', mm: 0,
     aciklama: 'fire havuzuna elle giriş', kaynak: 'elle',
     operatorUsername: session.username, operatorName: session.displayName, ts: now };
   DB.ref().update(updates).then(() => {
     karburFire[id] = rec;
-    ['karbur-fire-cap', 'karbur-fire-boy', 'karbur-fire-delik', 'karbur-fire-kalite', 'karbur-fire-adet']
-      .forEach(x => { const el = document.getElementById(x); if(el) el.value = ''; });
+    karburFireFormTemizle();
     toast('Fire eklendi');
     render();
   }).catch(err => toast('Eklenemedi: ' + ((err && err.message) || 'hata')));
+}
+function karburFireFormTemizle(){
+  ['karbur-fire-cap', 'karbur-fire-boy', 'karbur-fire-delik', 'karbur-fire-kalite', 'karbur-fire-adet']
+    .forEach(x => { const el = document.getElementById(x); if(el) el.value = ''; });
 }
 
 /* ==================== EXCEL İLE İLK YÜKLEME ====================
@@ -1122,7 +1363,9 @@ function karburOzetIste(base){
 
 function karburSetSubView(v){
   karburSubView = v;
+  karburIptalOnay = null;
   if(v === 'gecmis') loadKarburHareketleri(200);
+  if(v === 'isemri' && !karburOzetListe) loadKarburIsEmriOzet(150);
   render();
 }
 /* ==================== KARBÜR MODÜLÜ — SON ==================== */
