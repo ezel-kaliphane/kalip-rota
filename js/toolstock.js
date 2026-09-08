@@ -322,12 +322,13 @@ function toolFindColsForSheet(header){
 // Dosyanın her sekmesini ayrı ayrı okuyup birleştiriyor (bkz. CNC OFİS STOK.xlsx yapısı —
 // her kategori kendi sekmesinde). "KODU OLMAYANLAR"/"GİRİŞ-ÇIKIŞ" ve zorunlu sütunu (CANİAS/
 // ürün adı/stok adeti) olmayan sekmeler otomatik atlanır, kullanıcıya raporlanır.
-function handleToolExcelPreview(){
+async function handleToolExcelPreview(){
   if(!canManageToolStok()) return;
   const fileInput = document.getElementById('tool-excel-file-input');
   const file = fileInput?.files?.[0];
   const statusEl = document.getElementById('tool-excel-status');
   if(!file){ toast('Bir dosya seçin'); return; }
+  if(!(await ensureXLSX())) return; // Excel kütüphanesi ilk kullanımda yüklenir — bkz. js/lazy.js
   if(statusEl) statusEl.textContent = 'Okunuyor…';
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -762,7 +763,8 @@ function loadToolHistory(reset){
   });
 }
 
-function exportToolHistoryExcel(){
+async function exportToolHistoryExcel(){
+  if(!(await ensureXLSX())) return; // Excel kütüphanesi ilk kullanımda yüklenir — bkz. js/lazy.js
   const rows = (toolHistFilterTip ? toolHistMoves.filter(m=>m.tip===toolHistFilterTip) : toolHistMoves).map(m=>({
     Tarih: fmtDT(m.ts), Kod: m.canias, Kalem: (toolCatalog[m.itemId]||{}).ad || '', Tip: m.tip, Miktar: m.miktar,
     Öncesi: m.oncekiMiktar, Sonrası: m.sonrakiMiktar, Operatör: m.operatorName || m.operatorUsername || '',

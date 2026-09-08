@@ -15,6 +15,7 @@
       ".firebaserc",
       ".git/**",
       ".claude/**",
+      "tests/**",
       "functions/**",
       "node_modules/**",
       "database.rules.json",
@@ -25,7 +26,10 @@
       {
         "source": "/index.html",
         "headers": [
-          { "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
         ]
       }
     ]

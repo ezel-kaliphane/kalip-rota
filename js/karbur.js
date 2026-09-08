@@ -1181,9 +1181,10 @@ function karburFireFormTemizle(){
    SheetJS index.html'de global olarak zaten yüklü (XLSX, bkz. index.html:17). Kolon eşleme
    toleranslı: KOD sütunu aranır, ADET/MİKTAR varsa okunur. Desen js/toolstock.js:325-470
    (iki aşamalı önizleme → onay) ile aynı; upsert yapar, hiçbir şey silmez. */
-function karburExcelSec(ev){
+async function karburExcelSec(ev){
   const file = ev && ev.target && ev.target.files && ev.target.files[0];
   if(!file) return;
+  if(!(await ensureXLSX())) return; // Excel kütüphanesi ilk kullanımda yüklenir — bkz. js/lazy.js
   const rd = new FileReader();
   rd.onload = e => {
     try{

@@ -165,9 +165,10 @@ function machineDetailTadilatRows(code){
 function machineDetailAllRows(code){
   return [...machineDetailEntries(code), ...machineDetailTadilatRows(code)].sort((a,b)=>a.startTs-b.startTs);
 }
-function exportMachineExcel(code){
+async function exportMachineExcel(code){
   const m = allMachines().find(x=>x.code===code);
   if(!m){ toast('Makine bulunamadı'); return; }
+  if(!(await ensureXLSX())) return; // Excel kütüphanesi ilk kullanımda yüklenir — bkz. js/lazy.js
   let rows = machineDetailAllRows(code);
   // DÜZELTME: Ekrandaki tablo/Gantt "o günle KESİŞEN" kayıtları gösteriyor (bkz. aşağıdaki aynı
   // isimli düzeltme), ama dışa aktarım hâlâ sadece "o gün BAŞLAYAN" kayıtları alıyordu. Üstelik

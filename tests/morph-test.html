@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="tr"><head><meta charset="UTF-8"><title>morph testi</title>
+<style>body{font:13px/1.5 ui-monospace,monospace;background:#111;color:#ddd;padding:12px}
+.ok{color:#4ade80}.fail{color:#f87171;font-weight:700}h3{color:#7dd3fc;margin:14px 0 4px}</style>
+</head><body>
+<div id="out"></div>
+<div id="sandbox-morph" style="display:none"></div>
+<div id="sandbox-inner" style="display:none"></div>
+<script src="../ui/morph.js"></script>
+<script>
+const out = document.getElementById('out');
+let pass = 0, fail = 0;
+function log(ok, name, detail){
+  if(ok) pass++; else fail++;
+  out.insertAdjacentHTML('beforeend',
+    `<div class="${ok?'ok':'fail'}">${ok?'✓':'✗'} ${name}${ok?'':'<br>&nbsp;&nbsp;&nbsp;'+detail}</div>`);
+}
+
+/* ---- 1. Referans testi: morph sonucu innerHTML sonucuyla birebir aynı olmalı ---- */
+const A = document.getElementById('sandbox-morph');
+const B = document.getElementById('sandbox-inner');
+function refTest(name, from, to){
+  A.innerHTML = from; B.innerHTML = from;   // ikisi aynı başlangıçtan
+  morphInto(A, to);                          // biri yamalanır
+  B.innerHTML = to;                          // biri baştan kurulur
+  const ok = A.innerHTML === B.innerHTML;
+  log(ok, name, ok ? '' : `morph: ${A.innerHTML}<br>&nbsp;&nbsp;&nbsp;inner: ${B.innerHTML}`);
+}
+
+out.insertAdjacentHTML('beforeend','<h3>innerHTML ile birebir eşitlik</h3>');
+refTest('metin değişimi', '<div><span>00:01</span></div>', '<div><span>00:02</span></div>');
+refTest('öznitelik ekleme', '<div><b>x</b></div>', '<div><b class="a">x</b></div>');
+refTest('öznitelik silme', '<div><b class="a" data-k="1">x</b></div>', '<div><b>x</b></div>');
+refTest('etiket değişimi', '<div><b>x</b></div>', '<div><i>x</i></div>');
+refTest('düğüm ekleme (sona)', '<ul><li>a</li></ul>', '<ul><li>a</li><li>b</li></ul>');
+refTest('düğüm silme (sondan)', '<ul><li>a</li><li>b</li><li>c</li></ul>', '<ul><li>a</li></ul>');
+refTest('düğüm ekleme (başa)', '<ul><li>b</li></ul>', '<ul><li>a</li><li>b</li></ul>');
+refTest('tamamen farklı ağaç', '<div><p>bir</p></div>', '<section><table><tr><td>x</td></tr></table></section>');
+refTest('boştan doluya', '', '<div class="admin-header">başlık</div>');
+refTest('doludan boşa', '<div class="admin-header">başlık</div>', '');
+refTest('iç içe derin', '<a><b><c><d>1</d></c></b></a>', '<a><b><c><d>2</d></c></b></a>');
+refTest('id değişimi (aynı etiket)', '<div><div id="p1">a</div></div>', '<div><div id="p2">b</div></div>');
+refTest('inline onclick korunur', '<button onclick="f(1)">t</button>', '<button onclick="f(2)">t</button>');
+refTest('yorum düğümü', '<div><!-- not -->x</div>', '<div><!-- not2 -->x</div>');
+refTest('svg iç içe', '<svg viewBox="0 0 24 24"><path d="M1 1"></path></svg>', '<svg viewBox="0 0 24 24"><path d="M2 2"></path></svg>');
+refTest('tablo satır sayısı değişimi',
+  '<table><tbody><tr><td>1</td></tr><tr><td>2</td></tr></tbody></table>',
+  '<table><tbody><tr><td>1</td></tr></tbody></table>');
+
+/* ---- 2. Kimlik testi: değişmeyen düğüm DOM'da AYNI nesne kalmalı (asıl kazanç bu) ---- */
+out.insertAdjacentHTML('beforeend','<h3>düğüm kimliği (yıkılmadan güncelleme)</h3>');
+A.innerHTML = '<div class="wrap"><div class="row">sabit</div><div class="t">00:01</div></div>';
+const sabitOnce = A.querySelector('.row');
+const wrapOnce  = A.querySelector('.wrap');
+morphInto(A, '<div class="wrap"><div class="row">sabit</div><div class="t">00:02</div></div>');
+log(A.querySelector('.row') === sabitOnce, 'değişmeyen satır aynı DOM nesnesi kaldı', 'yeniden oluşturuldu');
+log(A.querySelector('.wrap') === wrapOnce, 'kapsayıcı aynı DOM nesnesi kaldı', 'yeniden oluşturuldu');
+log(A.querySelector('.t').textContent === '00:02', 'sayaç metni güncellendi', A.querySelector('.t').textContent);
+
+/* ---- 3. Kaydırma konumu korunuyor mu ---- */
+out.insertAdjacentHTML('beforeend','<h3>kaydırma konumu</h3>');
+A.style.display = 'block';
+A.innerHTML = '<div class="table-wrap" style="height:60px;overflow:auto">' +
+  Array.from({length:40},(_,i)=>`<div>satır ${i}</div>`).join('') + '<div class="t">00:01</div></div>';
+const wrap = A.querySelector('.table-wrap');
+wrap.scrollTop = 200;
+const before = wrap.scrollTop;
+morphInto(A, '<div class="table-wrap" style="height:60px;overflow:auto">' +
+  Array.from({length:40},(_,i)=>`<div>satır ${i}</div>`).join('') + '<div class="t">00:02</div></div>');
+log(before > 0 && A.querySelector('.table-wrap').scrollTop === before,
+  `iç kaydırma korundu (${before}px)`, `önce ${before}, sonra ${A.querySelector('.table-wrap').scrollTop}`);
+A.style.display = 'none';
+
+/* ---- 4. Odak ve imleç korunuyor mu ---- */
+out.insertAdjacentHTML('beforeend','<h3>odak / imleç</h3>');
+A.style.display = 'block';
+A.innerHTML = '<div><input id="f1" value="ABCDE"><div class="t">00:01</div></div>';
+const inp = document.getElementById('f1');
+inp.focus(); inp.setSelectionRange(2,2);
+morphInto(A, '<div><input id="f1" value="ABCDE"><div class="t">00:02</div></div>');
+log(document.activeElement === document.getElementById('f1'), 'odak korundu', 'odak kayboldu');
+log(document.getElementById('f1').selectionStart === 2, 'imleç konumu korundu (2)',
+  'imleç: '+document.getElementById('f1').selectionStart);
+A.style.display = 'none';
+
+/* ---- 5. Form durumu state'i takip ediyor mu (innerHTML sözleşmesi) ---- */
+out.insertAdjacentHTML('beforeend','<h3>form durumu state\'i takip ediyor</h3>');
+A.innerHTML = '<input id="v1" value="eski">';
+document.getElementById('v1').value = 'kullanıcı yazdı';
+morphInto(A, '<input id="v1" value="yeni">');
+log(document.getElementById('v1').value === 'yeni', 'input value render\'ı takip etti',
+  'değer: '+document.getElementById('v1').value);
+
+A.innerHTML = '<input id="c1" type="checkbox">';
+document.getElementById('c1').checked = true;
+morphInto(A, '<input id="c1" type="checkbox">');
+log(document.getElementById('c1').checked === false, 'checkbox işareti render\'ı takip etti', 'hâlâ işaretli');
+
+A.innerHTML = '<input id="c2" type="checkbox">';
+morphInto(A, '<input id="c2" type="checkbox" checked>');
+log(document.getElementById('c2').checked === true, 'checkbox işaretlendi', 'işaretlenmedi');
+
+A.innerHTML = '<select id="s1"><option value="a">A</option><option value="b">B</option></select>';
+document.getElementById('s1').value = 'b';
+morphInto(A, '<select id="s1"><option value="a" selected>A</option><option value="b">B</option></select>');
+log(document.getElementById('s1').value === 'a', 'select seçimi render\'ı takip etti',
+  'değer: '+document.getElementById('s1').value);
+
+A.innerHTML = '<select id="s2"><option value="a">A</option></select>';
+morphInto(A, '<select id="s2"><option value="a">A</option><option value="z" selected>Z</option></select>');
+log(document.getElementById('s2').value === 'z', 'yeni eklenen option seçili geldi',
+  'değer: '+document.getElementById('s2').value);
+
+A.innerHTML = '<textarea id="t1">eski</textarea>';
+document.getElementById('t1').value = 'kullanıcı yazdı';
+morphInto(A, '<textarea id="t1">yeni</textarea>');
+log(document.getElementById('t1').value === 'yeni', 'textarea render\'ı takip etti',
+  'değer: '+document.getElementById('t1').value);
+
+/* ---- 6. Doğrudan DOM müdahalesi geri alınıyor mu (operations.js:264 / statusEl senaryosu) ---- */
+out.insertAdjacentHTML('beforeend','<h3>render dışı DOM müdahalesi düzeltiliyor</h3>');
+A.innerHTML = '<div><span id="st">hazır</span></div>';
+document.getElementById('st').textContent = 'Okunuyor…';   // kod doğrudan yazdı
+morphInto(A, '<div><span id="st">hazır</span></div>');       // aynı HTML tekrar render edildi
+log(document.getElementById('st').textContent === 'hazır',
+  'doğrudan yazılan metin, render ile geri alındı (innerHTML davranışı)',
+  'metin: '+document.getElementById('st').textContent);
+
+/* ---- 7. Canvas (Chart.js) yeniden kullanılabilir kalıyor mu ---- */
+out.insertAdjacentHTML('beforeend','<h3>canvas</h3>');
+A.innerHTML = '<div><canvas id="cv" data-work="5"></canvas></div>';
+const cv = document.getElementById('cv');
+cv.width = 300; cv.height = 150; cv.style.width = '300px';   // Chart.js'in yaptığı gibi
+morphInto(A, '<div><canvas id="cv" data-work="9"></canvas></div>');
+log(document.getElementById('cv') === cv, 'canvas nesnesi korundu (Chart.js destroy/create ile uyumlu)', 'canvas değişti');
+log(document.getElementById('cv').getAttribute('data-work') === '9', 'canvas data özniteliği güncellendi',
+  'data-work: '+document.getElementById('cv').getAttribute('data-work'));
+
+out.insertAdjacentHTML('afterbegin',
+  `<div style="font-size:16px;font-weight:700;color:${fail?'#f87171':'#4ade80'}">SONUÇ: ${pass} geçti, ${fail} başarısız</div>`);
+console.log(`MORPH TEST: ${pass} passed, ${fail} failed`);
+</script>
+</body></html>

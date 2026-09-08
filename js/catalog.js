@@ -77,7 +77,7 @@ function canManageMalzemeListesi(){
   if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return false; }
   return true;
 }
-function uploadMalzemeListesi(){
+async function uploadMalzemeListesi(){
   if(!canManageMalzemeListesi()) return;
   const fileInput = document.getElementById('malzeme-file-input');
   const file = fileInput?.files?.[0];
@@ -85,6 +85,7 @@ function uploadMalzemeListesi(){
   const kodColName = trNorm((document.getElementById('malzeme-kod-col')?.value||'U Kodu').trim());
   const aciklamaColName = trNorm((document.getElementById('malzeme-aciklama-col')?.value||'Açıklama').trim());
   if(!file){ toast('Bir dosya seçin'); return; }
+  if(!(await ensureXLSX())) return; // Excel kütüphanesi ilk kullanımda yüklenir — bkz. js/lazy.js
   if(statusEl) statusEl.textContent = 'Okunuyor…';
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -139,13 +140,14 @@ function canManageIsMerkezleri(){
   if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return false; }
   return true;
 }
-function uploadIsMerkezleri(){
+async function uploadIsMerkezleri(){
   if(!canManageIsMerkezleri()) return;
   const fileInput = document.getElementById('ismerkezi-file-input');
   const file = fileInput?.files?.[0];
   const statusEl = document.getElementById('ismerkezi-upload-status');
   const kodColName = trNorm((document.getElementById('ismerkezi-kod-col')?.value||'İş Merkezi').trim());
   if(!file){ toast('Bir dosya seçin'); return; }
+  if(!(await ensureXLSX())) return; // Excel kütüphanesi ilk kullanımda yüklenir — bkz. js/lazy.js
   if(statusEl) statusEl.textContent = 'Okunuyor…';
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -226,7 +228,7 @@ function canManageUretimPersoneli(){
   if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return false; }
   return true;
 }
-function uploadUretimPersoneli(){
+async function uploadUretimPersoneli(){
   if(!canManageUretimPersoneli()) return;
   const fileInput = document.getElementById('personel-file-input');
   const file = fileInput?.files?.[0];
@@ -234,6 +236,7 @@ function uploadUretimPersoneli(){
   const adColName = trNorm((document.getElementById('personel-ad-col')?.value||'Görünen Ad').trim());
   const gorevColName = trNorm((document.getElementById('personel-gorev-col')?.value||'Görev').trim());
   if(!file){ toast('Bir dosya seçin'); return; }
+  if(!(await ensureXLSX())) return; // Excel kütüphanesi ilk kullanımda yüklenir — bkz. js/lazy.js
   if(statusEl) statusEl.textContent = 'Okunuyor…';
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -493,13 +496,14 @@ function normalizeTalepCode(v){
   s = s.replace(/^[^0-9A-Za-zÇĞİÖŞÜçğıöşü]+|[^0-9A-Za-zÇĞİÖŞÜçğıöşü]+$/g, ''); // baştaki/sondaki başıboş işaretler ("! 123 ?")
   return s.toUpperCase();
 }
-function uploadIsEmriListesi(){
+async function uploadIsEmriListesi(){
   if(!canManageIsEmriList()) return;
   const fileInput = document.getElementById('isemri-file-input');
   const file = fileInput?.files?.[0];
   const statusEl = document.getElementById('isemri-upload-status');
   const colName = trNorm((document.getElementById('isemri-col-name')?.value||'İş Talep No').trim());
   if(!file){ toast('Bir dosya seçin'); return; }
+  if(!(await ensureXLSX())) return; // Excel kütüphanesi ilk kullanımda yüklenir — bkz. js/lazy.js
   if(statusEl) statusEl.textContent = 'Okunuyor…';
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -1313,7 +1317,8 @@ function filteredEntries(){
     return true;
   }).map(e=>({...e, _seq: sm[e.id]||''})).sort((a,b)=>b.startTs-a.startTs);
 }
-function exportExcel(){
+async function exportExcel(){
+  if(!(await ensureXLSX())) return; // Excel kütüphanesi ilk kullanımda yüklenir — bkz. js/lazy.js
   const rows = filteredEntriesForExport().map(e=>{
     const d = entryDurationBreakdown(e);
     return {
@@ -1340,8 +1345,9 @@ function exportExcel(){
 // filtrelenmiş sayıyı ("Tamamlanan Talepler — Detay (12)") gösteriyordu. Kullanıcı 12 kayıt
 // beklerken 400 kayıt iniyordu. Artık ekranda gösterilen liste dışa aktarıma parametre olarak
 // geçiriliyor; parametresiz çağrılırsa (Tadilat Analizi sekmesi) eski davranış korunuyor.
-function exportTadilatExcel(list){
+async function exportTadilatExcel(list){
   if(!canViewTadilatAnaliz()) return;
+  if(!(await ensureXLSX())) return; // Excel kütüphanesi ilk kullanımda yüklenir — bkz. js/lazy.js
   const rows = [];
   const kaynak = Array.isArray(list) ? list : tadilatArray().filter(t=>tadilatTamamlandiMi(t));
   kaynak.forEach(t=>{

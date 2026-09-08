@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="tr"><head><meta charset="UTF-8"><title>morph ölçüt</title>
+<style>
+body{font:13px/1.6 ui-monospace,monospace;background:#111;color:#ddd;padding:12px;margin:0}
+h3{color:#7dd3fc;margin:16px 0 6px}
+table{border-collapse:collapse;margin-top:6px}td,th{border:1px solid #333;padding:4px 10px;text-align:right}
+th{color:#7dd3fc}td:first-child,th:first-child{text-align:left}
+.win{color:#4ade80;font-weight:700}
+/* Ölçümün gerçekçi olması için tarayıcının gerçekten yerleşim (layout) yapması gerekiyor:
+   grid + flex + gölge/kenarlık, gerçek matris ekranındakine benzer maliyet üretsin. */
+#stage{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.card{border:1px solid #2a3138;border-radius:8px;padding:8px;background:#171b20;box-shadow:0 1px 2px rgba(0,0,0,.4)}
+.card h4{margin:0 0 4px;font-size:12px;color:#ff8a3d}
+.row{display:flex;justify-content:space-between;gap:6px;font-size:11px;padding:2px 0;border-top:1px solid #23282e}
+.badge{border-radius:10px;padding:0 6px;background:#243}
+</style>
+</head><body>
+<div id="out"></div>
+<div id="stage"></div>
+<script src="../ui/morph.js"></script>
+<script>
+const out = document.getElementById('out'), stage = document.getElementById('stage');
+
+/* Gerçek Makine Matrisi ekranına benzer bir ağaç: makine kartları, her kartta satırlar,
+   rozetler ve CANLI SAYAÇ. Saniyelik tik'te ekranda değişen tek şey sayaçlardır. */
+function buildHtml(machines, rowsPerCard, tick){
+  let h = '';
+  for(let m = 0; m < machines; m++){
+    let rows = '';
+    for(let r = 0; r < rowsPerCard; r++){
+      rows += `<div class="row"><span>İş Emri ${m*100+r}</span>`
+            + `<span class="badge">${(r%3===0)?'devam':'duruş'}</span>`
+            + `<span class="t">${fmt(tick + m*37 + r*11)}</span></div>`;
+    }
+    h += `<div class="card" id="mk-${m}"><h4>MK${String(m).padStart(2,'0')} · Torna ${m}</h4>`
+       + `<div class="row"><span>Operatör</span><span>OP${m}</span></div>${rows}`
+       + `<div class="row"><span>Toplam</span><span class="t">${fmt(tick*3 + m)}</span></div></div>`;
+  }
+  return h;
+}
+function fmt(s){ const h=Math.floor(s/3600), m=Math.floor(s%3600/60); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
+
+function nodeCount(el){ return el.querySelectorAll('*').length; }
+
+/* Tarayıcı yerleşimi tembel yapar: ölçüme dahil olsun diye her turdan sonra bir layout'u
+   zorluyoruz (offsetHeight okumak buna sebep olur). Aksi halde innerHTML yapay olarak
+   ucuz görünürdü — asıl maliyeti yerleşim ve boyama. */
+function timeIt(label, iterations, fn){
+  fn(0); stage.offsetHeight;                        // ısınma
+  const samples = [];
+  for(let i = 1; i <= iterations; i++){
+    const t = performance.now();
+    fn(i);
+    stage.offsetHeight;
+    samples.push(performance.now() - t);
+  }
+  samples.sort((a,b)=>a-b);
+  return {
+    label,
+    med: samples[Math.floor(samples.length/2)],
+    avg: samples.reduce((a,b)=>a+b,0)/samples.length,
+    worst: samples[samples.length-1],
+  };
+}
+
+const SCENARIOS = [
+  { name: 'küçük (10 makine × 4 satır)',  machines: 10, rows: 4 },
+  { name: 'orta (30 makine × 6 satır)',   machines: 30, rows: 6 },
+  { name: 'büyük (60 makine × 10 satır)', machines: 60, rows: 10 },
+];
+const N = 30;
+
+let html = '<h3>Senaryo: saniyelik tik — ekranda sadece sayaçlar değişiyor</h3>';
+html += `<div style="color:#8b939b">Her ölçüm ${N} tur; yerleşim (layout) maliyeti dahil. med = medyan.</div>`;
+html += '<table><tr><th>Ağaç</th><th>DOM düğümü</th><th>innerHTML med</th><th>morph med</th><th>kazanç</th><th>innerHTML en kötü</th><th>morph en kötü</th></tr>';
+
+for(const sc of SCENARIOS){
+  stage.innerHTML = buildHtml(sc.machines, sc.rows, 0);
+  const nodes = nodeCount(stage);
+
+  const inner = timeIt('innerHTML', N, i => { stage.innerHTML = buildHtml(sc.machines, sc.rows, i); });
+  stage.innerHTML = buildHtml(sc.machines, sc.rows, 0);
+  const morph = timeIt('morph', N, i => { morphInto(stage, buildHtml(sc.machines, sc.rows, i)); });
+
+  const gain = inner.med / morph.med;
+  html += `<tr><td>${sc.name}</td><td>${nodes}</td>`
+        + `<td>${inner.med.toFixed(2)} ms</td><td>${morph.med.toFixed(2)} ms</td>`
+        + `<td class="win">${gain.toFixed(1)}×</td>`
+        + `<td>${inner.worst.toFixed(2)} ms</td><td>${morph.worst.toFixed(2)} ms</td></tr>`;
+}
+html += '</table>';
+
+/* İkinci senaryo: HİÇBİR ŞEY değişmiyor (başka bir operatörün Firebase güncellemesi geldiğinde
+   Stok/Rapor gibi durağan ekranlarda olan tam olarak bu). */
+html += '<h3>Senaryo: hiçbir şey değişmiyor (başka kullanıcının güncellemesi geldi)</h3>';
+html += '<table><tr><th>Ağaç</th><th>innerHTML med</th><th>morph med</th><th>kazanç</th></tr>';
+for(const sc of SCENARIOS){
+  const fixed = buildHtml(sc.machines, sc.rows, 7);
+  stage.innerHTML = fixed;
+  const inner = timeIt('innerHTML', N, () => { stage.innerHTML = fixed; });
+  stage.innerHTML = fixed;
+  const morph = timeIt('morph', N, () => { morphInto(stage, fixed); });
+  html += `<tr><td>${sc.name}</td><td>${inner.med.toFixed(2)} ms</td><td>${morph.med.toFixed(2)} ms</td>`
+        + `<td class="win">${(inner.med/morph.med).toFixed(1)}×</td></tr>`;
+}
+html += '</table>';
+html += '<div style="margin-top:14px;color:#8b939b">Not: bu makinede masaüstü tarayıcıda ölçüldü. '
+      + 'Telefon CPU\'su tipik olarak 4-6 kat yavaştır, yani oranlar aynı kalırken mutlak ms değerleri o kadar büyür.</div>';
+out.innerHTML = html;
+
+/* ---- Kalan maliyet nerede? morph'u parçalara ayırıp ölçüyoruz ---- */
+const tpl = document.createElement('template');
+let html3 = '<h3>Kalan maliyetin dağılımı (büyük ağaç, sayaçlar değişiyor)</h3>'
+  + '<table><tr><th>Aşama</th><th>medyan</th><th>ne yapıyor</th></tr>';
+{
+  const sc = { machines: 60, rows: 10 };
+  stage.innerHTML = buildHtml(sc.machines, sc.rows, 0);
+  const b = timeIt('build', N, i => { buildHtml(sc.machines, sc.rows, i); });
+  const p = timeIt('parse', N, i => { tpl.innerHTML = buildHtml(sc.machines, sc.rows, i); tpl.innerHTML=''; });
+  stage.innerHTML = buildHtml(sc.machines, sc.rows, 0);
+  const w = timeIt('full', N, i => { morphInto(stage, buildHtml(sc.machines, sc.rows, i)); });
+  const rows = [
+    ['1. HTML string üret',      b.med, 'JS: şablon + hesap (gerçek uygulamada bundan çok daha ağır)'],
+    ['2. + inert parse',         p.med, 'string → DOM ağacı (&lt;template&gt; içinde, layout yok)'],
+    ['3. + ağacı gez ve yamala', w.med, 'karşılaştır + sadece farkları DOM\'a yaz + layout'],
+  ];
+  for(const [n,ms,d] of rows) html3 += `<tr><td>${n}</td><td>${ms.toFixed(2)} ms</td><td style="text-align:left;color:#8b939b">${d}</td></tr>`;
+  html3 += `<tr><td colspan="3" style="text-align:left;color:#7dd3fc">→ parse tek başına ${(p.med-b.med).toFixed(2)} ms, yamalama+layout ${(w.med-p.med).toFixed(2)} ms</td></tr>`;
+}
+html3 += '</table>';
+out.insertAdjacentHTML('beforeend', html3);
+stage.innerHTML = '';
+
+</script>
+</body></html>

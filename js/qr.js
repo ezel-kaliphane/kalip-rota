@@ -63,6 +63,10 @@ function startQrDetectLoop(){
   if('BarcodeDetector' in window){
     try { qrScan.detector = new BarcodeDetector({ formats:['qr_code'] }); } catch(e){ qrScan.detector = null; }
   }
+  /* Yerli detector yoksa jsQR yedeği gerekiyor. Eskiden index.html'de her açılışta
+     indiriliyordu; artık ilk tarama anında yükleniyor — bkz. js/lazy.js. Kamera izni/akışı
+     zaten bundan uzun sürdüğü için kullanıcı bir gecikme fark etmiyor. */
+  if(!qrScan.detector) ensureJsQR();
   let lastCheck = 0, busy = false;
   const tick = (ts)=>{
     if(!qrScan || !qrScan.active) return;

@@ -14,11 +14,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
-<!-- QR kod okuma: Android Chrome/Edge yerli BarcodeDetector'ı kullanır, bu jsQR sadece onu
-     desteklemeyen tarayıcılar (ör. iOS Safari) için yedek çözücü — bkz. js/qr.js -->
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<!-- xlsx (Excel, ~308 KB), Chart.js (~69 KB) ve jsQR (~45 KB) artık BURADA YÜKLENMİYOR.
+     Üçü de sadece belirli işlerde gerekiyor (Excel al/ver, Analiz sekmesi, iOS'ta QR okuma),
+     ama eskiden her açılışta indirilip ayrıştırılıyordu — atölyedeki operatör telefonundan
+     sadece "başla/bitir" için girdiğinde bile ~420 KB boşa gidiyordu. Artık ilk gerçekten
+     ihtiyaç duyulduğu anda yükleniyorlar, bkz. js/lazy.js -->
 <link rel="stylesheet" href="ui/styles.css?v=6">
 <script>
 const FIREBASE_CONFIG = {
@@ -45,6 +45,7 @@ const FIREBASE_CONFIG = {
 <div id="toast-big" class="toast-big"></div>
 
 <script src="js/constants.js?v=2"></script>
+<script src="js/lazy.js?v=1"></script>
 <script src="js/state.js?v=3"></script>
 <script src="ui/state-ui.js?v=1"></script>
 <script src="js/tadilat.js?v=17"></script>
@@ -53,17 +54,18 @@ const FIREBASE_CONFIG = {
 <script src="ui/firebase-push-ui.js?v=1"></script>
 <script src="js/operations.js?v=8"></script>
 <script src="ui/operations-ui.js?v=1"></script>
-<script src="js/catalog.js?v=12"></script>
+<script src="js/catalog.js?v=13"></script>
 <script src="ui/catalog-ui.js?v=1"></script>
-<script src="ui/render-common.js?v=6"></script>
-<script src="js/toolstock.js?v=15"></script>
+<script src="ui/render-common.js?v=7"></script>
+<script src="js/toolstock.js?v=16"></script>
 <script src="ui/toolstock-ui.js?v=1"></script>
-<script src="js/karbur.js?v=8"></script>
+<script src="js/karbur.js?v=9"></script>
 <script src="ui/karbur-ui.js?v=8"></script>
 <script src="ui/render-operator.js?v=9"></script>
 <script src="ui/render-admin.js?v=27"></script>
 <script src="ui/bubble.js?v=2"></script>
-<script src="js/qr.js?v=1"></script>
-<script src="js/app.js?v=4"></script>
+<script src="js/qr.js?v=2"></script>
+<script src="ui/morph.js?v=1"></script>
+<script src="js/app.js?v=5"></script>
 </body>
 </html>

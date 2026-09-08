@@ -1,5 +1,61 @@
-/* ===================== ANA RENDER ===================== */
+/* ===================== RENDER ÖLÇÜMÜ (opsiyonel) =====================
+   Kasma şikayetini tahminle değil ölçümle konuşabilmek için. Normalde tamamen kapalı ve
+   hiçbir maliyeti yok (perfEnabled false ise performance.now() bile çağrılmıyor).
+
+   AÇMAK İÇİN: adresin sonuna ?perf=1 ekle (ör. .../index.html?perf=1). Bir kez açtıktan
+   sonra seçim hatırlanır; kapatmak için ?perf=0 ile aç.
+
+   Ekranın sol üstünde şunu gösterir:
+     yapı  — HTML string'ini üretmek (JS hesap maliyeti) kaç ms sürdü
+     yama  — bunu DOM'a uygulamak kaç ms sürdü  ← eski innerHTML yönteminde asıl pahalı kısım
+     10sn  — son 10 saniyede kaç render oldu, ortalaması ve en kötüsü */
+let perfEnabled = false;
+try {
+  const q = new URLSearchParams(location.search).get('perf');
+  if(q === '1') localStorage.setItem('rota_perf','1');
+  if(q === '0') localStorage.removeItem('rota_perf');
+  perfEnabled = localStorage.getItem('rota_perf') === '1';
+} catch(e){}
+
+let perfSamples = []; // {t, buildMs, paintMs}
+let perfBox = null;
+function perfRecord(buildMs, paintMs){
+  const now = Date.now();
+  perfSamples.push({ t: now, buildMs, paintMs });
+  while(perfSamples.length && now - perfSamples[0].t > 10000) perfSamples.shift();
+  if(!perfBox){
+    perfBox = document.createElement('div');
+    perfBox.style.cssText = 'position:fixed;top:0;left:0;z-index:99999;background:rgba(0,0,0,.8);color:#7dd3fc;font:11px/1.45 ui-monospace,monospace;padding:5px 8px;white-space:pre;pointer-events:none;border-bottom-right-radius:6px';
+    document.body.appendChild(perfBox);
+  }
+  const total = perfSamples.map(s => s.buildMs + s.paintMs);
+  const avg = total.reduce((a,b)=>a+b,0) / total.length;
+  const worst = Math.max(...total);
+  const mode = localStorage.getItem('rota_render') === 'innerhtml' ? 'innerHTML' : 'morph';
+  perfBox.textContent =
+    `${mode}  yapı ${buildMs.toFixed(1)}  yama ${paintMs.toFixed(1)} ms\n` +
+    `10sn: ${perfSamples.length} render · ort ${avg.toFixed(1)} · en kötü ${worst.toFixed(1)} ms`;
+}
+
+/* ===================== ANA RENDER =====================
+   Ekrana basma yöntemi: HTML string'i eskiden olduğu gibi üretiyoruz, ama #app'e `innerHTML`
+   ile basmak yerine ui/morph.js ile YAMALIYORUZ — sadece gerçekten değişen metin/öznitelik
+   DOM'a dokunuyor. Sonuç `innerHTML` ile birebir aynı, ama tarayıcı her saniye tüm sayfayı
+   yeniden kurup yerleştirmek zorunda kalmıyor (mobilde asıl kasma sebebi buydu).
+
+   ACİL ÇIKIŞ: canlıda beklenmedik bir davranış görülürse, tarayıcı konsolunda
+     localStorage.setItem('rota_render','innerhtml'); location.reload()
+   diyerek eski (yıkıp yeniden kur) yöntemine dönülebilir. Geri almak için 'morph' yaz. */
+function paintApp(app, html){
+  if(typeof morphInto !== 'function' || localStorage.getItem('rota_render') === 'innerhtml'){
+    app.innerHTML = html;
+    return;
+  }
+  morphInto(app, html);
+}
+
 function render(){
+  const t0 = perfEnabled ? performance.now() : 0;
   const app = document.getElementById('app');
   // DÜZELTME (arka plan kayıyor sorunu): Duruş modalı sabit konumlu (position:fixed) bir
   // overlay olsa da, ALTINDAKİ SAYFA hâlâ kaydırılabilir durumda kalıyordu — bu yüzden
@@ -32,8 +88,12 @@ function render(){
     try { selStart = activeEl.selectionStart; selEnd = activeEl.selectionEnd; } catch(e){}
   }
 
-  if(!session){ app.innerHTML = renderLogin(); renderBubble(); return; }
-  app.innerHTML = session.isAdmin ? renderAdmin() : renderOperator();
+  if(!session){ paintApp(app, renderLogin()); renderBubble(); return; }
+  const html = session.isAdmin ? renderAdmin() : renderOperator();
+  const t1 = perfEnabled ? performance.now() : 0;
+  paintApp(app, html);
+  const t2 = perfEnabled ? performance.now() : 0;
+  if(perfEnabled) perfRecord(t1 - t0, t2 - t1);
   renderBubble(); // baloncuk #app'ten bağımsız kendi kökünde — bkz. js/bubble.js
   scrollSel.forEach((sel,i) => { if(savedScroll[i]!=null){ const el = document.querySelector(sel); if(el) el.scrollTop = savedScroll[i]; } });
   if(savedWinScroll>0) window.scrollTo(0, savedWinScroll);
@@ -46,7 +106,10 @@ function render(){
     }
   }
 
-  if(session && session.isAdmin && view==='analiz'){ initAnalizCharts(lastAnalizData || computeAnalizData(analizFrom, analizTo, analizAtolyeFilter)); }
+  if(session && session.isAdmin && view==='analiz'){
+    ensureChartLoaded(); // Chart.js artık sadece Analiz sekmesine girilince inmeye başlıyor — bkz. js/lazy.js
+    initAnalizCharts(lastAnalizData || computeAnalizData(analizFrom, analizTo, analizAtolyeFilter));
+  }
 }
 let analizTickCounter = 0;
 // Firebase'den arka planda gelen HERHANGİ bir güncelleme (başka bir kullanıcının işlemi bile
