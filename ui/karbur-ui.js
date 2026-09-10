@@ -27,14 +27,9 @@ function renderKarburAdminSettings(){
     </div>`;
 }
 
-const KARBUR_SUBTABS = [
-  { key:'plan',   label:'Kesim Planı' },
-  { key:'stok',   label:'Stok & Fire' },
-  { key:'giris',  label:'↓ Stok Girişi' },
-  { key:'excel',  label:'Excel Yükle' },
-  { key:'gecmis', label:'Geçmiş' },
-  { key:'isemri', label:'İş Emri Tüketimi' }
-];
+/* Karbür'ün bölüm listesi artık burada değil: üç stok modülünün bölümleri tek yerde,
+   ortak sıra ve ortak adlarla tanımlı — bkz. ui/render-admin.js STOK_BOLUM_TANIM.
+   Alt görünüm ANAHTARLARI (plan/stok/giris/excel/gecmis/isemri) aynen korundu. */
 
 /* ---------- render: üst seviye "◆ Karbür" sekmesi ---------- */
 function renderKarburScreen(){
@@ -47,9 +42,7 @@ function renderKarburScreen(){
   if(!canManageKarbur()){
     html += `<div style="font-size:12px;color:var(--text-muted);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px">👁 Sadece görüntüleme modundasın — kayıt/düzenleme için stok yönetimi yetkisi (SuperAdmin veya Şef) gerekir.</div>`;
   }
-  html += `<div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
-      ${KARBUR_SUBTABS.map(t=>`<button type="button" class="chip ${karburSubView===t.key?'active':''}" onclick="karburSetSubView('${t.key}')">${esc(t.label)}</button>`).join('')}
-    </div>`;
+  /* Bölüm satırı artık burada çizilmiyor — bkz. ui/render-admin.js STOK_BOLUM_TANIM. */
 
   if(karburKatalogError || karburStokError || karburFireError){
     const err = karburKatalogError || karburStokError || karburFireError;
@@ -108,7 +101,7 @@ function renderKarburPlan(){
       malzeme eşleşiyorsa kendiliğinden çözülür, birden fazlaysa satırda seçim ister.
       Fire (artık) parçalar plana <b>otomatik katılmaz</b>; hesaptan sonra parçanın yanındaki
       <b>fire</b> düğmesiyle sen seçersin. <b>${karburFmt(karburHurdaEsigi())} mm altı artıklar hurdadır</b> —
-      havuza girmez, kaydı tutulmaz (eşiği Ayarlar → ◆ Karbür Stok'tan değiştirebilirsin).
+      havuza girmez, kaydı tutulmaz (eşiği Ayarlar → Karbür Stok'tan değiştirebilirsin).
     </div>
   </div>`;
 
@@ -568,7 +561,7 @@ function renderKarburStok(){
 function renderKarburGiris(){
   if(!canManageKarbur()) return `<div style="font-size:12.5px;color:var(--text-muted)">Stok girişi için yetkin yok.</div>`;
   return `<div class="card" style="max-width:560px">
-    <div style="font-size:13px;font-weight:600;margin-bottom:4px">↓ Stok girişi</div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:4px">${ico('plus',13)} Stok girişi</div>
     <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Satın alma / iade ile gelen çubuk veya hazır parça girişi. Katalogda olmayan kod için önce <b>Stok &amp; Fire</b> sekmesinden kalem açın.</div>
     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
       <div class="field" style="width:240px"><label>Stok Kodu</label>
@@ -921,7 +914,7 @@ function karburOzetSerit(isEmriNoRaw){
     o.parca ? o.parca + ' parça' : '',
     o.sonPlanNo ? esc(o.sonPlanNo) : ''
   ].filter(Boolean).join(' · ');
-  return `<div style="font-size:11.5px;color:var(--gunsonu)">◆ Karbür çıkışı yapıldı${parcalar ? ' · ' + parcalar : ''}</div>`;
+  return `<div style="font-size:11.5px;color:var(--gunsonu)">${ico('elmas',13)} Karbür çıkışı yapıldı${parcalar ? ' · ' + parcalar : ''}</div>`;
 }
 
 /* ==================== YAZDIR — A4 YATAY KESİM RAPORU ====================

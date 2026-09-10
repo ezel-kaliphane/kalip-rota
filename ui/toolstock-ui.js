@@ -39,9 +39,10 @@ function renderToolStokManagementScreen(){
   if(!canManageToolStok()){
     html += `<div style="font-size:12px;color:var(--text-muted);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px">👁 Sadece görüntüleme modundasın — kayıt/düzenleme işlemleri için SuperAdmin yetkisi gerekir.</div>`;
   }
-  html += `<div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
-      ${visibleTabs.map(t=>`<button type="button" class="chip ${toolAdminSubView===t.key?'active':''}" onclick="toolAdminSubView='${t.key}'; render()">${t.key==='giris'?'↓ ':''}${esc(t.label)}</button>`).join('')}
-    </div>`;
+  /* Bölüm satırı artık burada çizilmiyor — üç stok modülünde de aynı görünsün diye tek
+     yerden, renderStokScreen() içinden çiziliyor (bkz. ui/render-admin.js STOK_BOLUM_TANIM).
+     Yukarıdaki visibleTabs yalnızca "görebildiğin bir bölüm var mı / hangisine düşelim"
+     kontrolü için duruyor. */
 
   if(!toolStokEnabled()){
     html += `<div style="font-size:12.5px;color:var(--warn);background:var(--panel);border:1px solid var(--warn);border-radius:10px;padding:12px 14px;margin-bottom:16px">Modül şu an kapalı (Ayarlar → Takım & Sarf Stok'tan açabilirsin) — yönetim ekranı yine de çalışır, operatörler görmez.</div>`;

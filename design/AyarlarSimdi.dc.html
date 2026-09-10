@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+  <style>
+    body{margin:0;background:#0F1214;color:#EDF1F3;font-family:'Inter',system-ui,sans-serif;font-size:14px}
+    *{box-sizing:border-box}
+    a{color:#FF9046;text-decoration:none} a:hover{color:#FFA766}
+    .mono{font-family:'JetBrains Mono',monospace}
+    .ic{flex:none;vertical-align:-3px}
+    select,input{font-family:'Inter',sans-serif;background:#1F262C;border:1px solid #293138;border-radius:8px;padding:10px 12px;color:#EDF1F3;font-size:14px;outline:none}
+    .t1{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px 0;border-radius:9px;border:1px solid #293138;background:transparent;font-size:12.5px;font-weight:500;color:#8B959D}
+    /* .settings-wrap .sub-tabs — geniş ekranda panel içine sarılıyor (ui/styles.css:510) */
+    .t2{padding:7px 14px;border-radius:8px;border:1px solid #293138;background:transparent;font-size:12.5px;font-weight:500;color:#8B959D;white-space:nowrap}
+    .t2.on{background:#FF904618;border-color:#FF9046;color:#FF9046}
+    .satir{display:flex;align-items:center;gap:12px;background:#171C20;border:1px solid #293138;border-radius:10px;padding:10px 12px}
+  </style>
+</helmet>
+
+<div style="display:flex;flex-direction:column;width:1440px;height:900px;background:#0F1214;overflow:hidden">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 24px;border-bottom:1px solid #293138;flex:none">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="width:8px;height:8px;border-radius:50%;background:#46D07F;flex:none"></span>
+      <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M4 21V11l5 3V11l5 3V8l5 3v10"></path><path d="M8 21v-3"></path></svg>
+      <span style="font-family:'Oswald',sans-serif;font-size:17px;letter-spacing:1.5px;font-weight:600">ROTA TAKİP · YÖNETİCİ RAPORU</span>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <div style="display:flex;align-items:center;gap:6px;background:#1F262C;border:1px solid #FF9046;border-radius:8px;padding:8px 14px;color:#FF9046;font-size:13px">
+        <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        Ayarlar
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;background:#1F262C;border:1px solid #293138;border-radius:8px;padding:10px 20px;color:#8B959D;font-size:14px;font-weight:600">
+        <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>
+        Çıkış
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:6px;padding:12px 24px 0;flex:none">
+    <div class="t1">Rapor</div><div class="t1">Makine Matrisi</div><div class="t1">Tamamlanan Kodlar</div>
+    <div class="t1">Analiz</div><div class="t1">Tadilat</div><div class="t1">Stok</div>
+  </div>
+
+  <div style="padding:20px 24px;flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column">
+
+    <!-- 18 alt sekme, tek sarmalanan kutuda, gruplama yok, sıralama yok -->
+    <div style="display:flex;flex-wrap:wrap;gap:6px;background:#171C20;border:1px solid #293138;border-radius:14px;padding:8px;margin-bottom:22px;flex:none">
+      <div class="t2 on">Makine Erişimi</div>
+      <div class="t2">Personel Ayarları</div>
+      <div class="t2">Makine Ayarları</div>
+      <div class="t2">Atölye Ayarları (Personel)</div>
+      <div class="t2">Duruş Nedenleri</div>
+      <div class="t2">Tadilat Hazır İfadeleri</div>
+      <div class="t2">Tadilat Bölüm Kuralları</div>
+      <div class="t2">Sekme Erişimi (Yönetici)</div>
+      <div class="t2">🔧 Takım &amp; Sarf Stok</div>
+      <div class="t2">◆ Karbür Stok</div>
+      <div class="t2">Veri Listeleri</div>
+      <div class="t2">Malzeme Stoğu</div>
+      <div class="t2">Bildirimlerim</div>
+      <div class="t2">Bildirim Ayarları</div>
+      <div class="t2">Resim/Çizim Bul</div>
+      <div class="t2">📤 Bildirim Gönder</div>
+      <div class="t2">+ Kullanıcı Ekle</div>
+      <div class="t2">+ Makine Ekle</div>
+    </div>
+
+    <div style="font-size:16px;font-weight:600;margin-bottom:6px">Kişi Bazlı Makine Erişimi</div>
+    <div style="font-size:12.5px;color:#8B959D;margin-bottom:18px;max-width:640px;line-height:1.55">İşaretli makineler o operatörün "Çalışılan Makine" listesinde görünür.</div>
+
+    <div style="display:flex;flex-direction:column;gap:6px;max-width:340px;margin-bottom:18px">
+      <label style="font-size:11.5px;color:#8B959D;text-transform:uppercase;letter-spacing:.6px;font-weight:600">Operatör Seç</label>
+      <select><option>— Operatör seçin —</option></select>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:8px;max-width:1120px">
+      <div class="satir"><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px;flex:none"></span><span class="mono" style="color:#FF9046;font-weight:700">MK01</span><span style="font-size:13px">Torna 1</span></div>
+      <div class="satir"><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px;flex:none"></span><span class="mono" style="color:#FF9046;font-weight:700">MK02</span><span style="font-size:13px">Torna 2</span></div>
+      <div class="satir"><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px;flex:none"></span><span class="mono" style="color:#FF9046;font-weight:700">MK03</span><span style="font-size:13px">Freze 1</span></div>
+      <div class="satir"><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px;flex:none"></span><span class="mono" style="color:#FF9046;font-weight:700">MK04</span><span style="font-size:13px">Freze 2</span></div>
+      <div class="satir"><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px;flex:none"></span><span class="mono" style="color:#FF9046;font-weight:700">MK05</span><span style="font-size:13px">Tel Erozyon</span></div>
+      <div class="satir"><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px;flex:none"></span><span class="mono" style="color:#FF9046;font-weight:700">MK06</span><span style="font-size:13px">Dalma Erozyon</span></div>
+      <div class="satir"><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px;flex:none"></span><span class="mono" style="color:#FF9046;font-weight:700">MK07</span><span style="font-size:13px">Taşlama</span></div>
+      <div class="satir"><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px;flex:none"></span><span class="mono" style="color:#FF9046;font-weight:700">FII01</span><span style="font-size:13px">Isıl İşlem (fason)</span></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

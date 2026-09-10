@@ -1,3 +1,7 @@
 .firebase/
 firebase-debug.log
 functions/node_modules/
+
+# Tasarım tuvalinin ÜRETİLMİŞ çıktısı (~2.6 MB) — kaynak design/*.dc.html + canvas.json'dan
+# seed-canvas.mjs ile yeniden üretiliyor, depoda tutulmasına gerek yok.
+design/stok-ve-ayarlar-kurgusu.html

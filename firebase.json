@@ -15,6 +15,7 @@
       ".firebaserc",
       ".git/**",
       ".claude/**",
+      "design/**",
       "tests/**",
       "functions/**",
       "node_modules/**",

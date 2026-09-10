@@ -913,6 +913,12 @@ const ICONS = {
   repeat:'<path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
   hourglass:'<path d="M5 22h14M5 2h14M6 2c0 4 12 12 12 20M18 2c0 4-12 12-12 20"/>',
   lock:'<rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  /* Stok modüllerinin simgeleri — eskiden etiketlerde ham emoji vardı (🔧 / ◆ / 📤).
+     Emoji her işletim sisteminde başka çiziliyor, currentColor'ı almıyor ve temayla
+     uyumsuz kalıyordu; bu dosyanın başındaki "emoji yok" kuralına da aykırıydı. */
+  elmas:'<path d="M12 3l9 9-9 9-9-9z"/>',
+  katman:'<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/>',
+  send:'<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>',
 };
 function ico(name, size){
   const p = ICONS[name]; if(!p) return '';

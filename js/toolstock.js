@@ -29,7 +29,14 @@ let toolCatalog = {};          // toolCatalog/{id}   — statik katalog, localSt
 let toolStock = {};            // toolStock/{id}     — değişken stok adedi, cache'lenmez
 let toolCatalogReady = false;
 let toolStockReady = false;
-let toolAdminSubView = 'liste';  // 'liste' | 'konumlar' | 'excel'
+let toolAdminSubView = 'liste';  // 'liste' | 'konumlar' | 'excel' | 'giris' | 'gecmis'
+/* Bölüm satırı eskiden onclick içinde doğrudan atama yapıyordu ("toolAdminSubView='x'; render()").
+   Satır artık tek yerden (renderStokScreen) çizildiği için geçiş de tek bir fonksiyondan
+   geçiyor — ileride bir bölüme geçerken veri yüklemek gerekirse yeri burası. */
+function setToolAdminSubView(k){
+  toolAdminSubView = k;
+  render();
+}
 let toolExcelPreview = null;     // onay öncesi önizleme — {sheetName, rows, blankCount, dupCount}
 let toolExcelUpdateStock = false;
 let toolBulkSelected = {};       // {itemId: true} — Kalem Listesi'nde çoklu seçim (toplu konum taşıma için)

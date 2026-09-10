@@ -1,0 +1,56 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "Stok" },
+    { "id": "page-2", "name": "Ayarlar" }
+  ],
+  "artboards": [
+    { "file": "Simdi.dc.html", "title": "Stok — şimdi", "page": "page-1", "x": 0, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Main.dc.html", "title": "Stok — öneri", "page": "page-1", "x": 1560, "y": 0, "w": 1440, "h": 900, "is_interactive": true },
+    { "file": "StokMobil.dc.html", "title": "Stok — öneri, telefon", "page": "page-1", "x": 3120, "y": 0, "w": 390, "h": 844, "is_interactive": true },
+    { "file": "AyarlarSimdi.dc.html", "title": "Ayarlar — şimdi", "page": "page-2", "x": 0, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Ayarlar.dc.html", "title": "Ayarlar — öneri", "page": "page-2", "x": 1560, "y": 0, "w": 1440, "h": 900, "is_interactive": true }
+  ],
+  "annotations": [
+    {
+      "id": "simdi-tespit",
+      "page": "page-1",
+      "x": 0,
+      "y": 960,
+      "w": 620,
+      "text": "ŞİMDİ — üç seviye, üç ayrı görsel dil\n\n1) Stok — turuncu sekme\n2) Takım & Sarf — turuncu alt sekme, birinciyle aynı görünüm\n3) Kalem Listesi — SARI pill chip (.chip.active --warn rengini kullanıyor)\n\nAynı iş için üç farklı kontrol; üçüncü seviye gezinme değil uyarı/filtre gibi duruyor.\n\nKardeşler birbirini tutmuyor: Takım'da 5 bölüm, Karbür'de 6, Malzeme'de 0 — modül değiştirince ekranın şekli değişiyor.\n\nModülü açıp kapatmak Ayarlar'da; uygulama bunu ekranın altında kendisi yazıyor."
+    },
+    {
+      "id": "oneri-tespit",
+      "page": "page-1",
+      "x": 1560,
+      "y": 960,
+      "w": 620,
+      "text": "ÖNERİ — seviye 2 dikey, seviye 3 tek dil\n\nModüller sola dikey raya alındı: nerede olduğun hep görünüyor, yatay sekmelerle karışmıyor.\n\nBölümler her modülde aynı fiiller, aynı sırada, sekmelerle aynı stil:\nDurum · Giriş · Kalemler · Konumlar · Hareketler · Kurulum\n(Konumlar yalnızca Takım'da; Karbür'e Kesim Planı ve İş Emri Tüketimi eklenir.)\n\nAçılış bölümü modülün işine göre: Karbür'e girince Kesim Planı'na düşüyorsun.\n\nExcel Yükle ayrı sekme değil — kataloğu doldurduğu için Kalemler'in içinde bir eylem.\n\nModül aç/kapa ve yetkiler Ayarlar'dan Kurulum'a taşındı.\n\nGenel Bakış tek net yeni ekran; uydurma metrik yok, hepsi var olan alanlardan: altLimit, locId, hurda eşiği, hareket kayıtları."
+    },
+    {
+      "id": "mobil-tespit",
+      "page": "page-1",
+      "x": 3120,
+      "y": 960,
+      "w": 460,
+      "text": "TELEFON\n\nRay 390 px'e sığmıyor. İkinci bir yatay sekme satırı eklemek yerine modül tek satırlık bir SEÇİCİ: üstünde \"Stok Modülü\", altında hangisinde olduğun yazılı; dokununca liste açılıyor.\n\nBölüm kümeleri masaüstüyle birebir aynı, bölüm satırı yatay kaydırılabiliyor.\n\nGeniş tablo yerine kart — uygulamanın operatör ekranlarındaki .card deseni. Dokunma hedefleri 44-56 px.\n\nSahte durum çubuğu yok: gerçek cihaz onu kendisi çiziyor."
+    },
+    {
+      "id": "ayarlar-simdi",
+      "page": "page-2",
+      "x": 0,
+      "y": 960,
+      "w": 620,
+      "text": "ŞİMDİ — 18 düz alt sekme\n\nSuperAdmin'de tek sarmalanan kutuda 18 madde: kişiler, makineler, üretim kuralları, stok modülleri, bildirimler, veri listeleri ve iki \"+ ekle\" formu iç içe.\n\nGruplama yok, sıralama yok. \"Makine Erişimi\" aslında bir kişi ayarı ama adı makine diyor; \"Makine Ayarları\" hemen yanında ama alakasız.\n\nÜçü (Takım & Sarf Stok, Karbür Stok, Malzeme Stoğu) stok modüllerinin ayarı — ama stok ekranları başka bir sekmede."
+    },
+    {
+      "id": "ayarlar-oneri",
+      "page": "page-2",
+      "x": 1560,
+      "y": 960,
+      "w": 620,
+      "text": "ÖNERİ — 5 başlık, 13 madde\n\nKİŞİLER · MAKİNELER · ÜRETİM · VERİ · BİLDİRİMLER\nStok ekranıyla aynı ray deseni — uygulamada tek bir gezinme dili.\n\n18 → 13, çünkü:\n· 3 stok ayarı Stok → Kurulum'a taşındı\n· \"+ Kullanıcı Ekle\" ve \"+ Makine Ekle\" üst seviye sekme olmaktan çıkıp kendi ekranlarında birer butona indi\n\n\"Makine Erişimi\" Kişiler grubunda: gerçekten bir kişi ayarı.\n\nStok Excel yüklemeleri Veri Listeleri'nden çıkıp her modülün Kalemler bölümüne gitti; burada yalnızca üretim referans listeleri kaldı."
+    }
+  ],
+  "launch": { "view": "canvas", "page": "page-1" }
+}

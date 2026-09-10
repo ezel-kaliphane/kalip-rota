@@ -1,0 +1,397 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+  <style>
+    body{margin:0;background:#0F1214;color:#EDF1F3;font-family:'Inter',system-ui,sans-serif;font-size:14px}
+    *{box-sizing:border-box}
+    a{color:#FF9046;text-decoration:none} a:hover{color:#FFA766}
+    table{border-collapse:collapse;width:100%}
+    th{text-align:left;padding:10px 12px;color:#8B959D;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #293138;font-weight:600}
+    td{padding:10px 12px;color:#EDF1F3;vertical-align:top;border-bottom:1px solid #293138;font-size:13px}
+    .mono{font-family:'JetBrains Mono',monospace}
+    .ic{flex:none;vertical-align:-3px}
+    input,select{font-family:'Inter',sans-serif;background:#1F262C;border:1px solid #293138;border-radius:8px;padding:10px 12px;color:#EDF1F3;font-size:14px;outline:none}
+    ::placeholder{color:#8B959D}
+    button{cursor:pointer;font-family:'Inter',sans-serif;border:none;background:none;color:inherit}
+    .t1{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px 0;border-radius:9px;border:1px solid #293138;background:transparent;font-size:12.5px;font-weight:500;color:#8B959D}
+    .grup{display:flex;align-items:center;gap:7px;font-size:11px;color:#8B959D;text-transform:uppercase;letter-spacing:.6px;font-weight:600;padding:14px 4px 7px}
+    .ry{display:block;text-align:left;padding:9px 12px;border-radius:9px;border:1px solid transparent;background:transparent;font-size:13px;font-weight:500;color:#EDF1F3;width:100%}
+    .ry.on{background:#FF904618;border-color:#FF9046;color:#FF9046;font-weight:600}
+  </style>
+</helmet>
+
+<div style="display:flex;flex-direction:column;width:1440px;height:900px;background:#0F1214;overflow:hidden">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 24px;border-bottom:1px solid #293138;flex:none">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="width:8px;height:8px;border-radius:50%;background:#46D07F;flex:none"></span>
+      <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M4 21V11l5 3V11l5 3V8l5 3v10"></path><path d="M8 21v-3"></path></svg>
+      <span style="font-family:'Oswald',sans-serif;font-size:17px;letter-spacing:1.5px;font-weight:600">ROTA TAKİP · YÖNETİCİ RAPORU</span>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <div style="display:flex;align-items:center;gap:6px;background:#1F262C;border:1px solid #FF9046;border-radius:8px;padding:8px 14px;color:#FF9046;font-size:13px">
+        <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        Ayarlar
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;background:#1F262C;border:1px solid #293138;border-radius:8px;padding:10px 20px;color:#8B959D;font-size:14px;font-weight:600">
+        <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>
+        Çıkış
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:6px;padding:12px 24px 0;flex:none">
+    <div class="t1">Rapor</div><div class="t1">Makine Matrisi</div><div class="t1">Tamamlanan Kodlar</div>
+    <div class="t1">Analiz</div><div class="t1">Tadilat</div><div class="t1">Stok</div>
+  </div>
+
+  <div style="display:flex;flex:1;min-height:0;padding:14px 24px 24px;gap:20px">
+
+    <!-- Gruplanmış ray — Stok ekranıyla aynı desen, 18 düz sekme yerine 5 başlık altında 13 madde -->
+    <div style="width:246px;flex:none;display:flex;flex-direction:column;overflow:auto">
+
+      <div class="grup" style="padding-top:0">
+        <svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path></svg>
+        Kişiler
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <sc-for list="{{gruplar.kisiler}}" as="i" hint-placeholder-count="4">
+          <button class="{{i.sinif}}" onClick="{{i.sec}}">{{i.label}}</button>
+        </sc-for>
+      </div>
+
+      <div class="grup">
+        <svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M4 21V11l5 3V11l5 3V8l5 3v10"></path><path d="M8 21v-3"></path></svg>
+        Makineler
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <sc-for list="{{gruplar.makineler}}" as="i" hint-placeholder-count="1">
+          <button class="{{i.sinif}}" onClick="{{i.sec}}">{{i.label}}</button>
+        </sc-for>
+      </div>
+
+      <div class="grup">
+        <svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+        Üretim
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <sc-for list="{{gruplar.uretim}}" as="i" hint-placeholder-count="3">
+          <button class="{{i.sinif}}" onClick="{{i.sec}}">{{i.label}}</button>
+        </sc-for>
+      </div>
+
+      <div class="grup">
+        <svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>
+        Veri
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <sc-for list="{{gruplar.veri}}" as="i" hint-placeholder-count="2">
+          <button class="{{i.sinif}}" onClick="{{i.sec}}">{{i.label}}</button>
+        </sc-for>
+      </div>
+
+      <div class="grup">
+        <svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+        Bildirimler
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <sc-for list="{{gruplar.bildirim}}" as="i" hint-placeholder-count="3">
+          <button class="{{i.sinif}}" onClick="{{i.sec}}">{{i.label}}</button>
+        </sc-for>
+      </div>
+
+      <div style="margin-top:18px;font-size:11px;color:#8B959D;line-height:1.6;background:#171C20;border:1px solid #293138;border-radius:10px;padding:11px 13px">
+        Stok ayarları <span style="color:#FF9046;font-weight:600">Stok → Kurulum</span>'a taşındı. Kullanıcı/makine ekleme kendi ekranında buton.
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;overflow:auto">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="font-size:16px;font-weight:700;letter-spacing:.2px">{{panel.baslik}}</div>
+          <div style="font-size:12.5px;color:#8B959D;max-width:780px;line-height:1.55">{{panel.altYazi}}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <sc-for list="{{panel.aksiyonlar}}" as="a" hint-placeholder-count="1">
+            <button style="{{a.stil}}">{{a.label}}</button>
+          </sc-for>
+        </div>
+      </div>
+
+      <sc-if value="{{panel.filtreVar}}" hint-placeholder-val="{{true}}">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input placeholder="{{panel.aramaIpucu}}" style="flex:1;min-width:280px">
+        </div>
+      </sc-if>
+
+      <sc-if value="{{panel.tasindiVar}}" hint-placeholder-val="{{true}}">
+        <div style="display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:#FF9046;background:#FF904612;border:1px solid #FF904644;border-radius:10px;padding:12px 14px;max-width:900px">
+          <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:2px"><path d="M16 3h5v5"></path><path d="M4 20L21 3"></path></svg>
+          <span style="line-height:1.55">{{panel.tasindi}}</span>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{panel.tabloVar}}" hint-placeholder-val="{{true}}">
+        <div style="background:#171C20;border:1px solid #293138;border-radius:12px;padding:0 6px 6px;box-shadow:0 1px 2px rgba(0,0,0,.32);overflow:auto">
+          <table>
+            <thead><tr><sc-for list="{{panel.sutunlar}}" as="c" hint-placeholder-count="4"><th style="{{c.stil}}">{{c.ad}}</th></sc-for></tr></thead>
+            <tbody>
+              <sc-for list="{{panel.satirlar}}" as="r" hint-placeholder-count="4">
+                <tr><sc-for list="{{r.hucreler}}" as="h" hint-placeholder-count="4"><td style="{{h.stil}}">{{h.deger}}</td></sc-for></tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{panel.anahtarVar}}" hint-placeholder-val="{{true}}">
+        <div style="display:flex;flex-direction:column;gap:8px;max-width:780px">
+          <sc-for list="{{panel.anahtarlar}}" as="sw" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:13px;background:#171C20;border:1px solid #293138;border-radius:14px;padding:13px 15px">
+              <span style="{{sw.kutuStil}}"><span style="width:18px;height:18px;border-radius:50%;background:#0F1214;display:block"></span></span>
+              <span style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:0">
+                <span style="font-size:13.5px;font-weight:600">{{sw.baslik}}</span>
+                <span style="font-size:11.5px;color:#8B959D;line-height:1.5">{{sw.alt}}</span>
+              </span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+var SOLUK = 'color:#8B959D';
+var MONO = "font-family:'JetBrains Mono',monospace";
+var SAG = 'text-align:right';
+function h(deger, stil){ return { deger: deger, stil: stil || '' }; }
+
+/* 18 düz alt sekme → 5 başlık altında 13 madde.
+   Çıkanlar: "🔧 Takım & Sarf Stok", "◆ Karbür Stok", "Malzeme Stoğu" → Stok → Kurulum'a taşındı.
+             "+ Kullanıcı Ekle", "+ Makine Ekle" → kendi ekranlarında birer butona indi. */
+var GRUPLAR = {
+  kisiler:   [['personel','Personel Ayarları'],['atolye','Atölye Ayarları'],['makineErisim','Makine Erişimi'],['sekmeErisim','Sekme Erişimi']],
+  makineler: [['makine','Makine Ayarları']],
+  uretim:    [['durus','Duruş Nedenleri'],['ifade','Tadilat Hazır İfadeleri'],['bolum','Tadilat Bölüm Kuralları']],
+  veri:      [['listeler','Veri Listeleri'],['resim','Resim/Çizim Bul']],
+  bildirim:  [['bildirimAyar','Bildirim Ayarları'],['bildirimlerim','Bildirimlerim'],['bildirimGonder','Bildirim Gönder']]
+};
+
+var PANELLER = {
+  personel: {
+    baslik:'Personel Ayarları',
+    altYazi:'Kişi bazlı yetkiler ve varsayılan makine. Kullanıcı eklemek artık ayrı bir sekme değil — bu ekranın kendi butonu.',
+    aksiyonlar:[{ label:'+ Kullanıcı Ekle', tur:'primary' }],
+    aramaIpucu:'Kod ya da isim…',
+    sutunlar:[{ad:'Kod'},{ad:'İsim'},{ad:'Rol'},{ad:'Çoklu İş'},{ad:'Fason'},{ad:'Takım Stok'},{ad:'Varsayılan Makine'}],
+    satirlar:[
+      [h('SEF1',MONO+';color:#FF9046;font-weight:700'), h('Mehmet Y.'), h('Şef',SOLUK), h('açık'), h('açık'), h('görür + sayım'), h('—',SOLUK)],
+      [h('OPRT2',MONO+';color:#FF9046;font-weight:700'), h('Ali K.'), h('Operatör',SOLUK), h('kapalı',SOLUK), h('kapalı',SOLUK), h('görür'), h('MK01 · Torna 1')],
+      [h('OPRT4',MONO+';color:#FF9046;font-weight:700'), h('Hasan D.'), h('Operatör',SOLUK), h('açık'), h('açık'), h('görür'), h('MK05 · Tel Erozyon')],
+      [h('OPRT7',MONO+';color:#FF9046;font-weight:700'), h('Emre B.'), h('Operatör',SOLUK), h('kapalı',SOLUK), h('kapalı',SOLUK), h('—',SOLUK), h('MK03 · Freze 1')]
+    ]
+  },
+  atolye: {
+    baslik:'Atölye Ayarları (Personel)',
+    altYazi:'Kim hangi atölyede çalışıyor. Tadilat talepleri buna göre doğru listeye düşüyor.',
+    sutunlar:[{ad:'Kod'},{ad:'İsim'},{ad:'İmalat'},{ad:'Tadilat'}],
+    satirlar:[
+      [h('OPRT2',MONO+';color:#FF9046;font-weight:700'), h('Ali K.'), h('açık'), h('kapalı',SOLUK)],
+      [h('OPRT4',MONO+';color:#FF9046;font-weight:700'), h('Hasan D.'), h('açık'), h('açık')],
+      [h('OPRT7',MONO+';color:#FF9046;font-weight:700'), h('Emre B.'), h('kapalı',SOLUK), h('açık')]
+    ]
+  },
+  makineErisim: {
+    baslik:'Makine Erişimi',
+    altYazi:'İşaretli makineler o operatörün "Çalışılan Makine" listesinde görünür. Kişiler grubunda, çünkü aslında bir kişi ayarı — makine ayarı değil.',
+    sutunlar:[{ad:'Makine'},{ad:'Ad'},{ad:'Atölye'},{ad:'Erişimi olan'}],
+    satirlar:[
+      [h('MK01',MONO+';color:#FF9046;font-weight:700'), h('Torna 1'), h('İmalat',SOLUK), h('4 kişi',MONO)],
+      [h('MK03',MONO+';color:#FF9046;font-weight:700'), h('Freze 1'), h('İmalat',SOLUK), h('6 kişi',MONO)],
+      [h('MK05',MONO+';color:#FF9046;font-weight:700'), h('Tel Erozyon'), h('İmalat',SOLUK), h('2 kişi',MONO)],
+      [h('FII01',MONO+';color:#FF9046;font-weight:700'), h('Isıl İşlem'), h('İmalat',SOLUK), h('3 kişi',MONO)]
+    ]
+  },
+  sekmeErisim: {
+    baslik:'Sekme Erişimi (Yönetici)',
+    altYazi:'Düz yöneticinin hangi üst sekmeleri göreceği. Stok sekmesinin görünürlüğü buradan, modülün açık olup olmadığı ise Stok → Kurulum\'dan yönetiliyor.',
+    anahtarlar:[
+      { baslik:'Rapor', alt:'Devam eden ve tamamlanan iş emirleri.', acik:true },
+      { baslik:'Makine Matrisi', alt:'Canlı makine durumu.', acik:true },
+      { baslik:'Analiz', alt:'Verimlilik ve duruş analizleri; şef rolüne kapalı.', acik:false },
+      { baslik:'Stok', alt:'Sekmenin görünürlüğü. Hangi modüllerin göründüğü kişinin yetkilerine bağlı.', acik:true }
+    ]
+  },
+  makine: {
+    baslik:'Makine Ayarları',
+    altYazi:'Fason ve atölye tanımı. Makine eklemek artık ayrı bir sekme değil — bu ekranın butonu.',
+    aksiyonlar:[{ label:'+ Makine Ekle', tur:'primary' }],
+    sutunlar:[{ad:'Kod'},{ad:'Ad'},{ad:'Atölye'},{ad:'Fason'},{ad:'Grup'}],
+    satirlar:[
+      [h('MK01',MONO+';color:#FF9046;font-weight:700'), h('Torna 1'), h('İmalat',SOLUK), h('kapalı',SOLUK), h('Torna',SOLUK)],
+      [h('MK05',MONO+';color:#FF9046;font-weight:700'), h('Tel Erozyon'), h('İmalat',SOLUK), h('kapalı',SOLUK), h('Erozyon',SOLUK)],
+      [h('FII01',MONO+';color:#FF9046;font-weight:700'), h('Isıl İşlem'), h('İmalat',SOLUK), h('açık'), h('Fason',SOLUK)]
+    ]
+  },
+  durus: {
+    baslik:'Duruş Nedenleri',
+    altYazi:'Operatörün duruşa alırken seçtiği nedenler. Gün sonu nedeni ayrı davranıyor: analizde çalışma dışı sayılıyor.',
+    aksiyonlar:[{ label:'+ Neden Ekle', tur:'primary' }],
+    sutunlar:[{ad:'Neden'},{ad:'Tür'},{ad:'Kullanım (30 gün)',stil:SAG}],
+    satirlar:[
+      [h('Gün Sonu'), h('özel — çalışma dışı',SOLUK), h('412',MONO+';'+SAG)],
+      [h('Takım değişimi'), h('normal',SOLUK), h('96',MONO+';'+SAG)],
+      [h('Malzeme bekleniyor'), h('normal',SOLUK), h('61',MONO+';'+SAG)],
+      [h('Tadilata gitti'), h('tadilat',SOLUK), h('24',MONO+';'+SAG)]
+    ]
+  },
+  ifade: {
+    baslik:'Tadilat Hazır İfadeleri',
+    altYazi:'Tadilat talebi açılırken tek dokunuşla eklenebilen hazır açıklamalar.',
+    aksiyonlar:[{ label:'+ İfade Ekle', tur:'primary' }],
+    sutunlar:[{ad:'İfade'},{ad:'Bölüm'}],
+    satirlar:[
+      [h('Ölçü dışı — yeniden işlenecek'), h('Freze',SOLUK)],
+      [h('Yüzey kalitesi yetersiz'), h('Taşlama',SOLUK)],
+      [h('Delik pozisyonu kaymış'), h('Erozyon',SOLUK)]
+    ]
+  },
+  bolum: {
+    baslik:'Tadilat Bölüm Kuralları',
+    altYazi:'Hangi bölümün talebi hangi atölyeye düşecek.',
+    sutunlar:[{ad:'Bölüm'},{ad:'Atölye'},{ad:'Varsayılan makine'}],
+    satirlar:[
+      [h('Freze'), h('İmalat',SOLUK), h('MK03 · Freze 1')],
+      [h('Taşlama'), h('İmalat',SOLUK), h('MK07 · Taşlama')],
+      [h('Erozyon'), h('Tadilat',SOLUK), h('MK06 · Dalma Erozyon')]
+    ]
+  },
+  listeler: {
+    baslik:'Veri Listeleri',
+    altYazi:'Excel\'den yüklenen referans listeleri. Stok kataloglarının Excel yüklemesi burada değil — her stok modülünün Kalemler bölümünde, kataloğu doldurduğu yerde.',
+    tasindi:'Stok Excel yüklemeleri Stok → <modül> → Kalemler altına taşındı; burada yalnızca üretim referans listeleri kaldı.',
+    sutunlar:[{ad:'Liste'},{ad:'Kayıt',stil:SAG},{ad:'Son yükleme'},{ad:''}],
+    satirlar:[
+      [h('İş Emri Listesi'), h('1.284',MONO+';'+SAG), h('08.09 07:40',SOLUK), h('Yükle ve Güncelle','color:#FF9046')],
+      [h('Malzeme Listesi'), h('612',MONO+';'+SAG), h('01.09 09:12',SOLUK), h('Yükle ve Güncelle','color:#FF9046')],
+      [h('İş Merkezleri'), h('34',MONO+';'+SAG), h('12.08 15:03',SOLUK), h('Yükle ve Güncelle','color:#FF9046')],
+      [h('Üretim Personeli'), h('41',MONO+';'+SAG), h('12.08 15:05',SOLUK), h('Yükle ve Güncelle','color:#FF9046')]
+    ]
+  },
+  resim: {
+    baslik:'Resim/Çizim Bul',
+    altYazi:'İş emri numarasından teknik resmi bulup açar.',
+    aramaIpucu:'İş emri ya da U kodu (ör. 2607140006)…',
+    sutunlar:[{ad:'Kod'},{ad:'Dosya'},{ad:'Bulundu'}],
+    satirlar:[
+      [h('2607140006',MONO), h('2607140006_R2.pdf'), h('ağ sürücüsü',SOLUK)],
+      [h('2607140021',MONO), h('2607140021.dwg'), h('ağ sürücüsü',SOLUK)]
+    ]
+  },
+  bildirimAyar: {
+    baslik:'Bildirim Ayarları',
+    altYazi:'Hangi durumda kime bildirim gidecek ve eşikler.',
+    anahtarlar:[
+      { baslik:'Uzun duruş uyarısı — 45 dk', alt:'Bu süreden uzun duruşta kalan iş için yöneticiye bildirim ve başlıkta uyarı ikonu.', acik:true },
+      { baslik:'Uzun devam eden uyarısı — 10 saat', alt:'Kapatılmayı unutulmuş olabilecek işler için.', acik:true },
+      { baslik:'Tadilat talebi açıldığında', alt:'İlgili atölyenin şefine anında bildirim.', acik:true }
+    ]
+  },
+  bildirimlerim: {
+    baslik:'Bildirimlerim',
+    altYazi:'Bu cihaza gelen bildirimlerin geçmişi ve cihaz izni.',
+    anahtarlar:[
+      { baslik:'Bu cihazda bildirim açık', alt:'Tarayıcı izni verildi — kapatırsan bu cihaza bildirim gelmez.', acik:true }
+    ],
+    sutunlar:[{ad:'Tarih'},{ad:'Başlık'},{ad:'Okundu'}],
+    satirlar:[
+      [h('08.09 14:31',SOLUK), h('MK03 · 47 dk duruşta'), h('okundu',SOLUK)],
+      [h('08.09 09:02',SOLUK), h('Yeni tadilat talebi · 2607140018'), h('okundu',SOLUK)]
+    ]
+  },
+  bildirimGonder: {
+    baslik:'Bildirim Gönder',
+    altYazi:'Seçili kişilere ya da tüm atölyeye elle bildirim gönderir.',
+    aksiyonlar:[{ label:'Gönder', tur:'primary' }],
+    aramaIpucu:'Bildirim metni…',
+    sutunlar:[{ad:'Alıcı'},{ad:'Cihaz',stil:SAG},{ad:'Seçili'}],
+    satirlar:[
+      [h('Tüm atölye'), h('23',MONO+';'+SAG), h('—',SOLUK)],
+      [h('Sadece şefler'), h('3',MONO+';'+SAG), h('seçili','color:#FF9046')],
+      [h('Sadece yöneticiler'), h('5',MONO+';'+SAG), h('—',SOLUK)]
+    ]
+  }
+};
+
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.state = { secili:'personel' };
+  }
+
+  renderVals(){
+    var self = this;
+    var secili = this.state.secili;
+
+    function grup(liste){
+      return liste.map(function(p){
+        var key = p[0];
+        return {
+          label: p[1],
+          sinif: key === secili ? 'ry on' : 'ry',
+          sec: function(){ self.setState({ secili: key }); }
+        };
+      });
+    }
+
+    var ham = PANELLER[secili] || PANELLER.personel;
+    return {
+      gruplar: {
+        kisiler: grup(GRUPLAR.kisiler),
+        makineler: grup(GRUPLAR.makineler),
+        uretim: grup(GRUPLAR.uretim),
+        veri: grup(GRUPLAR.veri),
+        bildirim: grup(GRUPLAR.bildirim)
+      },
+      panel: {
+        baslik: ham.baslik,
+        altYazi: ham.altYazi,
+        aksiyonlar: (ham.aksiyonlar || []).map(function(a){
+          return {
+            label: a.label,
+            stil: a.tur === 'primary'
+              ? 'background:#FF9046;color:#1A1408;font-weight:700;font-size:13px;border-radius:10px;padding:10px 18px;box-shadow:0 1px 2px rgba(0,0,0,.32)'
+              : 'background:transparent;border:1px solid #293138;color:#8B959D;border-radius:8px;padding:9px 14px;font-size:12.5px'
+          };
+        }),
+        filtreVar: !!ham.aramaIpucu,
+        aramaIpucu: ham.aramaIpucu || '',
+        tasindiVar: !!ham.tasindi,
+        tasindi: ham.tasindi || '',
+        tabloVar: !!ham.sutunlar,
+        sutunlar: (ham.sutunlar || []).map(function(c){ return { ad: c.ad, stil: c.stil || '' }; }),
+        satirlar: (ham.satirlar || []).map(function(r){ return { hucreler: r }; }),
+        anahtarVar: !!ham.anahtarlar,
+        anahtarlar: (ham.anahtarlar || []).map(function(sw){
+          return {
+            baslik: sw.baslik,
+            alt: sw.alt,
+            kutuStil: 'width:42px;height:24px;border-radius:20px;flex:none;display:flex;align-items:center;padding:3px;background:' + (sw.acik ? '#46D07F' : '#293138') + ';justify-content:' + (sw.acik ? 'flex-end' : 'flex-start')
+          };
+        })
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

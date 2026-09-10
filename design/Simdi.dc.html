@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+  <style>
+    body{margin:0;background:#0F1214;color:#EDF1F3;font-family:'Inter',system-ui,sans-serif;font-size:14px}
+    *{box-sizing:border-box}
+    a{color:#FF9046;text-decoration:none} a:hover{color:#FFA766}
+    table{border-collapse:collapse;width:100%}
+    th{text-align:left;padding:10px 12px;color:#8B959D;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #293138;font-weight:600}
+    td{padding:10px 12px;color:#EDF1F3;vertical-align:top;border-bottom:1px solid #293138;font-size:13px}
+    .mono{font-family:'JetBrains Mono',monospace}
+    .ic{flex:none;vertical-align:-3px}
+    input,select{font-family:'Inter',sans-serif;background:#1F262C;border:1px solid #293138;border-radius:8px;padding:10px 12px;color:#EDF1F3;font-size:14px;outline:none}
+    ::placeholder{color:#8B959D}
+    /* .tab-btn — seviye 1, aktif TURUNCU */
+    .t1{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px 0;border-radius:9px;border:1px solid #293138;background:transparent;font-size:12.5px;font-weight:500;color:#8B959D}
+    .t1.on{background:#FF904618;border-color:#FF9046;color:#FF9046}
+    /* .sub-tab-btn — seviye 2, aktif TURUNCU (seviye 1 ile aynı görünüm) */
+    .t2{padding:7px 14px;border-radius:8px;border:1px solid #293138;background:transparent;font-size:12.5px;font-weight:500;color:#8B959D}
+    .t2.on{background:#FF904618;border-color:#FF9046;color:#FF9046}
+    /* .chip — seviye 3, aktif SARI ve 20px pill: aynı iş için üçüncü bir görsel dil */
+    .t3{font-size:12.5px;color:#8B959D;background:#171C20;border:1px solid #293138;border-radius:20px;padding:8px 14px}
+    .t3.on{background:#F2C14E1a;border-color:#F2C14E;color:#F2C14E;font-weight:600}
+  </style>
+</helmet>
+
+<div style="display:flex;flex-direction:column;width:1440px;height:900px;background:#0F1214;overflow:hidden">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 24px;border-bottom:1px solid #293138;flex:none">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="width:8px;height:8px;border-radius:50%;background:#46D07F;flex:none"></span>
+      <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M4 21V11l5 3V11l5 3V8l5 3v10"></path><path d="M8 21v-3"></path></svg>
+      <span style="font-family:'Oswald',sans-serif;font-size:17px;letter-spacing:1.5px;font-weight:600">ROTA TAKİP · YÖNETİCİ RAPORU</span>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <div style="background:#1F262C;border:1px solid #293138;border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#8B959D">
+        <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>
+      </div>
+      <div style="background:#1F262C;border:1px solid #293138;border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#8B959D">
+        <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;background:#1F262C;border:1px solid #293138;border-radius:8px;padding:8px 14px;color:#8B959D;font-size:13px">
+        <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        Ayarlar
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;background:#1F262C;border:1px solid #293138;border-radius:8px;padding:10px 20px;color:#8B959D;font-size:14px;font-weight:600">
+        <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>
+        Çıkış
+      </div>
+    </div>
+  </div>
+
+  <!-- SEVİYE 1 -->
+  <div style="display:flex;gap:6px;padding:12px 24px 0;flex:none">
+    <div class="t1"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"></path></svg>Rapor</div>
+    <div class="t1"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M4 21V11l5 3V11l5 3V8l5 3v10"></path><path d="M8 21v-3"></path></svg>Makine Matrisi</div>
+    <div class="t1"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>Tamamlanan Kodlar</div>
+    <div class="t1"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M8 17v-5"></path><path d="M13 17V8"></path><path d="M18 17v-8"></path></svg>Analiz</div>
+    <div class="t1"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>Tadilat</div>
+    <div class="t1 on"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8l-9-5-9 5v8l9 5 9-5z"></path><path d="M3.3 7L12 12l8.7-5"></path><path d="M12 22V12"></path></svg>Stok</div>
+  </div>
+
+  <!-- SEVİYE 2 — .sub-tabs, emoji etiketler (uygulamada aynen böyle) -->
+  <div style="display:flex;gap:8px;padding:14px 24px 0;flex:none">
+    <div class="t2 on">🔧 Takım &amp; Sarf</div>
+    <div class="t2">◆ Karbür</div>
+    <div class="t2">Malzeme (çelik)</div>
+  </div>
+
+  <div style="padding:20px 24px;flex:1;min-height:0;display:flex;flex-direction:column;gap:14px">
+
+    <!-- SEVİYE 3 — .chip, aktif SARI -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;flex:none">
+      <div class="t3 on">Kalem Listesi</div>
+      <div class="t3">Konumlar</div>
+      <div class="t3">Excel Yükle</div>
+      <div class="t3">Stok Girişi</div>
+      <div class="t3">Geçmiş</div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;flex:none">
+      <div style="font-size:14.5px;font-weight:700;letter-spacing:.2px">Kalem Listesi (182/182) · <span style="color:#F2C14E">12 konumsuz</span></div>
+      <div style="background:transparent;border:1px solid #293138;color:#8B959D;border-radius:8px;padding:7px 12px;font-size:12.5px">↻ Stok Adetlerini Yenile</div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;flex:none">
+      <input placeholder="Ara — kelimeler sırasız (ör. freze 6) ya da %joker%…" style="flex:1;min-width:280px">
+      <select style="width:170px"><option>Tüm Kategoriler</option></select>
+      <select style="width:170px"><option>Tüm Konumlar</option></select>
+    </div>
+
+    <div style="background:#171C20;border:1px solid #293138;border-radius:12px;padding:0 6px 6px;box-shadow:0 1px 2px rgba(0,0,0,.32);overflow:auto">
+      <table>
+        <thead><tr><th style="width:34px"></th><th>CANİAS</th><th>Ad</th><th>Kategori</th><th>Marka</th><th>Konum</th><th>Göz</th><th style="text-align:right">Stok</th><th>Sipariş</th></tr></thead>
+        <tbody>
+          <tr><td><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px"></span></td><td class="mono">TK-104128</td><td>Karbür freze Ø6 4 ağız</td><td style="color:#8B959D">Freze</td><td style="color:#8B959D">Karcan</td><td>Dolap A</td><td>A-3</td><td class="mono" style="text-align:right;color:#F4726A;font-weight:700">2</td><td style="color:#8B959D">—</td></tr>
+          <tr><td><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px"></span></td><td class="mono">TK-104130</td><td>Karbür freze Ø10 4 ağız</td><td style="color:#8B959D">Freze</td><td style="color:#8B959D">Karcan</td><td>Dolap A</td><td>A-5</td><td class="mono" style="text-align:right">11</td><td style="color:#8B959D">—</td></tr>
+          <tr><td><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px"></span></td><td class="mono">TK-100377</td><td>HSS matkap Ø8.5</td><td style="color:#8B959D">Matkap</td><td style="color:#8B959D">Nachi</td><td>Dolap A</td><td>B-1</td><td class="mono" style="text-align:right;color:#F4726A;font-weight:700">4</td><td style="color:#8B959D">açık</td></tr>
+          <tr><td><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px"></span></td><td class="mono">TK-100381</td><td>Punta matkabı NC Ø10</td><td style="color:#8B959D">Matkap</td><td style="color:#8B959D">Guhring</td><td>Dolap B</td><td>C-2</td><td class="mono" style="text-align:right">19</td><td style="color:#8B959D">—</td></tr>
+          <tr><td><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px"></span></td><td class="mono">SR-200915</td><td>Kesme yağı 5 L</td><td style="color:#8B959D">Sarf</td><td style="color:#8B959D">Blaser</td><td>Depo</td><td style="color:#8B959D">—</td><td class="mono" style="text-align:right;color:#F4726A;font-weight:700">1</td><td style="color:#8B959D">—</td></tr>
+          <tr><td><span style="display:block;width:14px;height:14px;border:1px solid #293138;border-radius:3px"></span></td><td class="mono">TK-104204</td><td>Karbür freze Ø3 2 ağız</td><td style="color:#8B959D">Freze</td><td style="color:#8B959D">Karcan</td><td style="color:#F2C14E">— konumsuz</td><td style="color:#8B959D">—</td><td class="mono" style="text-align:right">8</td><td style="color:#8B959D">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Modül ayarının başka bir yerde olduğunu uygulamanın kendisi söylüyor -->
+    <div style="display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:#8B959D;background:#171C20;border:1px solid #293138;border-radius:10px;padding:12px 14px;max-width:900px;flex:none">
+      <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:2px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v.01"></path><path d="M12 11v5"></path></svg>
+      <span style="line-height:1.55">Modülü açıp kapatmak, ve operatör yetkilerini vermek için <b style="color:#EDF1F3">Ayarlar → 🔧 Takım &amp; Sarf Stok</b>'a gitmen gerekiyor — stok ekranındayken buradan yapılamıyor.</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

@@ -215,6 +215,24 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 
 .settings-wrap{padding:20px 24px;overflow-y:auto;flex:1}
 .sub-tabs{display:flex;gap:8px;margin-bottom:18px}
+
+/* ===== STOK EKRANI — modül rayı =====
+   Stok üç seviyeli: ana sekme (Stok) → modül (Takım/Karbür/Malzeme) → bölüm. Üçü de yatay
+   satır olunca hangisinin ne olduğu ayırt edilmiyordu. Modül seviyesi artık geniş ekranda
+   SOLDA DİKEY duruyor; dar ekranda (aşağıdaki media) yatay kaydırılabilir şeride dönüşüyor,
+   çünkü 480px'e 236px'lik bir ray sığmaz. */
+.stok-govde{display:flex;flex:1;min-height:0}
+.stok-ray{width:236px;flex:none;display:flex;flex-direction:column;gap:6px;padding:20px 0 20px 24px;overflow-y:auto}
+.stok-ray-baslik{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600;padding:0 4px 6px}
+.stok-ray-btn{display:flex;align-items:center;gap:11px;text-align:left;width:100%;padding:11px 13px;border-radius:10px;border:1px solid var(--border);background:var(--panel);color:var(--text)}
+.stok-ray-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.stok-ray-metin{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.stok-ray-ad{font-size:13.5px;font-weight:500}
+.stok-ray-btn.active .stok-ray-ad{font-weight:600}
+.stok-ray-alt{font-size:11px;color:var(--text-muted)}
+.stok-icerik{flex:1;min-width:0;display:flex;flex-direction:column;overflow-y:auto}
+.stok-bolumler{padding:20px 24px 0;margin-bottom:0;flex-wrap:wrap}
+.stok-icerik .settings-wrap{padding-top:16px;overflow:visible;flex:none}
 .sub-tab-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:12.5px;font-weight:500}
 .sub-tab-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
 .op-settings-row{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;max-width:1120px;flex-wrap:nowrap}
@@ -300,6 +318,19 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .sub-tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .sub-tabs::-webkit-scrollbar{display:none}
   .sub-tab-btn{flex:0 0 auto;white-space:nowrap;padding:10px 16px;min-height:40px}
+
+  /* Stok modül rayı: dar ekranda 236px'lik dikey ray sığmaz — yatay kaydırılabilir şeride
+     dönüşüyor. Alt açıklama satırı ("freze, matkap, sarf") burada gizleniyor, yoksa şerit
+     gereksiz yer kaplıyor. Modül butonu dolu zeminli kaldığı için altındaki bölüm
+     satırından (çerçeveli .sub-tab-btn) hâlâ ayırt ediliyor. */
+  .stok-govde{flex-direction:column}
+  .stok-ray{width:auto;flex-direction:row;padding:14px 18px 0;gap:8px;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .stok-ray::-webkit-scrollbar{display:none}
+  .stok-ray-baslik{display:none}
+  .stok-ray-alt{display:none}
+  .stok-ray-btn{flex:0 0 auto;white-space:nowrap;width:auto;min-height:44px;padding:10px 14px}
+  .stok-icerik{overflow-y:visible}
+  .stok-bolumler{padding:14px 18px 0}
 
   /* Admin üst başlığı (logo + buton grubu) — dar ekranda taşıyordu, artık alt satıra sarıyor. */
   .admin-header{flex-wrap:wrap;gap:10px;padding:14px 16px}

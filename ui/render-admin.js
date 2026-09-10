@@ -741,7 +741,13 @@ function renderMalzemeStokAyarlar(){
 function renderMalzemeStokScreen(){
       const items = stockItemsArray();
       const recentMoves = Object.entries(stockHareketleri).map(([id,v])=>({id,...v})).sort((a,b)=>b.ts-a.ts).slice(0,20);
-      return `        ${!stockEnabled() ? `<div style="font-size:12.5px;color:var(--text-muted)">Modül kapalı — <b>Ayarlar → Malzeme Stoğu</b>'ndan açtığında stok kalemi yönetimi ve tüketim geçmişi burada görünür.</div>` : `
+      if(!stockEnabled()) return `<div style="font-size:12.5px;color:var(--text-muted)">Modül kapalı — <b>Ayarlar → Malzeme Stoğu</b>'ndan açtığında stok kalemi yönetimi ve tüketim geçmişi burada görünür.</div>`;
+
+      /* Bu ekran eskiden tek düz sayfaydı: ekleme formu + kalem listesi + hareketler alt alta.
+         Diğer iki stok modülü bölümlere ayrılmışken bunun ayrılmamış olması, modüller arası
+         geçişte ekranın şeklini değiştiriyordu (Takım'da 5 bölüm, Karbür'de 6, burada 0).
+         Artık aynı üç fiile bölünmüş — İÇERİK BİREBİR AYNI, yalnızca üçe ayrıldı. */
+      const girisBolumu = `
         <div style="max-width:640px;margin-bottom:22px">
           <div style="font-size:13px;font-weight:600;margin-bottom:10px">Yeni Stok Kalemi Ekle</div>
           <div style="display:flex;gap:8px;margin-bottom:10px">
@@ -766,7 +772,9 @@ function renderMalzemeStokScreen(){
             </div>
           `}
           <button class="btn-primary" style="width:auto;padding:10px 18px;margin-top:10px" onclick="addStockItem()">+ Ekle</button>
-        </div>
+        </div>`;
+
+      const durumBolumu = `
         <div class="sec-h" style="margin-top:0">Stok Kalemleri (${items.length})</div>
         <div class="op-settings-table" style="margin-bottom:26px">
           ${items.length===0 ? `<div style="font-size:12.5px;color:var(--text-muted);padding:12px 4px">Henüz stok kalemi eklenmedi.</div>` : items.map(it=>{
@@ -803,13 +811,19 @@ function renderMalzemeStokScreen(){
               <button class="del-btn" onclick="deleteStockItem('${it.id}')" title="Sil">${ico('trash',14)}</button>
             </div>`;
           }).join('')}
-        </div>
+        </div>`;
+
+      const hareketBolumu = `
         <div class="sec-h" style="margin-top:0">Son Stok Hareketleri</div>
         <table><thead><tr><th>Tarih</th><th>Kalem</th><th>Miktar</th><th>İş Emri</th><th>Kim</th></tr></thead><tbody>
           ${recentMoves.length===0 ? `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Henüz hareket yok.</td></tr>` : recentMoves.map(m=>`
             <tr><td>${fmtDT(m.ts)}</td><td class="mono">${esc(m.itemKod)}${m.itemIsim?` <span style="color:var(--text-muted)">· ${esc(m.itemIsim)}</span>`:''}</td><td style="color:${m.miktar<0?'var(--danger)':'var(--success)'}">${m.miktar>0?'+':''}${m.miktar} ${esc(m.birim||'')}</td><td class="mono">${esc(m.talepNo||m.isEmriNo||'—')}</td><td>${esc(m.operatorName||'')}</td></tr>
           `).join('')}
-        </tbody></table>`}`;
+        </tbody></table>`;
+
+      if(malzemeSubView === 'giris')      return girisBolumu;
+      if(malzemeSubView === 'hareketler') return hareketBolumu;
+      return durumBolumu;
 }
 
 /* ==================== STOK SEKMESİ (üç bölüm) ====================
@@ -818,11 +832,69 @@ function renderMalzemeStokScreen(){
    kalır (toolCatalog* / karbur* / stockItems*), hiçbiri veri paylaşmaz. Yetkiler değişmedi:
    takım ve karbür için mevcut sekme izinleri, malzeme için canManageStock() (SuperAdmin+Şef). */
 const STOK_BOLUMLERI = [
-  { key:'takim',   label:'🔧 Takım & Sarf', gor:()=>isAdminTabVisible('takimStok') },
-  { key:'karbur',  label:'◆ Karbür',        gor:()=>isAdminTabVisible('karbur') },
-  { key:'malzeme', label:'Malzeme (çelik)', gor:()=>canManageStock() }
+  { key:'takim',   ikon:'wrench', label:'Takım & Sarf',    alt:'freze, matkap, sarf',  gor:()=>isAdminTabVisible('takimStok') },
+  { key:'karbur',  ikon:'elmas',  label:'Karbür',          alt:'çubuk + tel erozyon',  gor:()=>isAdminTabVisible('karbur') },
+  { key:'malzeme', ikon:'katman', label:'Malzeme (çelik)', alt:'boy ve adet takibi',   gor:()=>canManageStock() }
 ];
+
+/* ---- Bölümler: her modülde aynı fiiller, aynı sırada ----
+   ÖNCEDEN: üç modülün her biri kendi alt sekme satırını kendi çiziyordu, hepsi farklı
+   isimler ve farklı sıra kullanıyordu (Takım'da "Kalem Listesi/Konumlar/Excel Yükle/Stok
+   Girişi/Geçmiş", Karbür'de "Kesim Planı/Stok & Fire/↓ Stok Girişi/...", Malzeme'de hiç
+   yoktu). Üstelik bu satır .chip ile çizildiği için AKTİF HÂLİ SARIYDI (--warn) — üstündeki
+   iki gezinme seviyesi turuncuyken (--accent) üçüncü seviye uyarı/filtre gibi görünüyordu.
+
+   ARTIK: satırı renderStokScreen tek yerden, .sub-tab-btn ile çiziyor. Ortak üç fiil
+   (Durum · Giriş · Hareketler) her modülde başta ve aynı sırada; modüle özel bölümler
+   sonra, Excel Yükle en sonda.
+
+   ANAHTARLAR BİLEREK DEĞİŞMEDİ — yalnızca etiket, sıra ve stil ortaklaştı. Takım'ın bölüm
+   görünürlük izinleri adminTabPermissions/<kullanıcı>/takimStokViews/<anahtar> altında bu
+   anahtarlarla saklanıyor; anahtarı değiştirmek kayıtlı izinleri sessizce geçersiz kılardı. */
+const STOK_BOLUM_TANIM = {
+  takim: {
+    oku: () => toolAdminSubView,
+    yaz: k => `setToolAdminSubView('${escJs(k)}')`,
+    gor: k => isTakimStokSubTabVisible(k),
+    bolumler: [
+      { key:'liste',    label:'Durum' },
+      { key:'giris',    label:'Giriş' },
+      { key:'gecmis',   label:'Hareketler' },
+      { key:'konumlar', label:'Konumlar' },
+      { key:'excel',    label:'Excel Yükle' }
+    ]
+  },
+  karbur: {
+    oku: () => karburSubView,
+    yaz: k => `karburSetSubView('${escJs(k)}')`,
+    gor: () => true,
+    bolumler: [
+      { key:'stok',   label:'Durum' },
+      { key:'giris',  label:'Giriş' },
+      { key:'gecmis', label:'Hareketler' },
+      { key:'plan',   label:'Kesim Planı' },
+      { key:'isemri', label:'İş Emri Tüketimi' },
+      { key:'excel',  label:'Excel Yükle' }
+    ]
+  },
+  malzeme: {
+    oku: () => malzemeSubView,
+    yaz: k => `setMalzemeSubView('${escJs(k)}')`,
+    gor: () => true,
+    bolumler: [
+      { key:'durum',      label:'Durum' },
+      { key:'giris',      label:'Giriş' },
+      { key:'hareketler', label:'Hareketler' }
+    ]
+  }
+};
 let stokSubView = 'takim';
+let malzemeSubView = 'durum'; // 'durum' | 'giris' | 'hareketler' — bkz. renderMalzemeStokScreen
+function setMalzemeSubView(k){
+  malzemeSubView = k;
+  if(k === 'hareketler') malzemeHareketGerekli(); // hareketler canlı dinlenmiyor, tek seferlik okunur
+  render();
+}
 let malzemeHareketYuklendi = false;
 function stokErisimVar(){ return STOK_BOLUMLERI.some(b=>b.gor()); }
 /* stockHareketleri canlı dinlenmiyor (maliyet optimizasyonu — bkz. js/firebase-push.js:271-275),
@@ -843,13 +915,42 @@ function renderStokScreen(){
   if(!gorunur.length) return `<div class="settings-wrap"><div style="color:var(--text-muted);font-size:12.5px">Stok ekranlarına erişim yetkin yok.</div></div>`;
   if(!gorunur.some(b=>b.key===stokSubView)) stokSubView = gorunur[0].key;
   if(stokSubView==='malzeme') malzemeHareketGerekli();
-  let html = `<div class="sub-tabs" style="padding:14px 24px 0">
-    ${gorunur.map(b=>`<button class="sub-tab-btn ${stokSubView===b.key?'active':''}" onclick="setStokSubView('${b.key}')">${esc(b.label)}</button>`).join('')}
+
+  /* Seviye 2 — MODÜL RAYI. Eskiden bu da yatay bir .sub-tabs satırıydı ve üstündeki ana
+     sekmelerle birebir aynı görünüyordu; hangisinin ana sekme hangisinin modül olduğu
+     ayırt edilmiyordu. Artık geniş ekranda SOLDA DİKEY duruyor — dar ekranda CSS onu
+     yatay kaydırılabilir bir şeride çeviriyor (bkz. ui/styles.css .stok-ray). */
+  const ray = `<div class="stok-ray">
+    <div class="stok-ray-baslik">Stok Modülleri</div>
+    ${gorunur.map(b=>`<button class="stok-ray-btn ${stokSubView===b.key?'active':''}" onclick="setStokSubView('${escJs(b.key)}')">
+      ${ico(b.ikon,17)}
+      <span class="stok-ray-metin">
+        <span class="stok-ray-ad">${esc(b.label)}</span>
+        <span class="stok-ray-alt">${esc(b.alt)}</span>
+      </span>
+    </button>`).join('')}
   </div>`;
-  if(stokSubView==='takim')       html += renderToolStokManagementScreen();
-  else if(stokSubView==='karbur') html += renderKarburScreen();
-  else                            html += `<div class="settings-wrap">${renderMalzemeStokScreen()}</div>`;
-  return html;
+
+  /* Seviye 3 — BÖLÜMLER. Üç modülün üçü de kendi satırını kendi çiziyordu; artık tek yerden,
+     ana sekmelerle aynı görsel dilde (.sub-tab-btn) çiziliyor. */
+  const tanim = STOK_BOLUM_TANIM[stokSubView];
+  /* Malzeme modülü kapalıyken üç bölüm de aynı "modül kapalı" yazısını gösteriyor —
+     o hâlde bölüm satırı üç kere aynı yere götüren bir gürültüden ibaret, gizliyoruz.
+     Takım ve Karbür'de böyle bir istisna yok: onların yönetim ekranı modül kapalıyken de
+     çalışıyor (kapalı olan yalnızca operatöre görünürlük). */
+  const bolumSatiriGizli = stokSubView === 'malzeme' && !stockEnabled();
+  const bolumler = (tanim && !bolumSatiriGizli) ? tanim.bolumler.filter(x=>tanim.gor(x.key)) : [];
+  const aktif = tanim ? tanim.oku() : null;
+  const bolumSatiri = bolumler.length ? `<div class="sub-tabs stok-bolumler">
+    ${bolumler.map(x=>`<button class="sub-tab-btn ${aktif===x.key?'active':''}" onclick="${tanim.yaz(x.key)}">${esc(x.label)}</button>`).join('')}
+  </div>` : '';
+
+  let icerik;
+  if(stokSubView==='takim')       icerik = renderToolStokManagementScreen();
+  else if(stokSubView==='karbur') icerik = renderKarburScreen();
+  else                            icerik = `<div class="settings-wrap">${renderMalzemeStokScreen()}</div>`;
+
+  return `<div class="stok-govde">${ray}<div class="stok-icerik">${bolumSatiri}${icerik}</div></div>`;
 }
 
 function renderAdmin(){
@@ -922,8 +1023,8 @@ function renderAdmin(){
         <button class="sub-tab-btn ${settingsSubTab==='tadilatSablonlari'?'active':''}" onclick="setSettingsSubTab('tadilatSablonlari')">Tadilat Hazır İfadeleri</button>
         <button class="sub-tab-btn ${settingsSubTab==='bolumKurallari'?'active':''}" onclick="setSettingsSubTab('bolumKurallari')">Tadilat Bölüm Kuralları</button>
         <button class="sub-tab-btn ${settingsSubTab==='tabErisimi'?'active':''}" onclick="setSettingsSubTab('tabErisimi')">Sekme Erişimi (Yönetici)</button>
-        <button class="sub-tab-btn ${settingsSubTab==='takimStok'?'active':''}" onclick="setSettingsSubTab('takimStok')">🔧 Takım & Sarf Stok</button>
-        <button class="sub-tab-btn ${settingsSubTab==='karbur'?'active':''}" onclick="setSettingsSubTab('karbur')">◆ Karbür Stok</button>` : ''}
+        <button class="sub-tab-btn ${settingsSubTab==='takimStok'?'active':''}" onclick="setSettingsSubTab('takimStok')">${ico('wrench',14)} Takım & Sarf Stok</button>
+        <button class="sub-tab-btn ${settingsSubTab==='karbur'?'active':''}" onclick="setSettingsSubTab('karbur')">${ico('elmas',14)} Karbür Stok</button>` : ''}
         ${(session.isSuperAdmin||session.isSef) ? `
         <button class="sub-tab-btn ${settingsSubTab==='veriListeleri'?'active':''}" onclick="setSettingsSubTab('veriListeleri')">Veri Listeleri</button>
         <button class="sub-tab-btn ${settingsSubTab==='stok'?'active':''}" onclick="setSettingsSubTab('stok')">Malzeme Stoğu</button>` : ''}
@@ -931,7 +1032,7 @@ function renderAdmin(){
         ${canManageBildirimAyarlari() ? `<button class="sub-tab-btn ${settingsSubTab==='uyarilar'?'active':''}" onclick="setSettingsSubTab('uyarilar')">Bildirim Ayarları</button>` : ''}
         ${session.isSuperAdmin ? `
         <button class="sub-tab-btn ${settingsSubTab==='resimBul'?'active':''}" onclick="setSettingsSubTab('resimBul')">Resim/Çizim Bul</button>
-        <button class="sub-tab-btn ${settingsSubTab==='bildirimGonder'?'active':''}" onclick="setSettingsSubTab('bildirimGonder')">📤 Bildirim Gönder</button>
+        <button class="sub-tab-btn ${settingsSubTab==='bildirimGonder'?'active':''}" onclick="setSettingsSubTab('bildirimGonder')">${ico('send',14)} Bildirim Gönder</button>
         <button class="sub-tab-btn ${settingsSubTab==='addOperator'?'active':''}" onclick="setSettingsSubTab('addOperator')">+ Kullanıcı Ekle</button>
         <button class="sub-tab-btn ${settingsSubTab==='addMachine'?'active':''}" onclick="setSettingsSubTab('addMachine')">+ Makine Ekle</button>` : ''}
       </div>`;
@@ -976,10 +1077,10 @@ function renderAdmin(){
                 <input type="checkbox" style="width:auto" ${v.messagesAccess?'checked':''} onchange="toggleMessagesAccess('${code}')"> Mesaj Erişimi
               </label>
               <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                <input type="checkbox" style="width:auto" ${v.permTakimStokGor?'checked':''} onchange="toggleUserPerm('${code}','permTakimStokGor')"> 🔧 Takım Stok: Görebilir/Çıkış
+                <input type="checkbox" style="width:auto" ${v.permTakimStokGor?'checked':''} onchange="toggleUserPerm('${code}','permTakimStokGor')"> ${ico('wrench',13)} Takım Stok: Görebilir/Çıkış
               </label>
               <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                <input type="checkbox" style="width:auto" ${v.permTakimStokSayim?'checked':''} onchange="toggleUserPerm('${code}','permTakimStokSayim')"> 🔧 Takım Stok: Sayım
+                <input type="checkbox" style="width:auto" ${v.permTakimStokSayim?'checked':''} onchange="toggleUserPerm('${code}','permTakimStokSayim')"> ${ico('wrench',13)} Takım Stok: Sayım
               </label>
               <select class="filter-input" style="width:200px" onchange="updateDefaultMachine('${code}', this.value)">
                 <option value="">— Varsayılan Makine yok —</option>
