@@ -277,6 +277,16 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .toast-big{position:fixed;top:175px;left:50%;transform:translateX(-50%);background:var(--panel);border:2px solid var(--accent);padding:18px 30px;border-radius:14px;font-size:18px;font-weight:700;color:var(--text);z-index:1000;display:none;text-align:center;max-width:min(92vw,520px);box-shadow:0 10px 30px rgba(0,0,0,.45);line-height:1.4}
 .toast-big::before{content:'!';position:absolute;top:-14px;left:-14px;background:var(--danger);color:#fff;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;box-shadow:0 3px 10px rgba(0,0,0,.5);border:2px solid var(--bg)}
 .toast-big.show{display:block}
+/* Onay varyantı — Excel yüklemesi gibi uzun süren ve "oldu mu olmadı mı" diye merak edilen
+   işlerin sonucu için. Uyarı hâlinden iki farkı var: yeşil kenarlık + onay rozeti, ve ekranın
+   tam ortasında duruyor (uyarı 175px'te, çünkü o çoğunlukla bir işin üstüne biniyor).
+   Rozet, ICONS.check ile aynı çizim — glif/emoji değil, aynı ikon dili. */
+.toast-big.ok{border-color:var(--success);top:50%;transform:translate(-50%,-50%);font-size:19px;padding:22px 34px}
+.toast-big.ok::before{
+  content:'';
+  background:var(--success) url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6L9 17l-5-5'/%3E%3C/svg%3E") center/17px 17px no-repeat;
+  width:34px;height:34px;top:-16px;left:-16px;
+}
 .lock-back-btn{background:var(--panel);border:2px solid var(--accent);color:var(--text);border-radius:10px;padding:11px 18px;font-size:15px;font-weight:600}
 .conn-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
 .auth-header .conn-dot{width:10px;height:10px;margin:0 0 0 4px;align-self:flex-start}

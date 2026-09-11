@@ -94,7 +94,7 @@ async function uploadMalzemeListesi(){
       const wb = XLSX.read(data, {type:'array'});
       const sheetName = wb.SheetNames[0];
       const ws = wb.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      const rows = xlsxSatirlar(ws);
       if(rows.length===0){ if(statusEl) statusEl.textContent='Dosya boş görünüyor.'; return; }
       const header = rows[0].map(h=>trNorm(String(h||'').trim()));
       let kodIdx = header.findIndex(h=>h===kodColName); if(kodIdx===-1) kodIdx = header.findIndex(h=>h.includes(kodColName));
@@ -111,14 +111,14 @@ async function uploadMalzemeListesi(){
       if(count===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
       DB.ref('malzemeListesi').set(list).then(()=>{
         malzemeListesi = list; // artık canlı dinlenmiyor, yerel kopyayı biz güncelliyoruz
-        toast(`${count} malzeme kodu yüklendi`);
+        bigToastOk(`${count} malzeme kodu yüklendi`);
         if(statusEl) statusEl.textContent = `${count} kayıt başarıyla yüklendi (sayfa: ${sheetName}).`;
         fileInput.value = '';
         render();
       });
     } catch(err){
       console.warn(err);
-      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx formatında olduğundan emin olun.';
+      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx formatında olduğundan emin olun.' + (err && err.message ? ' (' + err.message + ')' : '');
     }
   };
   reader.readAsArrayBuffer(file);
@@ -156,7 +156,7 @@ async function uploadIsMerkezleri(){
       const wb = XLSX.read(data, {type:'array'});
       const sheetName = wb.SheetNames[0];
       const ws = wb.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      const rows = xlsxSatirlar(ws);
       if(rows.length===0){ if(statusEl) statusEl.textContent='Dosya boş görünüyor.'; return; }
       const header = rows[0].map(h=>trNorm(String(h||'').trim()));
       let kodIdx = header.findIndex(h=>h===kodColName); if(kodIdx===-1) kodIdx = header.findIndex(h=>h.includes(kodColName));
@@ -170,7 +170,7 @@ async function uploadIsMerkezleri(){
       if(count===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
       DB.ref('isMerkezleri').set(list).then(()=>{
         isMerkezleri = list; // artık canlı dinlenmiyor (bkz. firebase-push.js) — yerel kopyayı da güncelle
-        toast(`${count} iş merkezi kodu yüklendi`);
+        bigToastOk(`${count} iş merkezi kodu yüklendi`);
         if(statusEl) statusEl.textContent = `${count} kayıt başarıyla yüklendi (sayfa: ${sheetName}).`;
         fileInput.value = '';
         render();
@@ -180,7 +180,7 @@ async function uploadIsMerkezleri(){
       });
     } catch(err){
       console.warn(err);
-      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx/.xls formatında olduğundan emin olun.';
+      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx/.xls formatında olduğundan emin olun.' + (err && err.message ? ' (' + err.message + ')' : '');
     }
   };
   reader.readAsArrayBuffer(file);
@@ -245,7 +245,7 @@ async function uploadUretimPersoneli(){
       const wb = XLSX.read(data, {type:'array'});
       const sheetName = wb.SheetNames[0];
       const ws = wb.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      const rows = xlsxSatirlar(ws);
       if(rows.length===0){ if(statusEl) statusEl.textContent='Dosya boş görünüyor.'; return; }
       const header = rows[0].map(h=>trNorm(String(h||'').trim()));
       let adIdx = header.findIndex(h=>h===adColName); if(adIdx===-1) adIdx = header.findIndex(h=>h.includes(adColName));
@@ -262,14 +262,14 @@ async function uploadUretimPersoneli(){
       if(count===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
       DB.ref('uretimPersoneli').set(list).then(()=>{
         uretimPersoneli = list; // artık canlı dinlenmiyor, yerel kopyayı biz güncelliyoruz
-        toast(`${count} personel yüklendi`);
+        bigToastOk(`${count} personel yüklendi`);
         if(statusEl) statusEl.textContent = `${count} kayıt başarıyla yüklendi (sayfa: ${sheetName})${gorevIdx!==-1?' · bölüm otomatik çıkarıldı':''}.`;
         fileInput.value = '';
         render();
       });
     } catch(err){
       console.warn(err);
-      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx/.xls formatında olduğundan emin olun.';
+      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx/.xls formatında olduğundan emin olun.' + (err && err.message ? ' (' + err.message + ')' : '');
     }
   };
   reader.readAsArrayBuffer(file);
@@ -489,6 +489,94 @@ function tadUkoduBlur(target){
 function trNorm(s){
   return String(s||'').replace(/İ/g,'i').replace(/I/g,'i').replace(/ı/g,'i').toLowerCase();
 }
+
+/* ==================== EXCEL OKUMA — GÜVENLİ ARALIK ====================
+   ERP'den çıkan Excel'lerde sayfanın "kullanılan aralığı" (!ref) çoğu zaman gerçekten veri
+   olan satırlardan kat kat büyük geliyor: bir zamanlar biçimlendirilip sonra boşaltılmış
+   satırlar yüzünden A1:Z1048576 gibi bir aralık yazılı kalıyor.
+
+   sheet_to_json'a defval verildiğinde bu aralıktaki HER HÜCRE maddeleştiriliyor — bir milyon
+   satır × sütun kadar boş string üretiliyor. Sekme senkron olarak kilitleniyor ve bellek
+   dolunca tarayıcı sekmeyi kapatıyor; kullanıcı tarafında bu "program yanıt vermiyor ve
+   kapanıyor" olarak görünüyor. Dosyada gerçekte kaç kayıt olduğunun bununla ilgisi yok:
+   7 bin satırlık bir listede de olabiliyor, çünkü sorun veri değil ARALIK BEYANI.
+
+   Çözüm: aralığı gerçekten dolu olan son satır/sütuna kırpmak. Sayfa nesnesinde yalnızca
+   GERÇEKTEN VAR OLAN hücrelerin anahtarı bulunuyor ("A1", "B7", ...) — son dolu hücreyi
+   bunlardan bulmak ucuz, boş satırlar hiç dolaşılmıyor. */
+const XLSX_MAX_SATIR = 200000;      // güvenlik tavanı — bunun üstünü okumaya kalkmıyoruz, kırpıp haber veriyoruz
+const XLSX_BOSLUK_TOLERANSI = 200;  // tabloda bu kadar arka arkaya boş satır görülürse tablo bitmiştir
+let xlsxSonOkuma = null;            // son okumanın özeti — mesajlarda kullanılıyor: {okunanSatir, atlananSatir, kirpildi}
+
+/* Hücrenin GERÇEKTEN bir değeri var mı? Sayfada, değeri olmayıp yalnızca biçim taşıyan
+   hücreler bulunabiliyor (t:'z' = boş hücre, ya da v'si hiç olmayan/boş string olan kayıtlar).
+   "Son dolu satır"ı bunlara bakarak bulmak yanlış sonuç veriyordu: tablonun çok altında kalmış
+   tek bir biçimli boş hücre, sayfayı bir milyon satırlık gösteriyordu. */
+function xlsxHucreDolu(c){
+  if(!c || c.t === 'z') return false;
+  if(c.v === undefined || c.v === null) return false;
+  return typeof c.v !== 'string' || c.v.trim() !== '';
+}
+
+function xlsxSatirlar(ws){
+  xlsxSonOkuma = null;
+  if(!ws || !ws['!ref']) return [];
+  const beyan = XLSX.utils.decode_range(ws['!ref']);
+
+  /* Hangi satırlarda gerçekten değer var? Sayfa nesnesinde yalnızca var olan hücrelerin
+     anahtarı bulunduğu için bu tarama ucuz — boş satırlar hiç dolaşılmıyor. */
+  const doluSatirlar = new Set();
+  let sonSutun = beyan.s.c;
+  for(const adres in ws){
+    if(adres.charCodeAt(0) === 33) continue; // '!' ile başlayan meta anahtarlar: !ref, !merges, !cols...
+    if(!xlsxHucreDolu(ws[adres])) continue;
+    const h = XLSX.utils.decode_cell(adres);
+    doluSatirlar.add(h.r);
+    if(h.c > sonSutun) sonSutun = h.c;
+  }
+  if(doluSatirlar.size === 0) return [];
+
+  /* TABLO NEREDE BİTİYOR? "Değeri olan en alttaki satır" diye bakmak yanlış sonuç veriyordu:
+     ERP dosyalarında tablonun bin kere altında, sayfanın en son satırında (T1048576 gibi)
+     başıboş tek bir hücre kalabiliyor. Öyle bir hücre yüzünden ne bir milyon satır okumalı
+     (sekme kilitlenir) ne de dosyayı reddetmeliyiz (kullanıcı hiç yükleyemez).
+
+     Doğrusu, insanın "tablo" dediği şeyi almak: yukarıdan aşağı ilerlerken arka arkaya
+     XLSX_BOSLUK_TOLERANSI kadar boş satır görülene kadar devam et, orada kes. Altında kalan
+     başıboş hücreler sessizce değil, GÖRÜNÜR şekilde atlanıyor — kaç satır atlandığını
+     xlsxSonOkuma ile çağıran taraf mesajda gösteriyor. */
+  const sirali = Array.from(doluSatirlar).sort((a,b)=>a-b);
+  let son = sirali[0];
+  for(let i=1;i<sirali.length;i++){
+    if(sirali[i] - son > XLSX_BOSLUK_TOLERANSI) break;
+    son = sirali[i];
+  }
+  const enAlttakiDolu = sirali[sirali.length-1];
+
+  let kirpildi = false;
+  if(son - beyan.s.r + 1 > XLSX_MAX_SATIR){ // gerçekten devasa bir tablo: oku ama tavanda kes
+    son = beyan.s.r + XLSX_MAX_SATIR - 1;
+    kirpildi = true;
+  }
+  xlsxSonOkuma = {
+    okunanSatir: son - beyan.s.r + 1,
+    atlananSatir: enAlttakiDolu > son ? (enAlttakiDolu - son) : 0,
+    kirpildi
+  };
+
+  return XLSX.utils.sheet_to_json(ws, {
+    header: 1,
+    defval: '',
+    range: { s:{ r:beyan.s.r, c:beyan.s.c }, e:{ r:son, c:sonSutun } }
+  });
+}
+/* Yükleme mesajlarına eklenecek not — atlanan/kırpılan bir şey yoksa boş döner. */
+function xlsxOkumaNotu(){
+  if(!xlsxSonOkuma) return '';
+  if(xlsxSonOkuma.kirpildi) return ` · dosya çok büyük, ilk ${XLSX_MAX_SATIR} satır okundu`;
+  if(xlsxSonOkuma.atlananSatir > 0) return ` · tablonun altındaki başıboş hücreler yok sayıldı`;
+  return '';
+}
 function normalizeTalepCode(v){
   if(v==null) return '';
   let s = String(v).trim();
@@ -512,7 +600,7 @@ async function uploadIsEmriListesi(){
       const wb = XLSX.read(data, {type:'array'});
       const sheetName = wb.SheetNames.find(n => n.toUpperCase().includes('İŞ EMRİ') || n.toUpperCase().includes('IS EMRI')) || wb.SheetNames[0];
       const ws = wb.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      const rows = xlsxSatirlar(ws);
       if(rows.length===0){ if(statusEl) statusEl.textContent='Dosya boş görünüyor.'; return; }
       const header = rows[0].map(h=>trNorm(String(h||'').trim()));
       let colIdx = header.findIndex(h => h===colName);
@@ -534,8 +622,8 @@ async function uploadIsEmriListesi(){
       if(codeCount===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
       DB.ref('validIsEmri').set(codes).then(()=>{
         STATE.validIsEmri = codes; // artık canlı dinlenmiyor (bkz. firebase-push.js) — yerel kopyayı da güncelle
-        toast(`${codeCount} İş Talep No yüklendi`);
-        if(statusEl) statusEl.textContent = `${codeCount} kayıt başarıyla yüklendi (sayfa: ${sheetName})${malzKoduIdx!==-1?' · malzeme bilgisi de eşleştirildi':''}.`;
+        bigToastOk(`${codeCount} İş Talep No yüklendi`);
+        if(statusEl) statusEl.textContent = `${codeCount} kayıt başarıyla yüklendi — ${rows.length-1} satır okundu (sayfa: ${sheetName})${malzKoduIdx!==-1?' · malzeme bilgisi de eşleştirildi':''}${xlsxOkumaNotu()}.`;
         fileInput.value = '';
         render();
       }).catch(err=>{
@@ -544,7 +632,7 @@ async function uploadIsEmriListesi(){
       });
     } catch(err){
       console.warn(err);
-      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx formatında olduğundan emin olun.';
+      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx formatında olduğundan emin olun.' + (err && err.message ? ' (' + err.message + ')' : '');
     }
   };
   reader.readAsArrayBuffer(file);

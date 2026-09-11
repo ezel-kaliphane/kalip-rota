@@ -1192,7 +1192,7 @@ async function karburExcelSec(ev){
       const okunan = [], hatali = [];
       let adetSutunuVar = false;
       wb.SheetNames.forEach(sn => {
-        const rowsRaw = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' });
+        const rowsRaw = xlsxSatirlar(wb.Sheets[sn]);
         if(!rowsRaw.length) return;
         const head = (rowsRaw[0] || []).map(x => String(x).trim().toLowerCase());
         let kodIdx = head.findIndex(h => h.indexOf('kod') >= 0);

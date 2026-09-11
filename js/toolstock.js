@@ -350,7 +350,7 @@ async function handleToolExcelPreview(){
       wb.SheetNames.forEach(sheetName=>{
         if(TOOL_EXCEL_EXCLUDED_SHEETS.some(x=>trNorm(x)===trNorm(sheetName))){ skippedSheets.push(sheetName); return; }
         const ws = wb.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+        const rows = xlsxSatirlar(ws);
         if(rows.length===0) return;
         const header = rows[0];
         const col = toolFindColsForSheet(header);
@@ -391,7 +391,7 @@ async function handleToolExcelPreview(){
       render();
     } catch(err){
       console.warn(err);
-      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx formatında olduğundan emin olun.';
+      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx formatında olduğundan emin olun.' + (err && err.message ? ' (' + err.message + ')' : '');
     }
   };
   reader.readAsArrayBuffer(file);

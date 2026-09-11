@@ -36,6 +36,10 @@ function dateKey(ts){
 function clampDateKey(dk, fromDate, toDate){ return dk<fromDate ? fromDate : (dk>toDate ? toDate : dk); }
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.className='toast show'; clearTimeout(t._t); t._t=setTimeout(()=>t.className='toast',2200); }
 function bigToast(msg){ const t=document.getElementById('toast-big'); if(!t) return; t.textContent=msg; t.className='toast-big show'; clearTimeout(t._t); t._t=setTimeout(()=>t.className='toast-big',3800); }
+/* Başarı bildirimi — ekranın ortasında, yeşil kenarlıklı, onay rozetli. Uzun süren ve sonucu
+   merak edilen işler için (Excel yüklemeleri): küçük alttaki toast bu işlerde gözden kaçıyordu.
+   Ekranda 4.5 sn duruyor — normal toast'tan uzun ama okunup geçilecek kadar kısa. */
+function bigToastOk(msg){ const t=document.getElementById('toast-big'); if(!t) return; t.textContent=msg; t.className='toast-big ok show'; clearTimeout(t._t); t._t=setTimeout(()=>t.className='toast-big',4500); }
 function connDot(){ return `<span class="conn-dot ${connOK?'on':'off'}" title="${connOK?'Buluta bağlı (senkron)':'Bağlantı yok — internet kontrol edin'}"></span>`; }
 function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 function load(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
