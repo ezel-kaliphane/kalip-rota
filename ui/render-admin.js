@@ -1051,12 +1051,72 @@ function renderStokScreen(){
   return `<div class="stok-govde">${ray}<div class="stok-icerik">${bolumSatiri}${icerik}</div></div>`;
 }
 
+// "İş Yoğunluğu" sekmesi — operatörlerin "Bitir" sırasında işaretlediği sonrakiMakine alanına
+// göre, hangi makinede kaç iş emri/adet biriktiğini gösterir (bkz. bekleyenSonrakiOperasyonlar,
+// js/operations.js). Sadece son operasyonu işaretlenmemiş VE henüz kimsenin devralmadığı (o
+// isEmriNo için daha yeni bir kayıt açılmamış) işler sayılıyor — devralınan iş listeden düşer.
+function renderIsYogunlugu(){
+  const bekleyenler = bekleyenSonrakiOperasyonlar();
+  const byMakine = {};
+  bekleyenler.forEach(e=>{
+    const key = e.sonrakiMakine;
+    if(!byMakine[key]) byMakine[key] = { label:key, isEmriler:[] };
+    byMakine[key].isEmriler.push(e);
+  });
+  const rows = Object.values(byMakine).map(m=>({
+    label: m.label,
+    isEmriSayisi: m.isEmriler.length,
+    toplamAdet: m.isEmriler.reduce((s,e)=>s+(Number(e.adet)||0), 0),
+    isEmriler: m.isEmriler.slice().sort((a,b)=>(a.endTs||0)-(b.endTs||0))
+  })).sort((a,b)=> b.isEmriSayisi - a.isEmriSayisi);
+  const toplamIsEmri = bekleyenler.length;
+  const toplamAdet = bekleyenler.reduce((s,e)=>s+(Number(e.adet)||0), 0);
+  const belirsizSayi = (byMakine['Belirsiz']?.isEmriler.length) || 0;
+
+  const kpi = (label, value, color, sub) => `<div class="analiz-chart-box">
+    <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">${label}</div>
+    <div class="mono" style="font-size:26px;font-weight:700;margin-top:8px;color:${color}">${value}</div>
+    ${sub?`<div style="font-size:10.5px;color:var(--text-muted);margin-top:4px">${sub}</div>`:''}
+  </div>`;
+
+  return `<div class="matrix-wrap">
+    <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:12px">Operatör bir operasyonu bitirirken (son operasyon değilse) işaretlediği sıradaki makineye göre — o makinede henüz kimsenin başlamadığı, bekleyen iş emirleri. Bir satıra tıkla, iş emirlerini gör.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:14px">
+      ${kpi('Bekleyen İş Emri', toplamIsEmri, 'var(--accent)', 'sıradaki operasyonu bekliyor')}
+      ${kpi('Toplam Adet', toplamAdet, 'var(--success)', 'bu iş emirlerindeki toplam parça')}
+      ${kpi('Dolu Makine Sayısı', rows.filter(r=>r.label!=='Belirsiz').length, 'var(--warn)', 'en az bir iş bekleyen makine')}
+      ${kpi('Belirsiz', belirsizSayi, 'var(--danger)', 'sıradaki makinesi işaretlenmemiş')}
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>Sıradaki Makine</th><th>İş Emri Sayısı</th><th>Toplam Adet</th><th></th></tr></thead><tbody>
+      ${rows.length===0 ? `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px">Şu an sıradaki operasyonu bekleyen iş emri yok.</td></tr>` : rows.map(r=>{
+        const acik = isYogunluguAcikMakine===r.label;
+        return `<tr style="cursor:pointer" onclick="toggleIsYogunluguDetay('${escJs(r.label)}')">
+          <td style="font-weight:700;color:${r.label==='Belirsiz'?'var(--danger)':'var(--accent)'}">${esc(r.label)}</td>
+          <td class="mono" style="font-weight:700">${r.isEmriSayisi}</td>
+          <td class="mono">${r.toplamAdet}</td>
+          <td style="text-align:right;color:var(--text-muted)">${acik?ico('chevronUp',14):ico('chevronDown',14)}</td>
+        </tr>
+        ${acik ? `<tr><td colspan="4" style="padding:0">
+          <div style="padding:4px 16px 12px">
+            ${r.isEmriler.map(e=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;flex-wrap:wrap">
+              <span class="mono" style="color:var(--accent);font-weight:600">${esc(e.talepNo||e.isEmriNo)}</span>
+              <span style="color:var(--text-muted)">${esc(e.makine||'—')}</span>
+              <span>Adet: ${esc(e.adet||'—')}</span>
+              <span style="color:var(--text-muted)">${esc(e.operatorName||e.operatorUsername||'')}</span>
+              <span style="color:var(--text-muted)">Bitiş: ${e.endTs?fmtDT(e.endTs):'—'}</span>
+            </div>`).join('')}
+          </div>
+        </td></tr>` : ''}`;
+      }).join('')}
+    </tbody></table></div>
+  </div>`;
+}
 function renderAdmin(){
   /* Stok sekmesi uc bolumlu (takim / karbur / malzeme), asagida `stokYonetim` olarak ayrica ele
      aliniyor — bu yuzden burada karsiligi yok. */
-  const viewToTabKey = { report:'rapor', matrix:'matrix', completed:'completed', analiz:'analiz', tadilatYonetim:'tadilat' };
+  const viewToTabKey = { report:'rapor', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilatYonetim:'tadilat' };
   if(viewToTabKey[view] && !isAdminTabVisible(viewToTabKey[view])){
-    const tabKeyToView = { rapor:'report', matrix:'matrix', completed:'completed', analiz:'analiz', tadilat:'tadilatYonetim', takimStok:'stokYonetim', karbur:'stokYonetim' };
+    const tabKeyToView = { rapor:'report', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilat:'tadilatYonetim', takimStok:'stokYonetim', karbur:'stokYonetim' };
     const fallbackKey = ADMIN_TAB_DEFS.map(t=>t.key).find(k=>isAdminTabVisible(k) && (k!=='tadilat' || canCreateTadilat()) && (k!=='analiz' || !(session.isSef || session.isUretimSef)));
     view = fallbackKey ? tabKeyToView[fallbackKey] : 'report';
   }
@@ -1099,6 +1159,7 @@ function renderAdmin(){
       ${isAdminTabVisible('rapor') ? `<button class="tab-btn ${view==='report'?'active':''}" onclick="setView('report')">${ico('list',14)} Rapor</button>` : ''}
       ${isAdminTabVisible('matrix') ? `<button class="tab-btn ${view==='matrix'?'active':''}" onclick="setView('matrix')">${ico('factory',14)} Makine Matrisi</button>` : ''}
       ${isAdminTabVisible('completed') ? `<button class="tab-btn ${view==='completed'?'active':''}" onclick="setView('completed')">${ico('check',14)} Tamamlanan Kodlar</button>` : ''}
+      ${isAdminTabVisible('isYogunlugu') ? `<button class="tab-btn ${view==='isYogunlugu'?'active':''}" onclick="setView('isYogunlugu')">${ico('box',14)} İş Yoğunluğu</button>` : ''}
       ${!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz') ? `<button class="tab-btn ${view==='analiz'?'active':''}" onclick="setView('analiz')">${ico('chart',14)} Analiz</button>` : ''}
       ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="tab-btn ${view==='tadilatYonetim'?'active':''}" onclick="setView('tadilatYonetim')">${ico('wrench',14)} Tadilat</button>` : ''}
       ${stokErisimVar() ? `<button class="tab-btn ${view==='stokYonetim'?'active':''}" onclick="setView('stokYonetim')">${ico('box',14)} Stok</button>` : ''}
@@ -1797,6 +1858,8 @@ function renderAdmin(){
       body += `${routeModal ? renderRouteModal() : ''}`;
     }
     body += `</div>`;
+  } else if(view==='isYogunlugu'){
+    body = renderIsYogunlugu();
   } else if(view==='analiz'){
     const visibleAnalizViews = ANALIZ_VIEW_DEFS.filter(v=>isAnalizViewVisible(v.key));
     if(!visibleAnalizViews.some(v=>v.key===analizRole)){

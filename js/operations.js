@@ -9,6 +9,20 @@ function getAllowedMachines(){
   const allowedCodes = op.allowedMachines ? Object.keys(op.allowedMachines).filter(k=>op.allowedMachines[k]) : allMachineCodes();
   return allMachines().filter(m=>allowedCodes.includes(m.code)).map(m=>`${m.code} · ${m.name}`);
 }
+// Bir iş emrinin (isEmriNo) ENCİ SON kaydı (startTs'e göre) — o iş emrinin şu an rotada
+// hangi adımda olduğunu anlamak için kullanılıyor. Bu kayıt "tamamlandi" ve son operasyon
+// değilse (ve sonrakiMakine işaretliyse) o iş emri hâlâ sonrakiMakine'de bekliyor demektir —
+// başka biri o iş emri için yeni bir kayıt açtığı an (isEmriNo aynı, startTs daha yeni) bu
+// kayıt artık "en son" olmaktan çıkar, dolayısıyla "bekliyor" listesinden kendiliğinden düşer.
+function bekleyenSonrakiOperasyonlar(){
+  const sonKayitlar = {};
+  entriesArray().forEach(e=>{
+    if(!e.isEmriNo) return;
+    const mevcut = sonKayitlar[e.isEmriNo];
+    if(!mevcut || (e.startTs||0) > (mevcut.startTs||0)) sonKayitlar[e.isEmriNo] = e;
+  });
+  return Object.values(sonKayitlar).filter(e => e.status==='tamamlandi' && !e.sonOperasyon && e.sonrakiMakine);
+}
 function openActiveDetail(id){ activeDetailId = id; render(); }
 function closeActiveDetail(){ activeDetailId = null; setView('list'); }
 // Girilen İş Talep No'yu gerçek takip koduna (U kodu + varsa bileşen eki) çevirir.
@@ -165,7 +179,22 @@ function baslat(){
   view = 'list';
   render();
 }
+// Operatör "Bitir"e bastığında, bu son operasyon DEĞİLSE (rota burada kapanmıyorsa) önce
+// "Sıradaki Operasyon" modalını açıp hangi makineye gideceğini soruyoruz — asıl bitirme
+// (finishEntry) operatör bir makine seçip onaylayınca çalışır. Amaç: bir iş emrinin şu an
+// hangi makinede/konumda beklediğini görüp makine bazlı iş yoğunluğunu çıkarabilmek.
 function bitir(id){
+  const e = STATE.entries[id] || {};
+  if(!e.sonOperasyon){
+    nextOpPendingId = id;
+    nextOpPendingGroupId = null;
+    nextOpMachineSel = '';
+    render();
+    return;
+  }
+  finishEntry(id, null);
+}
+function finishEntry(id, sonrakiMakine){
   const e = STATE.entries[id] || {};
   let extra = 0;
   if(e.status==='duruş' && e.duruşTs) extra = Date.now() - e.duruşTs;
@@ -174,7 +203,7 @@ function bitir(id){
   const excludedMs = (e.excludedMs||0) + (isGunSonu?extra:0);
   const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
   const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
-  DB.ref('entries/'+id).update({ endTs: Date.now(), status:'tamamlandi', duruşToplamMs, excludedMs, durusLog, excludedLog, finishedByUsername: session.username, finishedByName: session.displayName });
+  DB.ref('entries/'+id).update({ endTs: Date.now(), status:'tamamlandi', duruşToplamMs, excludedMs, durusLog, excludedLog, finishedByUsername: session.username, finishedByName: session.displayName, sonrakiMakine: sonrakiMakine || null });
   toast('Operasyon tamamlandı');
   if(activeDetailId===id){ activeDetailId=null; view='list'; }
 }
@@ -263,6 +292,51 @@ function pickDurusReason(i){
   const el = document.getElementById('durus-picker-inner');
   if(el){ el.innerHTML = durusOptionsListHtml(); updateDurusStartBtn(); }
   else { render(); } // güvenlik ağı: beklenmedik bir ekranda id yoksa eskisi gibi tam çizim
+}
+/* ===================== SIRADAKİ OPERASYON SEÇİCİ =====================
+   "Bitir" tıklanınca (son operasyon değilse) açılan modal — operatör bu iş emrinin bundan sonra
+   hangi makineye/operasyona gideceğini işaretliyor. Bu sayede bir iş emrinin an itibarıyla hangi
+   makinede beklediği görülebiliyor (bkz. entries/{id}.sonrakiMakine) ve makine bazlı iş yoğunluğu
+   (kaç iş emri o makineyi bekliyor) buradan çıkarılabiliyor. Duruş modalıyla birebir aynı desen
+   (renderDurusModal / durusOptionsListHtml) kullanılıyor, sadece seçenek listesi makineler. */
+const NEXT_OP_BELIRSIZ = '__BILINMIYOR__';
+function nextOpOptionsListHtml(){
+  const cards = allMachines().map(m=>{
+    const isActive = nextOpMachineSel===m.code;
+    return `<button class="durus-option-card" style="${isActive?'border-color:var(--accent);background:var(--accent-dim)':''}" onclick="pickNextOpMachine('${m.code}')">
+      <span class="durus-radio" style="${isActive?'border-color:var(--accent)':''}"><span style="width:10px;height:10px;border-radius:50%;background:${isActive?'var(--accent)':'transparent'}"></span></span>
+      <span class="durus-option-name" style="${isActive?'color:var(--accent)':''}">${esc(m.code)} · ${esc(m.name)}</span>
+    </button>`;
+  }).join('');
+  const isBelirsiz = nextOpMachineSel===NEXT_OP_BELIRSIZ;
+  return `${cards}
+    <div class="durus-option-divider">DİĞER</div>
+    <button class="durus-option-card dashed" onclick="pickNextOpMachine('${NEXT_OP_BELIRSIZ}')">
+      <span class="durus-radio" style="${isBelirsiz?'border-color:var(--warn)':''}"><span style="width:10px;height:10px;border-radius:50%;background:${isBelirsiz?'var(--warn)':'transparent'}"></span></span>
+      <span class="durus-option-name" style="color:var(--text-muted)">Belirsiz / Henüz Belli Değil</span>
+    </button>`;
+}
+function pickNextOpMachine(code){
+  nextOpMachineSel = code;
+  const el = document.getElementById('nextop-picker-inner');
+  if(el){ el.innerHTML = nextOpOptionsListHtml(); updateNextOpStartBtn(); }
+  else { render(); }
+}
+function updateNextOpStartBtn(){
+  const btn = document.getElementById('nextop-start-btn');
+  if(btn) btn.disabled = !nextOpMachineSel;
+}
+function closeNextOpModal(){
+  nextOpPendingId = null; nextOpPendingGroupId = null; nextOpMachineSel = '';
+  render();
+}
+function confirmNextOp(){
+  if(!nextOpMachineSel){ toast('Sıradaki operasyonu seçmelisin'); return; }
+  const machine = allMachines().find(m=>m.code===nextOpMachineSel);
+  const sonrakiMakine = nextOpMachineSel===NEXT_OP_BELIRSIZ ? 'Belirsiz' : (machine ? `${machine.code} · ${machine.name}` : nextOpMachineSel);
+  if(nextOpPendingGroupId){ finishGrup(nextOpPendingGroupId, sonrakiMakine); }
+  else if(nextOpPendingId){ finishEntry(nextOpPendingId, sonrakiMakine); }
+  nextOpPendingId = null; nextOpPendingGroupId = null; nextOpMachineSel = '';
 }
 // Operatör "Gün Sonu" verdiğinde, elinde BAŞKA duruşta unutulmuş kayıt varsa (ör. "Farklı İş
 // Emrine Geçiş" ile duraklatıp hiç geri dönmediği bir iş) onları da Gün Sonu'na çeviriyoruz.
@@ -406,6 +480,18 @@ function devamGrup(groupId){
 function bitirGrup(groupId){
   const members = groupMembersOf(groupId);
   if(members.length===0) return;
+  if(members.some(e=>!e.sonOperasyon)){
+    nextOpPendingGroupId = groupId;
+    nextOpPendingId = null;
+    nextOpMachineSel = '';
+    render();
+    return;
+  }
+  finishGrup(groupId, null);
+}
+function finishGrup(groupId, sonrakiMakine){
+  const members = groupMembersOf(groupId);
+  if(members.length===0) return;
   const now = Date.now();
   // Duraklatılmışsa önce ortak duruş süresini kapat (Gün Sonu hariç tutma kuralı aynı şekilde uygulanır).
   const withDurus = members.map(e=>{
@@ -440,7 +526,8 @@ function bitirGrup(groupId){
       durusLog: x.durusLog,
       excludedLog: x.excludedLog,
       finishedByUsername: session.username,
-      finishedByName: session.displayName
+      finishedByName: session.displayName,
+      sonrakiMakine: x.e.sonOperasyon ? null : (sonrakiMakine || null)
     });
   });
   toast('Tüm iş emirleri tamamlandı');

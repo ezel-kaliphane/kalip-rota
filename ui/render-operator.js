@@ -358,6 +358,7 @@ function renderOperator(){
           <div class="op-top"><span class="op-code">${esc(e.makine||'—')}</span></div>
           <div class="op-foot">${ico('clock',14)} ${fmtDT(e.startTs)} → ${e.endTs?fmtDT(e.endTs):'—'} · ${dur}</div>
           <div style="margin-top:6px;font-size:12px;font-weight:600;color:${statusColor}">${statusLabel}</div>
+          ${e.sonrakiMakine ? `<div style="margin-top:2px;font-size:11.5px;color:var(--text-muted)">${ico('chevronRight',12)} Sıradaki: <span style="color:var(--accent);font-weight:600">${esc(e.sonrakiMakine)}</span></div>` : ''}
         </div>`;
       }).join('')}
       ${entryDetailId ? renderEntryDetailModal() : ''}

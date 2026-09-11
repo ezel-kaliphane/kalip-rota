@@ -17,6 +17,23 @@ function renderDurusModal(){
   </div>`;
 }
 
+function renderNextOpModal(){
+  const canStart = !!nextOpMachineSel;
+  return `<div class="durus-modal-overlay" onclick="if(event.target===this) closeNextOpModal()">
+    <div class="durus-modal-panel">
+      <div class="durus-modal-handle" style="cursor:pointer" onclick="closeNextOpModal()" title="Kapat"></div>
+      <div class="durus-modal-header">
+        <div><div class="durus-modal-title">Sıradaki Operasyon</div><div class="durus-modal-sub">Bu iş emri şimdi hangi makineye gidecek?</div></div>
+        <button class="icon-btn" onclick="closeNextOpModal()">${ico('x',16)}</button>
+      </div>
+      <div class="durus-modal-list" id="nextop-picker-inner">${nextOpOptionsListHtml()}</div>
+      <div class="durus-modal-footer">
+        <button class="durus-modal-footer-btn" id="nextop-start-btn" ${canStart?'':'disabled'} onclick="confirmNextOp()">Onayla ve Bitir</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderMachineAccessModal(){
   const code = machineAccessModalCode;
   const op = STATE.operators[code];

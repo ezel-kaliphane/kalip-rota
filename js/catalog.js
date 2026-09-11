@@ -324,6 +324,7 @@ const ADMIN_TAB_DEFS = [
   { key:'rapor', label:'Rapor' },
   { key:'matrix', label:'Makine Matrisi' },
   { key:'completed', label:'Tamamlanan Kodlar' },
+  { key:'isYogunlugu', label:'İş Yoğunluğu' },
   { key:'analiz', label:'Analiz' },
   { key:'tadilat', label:'Tadilat' },
   { key:'takimStok', label:'Stok · Takım & Sarf' },

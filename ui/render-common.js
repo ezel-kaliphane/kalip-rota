@@ -310,6 +310,11 @@ function renderEntryDetailModal(){
           <div style="font-size:14px">${esc(e.operatorUsername)} · ${esc(e.operatorName)}</div>
         </div>` : ''}
 
+        ${e.sonrakiMakine ? `<div class="op-settings-row" style="display:block;margin-bottom:14px">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${ico('chevronRight',12)} Sıradaki Operasyon</div>
+          <div style="font-size:14px;color:var(--accent);font-weight:600">${esc(e.sonrakiMakine)}</div>
+        </div>` : ''}
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
           <div class="op-settings-row" style="display:block">
             <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Başlatan</div>
@@ -778,7 +783,8 @@ function renderGroupScreen(groupId, groupMembers){
       </div>
     </div>` : '';
 
-  return `<div class="root-mobile theme-${resolvedTheme()}">${header}${body}${editBlock}${!anyDurus && durusOpen ? renderDurusModal() : ''}</div>`;
+  const showNextOp = nextOpPendingGroupId===groupId || groupMembers.some(m=>m.id===nextOpPendingId);
+  return `<div class="root-mobile theme-${resolvedTheme()}">${header}${body}${editBlock}${!anyDurus && durusOpen ? renderDurusModal() : ''}${showNextOp ? renderNextOpModal() : ''}</div>`;
 }
 function renderLockScreen(active){
   const header = `
@@ -857,7 +863,7 @@ function renderLockScreen(active){
       ${durusBlock}
       ${editButton}
       ${editBlock}
-    </div>${durusOpen ? renderDurusModal() : ''}${kismiAktarId ? renderKismiAktarModal() : ''}</div>`;
+    </div>${durusOpen ? renderDurusModal() : ''}${kismiAktarId ? renderKismiAktarModal() : ''}${nextOpPendingId===active.id ? renderNextOpModal() : ''}</div>`;
 }
 
 /* ===================== MOBİL ALT GEZİNME (v27) =====================

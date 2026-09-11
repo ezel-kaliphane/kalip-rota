@@ -597,6 +597,7 @@ function saveEditActive(id){
   render();
 }
 let durusOpen = false, durusReasonSel = '', durusCustom = '';
+let nextOpPendingId = null, nextOpPendingGroupId = null, nextOpMachineSel = ''; // "Sıradaki Operasyon" seçici modalı — bkz. js/operations.js bitir()/bitirGrup()
 let pwForm = { current:'', next:'', confirm:'' };
 let loginForm = { username:'', password:'' };
 let loginError = '';
@@ -633,6 +634,8 @@ let matrixGroupFilter = 'Tümü';
 function setMatrixGroupFilter(v){ matrixGroupFilter = v; render(); }
 let matrixAtolyeFilter = 'tumu'; // 'tumu' | 'imalat' | 'tadilat'
 function setMatrixAtolyeFilter(v){ matrixAtolyeFilter = v; render(); }
+let isYogunluguAcikMakine = null; // "İş Yoğunluğu" sekmesinde detayı açık olan makine satırı
+function toggleIsYogunluguDetay(label){ isYogunluguAcikMakine = isYogunluguAcikMakine===label ? null : label; render(); }
 // Bir tadilat talebinin "Bekleme" (talep açıldıktan sonra bir operatörün işi seçip başlamasına
 // kadar geçen) süresinde ilgili operatörün sistemde ne yaptığını gösteren detay ekranı — kısa süreli
 // işler için uzun beklemelerin savunulabilir olup olmadığını görmek için. Şu an SADECE SuperAdmin
