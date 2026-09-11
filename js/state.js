@@ -417,6 +417,245 @@ function consumeStock(itemId, lotId, miktar, meta){
     stockHareketleri[hid] = hareket;
   }
 }
+/* ---------- Kod ile Giriş (mal kabul) — SuperAdmin/Şef ----------
+   Tadilat'taki "Malzeme Ara" modalıyla (bkz. js/catalog.js malzemeLikeMatch, ui/catalog-ui.js
+   renderMalzemeAramaModal) AYNI arama deneyimi: tek kutuya kelimeler boşlukla, sırasız yazılır
+   (ya da Canias alışkanlığı için %joker%), eşleşenler ANINDA liste olarak aşağıda çıkar,
+   tıklayınca seçilir — ayrı bir "Ara" tuşuna basmaya ya da kodu harfiyen bilmeye gerek yok.
+   stockItems zaten bellek-içi (canlı dinleniyor), ayrıca Firebase okuması YAPILMIYOR. TEK giriş
+   noktası — hem adet takipli kalemler (mal kabul: adet+not+sipariş açık) hem boy takipli
+   çubuklar (yeni çubuk ekleme) burada; Durum ekranında artık sadece düzeltme/silme var, giriş yok. */
+let stokGirisArama = '';
+let stokGirisFoundId = null;
+let stokGirisMiktar = 1;
+let stokGirisNot = '';
+let stokGirisSiparisAcik = false;
+let stokGirisCubukBoyu = '';
+function stockGirisAramaSonuclar(){
+  const q = stokGirisArama.trim();
+  if(!q) return [];
+  return stockItemsArray().filter(it=>malzemeLikeMatch(it.kod,q) || malzemeLikeMatch(it.isim,q)).slice(0,50);
+}
+function stockGirisSecKalem(itemId){
+  const it = stockItems[itemId]; if(!it) return;
+  stokGirisFoundId = itemId;
+  stokGirisMiktar = 1;
+  stokGirisNot = '';
+  stokGirisSiparisAcik = !!it.siparisAcik;
+  stokGirisCubukBoyu = '';
+  render();
+}
+function stokGirisScanQr(){
+  openQrScanner(function(kod){
+    stokGirisArama = kod;
+    const exact = stockItemsArray().find(it=>String(it.kod||'').trim().toUpperCase()===String(kod||'').trim().toUpperCase());
+    if(exact) stockGirisSecKalem(exact.id); else render();
+  });
+}
+function stokGirisGeriDon(){
+  stokGirisFoundId = null; stokGirisArama = '';
+  stokGirisMiktar = 1; stokGirisNot = ''; stokGirisSiparisAcik = false; stokGirisCubukBoyu = '';
+  render();
+}
+function stokGirisMiktarDegistir(delta){
+  stokGirisMiktar = Math.max(1, (Number(stokGirisMiktar)||1) + delta);
+  render();
+}
+function stokGirisCubukEkle(){
+  if(!canManageStock()) return;
+  const itemId = stokGirisFoundId; if(!itemId) return;
+  const boy = Number(stokGirisCubukBoyu)||0;
+  if(boy<=0){ toast('Boy (mm) girin'); return; }
+  const lotId = uid();
+  DB.ref(`stockItems/${itemId}/lots/${lotId}`).set({ boy }).then(()=>{
+    toast('Yeni çubuk eklendi');
+    stokGirisGeriDon();
+  });
+}
+function stockGirisKaydet(){
+  if(!canManageStock()) return;
+  const itemId = stokGirisFoundId; if(!itemId) return;
+  const item = stockItems[itemId]; if(!item) return;
+  const miktar = Math.max(1, Number(stokGirisMiktar)||1);
+  const siparisAcik = !!stokGirisSiparisAcik;
+  DB.ref('stockItems/'+itemId+'/miktar').transaction(cur => (Number(cur)||0) + miktar)
+    .then(result=>{
+      if(!result.committed){ toast('İşlem tamamlanamadı, tekrar deneyin'); return; }
+      const sonrakiMiktar = Number(result.snapshot.val())||0;
+      DB.ref('stockItems/'+itemId+'/siparisAcik').set(siparisAcik);
+      const hid = uid();
+      const hareket = {
+        itemId, itemKod: item.kod||'', itemIsim: item.isim||'', miktar: miktar, birim: item.birim||'',
+        tip:'giris', aciklama: (stokGirisNot||'').trim(),
+        operatorUsername: session.username, operatorName: session.displayName, ts: Date.now()
+      };
+      DB.ref('stockHareketleri/'+hid).set(hareket);
+      stockHareketleri[hid] = hareket;
+      stockItems[itemId] = { ...item, miktar: sonrakiMiktar, siparisAcik };
+      toast(`Giriş kaydedildi: ${item.kod||''} (+${miktar})`);
+      stokGirisGeriDon();
+    }).catch(err=>{
+      toast('Giriş kaydedilemedi: '+(err.message||'bilinmeyen hata'));
+    });
+}
+function toggleStockItemSiparisAcik(id){
+  if(!canManageStock()) return;
+  const cur = !!(stockItems[id]||{}).siparisAcik;
+  DB.ref('stockItems/'+id+'/siparisAcik').set(!cur).then(()=>{
+    stockItems[id] = { ...(stockItems[id]||{}), siparisAcik: !cur };
+    render();
+  });
+}
+
+/* ---------- Malzeme Excel Toplu Yükleme (SuperAdmin/Şef) ----------
+   Kama gibi kalemler (Ölçü/Tip/CANİAS Kodu alanları) için: bu bilgiler ayrı şema alanı olarak
+   DEĞİL, isim metnine gömülü tutuluyor (kullanıcı kararı). Bu yüzden CANİAS kodu, tekrar
+   yüklemede eşleştirme için isim'in sonundaki "(KOD)" parçasından ayrıştırılıyor — toolstock'ta
+   canias ayrı bir alan olduğu için doğrudan eşleşiyordu, buradaki tek fark bu. kod alanı
+   biricik DEĞİL (ör. B13 dört farklı ölçüde tekrar eder), o yüzden upsert anahtarı kod değil. */
+const MALZEME_EXCEL_COLS = {
+  kod:      ['KOD'],
+  olcu:     ['ÖLÇÜ (WXDXL)','OLCU (WXDXL)','ÖLÇÜ','OLCU'],
+  tip:      ['TİP','TIP'],
+  stok:     ['STOK'],
+  canias:   ['CANİAS KODU','CANIAS KODU','CANİAS','CANIAS'],
+  aciklama: ['AÇIKLAMA','ACIKLAMA'],
+};
+function malzemeFindColIdx(header, candidates){
+  const norm = header.map(h=>trNorm(String(h||'').trim()));
+  for(const c of candidates){ const nc=trNorm(c); const i=norm.findIndex(h=>h===nc); if(i!==-1) return i; }
+  for(const c of candidates){ const nc=trNorm(c); const i=norm.findIndex(h=>h.includes(nc)); if(i!==-1) return i; }
+  return -1;
+}
+function malzemeCaniasFromIsim(isim){
+  const m = String(isim||'').match(/\(([^()]+)\)\s*$/);
+  return m ? m[1].trim().toUpperCase() : '';
+}
+function malzemeKamaIsimOlustur(r){
+  const parcalar = [r.olcu, r.tip].filter(Boolean).join(' ');
+  let isim = parcalar;
+  if(r.aciklama) isim += (isim?' — ':'') + r.aciklama;
+  if(r.canias) isim += ` (${r.canias})`;
+  return isim.trim();
+}
+let malzemeExcelPreview = null;
+let malzemeExcelUpdateStock = false;
+async function handleMalzemeExcelPreview(){
+  if(!canManageStock()) return;
+  const fileInput = document.getElementById('malzeme-excel-file-input');
+  const file = fileInput?.files?.[0];
+  const statusEl = document.getElementById('malzeme-excel-status');
+  if(!file){ toast('Bir dosya seçin'); return; }
+  if(!(await ensureXLSX())) return;
+  if(statusEl) statusEl.textContent = 'Okunuyor…';
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = xlsxSatirlar(ws);
+      if(rows.length===0){ if(statusEl) statusEl.textContent = 'Sayfa boş.'; return; }
+      const header = rows[0];
+      const col = {
+        kod: malzemeFindColIdx(header, MALZEME_EXCEL_COLS.kod),
+        olcu: malzemeFindColIdx(header, MALZEME_EXCEL_COLS.olcu),
+        tip: malzemeFindColIdx(header, MALZEME_EXCEL_COLS.tip),
+        stok: malzemeFindColIdx(header, MALZEME_EXCEL_COLS.stok),
+        canias: malzemeFindColIdx(header, MALZEME_EXCEL_COLS.canias),
+        aciklama: malzemeFindColIdx(header, MALZEME_EXCEL_COLS.aciklama),
+      };
+      if(col.kod===-1 || col.stok===-1){
+        if(statusEl) statusEl.textContent = 'KOD/STOK sütunu bulunamadı.';
+        return;
+      }
+      const parsed = [];
+      const seenCodes = new Set();
+      let dupCount = 0, blankCount = 0;
+      for(let i=1;i<rows.length;i++){
+        const r = rows[i];
+        const kod = col.kod!==-1 ? String(r[col.kod]||'').trim() : '';
+        if(!kod){ blankCount++; continue; }
+        const canias = col.canias!==-1 ? String(r[col.canias]||'').trim().toUpperCase() : '';
+        if(canias){ if(seenCodes.has(canias)) dupCount++; seenCodes.add(canias); }
+        const row = {
+          kod,
+          olcu: col.olcu!==-1 ? String(r[col.olcu]||'').trim() : '',
+          tip: col.tip!==-1 ? String(r[col.tip]||'').trim() : '',
+          stok: col.stok!==-1 ? (Number(r[col.stok])||0) : 0,
+          canias,
+          aciklama: col.aciklama!==-1 ? String(r[col.aciklama]||'').trim() : '',
+        };
+        row.isim = malzemeKamaIsimOlustur(row);
+        parsed.push(row);
+      }
+      if(parsed.length===0){ if(statusEl) statusEl.textContent = 'Geçerli satır bulunamadı.'; return; }
+      malzemeExcelPreview = { rows: parsed, blankCount, dupCount };
+      malzemeExcelUpdateStock = false;
+      if(statusEl) statusEl.textContent = `${parsed.length} satır okundu, önizleme aşağıda.`;
+      render();
+    } catch(err){
+      console.warn(err);
+      if(statusEl) statusEl.textContent = 'Dosya okunamadı, .xlsx formatında olduğundan emin olun.' + (err && err.message ? ' (' + err.message + ')' : '');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function confirmMalzemeExcelUpload(){
+  if(!canManageStock() || !malzemeExcelPreview) return;
+  const rows = malzemeExcelPreview.rows;
+  if(rows.length===0){ toast('Yüklenecek satır yok'); return; }
+  // Mevcut kalemleri isim'in sonundaki (CANİAS) parçasından eşleştir — kod biricik değil.
+  const byCanias = {};
+  Object.entries(stockItems).forEach(([id,v])=>{
+    if(v.tur==='boy') return;
+    const c = malzemeCaniasFromIsim(v.isim);
+    if(c) byCanias[c] = id;
+  });
+  const now = Date.now();
+  const updates = {};
+  let yeni = 0, guncellendi = 0;
+  rows.forEach(r=>{
+    const existingId = r.canias ? byCanias[r.canias] : null;
+    const isNew = !existingId;
+    const itemId = isNew ? uid() : existingId;
+    updates['stockItems/'+itemId+'/kod'] = r.kod;
+    updates['stockItems/'+itemId+'/isim'] = r.isim;
+    updates['stockItems/'+itemId+'/tur'] = 'adet';
+    updates['stockItems/'+itemId+'/birim'] = 'adet';
+    if(isNew){
+      yeni++;
+      updates['stockItems/'+itemId+'/mode'] = 'manuel';
+      updates['stockItems/'+itemId+'/miktar'] = r.stok;
+      const hid = uid();
+      updates['stockHareketleri/'+hid] = {
+        itemId, itemKod: r.kod, itemIsim: r.isim, miktar: r.stok, birim:'adet',
+        tip:'sayim', aciklama:'Excel toplu yükleme (ilk kayıt)',
+        operatorUsername: session.username, operatorName: session.displayName, ts: now
+      };
+    } else if(malzemeExcelUpdateStock){
+      guncellendi++;
+      updates['stockItems/'+itemId+'/miktar'] = r.stok;
+      const onceki = Number((stockItems[itemId]||{}).miktar)||0;
+      const hid = uid();
+      updates['stockHareketleri/'+hid] = {
+        itemId, itemKod: r.kod, itemIsim: r.isim, miktar: r.stok-onceki, birim:'adet',
+        tip:'sayim', aciklama:'Excel toplu yükleme (sayım güncelleme)',
+        operatorUsername: session.username, operatorName: session.displayName, ts: now
+      };
+    } else {
+      guncellendi++;
+    }
+  });
+  DB.ref().update(updates).then(()=>{
+    toast(`Yükleme tamamlandı: ${yeni} yeni, ${guncellendi} güncellendi`);
+    malzemeExcelPreview = null;
+    render();
+  }).catch(err=>{
+    toast('Yükleme başarısız: '+(err.message||'bilinmeyen hata'));
+  });
+}
+
 let stokAddTurState = 'adet';
 function addStockItem(){
   if(!canManageStock()) return;
@@ -453,16 +692,6 @@ function deleteStockItem(id){
   if(!canManageStock()) return;
   if(!confirm('Bu malzeme stok kalemini silmek istediğinize emin misiniz?')) return;
   DB.ref('stockItems/'+id).remove();
-}
-function addStockLot(itemId){
-  if(!canManageStock()) return;
-  const boy = Number(document.getElementById('stok-yeni-boy-'+itemId)?.value||0);
-  if(boy<=0){ toast('Boy (mm) girin'); return; }
-  const lotId = uid();
-  DB.ref(`stockItems/${itemId}/lots/${lotId}`).set({ boy }).then(()=>{
-    toast('Yeni çubuk eklendi');
-    const el = document.getElementById('stok-yeni-boy-'+itemId); if(el) el.value='';
-  });
 }
 function updateStockLot(itemId, lotId, val){
   if(!canManageStock()) return;

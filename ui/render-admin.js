@@ -738,8 +738,10 @@ function renderMalzemeStokAyarlar(){
         <div style="font-size:12px;color:var(--text-muted);max-width:640px">Stok kalemi yönetimi ve tüketim geçmişi için üst menüdeki <b>Stok → Malzeme (çelik)</b> bölümüne bak.</div>`;
 }
 
+let malzemeAramaMetni = '';
 function renderMalzemeStokScreen(){
-      const items = stockItemsArray();
+      const aramaMetni = trNorm(malzemeAramaMetni.trim());
+      const items = stockItemsArray().filter(it=>!aramaMetni || trNorm(`${it.kod||''} ${it.isim||''}`).includes(aramaMetni));
       const recentMoves = Object.entries(stockHareketleri).map(([id,v])=>({id,...v})).sort((a,b)=>b.ts-a.ts).slice(0,20);
       if(!stockEnabled()) return `<div style="font-size:12.5px;color:var(--text-muted)">Modül kapalı — <b>Ayarlar → Malzeme Stoğu</b>'ndan açtığında stok kalemi yönetimi ve tüketim geçmişi burada görünür.</div>`;
 
@@ -776,8 +778,9 @@ function renderMalzemeStokScreen(){
 
       const durumBolumu = `
         <div class="sec-h" style="margin-top:0">Stok Kalemleri (${items.length})</div>
+        <input placeholder="Kod veya isimde ara…" value="${esc(malzemeAramaMetni)}" oninput="malzemeAramaMetni=this.value; render()" style="max-width:320px;margin-bottom:12px">
         <div class="op-settings-table" style="margin-bottom:26px">
-          ${items.length===0 ? `<div style="font-size:12.5px;color:var(--text-muted);padding:12px 4px">Henüz stok kalemi eklenmedi.</div>` : items.map(it=>{
+          ${items.length===0 ? `<div style="font-size:12.5px;color:var(--text-muted);padding:12px 4px">${malzemeAramaMetni.trim() ? 'Aramayla eşleşen kalem yok.' : 'Henüz stok kalemi eklenmedi.'}</div>` : items.map(it=>{
             if(it.tur==='boy'){
               const lots = lotsArray(it);
               return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px">
@@ -785,18 +788,14 @@ function renderMalzemeStokScreen(){
                   <div><span class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)}</span> <span style="color:var(--text-muted);font-size:12.5px">${esc(it.cap||'')} · Boy Takip · ${lots.length} çubuk</span></div>
                   <button class="del-btn" onclick="deleteStockItem('${it.id}')" title="Kalemi tamamen sil">${ico('trash',14)}</button>
                 </div>
-                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
-                  ${lots.length===0 ? `<div style="font-size:12px;color:var(--text-muted)">Çubuk yok.</div>` : lots.map(lot=>`
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  ${lots.length===0 ? `<div style="font-size:12px;color:var(--text-muted)">Çubuk yok — yeni çubuk eklemek için Kod ile Giriş'ten ara.</div>` : lots.map(lot=>`
                     <div style="display:flex;align-items:center;gap:8px">
                       <input type="number" value="${lot.boy}" style="width:110px" onchange="updateStockLot('${it.id}','${lot.id}',this.value)">
                       <span style="font-size:12px;color:var(--text-muted)">${esc(it.birim||'mm')}</span>
                       <button class="del-btn" onclick="deleteStockLot('${it.id}','${lot.id}')" title="Bu çubuğu sil">${ico('trash',14)}</button>
                     </div>
                   `).join('')}
-                </div>
-                <div style="display:flex;gap:8px">
-                  <input id="stok-yeni-boy-${it.id}" type="number" placeholder="Yeni çubuk boyu" style="width:150px">
-                  <button class="btn-ghost" style="padding:8px 14px;font-size:12.5px" onclick="addStockLot('${it.id}')">+ Yeni Çubuk</button>
                 </div>
               </div>`;
             }
@@ -808,6 +807,10 @@ function renderMalzemeStokScreen(){
                 <option value="oto" ${it.mode==='oto'?'selected':''}>Otomatik (Adet kadar)</option>
                 <option value="manuel" ${it.mode==='manuel'?'selected':''}>Manuel (operatör girer)</option>
               </select>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-muted);cursor:pointer">
+                <input type="checkbox" style="width:auto" ${it.siparisAcik?'checked':''} onchange="toggleStockItemSiparisAcik('${it.id}')">
+                Sipariş açık
+              </label>
               <button class="del-btn" onclick="deleteStockItem('${it.id}')" title="Sil">${ico('trash',14)}</button>
             </div>`;
           }).join('')}
@@ -817,12 +820,105 @@ function renderMalzemeStokScreen(){
         <div class="sec-h" style="margin-top:0">Son Stok Hareketleri</div>
         <table><thead><tr><th>Tarih</th><th>Kalem</th><th>Miktar</th><th>İş Emri</th><th>Kim</th></tr></thead><tbody>
           ${recentMoves.length===0 ? `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Henüz hareket yok.</td></tr>` : recentMoves.map(m=>`
-            <tr><td>${fmtDT(m.ts)}</td><td class="mono">${esc(m.itemKod)}${m.itemIsim?` <span style="color:var(--text-muted)">· ${esc(m.itemIsim)}</span>`:''}</td><td style="color:${m.miktar<0?'var(--danger)':'var(--success)'}">${m.miktar>0?'+':''}${m.miktar} ${esc(m.birim||'')}</td><td class="mono">${esc(m.talepNo||m.isEmriNo||'—')}</td><td>${esc(m.operatorName||'')}</td></tr>
+            <tr><td>${fmtDT(m.ts)}</td><td class="mono">${esc(m.itemKod)}${m.itemIsim?` <span style="color:var(--text-muted)">· ${esc(m.itemIsim)}</span>`:''}</td><td style="color:${m.miktar<0?'var(--danger)':'var(--success)'}">${m.miktar>0?'+':''}${m.miktar} ${esc(m.birim||'')}${m.aciklama?`<div style="font-size:10.5px;color:var(--text-muted);font-weight:400">${esc(m.aciklama)}</div>`:''}</td><td class="mono">${esc(m.talepNo||m.isEmriNo||'—')}</td><td>${esc(m.operatorName||'')}</td></tr>
           `).join('')}
         </tbody></table>`;
 
+      const kodGirisBolumu = (() => {
+        const it = stokGirisFoundId ? stockItems[stokGirisFoundId] : null;
+        const sonuclar = it ? [] : stockGirisAramaSonuclar();
+        return `<div class="sec-h" style="margin-top:0">Kod ile Giriş</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:640px">Kelimeleri boşlukla ayırarak yaz — sıra önemli değil (ör. "b13 kalın"), Canias alışkanlığın varsa %joker% da kullanabilirsin. Ya da QR okut. Adet takipli kalemlerde mal kabul, boy takipli çubuklarda yeni çubuk eklenir.</div>
+        <div class="card" style="max-width:520px">
+          ${!it ? `
+            <div style="display:flex;gap:8px;margin-bottom:14px">
+              <input id="malzeme-giris-arama" class="mono" placeholder="ör. b13 kalın  (ya da %B13%)" value="${esc(stokGirisArama)}" oninput="stokGirisArama=this.value; render()" autofocus style="flex:1">
+              <button class="btn-ghost" title="QR Okut" onclick="stokGirisScanQr()">${ico('camera',16)}</button>
+            </div>
+            ${!stokGirisArama.trim() ? `<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:16px 0">Aramaya başlamak için yukarı yaz.</div>`
+              : sonuclar.length===0 ? `<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:16px 0">Eşleşme bulunamadı.</div>`
+              : `<div style="max-height:340px;overflow-y:auto">
+                ${sonuclar.map(r=>{
+                  const ozet = r.tur==='boy'
+                    ? `${esc(r.cap||'')} · Boy Takip · ${lotsArray(r).length} çubuk`
+                    : `${esc(r.isim||'')} · mevcut: ${r.miktar} ${esc(r.birim||'adet')}`;
+                  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer" onclick="stockGirisSecKalem('${escJs(r.id)}')">
+                    <div><span class="mono" style="color:var(--accent);font-weight:700">${esc(r.kod)}</span><div style="font-size:11.5px;color:var(--text-muted)">${ozet}</div></div>
+                    <span style="font-size:11.5px;color:var(--success);flex-shrink:0">Seç →</span>
+                  </div>`;
+                }).join('')}
+                ${sonuclar.length===50 ? `<div style="font-size:11px;color:var(--text-muted);text-align:center;padding-top:6px">İlk 50 sonuç gösteriliyor — daha spesifik yaz.</div>` : ''}
+              </div>`}
+          ` : it.tur==='boy' ? `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:14px">
+              <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;flex:1">
+                <div style="font-weight:600">${esc(it.kod||'')} <span style="font-weight:400;color:var(--text-muted)">${esc(it.cap||'')} · Boy Takip</span></div>
+                <div style="font-size:12.5px;margin-top:6px">${lotsArray(it).length===0 ? 'Çubuk yok.' : 'Mevcut çubuklar: ' + lotsArray(it).map(l=>l.boy+' '+(it.birim||'mm')).join(', ')}</div>
+              </div>
+              <button class="btn-ghost" title="Başka kalem seç" onclick="stokGirisGeriDon()">${ico('x',16)}</button>
+            </div>
+            <div class="field"><label>Yeni çubuk boyu (${esc(it.birim||'mm')})</label>
+              <input type="number" value="${esc(stokGirisCubukBoyu)}" placeholder="ör. 2000" oninput="stokGirisCubukBoyu=this.value">
+            </div>
+            <button class="btn-primary" style="width:100%;padding:12px;margin-top:6px" onclick="stokGirisCubukEkle()">✓ Çubuğu Ekle</button>
+          ` : `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:14px">
+              <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;flex:1">
+                <div style="font-weight:600">${esc(it.kod||'')}</div>
+                <div style="font-size:11.5px;color:var(--text-muted)">${esc(it.isim||'')}</div>
+                <div style="font-size:12.5px;margin-top:6px">Mevcut stok: <b>${it.miktar}</b> ${esc(it.birim||'adet')}</div>
+              </div>
+              <button class="btn-ghost" title="Başka kalem seç" onclick="stokGirisGeriDon()">${ico('x',16)}</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:16px;justify-content:center;margin-bottom:14px">
+              <button class="btn-ghost" style="width:44px;height:44px;font-size:20px;padding:0" onclick="stokGirisMiktarDegistir(-1)">−</button>
+              <div style="font-size:24px;font-weight:700;min-width:44px;text-align:center">${stokGirisMiktar}</div>
+              <button class="btn-ghost" style="width:44px;height:44px;font-size:20px;padding:0" onclick="stokGirisMiktarDegistir(1)">+</button>
+            </div>
+            <div class="field"><label>Not (Sipariş No)</label>
+              <input value="${esc(stokGirisNot)}" placeholder="ör. Sip. No 2026-114" oninput="stokGirisNot=this.value">
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;margin-bottom:14px">
+              <input type="checkbox" style="width:auto" ${stokGirisSiparisAcik?'checked':''} onchange="stokGirisSiparisAcik=this.checked">
+              Sipariş açık (bu kalem için tedarikçiye sipariş verildi)
+            </label>
+            <button class="btn-primary" style="width:100%;padding:12px" onclick="stockGirisKaydet()">✓ Girişi Kaydet</button>
+          `}
+        </div>`;
+      })();
+
+      const excelBolumu = `<div class="sec-h" style="margin-top:0">Excel ile Toplu Yükleme</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;max-width:680px">Beklenen sütunlar: <span class="mono">KOD</span> ve <span class="mono">STOK</span> (zorunlu), ayrıca varsa ÖLÇÜ (WXDXL), TİP, CANİAS KODU, AÇIKLAMA (opsiyonel — bunlar isim alanına birleştirilerek yazılır). Yükleme <b>birleştirmedir</b> — Excel'de olmayan mevcut kalemler silinmez/değişmez. CANİAS kodu zaten varsa kalem güncellenir; stok adedi yalnızca aşağıdaki kutu işaretlenirse ezilir. Yeni kalemler "Manuel" tüketim modunda eklenir — kama:parmak oranı 1:1 değilse operatör miktarı elle girer; 1:1 olduğu bilinen kalemlerde Durum listesinden "Otomatik"e çevirebilirsin.</div>
+        <input type="file" id="malzeme-excel-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
+        <div><button class="btn-primary" style="width:auto;padding:10px 18px" onclick="handleMalzemeExcelPreview()">⬆ Oku ve Önizle</button></div>
+        <div id="malzeme-excel-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
+        ${(() => {
+          const p = malzemeExcelPreview;
+          if(!p) return '';
+          const first8 = p.rows.slice(0,8);
+          return `<div style="background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:16px;margin-top:14px;max-width:960px">
+            <div style="font-size:13.5px;font-weight:600;margin-bottom:6px">Önizleme — ${p.rows.length} geçerli satır${p.blankCount?`, ${p.blankCount} satır atlandı (kod boş)`:''}${p.dupCount?`, ${p.dupCount} tekrarlanan CANİAS kodu`:''}</div>
+            <div style="overflow-x:auto;margin-bottom:12px">
+              <table style="font-size:11.5px"><thead><tr><th>Kod</th><th>İsim (birleşik)</th><th>Stok</th></tr></thead><tbody>
+                ${first8.map(r=>`<tr><td class="mono">${esc(r.kod)}</td><td>${esc(r.isim)}</td><td>${r.stok}</td></tr>`).join('')}
+              </tbody></table>
+              ${p.rows.length>8 ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">…ve ${p.rows.length-8} satır daha.</div>` : ''}
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;margin-bottom:12px">
+              <input type="checkbox" style="width:auto" ${malzemeExcelUpdateStock?'checked':''} onchange="malzemeExcelUpdateStock=this.checked; render()">
+              Zaten var olan kalemlerin stok adetlerini de güncelle (yeni kalemler için stok her zaman yazılır)
+            </label>
+            <div style="display:flex;gap:10px">
+              <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="confirmMalzemeExcelUpload()">✓ Onayla ve Yükle</button>
+              <button class="btn-ghost" onclick="malzemeExcelPreview=null; render()">Vazgeç</button>
+            </div>
+          </div>`;
+        })()}`;
+
       if(malzemeSubView === 'giris')      return girisBolumu;
       if(malzemeSubView === 'hareketler') return hareketBolumu;
+      if(malzemeSubView === 'kodgiris')   return kodGirisBolumu;
+      if(malzemeSubView === 'excel')      return excelBolumu;
       return durumBolumu;
 }
 
@@ -884,12 +980,14 @@ const STOK_BOLUM_TANIM = {
     bolumler: [
       { key:'durum',      label:'Durum' },
       { key:'giris',      label:'Giriş' },
-      { key:'hareketler', label:'Hareketler' }
+      { key:'hareketler', label:'Hareketler' },
+      { key:'kodgiris',   label:'Kod ile Giriş' },
+      { key:'excel',      label:'Excel Yükle' }
     ]
   }
 };
 let stokSubView = 'takim';
-let malzemeSubView = 'durum'; // 'durum' | 'giris' | 'hareketler' — bkz. renderMalzemeStokScreen
+let malzemeSubView = 'durum'; // 'durum' | 'giris' | 'hareketler' | 'kodgiris' | 'excel' — bkz. renderMalzemeStokScreen
 function setMalzemeSubView(k){
   malzemeSubView = k;
   if(k === 'hareketler') malzemeHareketGerekli(); // hareketler canlı dinlenmiyor, tek seferlik okunur
