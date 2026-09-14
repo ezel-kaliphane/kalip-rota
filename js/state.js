@@ -63,9 +63,15 @@ function bilesenOfCode(code){
   for(const key of Object.keys(BILESEN_SUFFIX)){ if(s.endsWith(BILESEN_SUFFIX[key])) return key; }
   return null;
 }
+// Excel'e (validIsEmri listesi) bağlı olmadan her zaman kabul edilen sabit bir test kodu — deneme
+// amaçlı kayıt açmak için gerçek bir iş emri no aramaya gerek kalmasın diye. Report ekranındaki
+// arama + "Seçilenleri Sil" ile (İş Emri No alanına "DENEME" yazıp hepsini seçerek) kolayca
+// temizlenebilir, ayrı bir silme mekanizması gerekmiyor.
+const TEST_ISEMRI_NO = 'DENEME';
 function isEmriValid(code){
-  if(Object.keys(STATE.validIsEmri||{}).length===0) return true; // liste boşsa doğrulama yapılmaz
   const upper = String(code||'').trim().toUpperCase();
+  if(upper===TEST_ISEMRI_NO) return true;
+  if(Object.keys(STATE.validIsEmri||{}).length===0) return true; // liste boşsa doğrulama yapılmaz
   if(STATE.validIsEmri[upper]) return true;
   const base = baseIsEmriNo(upper);
   return base !== upper && !!STATE.validIsEmri[base];
@@ -75,6 +81,7 @@ function isEmriValid(code){
 function getTalepInfo(code){
   if(!code) return null;
   const upper = String(code||'').trim().toUpperCase();
+  if(baseIsEmriNo(upper)===TEST_ISEMRI_NO) return { malzemeKodu: TEST_ISEMRI_NO, malzemeAdi: 'Test kaydı' };
   let v = STATE.validIsEmri && STATE.validIsEmri[upper];
   if(!v){ const base = baseIsEmriNo(upper); if(base!==upper) v = STATE.validIsEmri && STATE.validIsEmri[base]; }
   return (v && typeof v === 'object') ? v : null;
@@ -391,6 +398,32 @@ function stockConsumableOptions(){
   return opts;
 }
 function stockOptionByValue(val){ return stockConsumableOptions().find(o=>o.value===val) || null; }
+/* İlk Operasyon hammadde seçimini QR ile de yapabilsin diye — CANİAS koduna göre eşleştiriyor
+   (isim'in sonundaki "(KOD)" parçasından, bkz. malzemeCaniasFromIsim), Kod ile Giriş'teki mal
+   kabul akışıyla aynı mantık. CANİAS'ı olmayan kalemlerde (boy takipli çelik gibi) kod alanına
+   düşülür. Boy takipli kalemde aynı kod+çap'ta birden fazla çubuk (lot) eşleşirse OTOMATİK
+   SEÇİM YAPILMAZ — hangi fiziksel çubuğun tarandığı QR'dan anlaşılamaz, operatör elle seçsin. */
+function stockOptionByScanCode(code){
+  code = String(code||'').trim().toUpperCase();
+  if(!code) return { status:'empty' };
+  const matches = stockConsumableOptions().filter(o=>{
+    const item = stockItems[o.itemId]; if(!item) return false;
+    const canias = malzemeCaniasFromIsim(item.isim);
+    return canias ? canias===code : String(item.kod||'').trim().toUpperCase()===code;
+  });
+  if(matches.length===1) return { status:'ok', option: matches[0] };
+  if(matches.length===0) return { status:'none' };
+  return { status:'multi', options: matches };
+}
+function stockScanUygula(setStockItemId){
+  openQrScanner(function(code){
+    const r = stockOptionByScanCode(code);
+    if(r.status==='ok'){ setStockItemId(r.option.value); toast('Seçildi: '+r.option.label); }
+    else if(r.status==='multi'){ toast(`"${code}" için ${r.options.length} çubuk eşleşti — listeden elle seçin`); }
+    else { toast(`"${code}" ile eşleşen hammadde bulunamadı`); }
+    render();
+  });
+}
 function consumeStock(itemId, lotId, miktar, meta){
   if(!itemId || !miktar) return;
   const item = stockItems[itemId]; if(!item) return;

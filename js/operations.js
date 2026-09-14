@@ -10,10 +10,11 @@ function getAllowedMachines(){
   return allMachines().filter(m=>allowedCodes.includes(m.code)).map(m=>`${m.code} · ${m.name}`);
 }
 // Bir iş emrinin (isEmriNo) ENCİ SON kaydı (startTs'e göre) — o iş emrinin şu an rotada
-// hangi adımda olduğunu anlamak için kullanılıyor. Bu kayıt "tamamlandi" ve son operasyon
-// değilse (ve sonrakiMakine işaretliyse) o iş emri hâlâ sonrakiMakine'de bekliyor demektir —
-// başka biri o iş emri için yeni bir kayıt açtığı an (isEmriNo aynı, startTs daha yeni) bu
-// kayıt artık "en son" olmaktan çıkar, dolayısıyla "bekliyor" listesinden kendiliğinden düşer.
+// hangi adımda olduğunu anlamak için kullanılıyor. Bu kayıt "tamamlandi" ve sonrakiMakine
+// işaretliyse o iş emri hâlâ sonrakiMakine'de bekliyor demektir — başka biri o iş emri için
+// (Press/FKK'da olsun ya da olmasın, AYNI isEmriNo ile) yeni bir kayıt açtığı an bu kayıt "en
+// son" olmaktan çıkar, dolayısıyla bekleyen listesinden kendiliğinden düşer (biri fiilen gelip
+// işi gerçekten aldı demektir — ayrı bir "işlendi" işaretlemeye gerek yok).
 function bekleyenSonrakiOperasyonlar(){
   const sonKayitlar = {};
   entriesArray().forEach(e=>{
@@ -21,7 +22,43 @@ function bekleyenSonrakiOperasyonlar(){
     const mevcut = sonKayitlar[e.isEmriNo];
     if(!mevcut || (e.startTs||0) > (mevcut.startTs||0)) sonKayitlar[e.isEmriNo] = e;
   });
-  return Object.values(sonKayitlar).filter(e => e.status==='tamamlandi' && !e.sonOperasyon && e.sonrakiMakine);
+  return Object.values(sonKayitlar).filter(e => e.status==='tamamlandi' && e.sonrakiMakine);
+}
+// Press bir operasyon değil — _ZARF ve _ELMAS dalları orada fiziksel olarak birleşiyor (çakılıyor).
+// Bu yüzden Press'e "teslim edilen" dalları TALEP NO'ya göre eşleştirip, ikisi de bitmiş mi (Preste
+// bekliyor) yoksa sadece biri mi bitmiş (diğeri bekleniyor) görmemiz lazım — aynı incompleteBilesenBranches'ın
+// kullandığı "done" tanımı (tamamlandi + sonOperasyon), o kontrolle tutarlı kalsın diye. Biri gelip
+// Press'te o talep no için GERÇEK bir birleştirme (Tek Parça, bileşensiz) kaydı başlattığı an —
+// tıpkı diğer makinelerdeki gibi, tamamen normal Başla/Bitir akışıyla — bu çift kuyruktan düşer.
+function presBekleyenCiftleri(){
+  const talepNoSet = new Set();
+  entriesArray().forEach(e=>{
+    const bilesen = bilesenOfCode(e.isEmriNo);
+    if(!bilesen || !e.talepNo) return;
+    const kod = String(e.sonrakiMakine||'').split(' · ')[0];
+    if(e.status==='tamamlandi' && e.sonOperasyon && kod==='P01') talepNoSet.add(e.talepNo.trim().toUpperCase());
+  });
+  const dalDurumu = (talepNo, suf) => {
+    const branchEntries = entriesArray().filter(e => (e.talepNo||'').trim().toUpperCase()===talepNo && bilesenOfCode(e.isEmriNo)===suf);
+    if(branchEntries.length===0) return null;
+    const last = branchEntries.slice().sort((a,b)=>b.startTs-a.startTs)[0];
+    return { last, hazir: last.status==='tamamlandi' && !!last.sonOperasyon };
+  };
+  const rows = [];
+  talepNoSet.forEach(talepNo=>{
+    const zarf = dalDurumu(talepNo, 'ZARF');
+    const elmas = dalDurumu(talepNo, 'ELMAS');
+    // Birleştirme (Tek Parça) işi dalların EN SON hareketinden SONRA başlamışsa artık kuyrukta
+    // değildir — biri gerçekten gelip aldı demektir. Bu talep no bileşenlere ayrılmadan ÖNCEKİ
+    // eski (tarihsel) bileşensiz kayıtlar burada SAYILMIYOR — yoksa yıllar önce aynı talep no'yla
+    // açılmış alakasız bir eski kayıt, yeni bir birleştirme çifti hiç görünmeden kuyruktan düşerdi.
+    const enSonDalTs = Math.max((zarf&&zarf.last.startTs)||0, (elmas&&elmas.last.startTs)||0);
+    const birlesmeBaslamis = entriesArray().some(e => (e.talepNo||'').trim().toUpperCase()===talepNo && !bilesenOfCode(e.isEmriNo) && (e.startTs||0) > enSonDalTs);
+    if(birlesmeBaslamis) return;
+    const zarfHazir = !!(zarf && zarf.hazir), elmasHazir = !!(elmas && elmas.hazir);
+    rows.push({ talepNo, zarf, elmas, zarfHazir, elmasHazir, ikisiDeHazir: zarfHazir && elmasHazir });
+  });
+  return rows.sort((a,b)=> (b.ikisiDeHazir?1:0)-(a.ikisiDeHazir?1:0) || a.talepNo.localeCompare(b.talepNo));
 }
 function openActiveDetail(id){ activeDetailId = id; render(); }
 function closeActiveDetail(){ activeDetailId = null; setView('list'); }
@@ -47,6 +84,26 @@ function incompleteBilesenBranches(talepNoRaw){
     }
   });
   return out;
+}
+// Bazı makine + bileşen kombinasyonları rotanın KESİN son adımıdır — operatör "Son Operasyon"
+// kutusunu işaretlemeyi unutsa bile (bkz. kullanıcı geri bildirimi, operatörler sık unutuyor)
+// bu kombinasyonlarda rota otomatik kapanır: _ZARF/_ELMAS parçaları Pres'e teslim edildiğinde
+// (birleştirmeden — Tek Parça'ya dönüşmeden — önceki son adım budur) ve bileşensiz (normal) iş
+// emirleri Final Kalite Kontrol'e teslim edildiğinde. ÖNEMLİ: Press ve FKK birer operasyon
+// DEĞİL — bu yüzden bu kural BAŞLA'da değil, sadece BİTİR → "Sıradaki Operasyon" seçiminde
+// (confirmNextOp/finishGrup) uygulanıyor: operatör o an bitirdiği GERÇEK operasyonda "Sıradaki"
+// olarak Press/FKK'yı seçince, işte o bitirdiği kayıt otomatik son operasyon oluyor. `makine`
+// parametresi burada hem "sonraki makine" kodu olarak (asıl kullanım) hem teorik olarak mevcut
+// makine kodu olarak gelebilir ama BAŞLA akışında KASITLI OLARAK ÇAĞRILMIYOR — biri Press/FKK'yı
+// kendi ÇALIŞILAN MAKİNESİ olarak seçip yeni bir kayıt başlatırsa (ör. birleştirme/Tek Parça işi,
+// ya da FKK'da fiilen kalite kontrol süresi takibi), bu normal, elle işaretlenen bir "Son
+// Operasyon" kararı — otomatik zorlama YOK, çünkü orada olmak tek başına "rota bitti" anlamına
+// gelmiyor, rotayı bitiren şey oraya "teslim edilmiş" olmasıydı.
+function otomatikSonOperasyonMu(makine, bilesen){
+  const kod = String(makine||'').split(' · ')[0];
+  if((bilesen==='ZARF' || bilesen==='ELMAS') && kod==='P01') return true;
+  if(!bilesen && kod==='FKK') return true;
+  return false;
 }
 function resolveTrackingCode(talepNoRaw, bilesenSel){
   const talepNo = String(talepNoRaw||'').trim().toUpperCase();
@@ -194,7 +251,11 @@ function bitir(id){
   }
   finishEntry(id, null);
 }
-function finishEntry(id, sonrakiMakine){
+// forceSonOperasyon: operatör "Sıradaki Operasyon" olarak Press (_ZARF/_ELMAS için) ya da Final
+// Kalite Kontrol (normal iş için) seçtiğinde true gelir — bkz. confirmNextOp/otomatikSonOperasyonMu.
+// Press ve FKK birer operasyon DEĞİL, rotanın kapandığı fiziksel varış noktası: bu yüzden orada
+// yeni bir kayıt açılması beklenmez, rota bu bitirilen kayıtta (sonrakiMakine kaydıyla birlikte) kapanır.
+function finishEntry(id, sonrakiMakine, forceSonOperasyon){
   const e = STATE.entries[id] || {};
   let extra = 0;
   if(e.status==='duruş' && e.duruşTs) extra = Date.now() - e.duruşTs;
@@ -203,7 +264,9 @@ function finishEntry(id, sonrakiMakine){
   const excludedMs = (e.excludedMs||0) + (isGunSonu?extra:0);
   const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
   const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
-  DB.ref('entries/'+id).update({ endTs: Date.now(), status:'tamamlandi', duruşToplamMs, excludedMs, durusLog, excludedLog, finishedByUsername: session.username, finishedByName: session.displayName, sonrakiMakine: sonrakiMakine || null });
+  const updates = { endTs: Date.now(), status:'tamamlandi', duruşToplamMs, excludedMs, durusLog, excludedLog, finishedByUsername: session.username, finishedByName: session.displayName, sonrakiMakine: sonrakiMakine || null };
+  if(forceSonOperasyon) updates.sonOperasyon = true;
+  DB.ref('entries/'+id).update(updates);
   toast('Operasyon tamamlandı');
   if(activeDetailId===id){ activeDetailId=null; view='list'; }
 }
@@ -334,8 +397,13 @@ function confirmNextOp(){
   if(!nextOpMachineSel){ toast('Sıradaki operasyonu seçmelisin'); return; }
   const machine = allMachines().find(m=>m.code===nextOpMachineSel);
   const sonrakiMakine = nextOpMachineSel===NEXT_OP_BELIRSIZ ? 'Belirsiz' : (machine ? `${machine.code} · ${machine.name}` : nextOpMachineSel);
-  if(nextOpPendingGroupId){ finishGrup(nextOpPendingGroupId, sonrakiMakine); }
-  else if(nextOpPendingId){ finishEntry(nextOpPendingId, sonrakiMakine); }
+  if(nextOpPendingGroupId){
+    finishGrup(nextOpPendingGroupId, sonrakiMakine, nextOpMachineSel);
+  } else if(nextOpPendingId){
+    const e = STATE.entries[nextOpPendingId] || {};
+    const forceSonOperasyon = nextOpMachineSel!==NEXT_OP_BELIRSIZ && otomatikSonOperasyonMu(nextOpMachineSel, bilesenOfCode(e.isEmriNo));
+    finishEntry(nextOpPendingId, sonrakiMakine, forceSonOperasyon);
+  }
   nextOpPendingId = null; nextOpPendingGroupId = null; nextOpMachineSel = '';
 }
 // Operatör "Gün Sonu" verdiğinde, elinde BAŞKA duruşta unutulmuş kayıt varsa (ör. "Farklı İş
@@ -487,9 +555,9 @@ function bitirGrup(groupId){
     render();
     return;
   }
-  finishGrup(groupId, null);
+  finishGrup(groupId, null, null);
 }
-function finishGrup(groupId, sonrakiMakine){
+function finishGrup(groupId, sonrakiMakine, sonrakiMakineKodu){
   const members = groupMembersOf(groupId);
   if(members.length===0) return;
   const now = Date.now();
@@ -518,7 +586,8 @@ function finishGrup(groupId, sonrakiMakine){
     const allocatedWallMs = Math.round(wallMs*share);
     const allocatedDurusMs = Math.round(x.duruşToplamMs*share);
     const allocatedExcludedMs = Math.round(x.excludedMs*share);
-    DB.ref('entries/'+x.e.id).update({
+    const forceSonOperasyon = !x.e.sonOperasyon && sonrakiMakineKodu && sonrakiMakineKodu!==NEXT_OP_BELIRSIZ && otomatikSonOperasyonMu(sonrakiMakineKodu, bilesenOfCode(x.e.isEmriNo));
+    const updates = {
       endTs: x.e.startTs + allocatedWallMs,
       status: 'tamamlandi',
       duruşToplamMs: allocatedDurusMs,
@@ -528,7 +597,9 @@ function finishGrup(groupId, sonrakiMakine){
       finishedByUsername: session.username,
       finishedByName: session.displayName,
       sonrakiMakine: x.e.sonOperasyon ? null : (sonrakiMakine || null)
-    });
+    };
+    if(forceSonOperasyon) updates.sonOperasyon = true;
+    DB.ref('entries/'+x.e.id).update(updates);
   });
   toast('Tüm iş emirleri tamamlandı');
   activeGroupId = null; view='list'; render();

@@ -934,7 +934,7 @@ function ico(name, size){
 function switchRow(id, checked, title, sub, opts){
   const o = opts||{};
   return `<label class="sw ${o.ok?'sw-ok':''}" style="${o.style||''}">
-    <input id="${id}" type="checkbox" ${checked?'checked':''} ${o.onchange?`onchange="${o.onchange}"`:''}>
+    <input id="${id}" type="checkbox" ${checked?'checked':''} ${o.disabled?'disabled':''} ${o.onchange?`onchange="${o.onchange}"`:''}>
     <span class="sw-track"><span class="sw-knob"></span></span>
     <span><span class="sw-title">${title}</span>${sub?`<span class="sw-sub" style="display:block">${sub}</span>`:''}</span>
   </label>`;

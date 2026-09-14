@@ -208,10 +208,13 @@ function renderOperator(){
             const isManualInput = selOpt && (selOpt.tur==='boy' || selOpt.mode==='manuel');
             return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:6px">
               <div style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${ico('box',14)} İlk Operasyon — Hammadde (opsiyonel)</div>
-              <select id="nf-coklu-stok-${i}" onchange="newForm.cokluItems[${i}].stockItemId=this.value; render()" style="margin-bottom:${isManualInput?'6px':'0'}">
-                <option value="">Hammadde tüketilmiyor</option>
-                ${opts.map(o=>`<option value="${o.value}" ${it.stockItemId===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}
-              </select>
+              <div style="display:flex;gap:6px;margin-bottom:${isManualInput?'6px':'0'}">
+                <select id="nf-coklu-stok-${i}" onchange="newForm.cokluItems[${i}].stockItemId=this.value; render()" style="flex:1;margin-bottom:0">
+                  <option value="">Hammadde tüketilmiyor</option>
+                  ${opts.map(o=>`<option value="${o.value}" ${it.stockItemId===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}
+                </select>
+                <button type="button" class="btn-ghost" style="padding:8px 10px;flex-shrink:0" title="QR Okut" onclick="stockScanUygula(function(v){ newForm.cokluItems[${i}].stockItemId=v; })">${ico('camera',14)}</button>
+              </div>
               ${selOpt ? (isManualInput
                 ? `<input id="nf-coklu-stok-miktar-${i}" type="number" placeholder="${selOpt.tur==='boy'?`Kesilen boy (${esc(selOpt.birim||'mm')})`:'Kullanılan miktar'}" value="${esc(it.stockMiktar)}" oninput="newForm.cokluItems[${i}].stockMiktar=this.value">`
                 : `<div style="font-size:11px;color:var(--text-muted)">Otomatik: Adet kadar (${esc(it.adet||'?')} ${esc(selOpt.birim||'')}) düşülecek</div>`) : ''}
@@ -262,10 +265,13 @@ function renderOperator(){
           const isManualInput = selOpt && (selOpt.tur==='boy' || selOpt.mode==='manuel');
           return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
             <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${ico('box',14)} İlk Operasyon — Kullanılan Hammadde (opsiyonel)</div>
-            <select id="nf-stok-item" onchange="newForm.stockItemId=this.value; render()" style="margin-bottom:${isManualInput?'8px':'0'}">
-              <option value="">Hammadde tüketilmiyor</option>
-              ${opts.map(o=>`<option value="${o.value}" ${newForm.stockItemId===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}
-            </select>
+            <div style="display:flex;gap:6px;margin-bottom:${isManualInput?'8px':'0'}">
+              <select id="nf-stok-item" onchange="newForm.stockItemId=this.value; render()" style="flex:1;margin-bottom:0">
+                <option value="">Hammadde tüketilmiyor</option>
+                ${opts.map(o=>`<option value="${o.value}" ${newForm.stockItemId===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}
+              </select>
+              <button type="button" class="btn-ghost" style="padding:8px 10px;flex-shrink:0" title="QR Okut" onclick="stockScanUygula(function(v){ newForm.stockItemId=v; })">${ico('camera',14)}</button>
+            </div>
             ${selOpt ? (isManualInput
               ? `<input id="nf-stok-miktar" type="number" placeholder="${selOpt.tur==='boy'?`Kesilen boy (${esc(selOpt.birim||'mm')})`:`Kullanılan miktar (${esc(selOpt.birim||'')})`}" value="${esc(newForm.stockMiktar)}" oninput="newForm.stockMiktar=this.value">`
               : `<div style="font-size:11.5px;color:var(--text-muted)">Otomatik: Adet kadar (${esc(newForm.adet||'?')} ${esc(selOpt.birim||'')}) düşülecek</div>`) : ''}

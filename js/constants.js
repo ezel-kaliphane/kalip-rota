@@ -13,6 +13,7 @@ const MACHINE_LIST = [
   { code:"UST01", name:"Satıh Taşlama" }, { code:"UST02", name:"Satıh Taşlama" },
   { code:"UT01", name:"Torna" }, { code:"UT02", name:"Torna" }, { code:"UT03", name:"Torna" },
   { code:"FII01", name:"Fason Isıl İşlem" }, { code:"SAL01", name:"Şaloma" },
+  { code:"FKK", name:"Final Kalite Kontrol" },
 ];
 const machineLabelFor = c => { const m = MACHINE_LIST.find(x=>x.code===c); return m ? `${m.code} · ${m.name}` : ""; };
 const ALL_MACHINE_CODES = MACHINE_LIST.map(m=>m.code);

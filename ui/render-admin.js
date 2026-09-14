@@ -1053,25 +1053,42 @@ function renderStokScreen(){
 
 // "İş Yoğunluğu" sekmesi — operatörlerin "Bitir" sırasında işaretlediği sonrakiMakine alanına
 // göre, hangi makinede kaç iş emri/adet biriktiğini gösterir (bkz. bekleyenSonrakiOperasyonlar,
-// js/operations.js). Sadece son operasyonu işaretlenmemiş VE henüz kimsenin devralmadığı (o
-// isEmriNo için daha yeni bir kayıt açılmamış) işler sayılıyor — devralınan iş listeden düşer.
+// js/operations.js). Press özel durum: bir operasyon değil, _ZARF/_ELMAS'ın fiziksel olarak
+// birleştiği (çakıldığı) yer — o yüzden Press satırı, ham kayıt listesi yerine presBekleyenCiftleri()
+// ile TALEP NO bazında eşleştirilmiş "ikisi de hazır mı / hangisi eksik" görünümü kullanıyor.
+// Kuyruktan çıkış hep AYNI mekanizmayla oluyor: biri o iş için gerçekten normal bir kayıt açıp
+// Başla'ya bastığı an (Press'te birleştirme/Tek Parça, FKK'da aynı isEmriNo ile devam), o kayıt
+// artık "en son" kayıt olur ve bekleyen listesinden kendiliğinden düşer — elle işaretlemeye gerek yok.
 function renderIsYogunlugu(){
   const bekleyenler = bekleyenSonrakiOperasyonlar();
+  // Sadece _ZARF/_ELMAS + Press kombinasyonu özel çift-eşleştirme görünümüne taşınıyor — bileşensiz
+  // (normal) bir iş emri Press'i sonraki makine olarak işaretlemişse (zarf/elmas birleşimiyle
+  // ilgisiz, farklı bir kullanım), genel makine listesinde olduğu gibi görünmeye devam etmeli.
+  const digerBekleyenler = bekleyenler.filter(e => {
+    const kod = String(e.sonrakiMakine||'').split(' · ')[0];
+    const bilesen = bilesenOfCode(e.isEmriNo);
+    return !(kod==='P01' && (bilesen==='ZARF' || bilesen==='ELMAS'));
+  });
   const byMakine = {};
-  bekleyenler.forEach(e=>{
+  digerBekleyenler.forEach(e=>{
     const key = e.sonrakiMakine;
     if(!byMakine[key]) byMakine[key] = { label:key, isEmriler:[] };
     byMakine[key].isEmriler.push(e);
   });
-  const rows = Object.values(byMakine).map(m=>({
-    label: m.label,
+  const digerRows = Object.values(byMakine).map(m=>({
+    label: m.label, isPres:false,
     isEmriSayisi: m.isEmriler.length,
     toplamAdet: m.isEmriler.reduce((s,e)=>s+(Number(e.adet)||0), 0),
     isEmriler: m.isEmriler.slice().sort((a,b)=>(a.endTs||0)-(b.endTs||0))
-  })).sort((a,b)=> b.isEmriSayisi - a.isEmriSayisi);
-  const toplamIsEmri = bekleyenler.length;
-  const toplamAdet = bekleyenler.reduce((s,e)=>s+(Number(e.adet)||0), 0);
+  }));
+  const presCiftleri = presBekleyenCiftleri();
+  const presRow = presCiftleri.length>0 ? { label:'P01 · Pres (Zarf/Elmas Birleşimi)', isPres:true, isEmriSayisi: presCiftleri.length, ciftler: presCiftleri } : null;
+  const rows = [...digerRows, ...(presRow?[presRow]:[])].sort((a,b)=> b.isEmriSayisi - a.isEmriSayisi);
+
+  const toplamIsEmri = digerBekleyenler.length + presCiftleri.length;
+  const toplamAdet = digerBekleyenler.reduce((s,e)=>s+(Number(e.adet)||0), 0);
   const belirsizSayi = (byMakine['Belirsiz']?.isEmriler.length) || 0;
+  const hazirCiftSayisi = presCiftleri.filter(c=>c.ikisiDeHazir).length;
 
   const kpi = (label, value, color, sub) => `<div class="analiz-chart-box">
     <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">${label}</div>
@@ -1079,35 +1096,66 @@ function renderIsYogunlugu(){
     ${sub?`<div style="font-size:10.5px;color:var(--text-muted);margin-top:4px">${sub}</div>`:''}
   </div>`;
 
+  const branchLine = (label, bilgi) => {
+    if(!bilgi) return `<span style="color:var(--text-muted)">${label}: — henüz açılmadı</span>`;
+    if(bilgi.hazir) return `<span style="color:var(--success)">${label}: ${ico('check',12)} hazır</span>`;
+    const durum = (bilgi.last.status==='devam'||bilgi.last.status==='duruş') ? 'işlemde' : 'bitmedi (son operasyon yok)';
+    return `<span style="color:var(--warn)">${label}: bekleniyor (${durum})</span>`;
+  };
+
+  const presRowHtml = (r) => {
+    const acik = isYogunluguAcikMakine===r.label;
+    return `<tr style="cursor:pointer" onclick="toggleIsYogunluguDetay('${escJs(r.label)}')">
+      <td style="font-weight:700;color:var(--accent)">${esc(r.label)}</td>
+      <td class="mono" style="font-weight:700">${r.isEmriSayisi}</td>
+      <td class="mono" style="color:var(--text-muted)">${hazirCiftSayisi}/${r.isEmriSayisi} hazır</td>
+      <td style="text-align:right;color:var(--text-muted)">${acik?ico('chevronUp',14):ico('chevronDown',14)}</td>
+    </tr>
+    ${acik ? `<tr><td colspan="4" style="padding:0"><div style="padding:4px 16px 12px">
+      ${r.ciftler.map(c=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="mono" style="color:var(--accent);font-weight:600">${esc(c.talepNo)}</span>
+          <span style="font-weight:600;color:${c.ikisiDeHazir?'var(--success)':'var(--warn)'}">${c.ikisiDeHazir ? 'Preste bekliyor' : (!c.zarfHazir ? 'Zarf bekliyor' : 'Elmas bekliyor')}</span>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:4px;flex-wrap:wrap">
+          ${branchLine('Çelik (_Zarf)', c.zarf)}
+          ${branchLine('Karbür (_Elmas)', c.elmas)}
+        </div>
+      </div>`).join('')}
+    </div></td></tr>` : ''}`;
+  };
+
+  const genericRowHtml = (r) => {
+    const acik = isYogunluguAcikMakine===r.label;
+    return `<tr style="cursor:pointer" onclick="toggleIsYogunluguDetay('${escJs(r.label)}')">
+      <td style="font-weight:700;color:${r.label==='Belirsiz'?'var(--danger)':'var(--accent)'}">${esc(r.label)}</td>
+      <td class="mono" style="font-weight:700">${r.isEmriSayisi}</td>
+      <td class="mono">${r.toplamAdet}</td>
+      <td style="text-align:right;color:var(--text-muted)">${acik?ico('chevronUp',14):ico('chevronDown',14)}</td>
+    </tr>
+    ${acik ? `<tr><td colspan="4" style="padding:0">
+      <div style="padding:4px 16px 12px">
+        ${r.isEmriler.map(e=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;flex-wrap:wrap">
+          <span class="mono" style="color:var(--accent);font-weight:600">${esc(e.talepNo||e.isEmriNo)}</span>
+          <span style="color:var(--text-muted)">${esc(e.makine||'—')}</span>
+          <span>Adet: ${esc(e.adet||'—')}</span>
+          <span style="color:var(--text-muted)">${esc(e.operatorName||e.operatorUsername||'')}</span>
+          <span style="color:var(--text-muted)">Bitiş: ${e.endTs?fmtDT(e.endTs):'—'}</span>
+        </div>`).join('')}
+      </div>
+    </td></tr>` : ''}`;
+  };
+
   return `<div class="matrix-wrap">
-    <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:12px">Operatör bir operasyonu bitirirken (son operasyon değilse) işaretlediği sıradaki makineye göre — o makinede henüz kimsenin başlamadığı, bekleyen iş emirleri. Bir satıra tıkla, iş emirlerini gör.</div>
+    <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:12px">Operatör bir operasyonu bitirirken işaretlediği sıradaki makineye göre — o konumda bekleyen iş emirleri. Press satırı özel: _Zarf/_Elmas çiftlerini talep no'ya göre eşleştirir, ikisi de bitmeden "preste bekliyor" saymaz. Biri o iş için gerçekten yeni bir kayıt açıp Başla'ya bastığında (normal Başla/Bitir akışı) kuyruktan kendiliğinden düşer. Bir satıra tıkla, detayları gör.</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:14px">
       ${kpi('Bekleyen İş Emri', toplamIsEmri, 'var(--accent)', 'sıradaki operasyonu bekliyor')}
-      ${kpi('Toplam Adet', toplamAdet, 'var(--success)', 'bu iş emirlerindeki toplam parça')}
-      ${kpi('Dolu Makine Sayısı', rows.filter(r=>r.label!=='Belirsiz').length, 'var(--warn)', 'en az bir iş bekleyen makine')}
+      ${kpi('Toplam Adet', toplamAdet, 'var(--success)', 'Press hariç — çift eşleşmesi adet toplamaz')}
+      ${kpi('Dolu Makine Sayısı', rows.length, 'var(--warn)', 'en az bir iş bekleyen makine')}
       ${kpi('Belirsiz', belirsizSayi, 'var(--danger)', 'sıradaki makinesi işaretlenmemiş')}
     </div>
-    <div class="table-wrap"><table><thead><tr><th>Sıradaki Makine</th><th>İş Emri Sayısı</th><th>Toplam Adet</th><th></th></tr></thead><tbody>
-      ${rows.length===0 ? `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px">Şu an sıradaki operasyonu bekleyen iş emri yok.</td></tr>` : rows.map(r=>{
-        const acik = isYogunluguAcikMakine===r.label;
-        return `<tr style="cursor:pointer" onclick="toggleIsYogunluguDetay('${escJs(r.label)}')">
-          <td style="font-weight:700;color:${r.label==='Belirsiz'?'var(--danger)':'var(--accent)'}">${esc(r.label)}</td>
-          <td class="mono" style="font-weight:700">${r.isEmriSayisi}</td>
-          <td class="mono">${r.toplamAdet}</td>
-          <td style="text-align:right;color:var(--text-muted)">${acik?ico('chevronUp',14):ico('chevronDown',14)}</td>
-        </tr>
-        ${acik ? `<tr><td colspan="4" style="padding:0">
-          <div style="padding:4px 16px 12px">
-            ${r.isEmriler.map(e=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;flex-wrap:wrap">
-              <span class="mono" style="color:var(--accent);font-weight:600">${esc(e.talepNo||e.isEmriNo)}</span>
-              <span style="color:var(--text-muted)">${esc(e.makine||'—')}</span>
-              <span>Adet: ${esc(e.adet||'—')}</span>
-              <span style="color:var(--text-muted)">${esc(e.operatorName||e.operatorUsername||'')}</span>
-              <span style="color:var(--text-muted)">Bitiş: ${e.endTs?fmtDT(e.endTs):'—'}</span>
-            </div>`).join('')}
-          </div>
-        </td></tr>` : ''}`;
-      }).join('')}
+    <div class="table-wrap"><table><thead><tr><th>Sıradaki Makine</th><th>İş Emri Sayısı</th><th>Toplam Adet / Hazır</th><th></th></tr></thead><tbody>
+      ${rows.length===0 ? `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px">Şu an sıradaki operasyonu bekleyen iş emri yok.</td></tr>` : rows.map(r=> r.isPres ? presRowHtml(r) : genericRowHtml(r)).join('')}
     </tbody></table></div>
   </div>`;
 }
