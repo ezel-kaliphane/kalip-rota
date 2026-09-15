@@ -781,13 +781,29 @@ function karburStokDus(cikisAdet, fireDus){
   const istekler = []
     .concat(Object.keys(cikisAdet).map(id => ({ tip: 'stok', id, yol: 'karburStok/' + id + '/adet', miktar: cikisAdet[id] })))
     .concat(Object.keys(fireDus).map(id => ({ tip: 'fire', id, yol: 'karburFire/' + id + '/adet', miktar: fireDus[id] })));
+  if(!istekler.length) return Promise.resolve([]);
 
+  /* Her düğümün güncel değeri ÖNCE okunur ve `bilinen` olarak saklanır.
+
+     Sebebi: Firebase transaction fonksiyonunu ilk kez YEREL ÖNBELLEKLE çağırır. Bu modülde
+     bilerek canlı dinleyici yok (maliyet kısıtı), bu yüzden o ilk çağrıda değer `null` gelir.
+     İlk pasta `undefined` (= iptal) döndürülürse transaction sunucuya HİÇ GİTMEDEN ölür.
+     Yani "negatife düşecekse iptal et" kuralı, stok yerli yerinde dururken bile her kalemi
+     reddediyordu — kaydetme tamamen kilitlenmişti (sahada görüldü: dört kalemin dördü de
+     "stok yetmedi" dedi, oysa hepsi stokta vardı).
+
+     Bilinen değer yedek olarak kullanılınca ilk pas geçerli bir sayı döndürüyor, transaction
+     sunucuya gidiyor ve fonksiyon GERÇEK değerle yeniden çalışıyor; gerçekten yetmiyorsa iptal
+     orada oluyor. Negatif koruması kayboluyor değil, doğru yere taşınıyor. */
   return Promise.all(istekler.map(x =>
+    DB.ref(x.yol).once('value').then(s => { x.bilinen = Number(s.val()) || 0; }).catch(() => { x.bilinen = 0; })
+  )).then(() => Promise.all(istekler.map(x =>
     DB.ref(x.yol).transaction(cur => {
-      const sonraki = (Number(cur) || 0) - x.miktar;
+      const mevcut = (cur === null || cur === undefined) ? x.bilinen : (Number(cur) || 0);
+      const sonraki = mevcut - x.miktar;
       return sonraki < 0 ? undefined : sonraki;      // negatife düşecekse iptal
     }).then(res => Object.assign({ ok: res.committed, sonraki: Number(res.snapshot && res.snapshot.val()) || 0 }, x))
-  )).then(results => {
+  ))).then(results => {
     const basarisiz = results.filter(r => !r.ok);
     if(!basarisiz.length) return results;
     const geriAl = results.filter(r => r.ok).map(r =>
