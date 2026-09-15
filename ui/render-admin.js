@@ -1135,13 +1135,55 @@ function iyAramaSonucKartHtml(grp){
   const chain = grp.entries.map(e=>(e.makine||'').split(' · ')[0]||'—');
   return `<div class="analiz-chart-box" style="margin-bottom:10px">
     <div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:8px">
-      <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px">${esc(grp.talepNo || grp.isEmriNo)}</span>
+      <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;cursor:pointer;text-decoration:underline dotted" onclick="openIyGecmisModal('${escJs(grp.isEmriNo)}')">${esc(grp.talepNo || grp.isEmriNo)}</span>
       ${bilesen ? `<span class="chip" style="padding:3px 9px;font-size:11px">${BILESEN_LABEL[bilesen]} (_${bilesen})</span>` : ''}
       ${grp.talepNo ? `<span style="font-size:11px;color:var(--text-muted)">U kodu: ${esc(grp.isEmriNo)}</span>` : ''}
     </div>
     <div style="margin-top:8px;font-size:13.5px;font-weight:600;color:${durum.renk}">${durum.metin}</div>
     ${durum.detay ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${durum.detay}</div>` : ''}
     <div class="route-chain" style="margin-top:10px">${chain.map((c,i)=>`<span class="route-chip">${esc(c)}</span>${i<chain.length-1?'<span class="route-arrow">→</span>':''}`).join('')}</div>
+  </div>`;
+}
+// İş emri no'ya tıklayınca açılan "geçmiş" penceresi — isEmriNo'nun TÜM kayıtlarını kronolojik
+// sırayla, her adımda hangi makine/kim/ne zaman olduğunu gösterir (bkz. iyGecmisIcinKayitlar).
+function renderIyGecmisModal(){
+  const isEmriNo = iyGecmisModalIsEmriNo;
+  const kayitlar = iyGecmisIcinKayitlar(isEmriNo);
+  if(kayitlar.length===0){ iyGecmisModalIsEmriNo = null; return ''; }
+  const last = kayitlar[kayitlar.length-1];
+  const durum = iyDurumOzeti(last);
+  const bilesen = bilesenOfCode(isEmriNo);
+  return `<div class="modal-overlay" onclick="if(event.target===this) closeIyGecmisModal()">
+    <div class="modal-box" style="max-width:640px">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">${esc(last.talepNo || isEmriNo)}</div>
+          <div class="modal-sub">${last.talepNo ? `U kodu: ${esc(isEmriNo)}` : ''}${bilesen ? ` · ${BILESEN_LABEL[bilesen]} (_${bilesen})` : ''}</div>
+        </div>
+        <button class="icon-btn" onclick="closeIyGecmisModal()">${ico('x',14)}</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:13.5px;font-weight:600;color:${durum.renk}">${durum.metin}</div>
+        ${durum.detay ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;margin-bottom:16px">${durum.detay}</div>` : '<div style="margin-bottom:16px"></div>'}
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:10px">Geçmiş — ${kayitlar.length} adım</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          ${kayitlar.map((e,i)=>{
+            const sureTxt = e.endTs ? fmtDur(e.endTs-e.startTs) : (e.status==='devam' ? fmtElapsed(entryDurationBreakdown(e).netMs)+' (sürüyor)' : '—');
+            const durumEtiket = e.status==='devam' ? 'Devam Ediyor' : e.status==='duruş' ? 'Duraklatıldı' : 'Tamamlandı';
+            return `<div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+                <span style="font-weight:700;color:var(--accent);font-size:13px">${i+1}. ${esc(e.makine||'—')}</span>
+                <span style="font-size:11.5px;color:var(--text-muted)">${durumEtiket}</span>
+              </div>
+              <div style="font-size:12.5px;margin-top:6px">${esc(e.operatorName||e.operatorUsername||'—')}${e.finishedByUsername && e.finishedByUsername!==e.operatorUsername ? ` · Bitiren: ${esc(e.finishedByName||e.finishedByUsername)}` : ''}</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${fmtDT(e.startTs)} → ${e.endTs?fmtDT(e.endTs):'—'} · ${sureTxt}${e.adet?` · Adet: ${esc(e.adet)}`:''}</div>
+              ${e.status==='duruş' && e.duruşNedeni ? `<div style="font-size:12px;color:var(--warn);margin-top:4px">Duruş: "${esc(e.duruşNedeni)}"</div>` : ''}
+              ${e.sonrakiMakine ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">${ico('chevronRight',11)} Sıradaki: ${esc(e.sonrakiMakine)}</div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
   </div>`;
 }
 function iyAramaHtml(){
@@ -1165,9 +1207,10 @@ function iyGorunumSecici(){
 function iyPresDetayHtml(r){
   const branchLine = (label, bilgi) => {
     if(!bilgi) return `<span style="color:var(--text-muted)">${label}: — henüz açılmadı</span>`;
-    if(bilgi.hazir) return `<span style="color:var(--success)">${label}: ${ico('check',12)} hazır</span>`;
+    const tik = `onclick="openIyGecmisModal('${escJs(bilgi.last.isEmriNo)}')"`;
+    if(bilgi.hazir) return `<span ${tik} style="color:var(--success);cursor:pointer;text-decoration:underline dotted">${label}: ${ico('check',12)} hazır</span>`;
     const durum = (bilgi.last.status==='devam'||bilgi.last.status==='duruş') ? 'işlemde' : 'bitmedi (son operasyon yok)';
-    return `<span style="color:var(--warn)">${label}: bekleniyor (${durum})</span>`;
+    return `<span ${tik} style="color:var(--warn);cursor:pointer;text-decoration:underline dotted">${label}: bekleniyor (${durum})</span>`;
   };
   return r.ciftler.map(c=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
@@ -1208,7 +1251,7 @@ function iyListeHtml(v){
         </div>
         ${acik ? `<div style="background:var(--panel-alt);padding:4px 14px 12px">
           ${r.isPres ? iyPresDetayHtml(r) : r.isEmriler.map(e=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;flex-wrap:wrap">
-            <span class="mono" style="color:var(--accent);font-weight:600">${esc(e.talepNo||e.isEmriNo)}</span>
+            <span class="mono" style="color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline dotted" onclick="openIyGecmisModal('${escJs(e.isEmriNo)}')">${esc(e.talepNo||e.isEmriNo)}</span>
             <span style="color:var(--text-muted)">${esc(e.makine||'—')}</span>
             <span>Adet: ${esc(e.adet||'—')}</span>
             <span style="color:var(--text-muted)">${esc(e.operatorName||e.operatorUsername||'')}</span>
@@ -1353,7 +1396,7 @@ function renderIsYogunlugu(){
     ${iyGorunumSecici()}
     ${iyKpiHtml(v)}
     ${govde}
-  </div>`;
+  </div>${iyGecmisModalIsEmriNo ? renderIyGecmisModal() : ''}`;
 }
 function renderAdmin(){
   /* Stok sekmesi uc bolumlu (takim / karbur / malzeme), asagida `stokYonetim` olarak ayrica ele

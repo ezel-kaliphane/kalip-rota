@@ -78,6 +78,11 @@ function iyAramaSonuclari(sorgu){
     return { isEmriNo, talepNo: sorted[sorted.length-1].talepNo||'', entries: sorted, last: sorted[sorted.length-1] };
   }).sort((a,b)=> b.last.startTs - a.last.startTs).slice(0,25);
 }
+// Bir isEmriNo'nun TÜM kayıtları, kronolojik sırayla — "geçmiş" penceresinde hangi makinelerden
+// geçtiğini, kimin işlediğini, ne zaman işlediğini göstermek için.
+function iyGecmisIcinKayitlar(isEmriNo){
+  return entriesArray().filter(e=>e.isEmriNo===isEmriNo).sort((a,b)=>a.startTs-b.startTs);
+}
 function openActiveDetail(id){ activeDetailId = id; render(); }
 function closeActiveDetail(){ activeDetailId = null; setView('list'); }
 // Girilen İş Talep No'yu gerçek takip koduna (U kodu + varsa bileşen eki) çevirir.
