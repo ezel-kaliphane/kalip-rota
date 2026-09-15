@@ -60,6 +60,24 @@ function presBekleyenCiftleri(){
   });
   return rows.sort((a,b)=> (b.ikisiDeHazir?1:0)-(a.ikisiDeHazir?1:0) || a.talepNo.localeCompare(b.talepNo));
 }
+// İş Yoğunluğu'ndaki "iş emri no yazarak nerede olduğunu bul" araması. isEmriNo bazında
+// gruplar (_ZARF/_ELMAS böylece kendiliğinden ayrı sonuç olur), her grubun EN SON kaydını
+// (startTs'e göre) "şu anki durum" olarak, tüm kayıtlarını da kronolojik "nereden geçti"
+// zinciri olarak döner. En fazla 25 sonuç — çok geniş bir sorguda ekran şişmesin diye.
+function iyAramaSonuclari(sorgu){
+  const q = String(sorgu||'').trim().toUpperCase();
+  if(!q) return [];
+  const byIsEmri = {};
+  entriesArray().forEach(e=>{
+    if(!e.isEmriNo) return;
+    if(!e.isEmriNo.toUpperCase().includes(q) && !(e.talepNo||'').toUpperCase().includes(q)) return;
+    (byIsEmri[e.isEmriNo] ||= []).push(e);
+  });
+  return Object.entries(byIsEmri).map(([isEmriNo, list])=>{
+    const sorted = list.slice().sort((a,b)=>a.startTs-b.startTs);
+    return { isEmriNo, talepNo: sorted[sorted.length-1].talepNo||'', entries: sorted, last: sorted[sorted.length-1] };
+  }).sort((a,b)=> b.last.startTs - a.last.startTs).slice(0,25);
+}
 function openActiveDetail(id){ activeDetailId = id; render(); }
 function closeActiveDetail(){ activeDetailId = null; setView('list'); }
 // Girilen İş Talep No'yu gerçek takip koduna (U kodu + varsa bileşen eki) çevirir.

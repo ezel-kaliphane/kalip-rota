@@ -636,6 +636,20 @@ let matrixAtolyeFilter = 'tumu'; // 'tumu' | 'imalat' | 'tadilat'
 function setMatrixAtolyeFilter(v){ matrixAtolyeFilter = v; render(); }
 let isYogunluguAcikMakine = null; // "İş Yoğunluğu" sekmesinde detayı açık olan makine satırı
 function toggleIsYogunluguDetay(label){ isYogunluguAcikMakine = isYogunluguAcikMakine===label ? null : label; render(); }
+// İş Yoğunluğu'nun 4 görünümü (liste/özet/hafta/pano) — seçim cihazda hatırlanır.
+let isYogunluguGorunum = (()=>{ try{ return localStorage.getItem('rota_iy_gorunum') || 'liste'; }catch(e){ return 'liste'; } })();
+function setIsYogunluguGorunum(g){
+  isYogunluguGorunum = g;
+  try{ localStorage.setItem('rota_iy_gorunum', g); }catch(e){}
+  render();
+}
+// İş Yoğunluğu'nda "iş emri no yazarak nerede olduğunu bul" araması.
+let iyAramaMetni = '';
+function setIyAramaMetni(v){ iyAramaMetni = v; render(); }
+// Tam ekran atölye panosu: index.html?pano=1 — bkz. js/app.js render()/renderLiveBits().
+function isYogunluguPanoMode(){
+  try{ return new URLSearchParams(location.search).get('pano') === '1'; }catch(e){ return false; }
+}
 // Bir tadilat talebinin "Bekleme" (talep açıldıktan sonra bir operatörün işi seçip başlamasına
 // kadar geçen) süresinde ilgili operatörün sistemde ne yaptığını gösteren detay ekranı — kısa süreli
 // işler için uzun beklemelerin savunulabilir olup olmadığını görmek için. Şu an SADECE SuperAdmin

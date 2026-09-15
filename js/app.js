@@ -114,6 +114,12 @@ function render(){
   }
 
   if(!session){ paintApp(app, renderLogin()); renderBubble(); return; }
+  // Atölye TV panosu (?pano=1) — giriş yapılmış bir admin oturumu üzerinden, sadece İş
+  // Yoğunluğu'nu tam ekran gösteren sabit görünüm. Normal admin ekranının yerine geçer.
+  if(session.isAdmin && isYogunluguPanoMode()){
+    paintApp(app, `<div class="root-mobile theme-${resolvedTheme()}">${iyPanoHtml(iyVeri(), true)}</div>`);
+    return;
+  }
   liveReset(); // canlı sayaç kayıtları her render'da sıfırdan toplanır — bkz. ui/live.js
   const html = session.isAdmin ? renderAdmin() : renderOperator();
   const t1 = perfEnabled ? performance.now() : 0;
@@ -187,6 +193,9 @@ function safeRender(){
   render();
 }
 function renderLiveBits(){
+  // Pano modunda hafif "canlı düğüm" takibi devrede değil (özel bir DOM yapısı) — saat ve
+  // sayılar taze kalsın diye her tik doğrudan tam render() yapıyoruz.
+  if(session && session.isAdmin && isYogunluguPanoMode()){ render(); return; }
   // Sadece kilit ekranındaki / matristeki canlı sayaçları güncellemek için tam render yeterli (veri seti küçük).
   // Ama bir form açıkken (düzenleme, duruş nedeni yazma, serbest mesaj, aktif input/select) tam render
   // odağı (focus) kaybettiriyor / açık dropdown'ı kapatıyor — o an atla.
