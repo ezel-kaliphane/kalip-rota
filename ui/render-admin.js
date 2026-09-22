@@ -1775,6 +1775,9 @@ function renderIsYogunlugu(){
    (Stok → Hammadde → Excel, Ayarlar → Personel Ayarları) yönlendiriyor. */
 function gotoExcelYukleme(){ setView('stokYonetim'); setStokSubView('malzeme'); setMalzemeSubView('excel'); }
 function gotoOperatorler(){ setView('adminSettings'); setSettingsSubTab('personelAyarlari'); }
+/* Ayarlar'a nav'dan girilince her zaman menuden baslanir; alt ekranda kalip donmek
+   "neden burasi acildi" sorusunu dogururdu. */
+function gotoAyarlar(){ settingsSubTab='menu'; setView('adminSettings'); }
 /* Makine Matrisi — 2026-09-16: kullanıcının verdiği koyu Material-3 referansına göre yeniden
    tasarlandı (kart üstü renk çubuğu, durum rozeti, ayrı "Detay" butonu, alt özet/senkron
    şeridi). Tüm veri/filtre mantığı ESKİSİYLE AYNI (workMsFor/statusPriority/sortedMachines,
@@ -2207,6 +2210,94 @@ function renderGenelBakis(){
   return out;
 }
 
+/* ===================== AYARLAR — DÖRT GRUPLU MENÜ (22.09.2026) =====================
+   Admin-Ayarlar tahtası 18 düz alt sekmeyi dört gruba indiriyor: Genel & Kurulum, Makineler,
+   Üretim Kuralları, Erişim & Yetkiler. Yatay alt sekme şeridi kalktı; ekran artık bir MENÜ —
+   satıra tıklayınca ilgili ayar ekranı açılıyor, aç/kapa anahtarları satır içinde.
+
+   TAHTADAN BİLEREK SAPILAN NOKTA: tahtanın altındaki "Buradan taşınanlar" şeridi dokuz
+   maddenin Operatörler / Excel Yükleme / Bildirimler ekranlarına taşındığını söylüyor — ama o
+   üç ekran HENÜZ YOK (A.10–A.12 çizilmedi; 9. adımın blokaj sebebi tam olarak bu). Tahta
+   birebir uygulansaydı Personel Ayarları, Veri Listeleri, Bildirim Gönder gibi ayarlara
+   erişim sessizce kaybolurdu. Bu yüzden şerit tahtadaki gibi duruyor ama ölü link değil:
+   ilgili alt sekmeyi açıyor. O ekranlar çizildiğinde şeridin hedefleri oraya çevrilir.
+
+   ERİŞİM: her satırın koşulu, o alt sekmenin ESKİ şerit koşuluyla birebir aynı. Satır
+   görünmüyorsa oraya menüden girilemez; state üzerinden girilse bile renderAdmin'in
+   başındaki rol zorlaması geri atar (o iki satıra 'menu' istisnası eklendi). */
+function ayarSatiri(o){
+  /* Yeni satir tipi ICAT EDILMEDI: ac/kapa icin render-common.js'teki switchRow(), gezinme
+     icin tasarim sisteminde zaten tanimli .set-row + .chev kullaniliyor. */
+  if(o.toggle) return switchRow(o.id, o.ac, o.etiket, o.alt||'', {ok:true, onchange:o.toggle, style:'margin-bottom:8px'});
+  const eylem = o.onclick || `setSettingsSubTab('${o.hedef}')`;
+  return `<button class="set-row" style="margin-bottom:8px" onclick="${eylem}">
+    <span style="min-width:0"><span>${o.etiket}</span>${o.alt?`<span class="sw-sub" style="display:block">${o.alt}</span>`:''}</span>
+    ${o.deger?`<span class="ayar-deger mono">${o.deger}</span>`:''}
+    <span class="chev">${ico('chevronRight',15)}</span>
+  </button>`;
+}
+function renderAyarlarMenu(){
+  const sa = !!session.isSuperAdmin, sef = !!session.isSef;
+  // ek: grubun satirlarindan SONRA, kapanis div'inden ONCE basilacak icerik (rol notu gibi)
+  const grup = (baslik, satirlar, ek) => {
+    const dolu = satirlar.filter(Boolean);
+    return dolu.length ? `<div class="set-card"><div class="set-sec" style="margin:0 0 10px">${baslik}</div>${dolu.join('')}${ek||''}</div>` : '';
+  };
+  const esikDk = Math.round(uzunDurusEsikMs()/60000);
+  const makineSay = allMachines().length;
+  const bolumKuralSay = Object.keys(getBolumKurallari()||{}).length;
+  const yoneticiSay = Object.entries(STATE.operators).filter(([c,v])=>!v.isSuperAdmin && (v.isAdmin||v.isSef||v.isUretimSef)).length;
+
+  const g1 = grup('Genel &amp; Kurulum', [
+    ayarSatiri({ etiket:'Tema', deger: resolvedTheme()==='dark'?'Koyu':'Açık', onclick:'toggleTheme()' }),
+    sa && ayarSatiri({ etiket:'Takım &amp; Sarf Stok Modülü', id:'sw-toolstok', toggle:'toggleToolStokEnabled()', ac:toolStokEnabled() }),
+    sa && ayarSatiri({ etiket:'Karbür Stok Modülü', id:'sw-karbur', toggle:'toggleKarburEnabled()', ac:karburEnabled() }),
+    sa && ayarSatiri({ etiket:'Malzeme Stok Takibi', id:'sw-malzeme', alt:'Kapalıyken operatör stoğu görmez; yönetim ekranı çalışmaya devam eder', toggle:'toggleStockTracking()', ac:stockEnabled() }),
+    sa && ayarSatiri({ etiket:'Resim Bul — görsel arama', id:'sw-resimbul', alt:'Yerel ağdaki ayrı sunucuya bağımlı', toggle:'toggleResimBul()', ac:resimBulEnabled() }),
+  ]);
+
+  const g2 = grup('Makineler', [
+    sa && ayarSatiri({ etiket:'Makine Listesi', alt:'Ad, grup, atölye, fason ve gizleme işaretleri', deger:String(makineSay), hedef:'makineAyarlari' }),
+    sa && ayarSatiri({ etiket:'Makine Ekle', hedef:'addMachine' }),
+    sa && ayarSatiri({ etiket:'Kişi Bazlı Makine Erişimi', alt:'Operatörün "Çalışılan Makine" listesini belirler', hedef:'access' }),
+  ]);
+
+  const g3 = grup('Üretim Kuralları', [
+    sa && ayarSatiri({ etiket:'Duruş Nedenleri', alt:'Planlı Mola ve Gün Sonu verimlilik paydasına girmez', hedef:'durusReasons' }),
+    canManageBildirimAyarlari() && ayarSatiri({ etiket:'Uzun Duruş Uyarı Eşiği', alt:'Bildirim ayarlarının tamamı', deger:`${esikDk} dk`, hedef:'uyarilar' }),
+    sa && ayarSatiri({ etiket:'Tadilat Hazır Açıklama Şablonları', hedef:'tadilatSablonlari' }),
+    sa && ayarSatiri({ etiket:'Bölüm &rarr; İş Merkezi Eşleştirme', deger:`${bolumKuralSay} kural`, hedef:'bolumKurallari' }),
+    sa && ayarSatiri({ etiket:'Karbür Stok Ayarları', alt:'Hurda eşiği ve katalog', hedef:'karbur' }),
+    sa && ayarSatiri({ etiket:'Takım &amp; Sarf Stok Ayarları', hedef:'takimStok' }),
+    (sa||sef) && ayarSatiri({ etiket:'Malzeme Stoğu', hedef:'stok' }),
+  ]);
+
+  /* Tahtadaki rol notu gerçeği yansıtıyor: rol atamaları RTDB Rules tarafından istemciye
+     kapalı, bu ekrandan yapılamıyor. */
+  const rolNotu = `<div class="notice" style="--nc:var(--warn);margin:10px 0 0;padding:11px 13px">
+    <div class="notice-sub"><b style="color:var(--nc)">Rol yükseltme burada yok.</b> Admin / SuperAdmin / Şef atamaları yalnızca Firebase Console'dan yapılır — Rules bunu istemciye kapatıyor.</div></div>`;
+
+  const g4 = grup('Erişim &amp; Yetkiler', [
+    sa && ayarSatiri({ etiket:'Sekme / Bölüm Erişimi', alt:"Kullanıcı bazlı — Canlı Panel'in üç sekmesi ayrı ayrı", deger:`${yoneticiSay} kişi`, hedef:'tabErisimi' }),
+    sa && ayarSatiri({ etiket:'Personel Ayarları', hedef:'personelAyarlari' }),
+    sa && ayarSatiri({ etiket:'Atölye Ayarları (Personel)', hedef:'personelAtolye' }),
+    sa && ayarSatiri({ etiket:'Kullanıcı Ekle', hedef:'addOperator' }),
+  ], sa ? rolNotu : '');
+
+  const tasinan = [
+    ayarSatiri({ etiket:'Bildirimlerim', hedef:'bildirimlerim' }),
+    sa && ayarSatiri({ etiket:'Bildirim Gönder', hedef:'bildirimGonder' }),
+    (sa||sef) && ayarSatiri({ etiket:'Veri Listeleri', hedef:'veriListeleri' }),
+  ].filter(Boolean);
+  const serit = tasinan.length ? `<div class="set-card ayar-tasinan">
+    <div class="set-sec" style="margin:0 0 6px">Bildirimler &amp; Veri</div>
+    <div class="sw-sub" style="margin:0 0 10px">Tasarımda bunlar Operatörler / Excel Yükleme / Bildirimler ekranlarına taşınıyor; o ekranlar çizilene kadar buradalar.</div>
+    <div class="ayar-tasinan-satirlar">${tasinan.join('')}</div>
+  </div>` : '';
+
+  return `<div class="ayar-menu">${g1}${g2}${g3}${g4}${serit}</div>`;
+}
+
 function renderAdmin(){
   /* Stok sekmesi uc bolumlu (takim / karbur / malzeme), asagida `stokYonetim` olarak ayrica ele
      aliniyor — bu yuzden burada karsiligi yok. */
@@ -2246,7 +2337,7 @@ function renderAdmin(){
       <div class="admin-sidebar-sec">Yönetim</div>
       <button class="admin-nav-item" title="Excel Yükleme" onclick="gotoExcelYukleme()">${ico('upload',14)}<span class="nav-label">Excel Yükleme</span></button>
       <button class="admin-nav-item" title="Operatörler" onclick="gotoOperatorler()">${ico('users',14)}<span class="nav-label">Operatörler</span></button>
-      <button class="admin-nav-item ${view==='adminSettings'?'active':''}" title="Ayarlar" onclick="setView('adminSettings')">${ico('gear',14)}<span class="nav-label">Ayarlar</span></button>
+      <button class="admin-nav-item ${view==='adminSettings'?'active':''}" title="Ayarlar" onclick="gotoAyarlar()">${ico('gear',14)}<span class="nav-label">Ayarlar</span></button>
       ` : ''}
       <div class="admin-sidebar-user">
         <div style="display:flex;align-items:center;gap:10px">
@@ -2285,33 +2376,11 @@ function renderAdmin(){
   let body = '';
   if(view==='adminSettings' && !session.isAdmin){ view = 'report'; }
   if((session.isSef || session.isUretimSef) && view==='analiz'){ view = canliPanelDefaultView(); }
-  if(session.isSef && view==='adminSettings' && settingsSubTab!=='veriListeleri' && settingsSubTab!=='stok' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'veriListeleri'; }
-  if(session.isAdmin && !session.isSef && !session.isSuperAdmin && view==='adminSettings' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'bildirimlerim'; } // düz Yönetici: sadece kendi bildirimini (ve izin verilmişse Bildirim Ayarları'nı) yönetebilir
+  if(session.isSef && view==='adminSettings' && settingsSubTab!=='menu' && settingsSubTab!=='veriListeleri' && settingsSubTab!=='stok' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'veriListeleri'; }
+  if(session.isAdmin && !session.isSef && !session.isSuperAdmin && view==='adminSettings' && settingsSubTab!=='menu' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'bildirimlerim'; } // düz Yönetici: sadece kendi bildirimini (ve izin verilmişse Bildirim Ayarları'nı) yönetebilir
   if(view==='adminSettings'){
     body = `<div class="settings-wrap">
-      <div class="sub-tabs">
-        ${session.isSuperAdmin ? `
-        <button class="sub-tab-btn ${settingsSubTab==='access'?'active':''}" onclick="setSettingsSubTab('access')">Makine Erişimi</button>
-        <button class="sub-tab-btn ${settingsSubTab==='personelAyarlari'?'active':''}" onclick="setSettingsSubTab('personelAyarlari')">Personel Ayarları</button>
-        <button class="sub-tab-btn ${settingsSubTab==='makineAyarlari'?'active':''}" onclick="setSettingsSubTab('makineAyarlari')">Makine Ayarları</button>
-        <button class="sub-tab-btn ${settingsSubTab==='personelAtolye'?'active':''}" onclick="setSettingsSubTab('personelAtolye')">Atölye Ayarları (Personel)</button>
-        <button class="sub-tab-btn ${settingsSubTab==='durusReasons'?'active':''}" onclick="setSettingsSubTab('durusReasons')">Duruş Nedenleri</button>
-        <button class="sub-tab-btn ${settingsSubTab==='tadilatSablonlari'?'active':''}" onclick="setSettingsSubTab('tadilatSablonlari')">Tadilat Hazır İfadeleri</button>
-        <button class="sub-tab-btn ${settingsSubTab==='bolumKurallari'?'active':''}" onclick="setSettingsSubTab('bolumKurallari')">Tadilat Bölüm Kuralları</button>
-        <button class="sub-tab-btn ${settingsSubTab==='tabErisimi'?'active':''}" onclick="setSettingsSubTab('tabErisimi')">Sekme Erişimi (Yönetici)</button>
-        <button class="sub-tab-btn ${settingsSubTab==='takimStok'?'active':''}" onclick="setSettingsSubTab('takimStok')">${ico('wrench',14)} Takım & Sarf Stok</button>
-        <button class="sub-tab-btn ${settingsSubTab==='karbur'?'active':''}" onclick="setSettingsSubTab('karbur')">${ico('elmas',14)} Karbür Stok</button>` : ''}
-        ${(session.isSuperAdmin||session.isSef) ? `
-        <button class="sub-tab-btn ${settingsSubTab==='veriListeleri'?'active':''}" onclick="setSettingsSubTab('veriListeleri')">Veri Listeleri</button>
-        <button class="sub-tab-btn ${settingsSubTab==='stok'?'active':''}" onclick="setSettingsSubTab('stok')">Malzeme Stoğu</button>` : ''}
-        <button class="sub-tab-btn ${settingsSubTab==='bildirimlerim'?'active':''}" onclick="setSettingsSubTab('bildirimlerim')">${ico('bell',14)} Bildirimlerim</button>
-        ${canManageBildirimAyarlari() ? `<button class="sub-tab-btn ${settingsSubTab==='uyarilar'?'active':''}" onclick="setSettingsSubTab('uyarilar')">Bildirim Ayarları</button>` : ''}
-        ${session.isSuperAdmin ? `
-        <button class="sub-tab-btn ${settingsSubTab==='resimBul'?'active':''}" onclick="setSettingsSubTab('resimBul')">Resim/Çizim Bul</button>
-        <button class="sub-tab-btn ${settingsSubTab==='bildirimGonder'?'active':''}" onclick="setSettingsSubTab('bildirimGonder')">${ico('send',14)} Bildirim Gönder</button>
-        <button class="sub-tab-btn ${settingsSubTab==='addOperator'?'active':''}" onclick="setSettingsSubTab('addOperator')">+ Kullanıcı Ekle</button>
-        <button class="sub-tab-btn ${settingsSubTab==='addMachine'?'active':''}" onclick="setSettingsSubTab('addMachine')">+ Makine Ekle</button>` : ''}
-      </div>`;
+      ${settingsSubTab==='menu' ? renderAyarlarMenu() : `<button class="btn-ghost" style="margin-bottom:14px" onclick="setSettingsSubTab('menu')"><span style="display:inline-flex;transform:rotate(180deg)">${ico('chevronRight',14)}</span> Tüm ayarlar</button>`}`;
     if(settingsSubTab==='access'){
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Kişi Bazlı Makine Erişimi</div>
         <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">İşaretli makineler o operatörün "Çalışılan Makine" listesinde görünür.</div>
