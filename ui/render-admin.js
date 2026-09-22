@@ -2298,6 +2298,29 @@ function renderAyarlarMenu(){
   return `<div class="ayar-menu">${g1}${g2}${g3}${g4}${serit}</div>`;
 }
 
+/* Üst bardaki ekran başlığı — tahtalarda (Admin-Tadilat, Admin-Matris, Admin-Ayarlar) üst bar
+   62px ve solunda "üst etiket / başlık / kısa açıklama" bloğu var. Canlı Panel'in üç sekmesinde
+   üst etiket ekranın adı, başlık aktif sekme (Admin-Matris tahtasındaki düzen). */
+const EKRAN_BASLIKLARI = {
+  report:       { baslik:'Rapor' },
+  genelBakis:   { ustu:'Canlı Panel', baslik:'Genel Bakış' },
+  matrix:       { ustu:'Canlı Panel', baslik:'Makine Matrisi' },
+  completed:    { ustu:'Canlı Panel', baslik:'Tamamlanan Kodlar' },
+  isYogunlugu:  { baslik:'İş Yoğunluğu' },
+  analiz:       { baslik:'Analiz' },
+  tadilatYonetim:{ baslik:'Tadilat', alt:'İmalat + Tadilat atölye' },
+  stokYonetim:  { baslik:'Stok Takibi' },
+  adminSettings:{ ustu:'Yönetim', baslik:'Ayarlar' },
+};
+function ekranBasligiHtml(){
+  const b = EKRAN_BASLIKLARI[view];
+  if(!b) return '';
+  return `<div class="topbar-baslik">
+    ${b.ustu?`<div class="topbar-ustu">${b.ustu}</div>`:''}
+    <div class="topbar-ad">${b.baslik}</div>
+    ${b.alt?`<div class="topbar-alt">${b.alt}</div>`:''}
+  </div>`;
+}
 function renderAdmin(){
   /* Stok sekmesi uc bolumlu (takim / karbur / malzeme), asagida `stokYonetim` olarak ayrica ele
      aliniyor — bu yuzden burada karsiligi yok. */
@@ -2349,6 +2372,7 @@ function renderAdmin(){
     </nav>`;
   const header = `
     <div class="admin-topbar">
+      ${ekranBasligiHtml()}
       ${uzunDurusList.length>0 ? `<button class="icon-btn" style="position:relative;border-color:var(--danger);color:var(--danger)" onclick="openUzunDurusModal()" title="Uzun süredir duruşta olanlar">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
         <span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:var(--btn-primary-text);font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${uzunDurusList.length}</span>
