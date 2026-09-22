@@ -126,7 +126,9 @@ function renderToolCatalogListAdmin(){
             ${locs.map(l=>`<option value="${l.id}" ${it.locId===l.id?'selected':''}>${esc(l.ad)}</option>`).join('')}
           </select></td>
           <td><input value="${esc(it.goz||'')}" style="width:70px" onchange="updateToolCatalogField('${it.id}','goz',this.value)"></td>
-          <td style="color:${dusuk?'var(--danger)':'var(--text)'};font-weight:${dusuk?'700':'400'}">${stok==null?'—':stok}</td>
+          <td>${canManageToolStok()
+            ? `<input type="number" min="0" value="${stok==null?0:stok}" title="Stoğu elle düzelt — hareket kütüğüne yazılır" style="width:74px;text-align:right;color:${dusuk?'var(--danger)':'var(--text)'};font-weight:${dusuk?'700':'600'}" onchange="toolStokMiktarDuzelt('${it.id}',this.value)">`
+            : `<span style="color:${dusuk?'var(--danger)':'var(--text)'};font-weight:${dusuk?'700':'400'}">${stok==null?'—':stok}</span>`}</td>
           <td style="text-align:center"><input type="checkbox" ${siparisAcik?'checked':''} title="Bu kalem için tedarikçiye sipariş verildi mi?" onchange="toggleToolStokSiparisAcik('${it.id}')"></td>
           <td><input type="number" value="${it.altLimit||0}" style="width:70px" onchange="updateToolCatalogField('${it.id}','altLimit',this.value)"></td>
           <td><input type="number" value="${it.siparisMiktari||0}" style="width:70px" onchange="updateToolCatalogField('${it.id}','siparisMiktari',this.value)"></td>

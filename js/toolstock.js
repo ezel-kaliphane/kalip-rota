@@ -248,6 +248,41 @@ function toolChunkedUpdate(updates, chunkSize){
 }
 
 /* ---------- kalem alanı düzenleme (SuperAdmin, tek alan) ---------- */
+/* Kalem Listesi'ndeki STOK hücresinden doğrudan düzeltme (22.09.2026).
+   Yetki kapısı diğer sütunlarla AYNI: canManageToolStok() = yalnızca SuperAdmin.
+   Stok bir katalog alanı DEĞİL (ayrı toolStock düğümü + toolMoves kütüğü), o yüzden
+   updateToolCatalogField'a eklenmedi, kendi fonksiyonu var ve hareketi kütüğe yazıyor.
+   Transaction KOŞULSUZ yeni değeri döndürüyor, hiçbir pasta undefined yok: toolStock'ta
+   canlı dinleyici olmadığı için ilk pas null gelir ve naif bir koruma orada ölürdü
+   (bkz. HATA_NOTLARI 2026-09-15, karbür). Önceki değer sunucu pasında tazeleniyor. */
+function toolStokMiktarDuzelt(itemId, girilen){
+  if(!canManageToolStok()){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
+  const it = toolCatalog[itemId]; if(!it) return;
+  const yeni = Math.round(Number(girilen));
+  const bilinen = Number((toolStock[itemId]||{}).miktar)||0;
+  if(!isFinite(yeni)){ toast('Geçerli bir sayı girin'); render(); return; }
+  if(yeni < 0){ toast('Stok negatif olamaz'); render(); return; }
+  if(yeni === bilinen) return; // değişmediyse yazma da kütük kaydı da yok
+  let onceki = bilinen;
+  DB.ref('toolStock/'+itemId+'/miktar').transaction(cur => { onceki = (cur===null?bilinen:(Number(cur)||0)); return yeni; })
+    .then(res=>{
+      if(!res.committed){ toast('İşlem tamamlanamadı, tekrar deneyin'); render(); return; }
+      const now = Date.now();
+      const moveId = DB.ref('toolMoves').push().key;
+      const updates = {};
+      updates['toolMoves/'+moveId] = { itemId, canias: it.canias||'', tip:'duzeltme', miktar: yeni-onceki,
+        oncekiMiktar: onceki, sonrakiMiktar: yeni, operatorUsername: session.username,
+        operatorName: session.displayName, aciklama:'Elle düzeltme (kalem listesi)', kaynak:'liste', ts: now };
+      updates['toolStock/'+itemId+'/sonHareketTs'] = now;
+      updates['toolStock/'+itemId+'/sonHareketAciklama'] = 'Elle düzeltme';
+      if(Number(it.altLimit)>0 && yeni>Number(it.altLimit)) updates['toolStock/'+itemId+'/uyariGonderildi'] = false;
+      DB.ref().update(updates).then(()=>{
+        toolStock[itemId] = { ...(toolStock[itemId]||{}), miktar: yeni, sonHareketTs: now };
+        toast(`${it.ad||it.canias}: ${onceki} → ${yeni}`);
+        render();
+      }).catch(err=>{ toast('Kaydedilemedi: '+(err.message||'bilinmeyen hata')); render(); });
+    }).catch(err=>{ toast('Kaydedilemedi: '+(err.message||'bilinmeyen hata')); render(); });
+}
 function updateToolCatalogField(itemId, field, val){
   if(!canManageToolStok()) return;
   const it = toolCatalog[itemId]; if(!it) return;
