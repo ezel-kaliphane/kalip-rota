@@ -1339,13 +1339,11 @@ function renderStokScreen(){
      artık konum sabit, sadece kırıntı/hedef aktif sekmeye göre değişiyor. Arama kutusu her
      zaman Genel Bakış'ın aggregasyonunu süzer (stokGenelArama) ve yazınca oraya geçer, çünkü
      diğer modüllerin kendi arama kutuları zaten kendi ekranlarında var. */
-  const ustAktifTanim = STOK_BOLUMLERI.find(b=>b.key===stokSubView);
   const ustHedef = stokSubView==='genel' ? stokGenelHedefModul() : stokSubView;
+  /* Breadcrumb ve "Stok Takibi" basligi 22.09.2026'da UST BARA tasindi (ekranBasligiHtml);
+     burada birakilsaydi ayni baslik ekranda iki kez gorunurdu. Arama ve aksiyon butonlari
+     kaldi. */
   const topHeader = `<div class="stok-top-header">
-    <div style="flex:none">
-      <div class="stok-top-crumb">Stok / ${esc(ustAktifTanim ? ustAktifTanim.label : 'Genel Bakış')}</div>
-      <div class="stok-top-title">Stok Takibi</div>
-    </div>
     <div style="flex:1;display:flex;justify-content:center;min-width:180px">
       <label class="stok-top-search">
         ${ico('search',14)}
@@ -2309,14 +2307,19 @@ const EKRAN_BASLIKLARI = {
   isYogunlugu:  { baslik:'İş Yoğunluğu' },
   analiz:       { baslik:'Analiz' },
   tadilatYonetim:{ baslik:'Tadilat', alt:'İmalat + Tadilat atölye' },
-  stokYonetim:  { baslik:'Stok Takibi' },
+  /* Breadcrumb gövdeden üst bara taşındı — aktif alt görünümü (Genel Bakış / Takım & Sarf /
+     Karbür / Hammadde) gösteriyor, tahtadaki 'Stok / Genel Bakış' satırının karşılığı. */
+  stokYonetim:  { ustu:()=>{ const t=(typeof STOK_BOLUMLERI!=='undefined') ? STOK_BOLUMLERI.find(b=>b.key===stokSubView) : null;
+                             return 'Stok / '+(t ? t.label : 'Genel Bakış'); }, baslik:'Stok Takibi' },
   adminSettings:{ ustu:'Yönetim', baslik:'Ayarlar' },
 };
 function ekranBasligiHtml(){
   const b = EKRAN_BASLIKLARI[view];
   if(!b) return '';
+  // 'ustu' fonksiyon olabilir: Stok'ta aktif alt gorunume gore degisiyor (Stok / Karbur gibi).
+  const ustu = typeof b.ustu==='function' ? b.ustu() : b.ustu;
   return `<div class="topbar-baslik">
-    ${b.ustu?`<div class="topbar-ustu">${b.ustu}</div>`:''}
+    ${ustu?`<div class="topbar-ustu">${ustu}</div>`:''}
     <div class="topbar-ad">${b.baslik}</div>
     ${b.alt?`<div class="topbar-alt">${b.alt}</div>`:''}
   </div>`;

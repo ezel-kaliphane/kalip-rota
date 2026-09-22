@@ -362,8 +362,6 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
 /* Üst başlık + arama — sadece Genel Bakış'ta (design/StokTakibiOneri.dc.html ile birebir),
    diğer modüllerin kendi arama/aksiyon akışı zaten var, burada tekrarlanmıyor. */
 .stok-top-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;flex:none;flex-wrap:wrap;background:var(--panel);border-bottom:1px solid var(--border)}
-.stok-top-crumb{font-size:11px;color:var(--text-subtle);font-weight:600;letter-spacing:.05em;text-transform:uppercase}
-.stok-top-title{font-family:var(--ff);font-size:24px;font-weight:700;margin-top:2px;color:var(--text);letter-spacing:-.02em}
 .stok-top-search{display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 13px;color:var(--text-subtle);font-size:13px;width:100%;max-width:520px}
 .stok-top-search input{border:none;background:none;padding:0;width:100%;color:var(--text);font-size:13px}
 .stok-top-search input::placeholder{color:var(--text-subtle)}
