@@ -2022,7 +2022,9 @@ function renderIsYogunlugu(){
 /* Sidebar'ın "Yönetim" grubundaki Excel Yükleme/Operatörler — henüz kendi ekranları yok (bu,
    TASARIM_ENVANTERI.md'deki A.11/A.12, ayrı bir aşama), şimdilik var olan gerçek işlevlere
    (Stok → Hammadde → Excel, Ayarlar → Personel Ayarları) yönlendiriyor. */
-function gotoExcelYukleme(){ setView('stokYonetim'); setStokSubView('malzeme'); setMalzemeSubView('excel'); }
+/* Eskiden Stok Takibi → Hammadde → Excel'e atıyordu; artık tüm yükleme akışlarını toplayan
+   kendi ekranını açıyor (22.09.2026). */
+function gotoExcelYukleme(){ setView('excelYukleme'); }
 function gotoOperatorler(){ setView('adminSettings'); setSettingsSubTab('personelAyarlari'); }
 /* Ayarlar'a nav'dan girilince her zaman menuden baslanir; alt ekranda kalip donmek
    "neden burasi acildi" sorusunu dogururdu. */
@@ -2536,7 +2538,6 @@ function renderAyarlarMenu(){
   const tasinan = [
     ayarSatiri({ etiket:'Bildirimlerim', hedef:'bildirimlerim' }),
     sa && ayarSatiri({ etiket:'Bildirim Gönder', hedef:'bildirimGonder' }),
-    (sa||sef) && ayarSatiri({ etiket:'Veri Listeleri', hedef:'veriListeleri' }),
   ].filter(Boolean);
   const serit = tasinan.length ? `<div class="set-card ayar-tasinan">
     <div class="set-sec" style="margin:0 0 6px">Bildirimler &amp; Veri</div>
@@ -2567,6 +2568,7 @@ const EKRAN_BASLIKLARI = {
      Karbür / Hammadde) gösteriyor, tahtadaki 'Stok / Genel Bakış' satırının karşılığı. */
   stokYonetim:  { ustu:()=>{ const t=(typeof STOK_BOLUMLERI!=='undefined') ? STOK_BOLUMLERI.find(b=>b.key===stokSubView) : null;
                              return 'Stok / '+(t ? t.label : 'Genel Bakış'); }, baslik:'Stok Takibi' },
+  excelYukleme: { ustu:'Yönetim', baslik:'Excel Yükleme' },
   adminSettings:{ ustu:'Yönetim', baslik:'Ayarlar' },
 };
 function ekranBasligiHtml(){
@@ -2581,6 +2583,129 @@ function ekranBasligiHtml(){
     ${alt?`<div class="topbar-alt">${alt}</div>`:''}
   </div>`;
 }
+/* Veri Listeleri 22.09.2026'da Ayarlar'dan Excel Yükleme ekranına TAŞINDI (kullanıcı isteği).
+   Gövde aynen taşındı, yalnızca renderAdmin'in `body` değişkenine eklemek yerine kendi dizesini
+   döndürüyor. Erişim koşulu değişmedi: SuperAdmin ya da Şef. */
+function renderVeriListeleri(){
+  let body = '';
+      const count = Object.keys(STATE.validIsEmri||{}).length;
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Veri Listeleri</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:22px;max-width:760px">Excel'den yüklenen referans listeleri. Excel'iniz güncellendikçe aynı bölümden tekrar yükleyip üzerine yazabilirsiniz.</div>
+
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;margin-bottom:22px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">İş Emri Listesi (ERP Doğrulaması)</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">ERP'den aldığınız Excel'i yükleyin. Operatörler İş Emri No olarak <b>İş Talep No</b> girer, sistem bu listeden doğrular. "Malzeme kodu"/"Malzeme Adı" sütunları da varsa otomatik gösterilir. _ZARF/_ELMAS varyantları taban talep no'ya göre otomatik doğrulanır, ayrıca eklemenize gerek yok.</div>
+          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${count}</b> kayıt.${count===0?' <span style="color:var(--warn)">(Liste boşsa doğrulama yapılmaz.)</span>':''}</div>
+          <div class="field"><label>Sütun Başlığı (varsayılan: İş Talep No)</label><input id="isemri-col-name" value="İş Talep No" placeholder="İş Talep No"></div>
+          <input type="file" id="isemri-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadIsEmriListesi()">⬆ Yükle ve Güncelle</button>
+            ${count>0 ? `<button class="btn-ghost" onclick="clearIsEmriListesi()">${ico('trash',14)} Temizle</button>` : ''}
+          </div>
+          <div id="isemri-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
+        </div>`;
+      if(session.isSuperAdmin){
+        const mCount = malzemeListesiArray().length;
+        const iCount = isMerkezleriArray().length;
+        const pCount = uretimPersoneliArray().length;
+        body += `
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;margin-bottom:22px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">Malzeme Listesi (Dürbün Arama Kaynağı) <span style="font-size:10.5px;color:var(--text-muted);font-weight:400">(SuperAdmin)</span></div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">BAST03'ten (Canias) aldığınız U kodu + Açıklama listesi. Tadilat talebinde ${ico('search',13)} ile <span class="mono">%joker%</span> karakterli arama yapılabilir.</div>
+          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${mCount}</b> kayıt.</div>
+          <div class="field"><label>U Kodu Sütun Başlığı (varsayılan: U Kodu)</label><input id="malzeme-kod-col" value="U Kodu" placeholder="U Kodu"></div>
+          <div class="field"><label>Açıklama Sütun Başlığı (varsayılan: Açıklama)</label><input id="malzeme-aciklama-col" value="Açıklama" placeholder="Açıklama"></div>
+          <input type="file" id="malzeme-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadMalzemeListesi()">⬆ Yükle ve Güncelle</button>
+            ${mCount>0 ? `<button class="btn-ghost" onclick="clearMalzemeListesi()">${ico('trash',14)} Temizle</button>` : ''}
+          </div>
+          <div id="malzeme-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
+        </div>
+
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;margin-bottom:22px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">İş Merkezi Listesi (Tadilat "Talep Edilen Makine" Kaynağı) <span style="font-size:10.5px;color:var(--text-muted);font-weight:400">(SuperAdmin)</span></div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">ERP'den (BAST08) aldığınız iş merkezi kodları (V01, B10, N3 gibi — açıklama alınmaz). Rota Takip'in kendi makine listesinden ayrı; Tadilat'ta "Talep Edilen Makine" alanında kullanılır. Hangi bölümün hangi kodlara erişebileceği "Tadilat Bölüm Kuralları"ndan ayarlanır.</div>
+          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${iCount}</b> kayıt.</div>
+          <div class="field"><label>Sütun Başlığı (varsayılan: İş Merkezi)</label><input id="ismerkezi-kod-col" value="İş Merkezi" placeholder="İş Merkezi"></div>
+          <input type="file" id="ismerkezi-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadIsMerkezleri()">⬆ Yükle ve Güncelle</button>
+            ${iCount>0 ? `<button class="btn-ghost" onclick="clearIsMerkezleri()">${ico('trash',14)} Temizle</button>` : ''}
+          </div>
+          <div id="ismerkezi-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
+        </div>
+
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;margin-bottom:22px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">Üretim Personeli Listesi <span style="font-size:10.5px;color:var(--text-muted);font-weight:400">(SuperAdmin)</span></div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Tadilat'taki "Talep eden kişi" alanı bu listeye göre doğrulanır. "Görev" sütunu varsa (ör. "Civata Üretim Operatörü") bölüm otomatik çıkarılır (Civata/Vida/Somun/Bakım/Kalite/Diğer). Liste boşken serbest yazıma açık kalır.</div>
+          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${pCount}</b> kayıt.${pCount===0?' <span style="color:var(--warn)">(Liste boşsa doğrulama yapılmaz.)</span>':''}</div>
+          <div class="field"><label>Ad Sütun Başlığı (varsayılan: Görünen Ad)</label><input id="personel-ad-col" value="Görünen Ad" placeholder="Görünen Ad"></div>
+          <div class="field"><label>Görev Sütun Başlığı (varsayılan: Görev)</label><input id="personel-gorev-col" value="Görev" placeholder="Görev"></div>
+          <input type="file" id="personel-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadUretimPersoneli()">⬆ Yükle ve Güncelle</button>
+            ${pCount>0 ? `<button class="btn-ghost" onclick="clearUretimPersoneli()">${ico('trash',14)} Temizle</button>` : ''}
+          </div>
+          <div id="personel-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
+        </div>`;
+      }
+  return body;
+}
+/* ===================== EXCEL YÜKLEME EKRANI (A.11, 22.09.2026) =====================
+   Sol bardaki yükleme ikonu eskiden Stok Takibi → Hammadde → Excel'e atıyordu (gotoExcelYukleme).
+   Artık kendi ekranı var ve DÖRT yükleme akışının hepsi burada toplandı:
+
+     veriListeleri -> Ayarlar'dan TAŞINDI (renderVeriListeleri) — üretim referans listeleri
+     malzeme       -> renderMalzemeStokScreen()'in excel bölümü
+     takim         -> renderToolExcelUploadAdmin()
+     karbur        -> renderKarburExcel()
+
+   Gövdeler KOPYALANMADI, olduğu yerden çağrılıyor; böylece yükleme mantığı tek yerde kalıyor
+   ve modül içindeki mevcut "Excel Yükle" bölümleri de aynı kodu göstermeye devam ediyor.
+
+   Erişim: her sekmenin koşulu, o akışın ESKİ koşuluyla birebir aynı — Veri Listeleri
+   SuperAdmin/Şef, Hammadde canManageStock(), Takım isTakimStokSubTabVisible('excel'),
+   Karbür isAdminTabVisible('karbur'). Hiçbiri görünmüyorsa ekran bunu söylüyor. */
+const EXCEL_BOLUMLERI = [
+  { key:'veriListeleri', label:'Veri Listeleri', alt:'üretim referans listeleri',
+    gor:()=>!!(session && (session.isSuperAdmin || session.isSef)) },
+  { key:'malzeme', label:'Hammadde', alt:'stok kalemleri',
+    gor:()=>canManageStock() },
+  { key:'takim', label:'Takım & Sarf', alt:'katalog',
+    gor:()=>(typeof isTakimStokSubTabVisible==='function') && isTakimStokSubTabVisible('excel') },
+  { key:'karbur', label:'Karbür', alt:'katalog',
+    gor:()=>isAdminTabVisible('karbur') },
+];
+let excelSubView = 'veriListeleri';
+function setExcelSubView(k){
+  excelSubView = k;
+  /* Hammadde bölümü renderMalzemeStokScreen()'in içinden geliyor ve hangi bölümü
+     döndüreceğine malzemeSubView'a bakarak karar veriyor — sekmeye basınca onu da
+     'excel'e alıyoruz ki doğru gövde gelsin. */
+  if(k==='malzeme') malzemeSubView = 'excel';
+  render();
+}
+function renderExcelYukleme(){
+  const gorunur = EXCEL_BOLUMLERI.filter(b=>b.gor());
+  if(gorunur.length===0){
+    return `<div class="settings-wrap"><div style="color:var(--text-muted);font-size:12.5px">Excel yükleme ekranlarına erişim yetkin yok.</div></div>`;
+  }
+  if(!gorunur.some(b=>b.key===excelSubView)){
+    excelSubView = gorunur[0].key;
+    if(excelSubView==='malzeme') malzemeSubView = 'excel';
+  }
+  const serit = `<div class="sub-tabs" style="flex-wrap:wrap">
+    ${gorunur.map(b=>`<button class="sub-tab-btn ${excelSubView===b.key?'active':''}" title="${esc(b.alt)}" onclick="setExcelSubView('${b.key}')">${esc(b.label)}</button>`).join('')}
+  </div>`;
+  let govde = '';
+  if(excelSubView==='veriListeleri')  govde = renderVeriListeleri();
+  else if(excelSubView==='malzeme')   govde = renderMalzemeStokScreen();
+  else if(excelSubView==='takim')     govde = renderToolExcelUploadAdmin();
+  else if(excelSubView==='karbur')    govde = renderKarburExcel();
+  return `<div class="settings-wrap">${serit}${govde}</div>`;
+}
+
 function renderAdmin(){
   /* Stok sekmesi uc bolumlu (takim / karbur / malzeme), asagida `stokYonetim` olarak ayrica ele
      aliniyor — bu yuzden burada karsiligi yok. */
@@ -2660,7 +2785,16 @@ function renderAdmin(){
   let body = '';
   if(view==='adminSettings' && !session.isAdmin){ view = 'report'; }
   if((session.isSef || session.isUretimSef) && view==='analiz'){ view = canliPanelDefaultView(); }
-  if(session.isSef && view==='adminSettings' && settingsSubTab!=='menu' && settingsSubTab!=='veriListeleri' && settingsSubTab!=='stok' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'veriListeleri'; }
+  /* Veri Listeleri Excel Yükleme ekranına taşındığı için Şef'in izinli alt sekmeleri arasından çıktı;
+     yasak bir sekmeye düşen Şef artık boş bir ekrana değil MENÜYE atılıyor. */
+  /* Bir alt sekme kaldirildiginda (Veri Listeleri -> Excel Yukleme ekranina tasindi) eski deger
+     state'te kalabiliyor; asagidaki if/else zincirinden dusup bombos bir Ayarlar ekrani veriyordu.
+     Taninmayan her deger menuye donuyor. Rol zorlamalari bunun USTUNE calisiyor, sirasi onemli. */
+  const AYAR_ALT_SEKMELERI = ['menu','access','personelAyarlari','makineAyarlari','personelAtolye',
+    'addOperator','addMachine','bolumKurallari','tabErisimi','resimBul','uyarilar','bildirimlerim',
+    'bildirimGonder','durusReasons','tadilatSablonlari','takimStok','karbur','stok'];
+  if(view==='adminSettings' && AYAR_ALT_SEKMELERI.indexOf(settingsSubTab)===-1){ settingsSubTab = 'menu'; }
+  if(session.isSef && view==='adminSettings' && settingsSubTab!=='menu' && settingsSubTab!=='stok' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'menu'; }
   if(session.isAdmin && !session.isSef && !session.isSuperAdmin && view==='adminSettings' && settingsSubTab!=='menu' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'bildirimlerim'; } // düz Yönetici: sadece kendi bildirimini (ve izin verilmişse Bildirim Ayarları'nı) yönetebilir
   if(view==='adminSettings'){
     body = `<div class="settings-wrap">
@@ -2804,69 +2938,6 @@ function renderAdmin(){
         </div>
         <div style="margin-top:24px;font-size:13px;font-weight:600;margin-bottom:8px">Mevcut Makineler (${allMachines().length})</div>
         <div class="machine-grid">${allMachines().map(m=>`<div class="machine-chip" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</span><button class="del-btn" onclick="deleteMachine('${escJs(m.code)}')" title="Sil">${ico('trash',14)}</button></div>`).join('')}</div>`;
-    } else if(settingsSubTab==='veriListeleri'){
-      const count = Object.keys(STATE.validIsEmri||{}).length;
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Veri Listeleri</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:22px;max-width:760px">Excel'den yüklenen referans listeleri. Excel'iniz güncellendikçe aynı bölümden tekrar yükleyip üzerine yazabilirsiniz.</div>
-
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;margin-bottom:22px">
-          <div style="font-size:14px;font-weight:600;margin-bottom:6px">İş Emri Listesi (ERP Doğrulaması)</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">ERP'den aldığınız Excel'i yükleyin. Operatörler İş Emri No olarak <b>İş Talep No</b> girer, sistem bu listeden doğrular. "Malzeme kodu"/"Malzeme Adı" sütunları da varsa otomatik gösterilir. _ZARF/_ELMAS varyantları taban talep no'ya göre otomatik doğrulanır, ayrıca eklemenize gerek yok.</div>
-          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${count}</b> kayıt.${count===0?' <span style="color:var(--warn)">(Liste boşsa doğrulama yapılmaz.)</span>':''}</div>
-          <div class="field"><label>Sütun Başlığı (varsayılan: İş Talep No)</label><input id="isemri-col-name" value="İş Talep No" placeholder="İş Talep No"></div>
-          <input type="file" id="isemri-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
-          <div style="display:flex;gap:10px">
-            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadIsEmriListesi()">⬆ Yükle ve Güncelle</button>
-            ${count>0 ? `<button class="btn-ghost" onclick="clearIsEmriListesi()">${ico('trash',14)} Temizle</button>` : ''}
-          </div>
-          <div id="isemri-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
-        </div>`;
-      if(session.isSuperAdmin){
-        const mCount = malzemeListesiArray().length;
-        const iCount = isMerkezleriArray().length;
-        const pCount = uretimPersoneliArray().length;
-        body += `
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;margin-bottom:22px">
-          <div style="font-size:14px;font-weight:600;margin-bottom:6px">Malzeme Listesi (Dürbün Arama Kaynağı) <span style="font-size:10.5px;color:var(--text-muted);font-weight:400">(SuperAdmin)</span></div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">BAST03'ten (Canias) aldığınız U kodu + Açıklama listesi. Tadilat talebinde ${ico('search',13)} ile <span class="mono">%joker%</span> karakterli arama yapılabilir.</div>
-          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${mCount}</b> kayıt.</div>
-          <div class="field"><label>U Kodu Sütun Başlığı (varsayılan: U Kodu)</label><input id="malzeme-kod-col" value="U Kodu" placeholder="U Kodu"></div>
-          <div class="field"><label>Açıklama Sütun Başlığı (varsayılan: Açıklama)</label><input id="malzeme-aciklama-col" value="Açıklama" placeholder="Açıklama"></div>
-          <input type="file" id="malzeme-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
-          <div style="display:flex;gap:10px">
-            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadMalzemeListesi()">⬆ Yükle ve Güncelle</button>
-            ${mCount>0 ? `<button class="btn-ghost" onclick="clearMalzemeListesi()">${ico('trash',14)} Temizle</button>` : ''}
-          </div>
-          <div id="malzeme-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
-        </div>
-
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;margin-bottom:22px">
-          <div style="font-size:14px;font-weight:600;margin-bottom:6px">İş Merkezi Listesi (Tadilat "Talep Edilen Makine" Kaynağı) <span style="font-size:10.5px;color:var(--text-muted);font-weight:400">(SuperAdmin)</span></div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">ERP'den (BAST08) aldığınız iş merkezi kodları (V01, B10, N3 gibi — açıklama alınmaz). Rota Takip'in kendi makine listesinden ayrı; Tadilat'ta "Talep Edilen Makine" alanında kullanılır. Hangi bölümün hangi kodlara erişebileceği "Tadilat Bölüm Kuralları"ndan ayarlanır.</div>
-          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${iCount}</b> kayıt.</div>
-          <div class="field"><label>Sütun Başlığı (varsayılan: İş Merkezi)</label><input id="ismerkezi-kod-col" value="İş Merkezi" placeholder="İş Merkezi"></div>
-          <input type="file" id="ismerkezi-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
-          <div style="display:flex;gap:10px">
-            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadIsMerkezleri()">⬆ Yükle ve Güncelle</button>
-            ${iCount>0 ? `<button class="btn-ghost" onclick="clearIsMerkezleri()">${ico('trash',14)} Temizle</button>` : ''}
-          </div>
-          <div id="ismerkezi-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
-        </div>
-
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;margin-bottom:22px">
-          <div style="font-size:14px;font-weight:600;margin-bottom:6px">Üretim Personeli Listesi <span style="font-size:10.5px;color:var(--text-muted);font-weight:400">(SuperAdmin)</span></div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Tadilat'taki "Talep eden kişi" alanı bu listeye göre doğrulanır. "Görev" sütunu varsa (ör. "Civata Üretim Operatörü") bölüm otomatik çıkarılır (Civata/Vida/Somun/Bakım/Kalite/Diğer). Liste boşken serbest yazıma açık kalır.</div>
-          <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${pCount}</b> kayıt.${pCount===0?' <span style="color:var(--warn)">(Liste boşsa doğrulama yapılmaz.)</span>':''}</div>
-          <div class="field"><label>Ad Sütun Başlığı (varsayılan: Görünen Ad)</label><input id="personel-ad-col" value="Görünen Ad" placeholder="Görünen Ad"></div>
-          <div class="field"><label>Görev Sütun Başlığı (varsayılan: Görev)</label><input id="personel-gorev-col" value="Görev" placeholder="Görev"></div>
-          <input type="file" id="personel-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
-          <div style="display:flex;gap:10px">
-            <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="uploadUretimPersoneli()">⬆ Yükle ve Güncelle</button>
-            ${pCount>0 ? `<button class="btn-ghost" onclick="clearUretimPersoneli()">${ico('trash',14)} Temizle</button>` : ''}
-          </div>
-          <div id="personel-upload-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
-        </div>`;
-      }
     } else if(settingsSubTab==='bolumKurallari'){
       const kurallar = getBolumKurallari();
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Bölüm Kuralları</div>
@@ -3148,6 +3219,8 @@ function renderAdmin(){
       body += renderMalzemeStokAyarlar();
     }
     body += `</div>`;
+  } else if(view==='excelYukleme'){
+    body = renderExcelYukleme();
   } else if(view==='genelBakis'){
     body = renderGenelBakis();
   } else if(view==='matrix'){
