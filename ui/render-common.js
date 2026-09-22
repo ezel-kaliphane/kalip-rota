@@ -274,7 +274,7 @@ function renderEntryDetailModal(){
   const e = STATE.entries[entryDetailId];
   if(!e){ entryDetailId=null; return ''; }
   const isDone = computeCompletedRouteIds().has(e.id);
-  const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success-soft)';
+  const statusColor = isDone ? 'var(--success-text)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn-text)':'var(--success-text)';
   const statusLabel = isDone ? 'Rota Tamamlandı' : e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
   // DÜZELTME: Eskiden burada `e.status==='devam'` dışındaki her kapanmamış kayıt için wallMs=0
   // yazılıyordu — yani DURUŞTAKİ bir kaydın detayı açıldığında "Üretim Süresi 0 dk / Toplam 0 dk"
@@ -522,16 +522,16 @@ function renderMachineModal(){
           <div style="width:90px;font-size:11px;color:var(--text-muted);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.isEmriNo||'')}">${esc(e.isEmriNo||'—')}</div>
           <div style="position:relative;flex:1;height:20px;background:var(--panel-alt);border-radius:4px;overflow:hidden">
             <div style="position:absolute;left:${leftPct}%;width:${widthPct}%;height:100%;display:flex;border-radius:3px;overflow:hidden" title="${esc(e.operatorName||'')} · ${fmtDT(e.startTs)}${e.endTs?' - '+fmtDT(e.endTs):' (devam ediyor)'}">
-              <div style="width:${workPct}%;background:#4ade80"></div>
-              <div style="width:${durusPct}%;background:#facc15"></div>
-              <div style="flex:1;background:#3a4148"></div>
+              <div style="width:${workPct}%;background:var(--success)"></div>
+              <div style="width:${durusPct}%;background:var(--warn)"></div>
+              <div style="flex:1;background:var(--text-faint, #3a4148)"></div>
             </div>
           </div>
         </div>
       `).join('')}
       <div style="display:flex;gap:16px;font-size:11px;color:var(--text-muted);margin-top:6px">
-        <span><span style="display:inline-block;width:10px;height:10px;background:#4ade80;border-radius:2px;margin-right:4px"></span>Çalışma</span>
-        <span><span style="display:inline-block;width:10px;height:10px;background:#facc15;border-radius:2px;margin-right:4px"></span>Duruş</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:var(--success);border-radius:2px;margin-right:4px"></span>Çalışma</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:var(--warn);border-radius:2px;margin-right:4px"></span>Duruş</span>
       </div>
     </div>`;
   }
@@ -603,7 +603,7 @@ function renderMachineModal(){
             </tr>`;
           }
           const isDone = completedIdsForModal.has(e.id);
-          const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success-soft)';
+          const statusColor = isDone ? 'var(--success-text)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn-text)':'var(--success-text)';
           const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
           const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : (e.status==='devam' ? fmtElapsed(entryDurationBreakdown(e).netMs)+' (sürüyor)' : '—');
           const malzAdi = e.malzemeCinsi || getTalepInfo(e.talepNo)?.malzemeAdi || '—';

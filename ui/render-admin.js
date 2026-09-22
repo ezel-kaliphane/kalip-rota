@@ -1239,7 +1239,7 @@ function renderStokGenelBakis(){
           <span style="background:var(--panel);color:var(--danger-text);font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:6px">ACİL</span>
         </div>
         <div style="margin-top:22px"><div class="sgk-num">${sayKritik}</div><div class="sgk-label">Alt Limit / Negatif</div>
-        <div style="font-size:12px;margin-top:4px;color:color-mix(in srgb,currentColor 85%,transparent)">${sayNegatif} negatif stok · işlem devam ediyor</div></div>
+        <div style="font-size:12px;margin-top:4px">${sayNegatif} negatif stok · işlem devam ediyor</div></div>
       </div>
     </div>
     <div class="stok-genel-body">
@@ -1296,12 +1296,12 @@ function renderStokGenelBakis(){
               <div style="font-size:14px;font-weight:700;color:var(--danger-text);flex:none">${s.stokSayi}</div>
             </div>
           `).join('')}
-          ${kritik.length>0 ? `<button style="width:100%;margin-top:16px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;justify-content:center;gap:6px" onclick="stokGenelTurDegistir('tumu'); stokGenelSiralama='artan'; render()">Tümünü Gör ${ico('chevronRight',14)}</button>` : ''}
+          ${kritik.length>0 ? `<button style="width:100%;margin-top:16px;padding:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;justify-content:center;gap:6px" onclick="stokGenelTurDegistir('tumu'); stokGenelSiralama='artan'; render()">Tümünü Gör ${ico('chevronRight',14)}</button>` : ''}
         </div>
         <div class="sg-panel">
           <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--panel-alt);margin-bottom:2px">
             <span class="sg-panel-title" style="margin-bottom:0">Son Hareketler</span>
-            <button style="font-size:12px;font-weight:500;color:var(--accent)" onclick="openMyPushHistoryModal()">pushLog</button>
+            <button style="background:transparent;font-size:12px;font-weight:500;color:var(--accent)" onclick="openMyPushHistoryModal()">pushLog</button>
           </div>
           ${!stokSonHareketler ? `<div style="font-size:12px;color:var(--text-muted);padding:12px 0">Yükleniyor…</div>` : stokSonHareketler.length===0 ? `<div style="font-size:12px;color:var(--text-muted);padding:12px 0">Hareket kaydı yok.</div>` : stokSonHareketler.map(s=>`
             <div class="sg-crit-row" style="align-items:flex-start;justify-content:space-between;gap:8px">
@@ -2261,19 +2261,19 @@ function renderAdmin(){
     <div class="admin-topbar">
       ${uzunDurusList.length>0 ? `<button class="icon-btn" style="position:relative;border-color:var(--danger);color:var(--danger)" onclick="openUzunDurusModal()" title="Uzun süredir duruşta olanlar">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-        <span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${uzunDurusList.length}</span>
+        <span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:var(--btn-primary-text);font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${uzunDurusList.length}</span>
       </button>` : ''}
       ${uzunDevamEdenList.length>0 ? `<button class="icon-btn" style="position:relative;border-color:var(--warn);color:var(--warn)" onclick="openUzunDevamEdenModal()" title="Uzun süredir devam ediyor görünen (kapatılmayı unutulmuş olabilir)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-        <span style="position:absolute;top:-4px;left:-4px;background:var(--warn);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${uzunDevamEdenList.length}</span>
+        <span style="position:absolute;top:-4px;left:-4px;background:var(--warn);color:var(--btn-primary-text);font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${uzunDevamEdenList.length}</span>
       </button>` : ''}
       ${canViewMessages() ? `<button class="icon-btn" style="position:relative" onclick="openMessagesModal()" title="Mesajlar">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M2 6l10 7 10-7"></path></svg>
-        ${unreadMessageCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadMessageCount()}</span>` : ''}
+        ${unreadMessageCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:var(--btn-primary-text);font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadMessageCount()}</span>` : ''}
       </button>` : ''}
       <button class="icon-btn" style="position:relative" onclick="openMyPushHistoryModal()" title="Bildirimlerim">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-        ${unreadPushCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadPushCount()}</span>` : ''}
+        ${unreadPushCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--accent);color:var(--btn-primary-text);font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadPushCount()}</span>` : ''}
       </button>
       ${themeToggleHtml()}
       <button class="icon-btn-labeled" onclick="doLogout()">${ico('logout',14)} Çıkış</button>
@@ -3497,7 +3497,7 @@ function renderAdmin(){
     if(fe.length===0){ body += `<tr><td colspan="${reportColCount}" style="text-align:center;color:var(--text-muted);padding:30px">Filtreyle eşleşen kayıt yok.</td></tr>`; }
     fe.forEach(e=>{
       const isDone = completedRoutes.has(e.id);
-      const statusColor = isDone ? 'var(--success)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn)':'var(--success-soft)';
+      const statusColor = isDone ? 'var(--success-text)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn-text)':'var(--success-text)';
       const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
       const rowStyle = isDone ? 'background:var(--success-row)' : '';
       const malzAdi = getTalepInfo(e.talepNo)?.malzemeAdi || '';

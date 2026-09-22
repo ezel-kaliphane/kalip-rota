@@ -17,11 +17,11 @@ function renderOperator(){
         </button>
         ${canViewMessages() ? `<button class="icon-btn" style="position:relative" onclick="openMessagesModal()" title="Mesajlar">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M2 6l10 7 10-7"></path></svg>
-          ${unreadMessageCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadMessageCount()}</span>` : ''}
+          ${unreadMessageCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:var(--btn-primary-text);font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadMessageCount()}</span>` : ''}
         </button>` : ''}
         <button class="icon-btn" style="position:relative" onclick="openMyPushHistoryModal()" title="Bildirimlerim">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-          ${unreadPushCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadPushCount()}</span>` : ''}
+          ${unreadPushCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--accent);color:var(--btn-primary-text);font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadPushCount()}</span>` : ''}
         </button>
         <button class="icon-btn" onclick="setView('settings')" title="Ayarlar">${ico('gear',14)}</button>
         <button class="icon-btn" onclick="doLogout()" title="Çıkış">${ico('logout',14)}</button>
@@ -384,9 +384,9 @@ function renderOperator(){
 
       <div class="set-sec">GÖRÜNÜM</div>
       <div class="theme-pick">
-        ${themeOptHtml('dark','Koyu','#15181c','#15181c')}
+        ${themeOptHtml('dark','Koyu','#0B0D10','#0B0D10')}
         ${themeOptHtml('light','Açık','#ffffff','#ffffff')}
-        ${themeOptHtml('system','Sistem','#15181c','#ffffff')}
+        ${themeOptHtml('system','Sistem','#0B0D10','#ffffff')}
       </div>
 
       <div style="display:flex;flex-direction:column;gap:9px;margin-top:14px">
