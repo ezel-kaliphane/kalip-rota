@@ -386,7 +386,7 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .sgk-card.uyari .sgk-label{color:var(--on-warn)}
 /* .aktif kartının zemini --sidebar-bg; o iki gövdede de koyu, beyaz doğru. */
 .sgk-card.aktif .sgk-label{color:#fff}
-.stok-genel-body{display:grid;grid-template-columns:2.8fr 1fr;gap:24px;padding:24px;flex:1;min-height:0}
+.stok-genel-body{display:grid;grid-template-columns:minmax(0,480px) minmax(0,1fr);gap:24px;padding:24px;flex:1;min-height:0}
 .sg-table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;min-width:0;display:flex;flex-direction:column;box-shadow:var(--card-shadow)}
 .sg-table-wrap table{display:block;overflow-y:auto;flex:1}
 .sg-table-wrap thead,.sg-table-wrap tbody tr{display:table;width:100%;table-layout:fixed}
