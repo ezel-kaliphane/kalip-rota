@@ -889,13 +889,23 @@ function toolOpChangeQty(delta){
 
 
 /* Stok azaltma transaction() ile — vardiya başında birden fazla operatör aynı koddan çıkış
-   yapsa da yazma kaybı olmuyor. Negatife düşerse ENGELLENMİYOR (bkz. görev talimatı §4). */
+   yapsa da yazma kaybı olmuyor.
+   22.09.2026: negatife düşen çıkış artık ENGELLENİYOR (önceden bilinçli olarak serbestti).
+   İki katman var: (a) ekranda, tarama anında okunan taze stokla ön kontrol; (b) transaction
+   içinde son savunma — yarıştan dolayı (a)'nın gördüğü değer bayatlamış olabilir. */
 function doToolCikis(){
   if(!canSeeToolStok()) return;
   if(toolOpBusy) return;
   const it = toolOpFoundItem; if(!it) return;
   const itemId = it.id;
   const qty = Math.max(1, Number(toolOpQty)||1);
+  /* (a) Ekran katmanı: toolOpFoundStock, kod okutulduğu anda toolStock/<id>'den once('value')
+     ile TAZE okunmuş değer (bkz. toolOpLookup). Kullanıcı burada net bir sebep görüyor. */
+  const bilinen = Number((toolOpFoundStock||{}).miktar)||0;
+  if(bilinen - qty < 0){
+    toast(`Stok yetersiz — ${bilinen} adet görünüyor, ${qty} adet çıkış yapılamaz. Önce stok girişi yapın.`);
+    return;
+  }
   toolOpBusy = true;
   render();
 
@@ -904,10 +914,21 @@ function doToolCikis(){
   const makine = chosen ? chosen.makine : (toolOpManualMachine||'');
   const isEmriNo = chosen ? chosen.isEmriNo : '';
 
-  DB.ref('toolStock/'+itemId+'/miktar').transaction(cur => (Number(cur)||0) - qty)
+  DB.ref('toolStock/'+itemId+'/miktar').transaction(cur => {
+    /* Firebase, update fonksiyonunu ÖNCE yerel önbellekle çağırır. toolStock'ta maliyet
+       kısıtı yüzünden CANLI DİNLEYİCİ YOK (once('value') ile okunuyor), dolayısıyla bu ilk
+       pasta cur === null gelir. Naif bir `sonraki < 0 ? undefined` koruması transaction'ı
+       sunucuya hiç göndermeden öldürür ve stok bol olsa bile HER çıkışı reddeder — karbürde
+       birebir bu yaşandı, bir hafta hiçbir çıkış kaydedilemedi (HATA_NOTLARI 2026-09-15).
+       Bu yüzden ilk pasta, tarama anında okunan taze değeri kullanıyoruz; transaction sunucuya
+       gidip GERÇEK değerle yeniden çalışıyor ve gerçekten yetmiyorsa iptal orada oluyor. */
+    const mevcut = (cur === null ? bilinen : (Number(cur)||0));
+    const sonraki = mevcut - qty;
+    return sonraki < 0 ? undefined : sonraki;
+  })
     .then(result=>{
       toolOpBusy = false;
-      if(!result.committed){ toast('İşlem tamamlanamadı, tekrar deneyin'); render(); return; }
+      if(!result.committed){ toast('Stok yetersiz — bu sırada başka bir çıkış yapılmış olabilir, stoğu kontrol edin.'); render(); return; }
       // oncekiMiktar/sonrakiMiktar transaction'ın kendi sonucundan türetiliyor, kendi
       // hesapladığımız (raced olabilecek) bir değerden değil — bkz. görev talimatı §4.
       const sonrakiMiktar = Number(result.snapshot.val())||0;
