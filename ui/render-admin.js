@@ -1211,24 +1211,24 @@ function renderStokGenelBakis(){
   })();
 
   const kpiAktifMi = tur => stokGenelTurFiltre===tur;
-  const kpiIkon = (i,aktif) => `<span style="width:40px;height:40px;border-radius:8px;background:${aktif?'color-mix(in srgb,currentColor 15%,transparent)':'var(--panel-alt)'};display:flex;align-items:center;justify-content:center;color:${aktif?'#fff':'var(--text-muted)'};flex:none">${i}</span>`;
+  const kpiIkon = (i,aktif) => `<span style="width:28px;height:28px;border-radius:8px;background:${aktif?'color-mix(in srgb,currentColor 15%,transparent)':'var(--panel-alt)'};display:flex;align-items:center;justify-content:center;color:${aktif?'#fff':'var(--text-muted)'};flex:none">${i}</span>`;
   const kpiOk = aktif => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${aktif?'#fff':'var(--text-subtle)'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"></path><path d="M7 7h10v10"></path></svg>`;
   const kpiTikla = tur => `onclick="stokGenelTurDegistir('${stokGenelTurFiltre===tur?'tumu':tur}')" style="cursor:pointer"`;
   return `
     <div class="stok-genel-kpi">
       <div class="sgk-card ${kpiAktifMi('Hammadde')?'aktif':''}" ${kpiTikla('Hammadde')}>
         <div style="display:flex;justify-content:space-between;align-items:flex-start">${kpiIkon(ico('katman',16),kpiAktifMi('Hammadde'))}${kpiOk(kpiAktifMi('Hammadde'))}</div>
-        <div style="margin-top:22px"><div class="sgk-num">${sayMalzeme}</div><div class="sgk-label">Hammadde Kalemi</div>
+        <div style="margin-top:8px"><div class="sgk-num">${sayMalzeme}</div><div class="sgk-label">Hammadde Kalemi</div>
         <div style="font-size:12px;margin-top:4px;color:${kpiAktifMi('Hammadde')?'color-mix(in srgb,currentColor 70%,transparent)':'var(--text-subtle)'}">stockItems</div></div>
       </div>
       <div class="sgk-card ${kpiAktifMi('Takım')?'aktif':''}" ${kpiTikla('Takım')}>
         <div style="display:flex;justify-content:space-between;align-items:flex-start">${kpiIkon(ico('wrench',16),kpiAktifMi('Takım'))}${kpiOk(kpiAktifMi('Takım'))}</div>
-        <div style="margin-top:22px"><div class="sgk-num">${sayTakim}</div><div class="sgk-label">Takım & Sarf Kalemi</div>
+        <div style="margin-top:8px"><div class="sgk-num">${sayTakim}</div><div class="sgk-label">Takım & Sarf Kalemi</div>
         <div style="font-size:12px;margin-top:4px;color:${kpiAktifMi('Takım')?'color-mix(in srgb,currentColor 70%,transparent)':'var(--text-subtle)'}">toolCatalog</div></div>
       </div>
       <div class="sgk-card ${kpiAktifMi('Karbür')?'aktif':''}" ${kpiTikla('Karbür')}>
         <div style="display:flex;justify-content:space-between;align-items:flex-start">${kpiIkon(ico('elmas',16),kpiAktifMi('Karbür'))}${kpiOk(kpiAktifMi('Karbür'))}</div>
-        <div style="margin-top:22px"><div class="sgk-num">${sayKarbur}</div><div class="sgk-label">Karbür Kalemi</div>
+        <div style="margin-top:8px"><div class="sgk-num">${sayKarbur}</div><div class="sgk-label">Karbür Kalemi</div>
         <div style="font-size:12px;margin-top:4px;color:${kpiAktifMi('Karbür')?'color-mix(in srgb,currentColor 70%,transparent)':'var(--text-subtle)'}">Fire havuzu: ${fireSayisi} parça</div></div>
       </div>
       <div class="sgk-card uyari">
@@ -1238,7 +1238,7 @@ function renderStokGenelBakis(){
           </span>
           <span style="background:var(--panel);color:var(--danger-text);font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:6px">ACİL</span>
         </div>
-        <div style="margin-top:22px"><div class="sgk-num">${sayKritik}</div><div class="sgk-label">Alt Limit / Negatif</div>
+        <div style="margin-top:8px"><div class="sgk-num">${sayKritik}</div><div class="sgk-label">Alt Limit / Negatif</div>
         <div style="font-size:12px;margin-top:4px">${sayNegatif} negatif stok · işlem devam ediyor</div></div>
       </div>
     </div>
@@ -1315,17 +1315,7 @@ function renderStokGenelBakis(){
         </div>
       </div>
     </div>
-    <div style="margin:0 24px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:16px;justify-content:space-between;background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:12px;padding:16px">
-      <div style="display:flex;align-items:center;gap:14px">
-        <span style="width:32px;height:32px;border-radius:8px;background:var(--warn-med);border:1px solid var(--warn-border);color:var(--warn-text);display:flex;align-items:center;justify-content:center;flex:none">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-        </span>
-        <div style="font-size:12.5px;color:var(--text);line-height:1.5">
-          <b>Negatif stok politikası:</b> takım çıkışı eksiye düşebilir (bilinçli tasarım) — kırmızı satırlar operatörü engellemez, SuperAdmin sayımda kapatır. Malzeme stoğu transaction kullanmaz, eşzamanlı tüketimde dikkat.
-        </div>
-      </div>
-      <button style="flex:none;padding:9px 18px;background:var(--panel);border:1px solid var(--border);border-radius:8px;font-size:12.5px;font-weight:700;color:var(--text);box-shadow:var(--card-shadow)" onclick="stokGenelGirisAc()">Sayım Aç</button>
-    </div>`;
+    `;
 }
 function renderStokScreen(){
   const gorunur = STOK_BOLUMLERI.filter(b=>b.gor());

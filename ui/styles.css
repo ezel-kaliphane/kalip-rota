@@ -355,7 +355,7 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .stok-govde{display:flex;flex-direction:column;flex:1;min-height:0}
 /* Üst başlık + arama — sadece Genel Bakış'ta (design/StokTakibiOneri.dc.html ile birebir),
    diğer modüllerin kendi arama/aksiyon akışı zaten var, burada tekrarlanmıyor. */
-.stok-top-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;flex:none;flex-wrap:wrap;background:var(--panel);border-bottom:1px solid var(--border)}
+.stok-top-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 24px;flex:none;flex-wrap:wrap;background:var(--panel);border-bottom:1px solid var(--border)}
 .stok-top-search{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text-subtle);font-size:13px;width:100%;max-width:520px}
 .stok-top-search input{border:none;background:none;padding:0;width:100%;color:var(--text);font-size:13px}
 .stok-top-search input::placeholder{color:var(--text-subtle)}
@@ -372,11 +372,11 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .stok-icerik .settings-wrap{padding-top:16px;overflow:visible;flex:none}
 /* Genel Bakış — üç kaynağı birleştiren özet (bkz. renderStokGenelBakis()) */
 .stok-genel-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:24px 24px 0}
-.sgk-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--card-shadow)}
+.sgk-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:11px 14px;box-shadow:var(--card-shadow)}
 .sgk-card.uyari{background:var(--danger);border-color:var(--danger);color:var(--on-warn)}
 .sgk-card.aktif{background:var(--sidebar-bg);border-color:var(--sidebar-bg);color:#fff}
-.sgk-num{font-family:'Inter',sans-serif;font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1}
-.sgk-label{font-size:14px;font-weight:500;color:var(--text);margin-top:4px}
+.sgk-num{font-family:'Inter',sans-serif;font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.sgk-label{font-size:13px;font-weight:500;color:var(--text);margin-top:4px}
 .sgk-card.uyari .sgk-label{color:var(--on-warn)}
 /* .aktif kartının zemini --sidebar-bg; o iki gövdede de koyu, beyaz doğru. */
 .sgk-card.aktif .sgk-label{color:#fff}
@@ -385,8 +385,8 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .sg-table-wrap table{display:block;overflow-y:auto;flex:1}
 .sg-table-wrap thead,.sg-table-wrap tbody tr{display:table;width:100%;table-layout:fixed}
 .sg-table-wrap thead{position:sticky;top:0;background:var(--panel-alt);z-index:1}
-.sg-table-wrap th{padding:12px 16px;font-size:11px;color:var(--text-subtle);text-transform:uppercase;letter-spacing:.04em;font-weight:700;border-bottom:1px solid var(--border)}
-.sg-table-wrap td{padding:14px 16px;font-size:13px;border-bottom:1px solid var(--panel-alt)}
+.sg-table-wrap th{padding:9px 14px;font-size:11px;color:var(--text-subtle);text-transform:uppercase;letter-spacing:.04em;font-weight:700;border-bottom:1px solid var(--border)}
+.sg-table-wrap td{padding:9px 14px;font-size:13px;border-bottom:1px solid var(--panel-alt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sg-table-wrap tbody tr:hover{background:var(--panel-alt)}
 .sg-table-wrap tbody tr:last-child td{border-bottom:none}
 .sg-side{display:flex;flex-direction:column;gap:20px;overflow-y:auto;min-width:0}
