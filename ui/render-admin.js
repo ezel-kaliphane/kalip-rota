@@ -941,7 +941,9 @@ const STOK_BOLUMLERI = [
   { key:'genel',   ikon:'chart',  label:'Genel Bakış',     alt:'üç kaynak bir arada',  gor:()=>true },
   { key:'takim',   ikon:'wrench', label:'Takım & Sarf',    alt:'freze, matkap, sarf',  gor:()=>isAdminTabVisible('takimStok') },
   { key:'karbur',  ikon:'elmas',  label:'Karbür',          alt:'çubuk + tel erozyon',  gor:()=>isAdminTabVisible('karbur') },
-  { key:'malzeme', ikon:'katman', label:'Hammadde', alt:'boy ve adet takibi',   gor:()=>canManageStock() }
+  { key:'malzeme', ikon:'katman', label:'Hammadde', alt:'boy ve adet takibi',   gor:()=>canManageStock() },
+  /* Genel Bakış'taki kırmızı ACIL kartının hedefi. En sona eklendi ki mevcut sekme sırası bozulmasın. */
+  { key:'kritik',  ikon:'alert',  label:'Kritik Stok',     alt:'biten ve alt limit',   gor:()=>true }
 ];
 
 /* ---- Bölümler: her modülde aynı fiiller, aynı sırada ----
@@ -1382,7 +1384,7 @@ function renderStokGenelBakis(){
         <div style="margin-top:8px"><div class="sgk-num">${sayKarbur}</div><div class="sgk-label">Karbür Kalemi</div>
         <div style="font-size:12px;margin-top:4px;color:${kpiAktifMi('Karbür')?'color-mix(in srgb,currentColor 70%,transparent)':'var(--text-subtle)'}">Fire havuzu: ${fireSayisi} parça</div></div>
       </div>
-      <div class="sgk-card uyari">
+      <div class="sgk-card uyari" style="cursor:pointer" title="Kritik Stok sekmesini aç" onclick="setStokSubView('kritik')">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <span style="width:40px;height:40px;border-radius:8px;background:color-mix(in srgb,currentColor 15%,transparent);display:flex;align-items:center;justify-content:center">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
@@ -1538,14 +1540,84 @@ function renderStokScreen(){
   else if(stokSubView==='takim')  icerik = renderToolStokManagementScreen();
   else if(stokSubView==='karbur') icerik = renderKarburScreen();
   else if(stokSubView==='malzeme') icerik = `<div class="settings-wrap">${renderMalzemeStokScreen()}</div>`;
+  else if(stokSubView==='kritik') icerik = renderStokKritik();
   else                             icerik = '';
 
   return `<div class="stok-govde">${topHeader}${ray}<div class="stok-icerik">${bolumSatiri}${icerik}</div></div>`;
 }
+/* ===================== KRİTİK STOK SEKMESİ (22.09.2026) =====================
+   Genel Bakış'taki kırmızı "ACİL — Alt Limit / Negatif" kartına tıklayınca buraya geliniyor.
+
+   İKİ AYRI GRUP, bilerek: kartın saydığı küme ile "stoğu bitenler" AYNI ŞEY DEĞİL.
+   stokGenelSatirlar()'daki kural şu:
+       durum = stok<0 ? 'negatif' : (altLimit>0 && stok<altLimit) ? 'altlimit' : 'normal'
+   Yani alt limiti tanımlanmamış (altLimit=0) ve stoğu sıfıra inmiş bir kalem 'normal'
+   sayılıyor ve karta hiç girmiyor. Kullanıcının istediği "stoğu kalmamış" kalemler büyük
+   ölçüde bunlar. Bu yüzden sekme iki başlık altında topluyor:
+     1) Stoğu bitenler      -> stokSayi <= 0 (negatif olanlar dahil, en üstte)
+     2) Alt limitin altında -> stok var ama tanımlı alt limitin altında
+   Böylece hem kartın işaret ettiği liste hem de karta girmeyen "sıfırlananlar" görünüyor.
+
+   Satırlar Genel Bakış'ın ürettiği aynı veriden (stokGenelSatirlar) geliyor — Takım & Sarf,
+   Karbür ve Hammadde bir arada; tür sütunu hangisi olduğunu söylüyor. Düzeltme butonu
+   Genel Bakış'takiyle aynı fonksiyonu çağırıyor (stokDuzeltAc), yani yetki de aynı:
+   yalnızca SuperAdmin. */
+function stokKritikVeri(){
+  const tumu = stokGenelSatirlar();
+  const bitenler = tumu.filter(s=>Number(s.stokSayi)<=0)
+    .sort((a,b)=>Number(a.stokSayi)-Number(b.stokSayi) || String(a.kod).localeCompare(String(b.kod)));
+  const altLimit = tumu.filter(s=>Number(s.stokSayi)>0 && s.durum==='altlimit')
+    .sort((a,b)=>(Number(a.stokSayi)/Math.max(1,Number(a.altLimit))) - (Number(b.stokSayi)/Math.max(1,Number(b.altLimit))));
+  return { bitenler, altLimit };
+}
+
+function stokKritikTablo(satirlar, bosMetin){
+  if(satirlar.length===0){
+    return `<div style="color:var(--text-muted);font-size:12.5px;padding:14px 2px">${bosMetin}</div>`;
+  }
+  const duzeltilebilir = (typeof stokDuzeltYetkisi==='function') && stokDuzeltYetkisi();
+  return `<div class="sg-table-wrap" style="margin-bottom:18px">
+    <table><thead><tr>
+      <th>Kod</th><th>Malzeme</th><th>Tür</th><th>Stok</th><th>Alt Limit</th><th>Son Hareket</th>
+      ${duzeltilebilir?'<th style="width:56px"></th>':''}
+    </tr></thead><tbody>
+      ${satirlar.map(s=>`<tr class="${Number(s.stokSayi)<0?'sg-neg':''}">
+        <td class="mono" style="font-weight:500;font-size:12.5px">${esc(s.kod)}</td>
+        <td style="font-weight:500">${esc(s.malzeme)}</td>
+        <td style="color:var(--text-muted)">${esc(s.kaynak||s.tur)}</td>
+        <td style="font-weight:700;color:${Number(s.stokSayi)<=0?'var(--danger)':'var(--warn)'}">${esc(s.stokText)}</td>
+        <td class="mono" style="color:var(--text-muted)">${s.altLimit||'—'}</td>
+        <td style="color:var(--text-subtle)">${s.sonHareketTs?fmtDT(s.sonHareketTs):'—'}</td>
+        ${duzeltilebilir?`<td><button class="del-btn" title="Stoğu elle düzelt" onclick="stokDuzeltAc('${escJs(s.id)}',${Number(s.stokSayi)||0})">${ico('edit',14)}</button></td>`:''}
+      </tr>`).join('')}
+    </tbody></table>
+  </div>`;
+}
+
+function renderStokKritik(){
+  const { bitenler, altLimit } = stokKritikVeri();
+  const kartaGirmeyen = bitenler.filter(s=>s.durum==='normal').length;
+  return `<div class="settings-wrap">
+    <div class="sec-h" style="margin-top:0">${ico('alert',15)} Stoğu bitenler
+      <span class="ayar-deger mono" style="margin-left:8px">${bitenler.length}</span></div>
+    <div style="font-size:12px;color:var(--text-muted);margin:-6px 0 10px">
+      Stoğu sıfıra inmiş ya da eksiye düşmüş kalemler. Takım çıkışında bunlar reddedilir.
+      ${kartaGirmeyen>0?`<b style="color:var(--warn)">${kartaGirmeyen} tanesi</b> alt limiti tanımlı olmadığı için "Alt Limit / Negatif" sayacına girmiyor.`:''}
+    </div>
+    ${stokKritikTablo(bitenler, 'Stoğu biten kalem yok.')}
+
+    <div class="sec-h">Alt limitin altında
+      <span class="ayar-deger mono" style="margin-left:8px">${altLimit.length}</span></div>
+    <div style="font-size:12px;color:var(--text-muted);margin:-6px 0 10px">Stok var ama tanımlı alt limitin altına inmiş — en kritik oran en üstte.</div>
+    ${stokKritikTablo(altLimit, 'Alt limitin altına inen kalem yok.')}
+  </div>`;
+}
+
 function stokBolumSayisi(key){
   if(key==='takim')    return toolCatalogReady ? toolCatalogArray().length : null;
   if(key==='karbur')   return karburKatalogReady ? karburKatalogArray().length : null;
   if(key==='malzeme')  return canManageStock() ? stockItemsArray().length : null;
+  if(key==='kritik'){ const v = stokKritikVeri(); return v.bitenler.length + v.altLimit.length; }
   return null; // 'genel' — tek bir sayı yerine KPI kartlarında gösteriliyor
 }
 
