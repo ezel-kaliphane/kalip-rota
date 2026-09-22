@@ -1028,6 +1028,157 @@ function setStokSubView(v){
    kişi bazlı ince ayarlar (takimStokViews gibi) burada GENİŞLETİLMEDİ, sadece kaynağın modül
    seviyesinde hiç görünüp görünmeyeceği kontrol ediliyor. */
 let stokGenelArama = '';
+/* ===================== ELLE STOK DÜZELTME (yalnızca SuperAdmin) =====================
+   Sayım sonrası stoğu doğru değere çekmek için. Negatif stok engeli geldikten sonra sıfır
+   stokta görünen kalemler okutulamıyor; düzeltmenin yolu bu.
+
+   YETKİ: doğrudan session.isSuperAdmin. canManageToolStok() zaten yalnızca SuperAdmin ama
+   malzeme tarafındaki canManageStock() Şef'i de kapsıyor — bu işlem Şef'e AÇILMIYOR, o yüzden
+   ortak fonksiyon değil açık kontrol kullanılıyor. Hem açılışta hem kaydederken kontrol var
+   (ekranı atlayıp konsoldan çağıran olursa diye).
+
+   Üç stok türü üç ayrı düğümde ve üç ayrı hareket kütüğünde tutuluyor; düzeltme her birinin
+   KENDİ desenine yazılıyor ki geçmiş tek yerde bozulmasın:
+     takim_<id>   -> toolStock/<id>/miktar   + toolMoves
+     karbur_<id>  -> karburStok/<id>/adet    + karburHareketleri
+     malzeme_<id> -> stockItems/<id>/miktar  + stockHareketleri
+   Lot bazlı hammadde (tur==='boy') HARİÇ: orada stok tek sayı değil, lot listesinin toplamı —
+   tek kutuyla yazmak lotları bozardı. O satırda düzeltme reddediliyor.
+
+   Transaction geri çağrısı KOŞULSUZ yeni değeri döndürüyor, yani hiçbir pasta undefined
+   dönmüyor — karbürdeki "ilk pas null gelince transaction ölür" tuzağı burada oluşamaz
+   (bkz. HATA_NOTLARI 2026-09-15). Önceki değer sunucu pasında doğru değerle tazeleniyor. */
+let stokDuzeltRowId = null, stokDuzeltDeger = '', stokDuzeltNot = '', stokDuzeltBusy = false;
+
+function stokDuzeltYetkisi(){ return !!(session && session.isSuperAdmin); }
+function stokDuzeltAc(rowId, mevcut){
+  if(!stokDuzeltYetkisi()){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
+  stokDuzeltRowId = rowId; stokDuzeltDeger = String(mevcut); stokDuzeltNot = ''; stokDuzeltBusy = false;
+  render();
+}
+function stokDuzeltKapat(){ stokDuzeltRowId = null; stokDuzeltBusy = false; render(); }
+
+function stokDuzeltKaydet(){
+  if(!stokDuzeltYetkisi()){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
+  if(stokDuzeltBusy) return;
+  const rowId = stokDuzeltRowId; if(!rowId) return;
+  const yeni = Math.round(Number(stokDuzeltDeger));
+  if(!isFinite(yeni)){ toast('Geçerli bir sayı girin'); return; }
+  if(yeni < 0){ toast('Stok negatif olamaz'); return; }
+  const not = (stokDuzeltNot||'').trim();
+  const now = Date.now();
+  stokDuzeltBusy = true; render();
+
+  const bitti = (etiket, onceki) => {
+    stokDuzeltBusy = false; stokDuzeltRowId = null;
+    toast(`${etiket}: ${onceki} → ${yeni}`);
+    render();
+  };
+  const hata = err => {
+    stokDuzeltBusy = false;
+    toast('Kaydedilemedi: ' + ((err && err.message) || 'bilinmeyen hata'));
+    render();
+  };
+
+  if(rowId.indexOf('takim_')===0){
+    const itemId = rowId.slice(6);
+    const it = toolCatalog[itemId]; if(!it){ hata(new Error('kalem bulunamadı')); return; }
+    const bilinen = Number((toolStock[itemId]||{}).miktar)||0;
+    let onceki = bilinen;
+    DB.ref('toolStock/'+itemId+'/miktar').transaction(cur => { onceki = (cur===null?bilinen:(Number(cur)||0)); return yeni; })
+      .then(res=>{
+        if(!res.committed){ hata(new Error('işlem tamamlanamadı')); return; }
+        const moveId = DB.ref('toolMoves').push().key;
+        const updates = {};
+        updates['toolMoves/'+moveId] = { itemId, canias: it.canias||'', tip:'duzeltme', miktar: yeni-onceki,
+          oncekiMiktar: onceki, sonrakiMiktar: yeni, operatorUsername: session.username,
+          operatorName: session.displayName, aciklama: not || 'Elle düzeltme', kaynak:'elle', ts: now };
+        updates['toolStock/'+itemId+'/sonHareketTs'] = now;
+        updates['toolStock/'+itemId+'/sonHareketAciklama'] = 'Elle düzeltme';
+        // Alt limitin üstüne çıktıysa uyarı bayrağı sıfırlanıyor (stok girişindeki davranışın aynısı).
+        if(Number(it.altLimit)>0 && yeni>Number(it.altLimit)) updates['toolStock/'+itemId+'/uyariGonderildi'] = false;
+        DB.ref().update(updates).then(()=>{
+          toolStock[itemId] = { ...(toolStock[itemId]||{}), miktar: yeni, sonHareketTs: now };
+          bitti(it.ad || it.canias || itemId, onceki);
+        }).catch(hata);
+      }).catch(hata);
+    return;
+  }
+
+  if(rowId.indexOf('karbur_')===0){
+    const katalogId = rowId.slice(7);
+    const k = (typeof karburKatalog!=='undefined' && karburKatalog) ? karburKatalog[katalogId] : null;
+    const bilinen = karburStokAdet(katalogId);
+    let onceki = bilinen;
+    DB.ref('karburStok/'+katalogId+'/adet').transaction(cur => { onceki = (cur===null?bilinen:(Number(cur)||0)); return yeni; })
+      .then(res=>{
+        if(!res.committed){ hata(new Error('işlem tamamlanamadı')); return; }
+        const hid = DB.ref('karburHareketleri').push().key;
+        const updates = {};
+        updates['karburHareketleri/'+hid] = { tip:'duzeltme', katalogId, kod:(k&&k.kod)||'', adet: yeni-onceki,
+          oncekiAdet: onceki, sonrakiAdet: yeni, isEmriNo:'', mm:0, aciklama: not || 'Elle düzeltme',
+          kaynak:'elle', operatorUsername: session.username, operatorName: session.displayName, ts: now };
+        updates['karburStok/'+katalogId+'/sonHareketTs'] = now;
+        updates['karburStok/'+katalogId+'/sonHareketAciklama'] = 'Elle düzeltme';
+        DB.ref().update(updates).then(()=>{
+          karburStok[katalogId] = { ...(karburStok[katalogId]||{}), adet: yeni, sonHareketTs: now };
+          bitti((k&&k.kod)||katalogId, onceki);
+        }).catch(hata);
+      }).catch(hata);
+    return;
+  }
+
+  if(rowId.indexOf('malzeme_')===0){
+    const itemId = rowId.slice(8);
+    const it = stockItems[itemId]; if(!it){ hata(new Error('kalem bulunamadı')); return; }
+    if(it.tur==='boy'){
+      stokDuzeltBusy = false;
+      toast('Bu kalem lot bazlı — stoğu lot ekranından düzeltilir');
+      render(); return;
+    }
+    const onceki = Number(it.miktar)||0;
+    const hid = DB.ref('stockHareketleri').push().key;
+    const updates = {};
+    updates['stockItems/'+itemId+'/miktar'] = yeni;
+    updates['stockItems/'+itemId+'/sonHareketTs'] = now;
+    updates['stockItems/'+itemId+'/sonHareketAciklama'] = 'Elle düzeltme';
+    updates['stockHareketleri/'+hid] = { itemId, itemKod: it.kod||'', itemIsim: it.isim||it.cap||'',
+      miktar: yeni-onceki, birim: it.birim||'adet', tip:'duzeltme', aciklama: not || 'Elle düzeltme',
+      isEmriNo:'', talepNo:'', operatorUsername: session.username, operatorName: session.displayName, ts: now };
+    DB.ref().update(updates).then(()=>{
+      stockItems[itemId] = { ...it, miktar: yeni, sonHareketTs: now };
+      bitti(it.kod||itemId, onceki);
+    }).catch(hata);
+    return;
+  }
+
+  hata(new Error('bilinmeyen kalem türü'));
+}
+
+function renderStokDuzeltModal(){
+  if(!stokDuzeltRowId || !stokDuzeltYetkisi()) return '';
+  const satir = stokGenelSatirlar().find(s=>s.id===stokDuzeltRowId);
+  if(!satir) return '';
+  return `<div class="modal-overlay" onclick="if(event.target===this)stokDuzeltKapat()">
+    <div class="modal-box" style="max-width:420px;padding:20px">
+      <div class="sec-h" style="margin-top:0">Stoğu elle düzelt</div>
+      <div style="font-size:13.5px;font-weight:600;margin-bottom:3px">${esc(satir.malzeme)}</div>
+      <div class="mono" style="font-size:12px;color:var(--text-muted);margin-bottom:14px">${esc(satir.kod)} · şu an ${esc(satir.stokText)}</div>
+      <div class="field">
+        <label for="sd-deger">Yeni stok</label>
+        <input id="sd-deger" inputmode="numeric" value="${esc(stokDuzeltDeger)}" oninput="stokDuzeltDeger=this.value">
+      </div>
+      <div class="field">
+        <label for="sd-not">Not (hareket kütüğüne yazılır)</label>
+        <input id="sd-not" placeholder="ör. sayım sonucu" value="${esc(stokDuzeltNot)}" oninput="stokDuzeltNot=this.value">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn-primary" style="flex:1" ${stokDuzeltBusy?'disabled':''} onclick="stokDuzeltKaydet()">${stokDuzeltBusy?'Kaydediliyor…':'Kaydet'}</button>
+        <button class="btn-ghost" onclick="stokDuzeltKapat()">Vazgeç</button>
+      </div>
+    </div></div>`;
+}
+
 function stokGenelSatirlar(){
   const satirlar = [];
   if(isAdminTabVisible('takimStok')){
@@ -1257,8 +1408,8 @@ function renderStokGenelBakis(){
             <button class="sg-filtre-chip" onclick="stokGenelSiralamaDegistir()">Stok: ${stokGenelSiralama==='artan'?'Artan':'Azalan'}</button>
           </div>
         </div>
-        <table><thead><tr><th>Kod</th><th>Malzeme</th><th>Tür</th><th>Stok</th><th>Alt Limit</th><th>Durum</th><th>Son Hareket</th></tr></thead><tbody>
-          ${sayfaSatirlari.length===0 ? `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px">${stokGenelArama.trim()?'Aramayla eşleşen kalem yok.':'Henüz erişebildiğin bir stok kaynağı yok.'}</td></tr>` : sayfaSatirlari.map(s=>`
+        <table><thead><tr><th>Kod</th><th>Malzeme</th><th>Tür</th><th>Stok</th><th>Alt Limit</th><th>Durum</th><th>Son Hareket</th>${stokDuzeltYetkisi()?'<th style="width:56px"></th>':''}</tr></thead><tbody>
+          ${sayfaSatirlari.length===0 ? `<tr><td colspan="${stokDuzeltYetkisi()?8:7}" style="text-align:center;color:var(--text-muted);padding:20px">${stokGenelArama.trim()?'Aramayla eşleşen kalem yok.':'Henüz erişebildiğin bir stok kaynağı yok.'}</td></tr>` : sayfaSatirlari.map(s=>`
             <tr class="${s.durum==='negatif'?'sg-neg':''}">
               <td class="mono" style="color:var(--text);font-weight:500;font-size:12.5px">${esc(s.kod)}</td>
               <td style="font-weight:500;color:var(--text)">${esc(s.malzeme)}</td>
@@ -1267,6 +1418,7 @@ function renderStokGenelBakis(){
               <td class="mono" style="color:var(--text-muted)">${s.altLimit||'—'}</td>
               <td>${durumPill(s)}</td>
               <td style="color:var(--text-subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px" title="${esc(s.sonHareketAciklama ? s.sonHareketAciklama+' · '+stokGenelZamanKisa(s.sonHareketTs) : stokGenelZamanKisa(s.sonHareketTs))}">${s.sonHareketAciklama ? esc(s.sonHareketAciklama)+' · '+stokGenelZamanKisa(s.sonHareketTs) : stokGenelZamanKisa(s.sonHareketTs)}</td>
+              ${stokDuzeltYetkisi()?`<td><button class="del-btn" title="Stoğu elle düzelt" onclick="stokDuzeltAc('${escJs(s.id)}',${s.stokSayi})">${ico('edit',14)}</button></td>`:''}
             </tr>
           `).join('')}
         </tbody></table>
@@ -3618,7 +3770,7 @@ function renderAdmin(){
      gerekiyor; bu yüzden #bubble-root gibi morph'a rağmen yaşayan bir kök kullanılmıyor. */
   if(isCanliPanelView(view)) body = introHintHtml() + canliPanelTabsHtml() + body;
 
-  return `<div class="root-wide theme-${resolvedTheme()}">${sidebar}<div class="admin-shell-body"><div class="print-brand">ROTA TAKİP · YÖNETİCİ RAPORU</div>${header}${body}</div>${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}${tadilatAkisModalId ? renderTadilatAkisModal() : ''}${karburPickerFor ? renderKarburPicker() : ''}</div>`;
+  return `<div class="root-wide theme-${resolvedTheme()}">${sidebar}<div class="admin-shell-body"><div class="print-brand">ROTA TAKİP · YÖNETİCİ RAPORU</div>${header}${body}</div>${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}${tadilatAkisModalId ? renderTadilatAkisModal() : ''}${karburPickerFor ? renderKarburPicker() : ''}${stokDuzeltRowId ? renderStokDuzeltModal() : ''}</div>`;
 }
 function setReportFilterFieldLight(field, val){ reportFilter[field]=val; renderTableOnly(); }
 function renderTableOnly(){ render(); } // basit yaklaşım: filtre değişince tam yeniden çizim yeterli hızda çalışır
