@@ -567,6 +567,46 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
    başlık kalsın diye görünmez bir yedek satır, sadece @media print'te görünür hale geliyor. */
 .print-brand{display:none}
 .admin-topbar{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:14px 24px 0;flex:none}
+
+/* ===== KENAR CUBUGU — 64px IKON SERIDI (Tezgah tahtalari, 22.09.2026) =====
+   Etiketler MARKUP'TA duruyor (<span class="nav-label">), yalnizca burada gizleniyor:
+   styles.css'e geri donulurse etiketli 236px cubuk oldugu gibi calismaya devam eder.
+   Erisilebilirlik: her nav ogesinde title (ipucu) var, ikonlar tek basina kalmiyor.
+   900px altinda mevcut yatay serit duzeni korunuyor, bu yuzden min-width:901px. */
+@media (min-width:901px){
+  .admin-sidebar{width:64px;align-items:center;padding:18px 0 12px;gap:4px}
+  .admin-sidebar .nav-label{display:none}
+  .admin-sidebar-brand{padding:0 0 14px;justify-content:center}
+  .admin-sidebar-brand > div:last-child{display:none}
+  .admin-sidebar-sec{display:none}
+  .admin-nav-item{width:40px;height:40px;min-height:40px;padding:0;justify-content:center;gap:0}
+  .admin-nav-item.active::before{left:-12px}
+  /* Sayac rozeti 40px ikonun icine sigmaz — tahtadaki gibi kucuk bir noktaya iniyor. */
+  .admin-nav-badge{position:absolute;top:3px;right:3px;margin:0;width:8px;height:8px;min-width:0;
+    padding:0;font-size:0;line-height:0;color:transparent;background:var(--accent);border-radius:50%}
+  .admin-sidebar-user{flex-direction:column;gap:8px;padding:0;background:transparent;border:none}
+  .admin-sidebar-uname,.admin-sidebar-urole{display:none}
+}
+/* Yonetici kabugu viewport'a sabitlenir: tahtada da boyle (height:1020px + overflow:hidden).
+   Eskiden min-height:100vh idi, icerik buyuyunce SAYFA uzuyordu ve .body-pad'in kendi
+   kaydirmasi hic devreye girmiyordu — Tadilat'in "gereksiz asagiya uzamasi"nin koku buydu. */
+@media (min-width:901px){
+  .root-wide{height:100vh;height:100dvh;overflow:hidden}
+}
+
+/* Tadilat — tahtadaki (Admin-Tadilat) izgara: sabit 560px form + esnek liste.
+   Eskiden 1fr 1fr idi ve iki kolon da alt alta buyuyerek SAYFAYI uzatiyordu; simdi kolonlar
+   kendi icinde kayiyor, kabuk viewport'a sabit. Dar ekranda tek kolona dusup normal akisa
+   donuyor (o zaman sayfa kaymasi dogru davranis). */
+.body-pad:has(.tad-layout){display:flex;flex-direction:column;overflow:hidden}
+.tad-layout{flex:1;display:grid;grid-template-columns:560px minmax(0,1fr);gap:20px;min-height:0}
+.tad-layout > *{min-height:0;overflow-y:auto}
+@media (max-width:1180px){
+  .body-pad:has(.tad-layout){display:block;overflow-y:auto}
+  .tad-layout{grid-template-columns:1fr;flex:none;min-height:0}
+  .tad-layout > *{overflow-y:visible}
+}
+
 @media (max-width:900px){
   .root-wide{flex-direction:column}
   .admin-sidebar{width:auto;flex-direction:row;align-items:center;padding:10px 14px;gap:6px;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch}

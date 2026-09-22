@@ -210,6 +210,20 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .matrix-footer-sync{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-muted)}
 .matrix-footer-sync b{color:var(--text);font-family:'JetBrains Mono',monospace;font-weight:600}
 
+/* Tadilat — tahtadaki (Admin-Tadilat) izgara: sabit 560px form + esnek liste.
+   Eskiden 1fr 1fr idi ve iki kolon da alt alta buyuyerek SAYFAYI uzatiyordu; simdi kolonlar
+   kendi icinde kayiyor, kabuk viewport'a sabit. Dar ekranda tek kolona dusup normal akisa
+   donuyor (o zaman sayfa kaymasi dogru davranis). */
+.body-pad:has(.tad-layout){display:flex;flex-direction:column;overflow:hidden}
+.tad-layout{flex:1;display:grid;grid-template-columns:560px minmax(0,1fr);gap:20px;min-height:0}
+.tad-layout > *{min-height:0;overflow-y:auto}
+@media (max-width:1180px){
+  .body-pad:has(.tad-layout){display:block;overflow-y:auto}
+  .tad-layout{grid-template-columns:1fr;flex:none;min-height:0}
+  .tad-layout > *{overflow-y:visible}
+}
+
+
 /* ===== CANLI PANEL — GENEL BAKIŞ (22.09.2026) =====
    Burada yalnızca YERLEŞİM var. KPI kartları .iy-kpi (--nc), dikkat kartları .matrix-card +
    .matrix-tag, sağ raydaki iki uyarı kutusu .notice (--nc) — üçü de mevcut desen, yeniden

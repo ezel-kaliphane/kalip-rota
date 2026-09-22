@@ -2236,18 +2236,18 @@ function renderAdmin(){
         <div class="admin-sidebar-mark">B</div>
         <div><div class="admin-sidebar-name">BOM-ROTA</div><div class="admin-sidebar-sub">Üretim Takip</div></div>
       </div>
-      ${isAdminTabVisible('rapor') ? `<button class="admin-nav-item ${view==='report'?'active':''}" onclick="setView('report')">${ico('list',14)} Rapor</button>` : ''}
-      ${canliPanelVisible() ? `<button class="admin-nav-item ${isCanliPanelView(view)?'active':''}" onclick="setView('${canliPanelDefaultView()}')">${ico('clock',14)} Canlı Panel</button>` : ''}
-      ${isAdminTabVisible('isYogunlugu') ? `<button class="admin-nav-item ${view==='isYogunlugu'?'active':''}" onclick="setView('isYogunlugu')">${ico('box',14)} İş Yoğunluğu</button>` : ''}
-      ${!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz') ? `<button class="admin-nav-item ${view==='analiz'?'active':''}" onclick="setView('analiz')">${ico('chart',14)} Analiz</button>` : ''}
-      ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="admin-nav-item ${view==='tadilatYonetim'?'active':''}" onclick="setView('tadilatYonetim')">${ico('wrench',14)} Tadilat</button>` : ''}
-      ${stokErisimVar() ? `<button class="admin-nav-item ${view==='stokYonetim'?'active':''}" onclick="setView('stokYonetim')">${ico('box',14)} Stok</button>` : ''}
-      <button class="admin-nav-item" onclick="openMyPushHistoryModal()">${ico('bell',14)} Bildirimler${unreadPushCount()>0?`<span class="admin-nav-badge">${unreadPushCount()}</span>`:''}</button>
+      ${isAdminTabVisible('rapor') ? `<button class="admin-nav-item ${view==='report'?'active':''}" title="Rapor" onclick="setView('report')">${ico('list',14)}<span class="nav-label">Rapor</span></button>` : ''}
+      ${canliPanelVisible() ? `<button class="admin-nav-item ${isCanliPanelView(view)?'active':''}" title="Canlı Panel" onclick="setView('${canliPanelDefaultView()}')">${ico('clock',14)}<span class="nav-label">Canlı Panel</span></button>` : ''}
+      ${isAdminTabVisible('isYogunlugu') ? `<button class="admin-nav-item ${view==='isYogunlugu'?'active':''}" title="İş Yoğunluğu" onclick="setView('isYogunlugu')">${ico('box',14)}<span class="nav-label">İş Yoğunluğu</span></button>` : ''}
+      ${!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz') ? `<button class="admin-nav-item ${view==='analiz'?'active':''}" title="Analiz" onclick="setView('analiz')">${ico('chart',14)}<span class="nav-label">Analiz</span></button>` : ''}
+      ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="admin-nav-item ${view==='tadilatYonetim'?'active':''}" title="Tadilat" onclick="setView('tadilatYonetim')">${ico('wrench',14)}<span class="nav-label">Tadilat</span></button>` : ''}
+      ${stokErisimVar() ? `<button class="admin-nav-item ${view==='stokYonetim'?'active':''}" title="Stok" onclick="setView('stokYonetim')">${ico('box',14)}<span class="nav-label">Stok</span></button>` : ''}
+      <button class="admin-nav-item" title="Bildirimler" onclick="openMyPushHistoryModal()">${ico('bell',14)}<span class="nav-label">Bildirimler</span>${unreadPushCount()>0?`<span class="admin-nav-badge">${unreadPushCount()}</span>`:''}</button>
       ${session.isAdmin ? `
       <div class="admin-sidebar-sec">Yönetim</div>
-      <button class="admin-nav-item" onclick="gotoExcelYukleme()">${ico('upload',14)} Excel Yükleme</button>
-      <button class="admin-nav-item" onclick="gotoOperatorler()">${ico('users',14)} Operatörler</button>
-      <button class="admin-nav-item ${view==='adminSettings'?'active':''}" onclick="setView('adminSettings')">${ico('gear',14)} Ayarlar</button>
+      <button class="admin-nav-item" title="Excel Yükleme" onclick="gotoExcelYukleme()">${ico('upload',14)}<span class="nav-label">Excel Yükleme</span></button>
+      <button class="admin-nav-item" title="Operatörler" onclick="gotoOperatorler()">${ico('users',14)}<span class="nav-label">Operatörler</span></button>
+      <button class="admin-nav-item ${view==='adminSettings'?'active':''}" title="Ayarlar" onclick="setView('adminSettings')">${ico('gear',14)}<span class="nav-label">Ayarlar</span></button>
       ` : ''}
       <div class="admin-sidebar-user">
         <div style="display:flex;align-items:center;gap:10px">
@@ -3330,7 +3330,7 @@ function renderAdmin(){
       body += `
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Talepleri</div>
       <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:900px">Operatörler bu listeden bekleyen bir talebi alıp çalışır. "Son Operasyon" işaretlenene kadar talep tekrar tekrar bekleyenlere düşebilir (çok operasyonlu tadilatlar için). Bitirdiklerinde, varsa duraklattıkları üretim işi otomatik olarak "${TADILAT_SONRASI_REASON}" duruşuna geçer.</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start">
+      <div class="tad-layout">
         <div>
           <div style="font-size:16px;font-weight:700;margin-bottom:4px">Yeni Tadilat Talebi</div>
           <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:14px"><span class="zorunlu">*</span> ile işaretli alanların hepsi zorunlu.</div>
