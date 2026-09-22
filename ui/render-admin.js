@@ -2447,7 +2447,12 @@ const EKRAN_BASLIKLARI = {
   matrix:       { ustu:'Canlı Panel', baslik:'Makine Matrisi' },
   completed:    { ustu:'Canlı Panel', baslik:'Tamamlanan Kodlar' },
   isYogunlugu:  { baslik:'İş Yoğunluğu' },
-  analiz:       { baslik:'Analiz' },
+  /* Tahtada başlığın altında seçili aralık ve canlı göstergesi var ("21 Eylül 2026 · canlı"). */
+  analiz:       { baslik:'Analiz', alt:()=>{
+                    const bugun = dateKey(Date.now());
+                    if(analizFrom===bugun && analizTo===bugun) return 'bugün · canlı';
+                    return analizFrom===analizTo ? analizFrom : (analizFrom+' → '+analizTo);
+                  } },
   tadilatYonetim:{ baslik:'Tadilat', alt:'İmalat + Tadilat atölye' },
   /* Breadcrumb gövdeden üst bara taşındı — aktif alt görünümü (Genel Bakış / Takım & Sarf /
      Karbür / Hammadde) gösteriyor, tahtadaki 'Stok / Genel Bakış' satırının karşılığı. */
@@ -2460,10 +2465,11 @@ function ekranBasligiHtml(){
   if(!b) return '';
   // 'ustu' fonksiyon olabilir: Stok'ta aktif alt gorunume gore degisiyor (Stok / Karbur gibi).
   const ustu = typeof b.ustu==='function' ? b.ustu() : b.ustu;
+  const alt  = typeof b.alt==='function'  ? b.alt()  : b.alt;
   return `<div class="topbar-baslik">
     ${ustu?`<div class="topbar-ustu">${ustu}</div>`:''}
     <div class="topbar-ad">${b.baslik}</div>
-    ${b.alt?`<div class="topbar-alt">${b.alt}</div>`:''}
+    ${alt?`<div class="topbar-alt">${alt}</div>`:''}
   </div>`;
 }
 function renderAdmin(){
@@ -3117,8 +3123,11 @@ function renderAdmin(){
     if(!visibleAnalizViews.some(v=>v.key===analizRole)){
       analizRole = visibleAnalizViews[0] ? visibleAnalizViews[0].key : analizRole;
     }
-    const analizRoleBar = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-      ${visibleAnalizViews.map(v=>`<button class="chip ${analizRole===v.key?'active':''}" style="font-size:13px;padding:9px 16px" onclick="setAnalizRole('${v.key}')">${esc(v.label)}</button>`).join('')}
+    /* Rol seçici GEZİNME, filtre değil — tasarım sisteminin kuralı gereği .chip yerine
+       .sub-tabs/.sub-tab-btn kullanıyor (chip artık yalnızca filtre; bkz. Bileşen Kütüphanesi).
+       Tahtada da bunlar sekme. Altındaki tarih ve atölye çipleri GERÇEKTEN filtre, chip kalıyor. */
+    const analizRoleBar = `<div class="sub-tabs" style="flex-wrap:wrap">
+      ${visibleAnalizViews.map(v=>`<button class="sub-tab-btn ${analizRole===v.key?'active':''}" onclick="setAnalizRole('${v.key}')">${esc(v.label)}</button>`).join('')}
     </div>`;
     if(visibleAnalizViews.length===0){
       body = `<div class="analiz-wrap"><div style="text-align:center;color:var(--text-muted);padding:60px 20px">Analiz sekmesindeki hiçbir görünüm için yetkin yok.</div></div>`;
