@@ -3328,36 +3328,36 @@ function renderAdmin(){
       ${beklemeDetayId ? renderBeklemeDetayModal() : ''}`;
     } else {
       body += `
-      <div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Talepleri</div>
-      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:900px">Operatörler bu listeden bekleyen bir talebi alıp çalışır. "Son Operasyon" işaretlenene kadar talep tekrar tekrar bekleyenlere düşebilir (çok operasyonlu tadilatlar için). Bitirdiklerinde, varsa duraklattıkları üretim işi otomatik olarak "${TADILAT_SONRASI_REASON}" duruşuna geçer.</div>
       <div class="tad-layout">
         <div>
-          <div style="font-size:16px;font-weight:700;margin-bottom:4px">Yeni Tadilat Talebi</div>
-          <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:14px"><span class="zorunlu">*</span> ile işaretli alanların hepsi zorunlu.</div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px">
+            <div style="font-size:16px;font-weight:700">Yeni Tadilat Talebi</div>
+            <div style="font-size:11.5px;color:var(--text-muted)"><span class="zorunlu">*</span> zorunlu</div>
+          </div>
 
           <div class="tad-grup">
             <div class="tad-grup-baslik"><span class="tad-grup-no">1</span> Ne yapılacak</div>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
-              <div class="field" style="flex:1;min-width:170px">
+              <div class="field" style="width:200px;flex:none">
                 <label for="tad-ukodu">U kodu<span class="zorunlu">*</span></label>
                 <div style="display:flex;gap:8px">
                   <input id="tad-ukodu" class="mono" placeholder="ör. U-8841-M10" value="${esc(newTadilatForm.uKodu)}" oninput="newTadilatForm.uKodu=this.value" onblur="tadUkoduBlur('new')" style="flex:1;min-width:0">
                   <button type="button" class="btn-ghost" style="padding:0 14px;flex:none" title="Malzeme Ara" onclick="openMalzemeArama('new')">${ico('search',14)}</button>
                 </div>
               </div>
-              <div class="field" style="width:120px;flex:none">
+            <div class="field" style="flex:1;min-width:0">
+              <label for="tad-kisaaciklama">Kısa açıklama<span class="zorunlu">*</span></label>
+              <input id="tad-kisaaciklama" placeholder="listede görünecek tek satır" value="${esc(newTadilatForm.kisaAciklama)}" oninput="newTadilatForm.kisaAciklama=this.value; newTadilatForm.aciklamaManual=true">
+            </div>
+              <div class="field" style="width:96px;flex:none">
                 <label for="tad-adet">Adet<span class="zorunlu">*</span></label>
                 <input id="tad-adet" inputmode="numeric" placeholder="0" value="${esc(newTadilatForm.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newTadilatForm.adet=this.value">
               </div>
             </div>
-            <div class="field">
-              <label for="tad-kisaaciklama">Kısa açıklama<span class="zorunlu">*</span></label>
-              <input id="tad-kisaaciklama" placeholder="listede görünecek tek satır" value="${esc(newTadilatForm.kisaAciklama)}" oninput="newTadilatForm.kisaAciklama=this.value; newTadilatForm.aciklamaManual=true">
-            </div>
             ${tadilatOnHazirIstekListesi().length>0 ? `
-            <div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px">
-              <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:6px">Hazır ifadeler — işaretlediğin, açıklamaya otomatik eklenir</div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 14px">
+            <div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px">
+              <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:5px">Hazır ifadeler — işaretlediğin, açıklamaya otomatik eklenir</div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px 12px">
                 ${tadilatOnHazirIstekListesi().map(p=>{
                   const sel = tadPresetSelections[p.id] || {checked:false, value:''};
                   return `<label style="display:flex;align-items:center;gap:5px;padding:3px 0;cursor:pointer;font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);font-weight:400">
@@ -3371,19 +3371,21 @@ function renderAdmin(){
             </div>` : ''}
             <div class="field">
               <label for="tad-aciklama">Ne işlem yapılacak?<span class="zorunlu">*</span></label>
-              <textarea id="tad-aciklama" placeholder="yapılacak işi tarif et" oninput="newTadilatForm.aciklama=this.value" style="min-height:110px">${esc(newTadilatForm.aciklama)}</textarea>
+              <textarea id="tad-aciklama" placeholder="yapılacak işi tarif et" oninput="newTadilatForm.aciklama=this.value" style="min-height:56px">${esc(newTadilatForm.aciklama)}</textarea>
             </div>
           </div>
 
           <div class="tad-grup">
             <div class="tad-grup-baslik"><span class="tad-grup-no">2</span> Kim istedi</div>
-            <div class="field">
+            <div style="display:flex;gap:10px">
+            <div class="field" style="flex:1;min-width:0">
               <label for="tad-bolum">Talep eden bölüm<span class="zorunlu">*</span></label>
               <input id="tad-bolum" list="tadilat-bolum-options" placeholder="seç ya da yaz" value="${esc(newTadilatForm.bolum)}" oninput="newTadilatForm.bolum=this.value" onblur="render()">
             </div>
-            <div class="field">
+            <div class="field" style="flex:1;min-width:0">
               <label for="tad-kisi">Talep eden kişi<span class="zorunlu">*</span></label>
               <input id="tad-kisi" list="uretim-personeli-options" placeholder="ad soyad" value="${esc(newTadilatForm.talepKisi)}" oninput="newTadilatForm.talepKisi=this.value">
+            </div>
             </div>
             <datalist id="tadilat-bolum-options">${tadilatBolumOptions().map(b=>`<option value="${b}">`).join('')}</datalist>
             <datalist id="uretim-personeli-options">${uretimPersoneliFor(newTadilatForm.bolum).map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
@@ -3391,13 +3393,14 @@ function renderAdmin(){
 
           <div class="tad-grup">
             <div class="tad-grup-baslik"><span class="tad-grup-no">3</span> Nerede</div>
-            <div class="field">
+            <div style="display:flex;gap:10px;align-items:flex-end">
+            <div class="field" style="flex:1;min-width:0">
               <label for="tad-makine">Talep edilen makine<span class="zorunlu">*</span></label>
               <input id="tad-makine" list="tadilat-makine-options" placeholder="makine kodu" value="${esc(newTadilatForm.talepMakine)}" oninput="newTadilatForm.talepMakine=this.value">
             </div>
             <datalist id="tadilat-makine-options">${isMerkezleriFor(newTadilatForm.bolum).map(k=>`<option value="${esc(k)}">`).join('')}</datalist>
             ${myAtolyelerAdmin.length>1 ? `
-            <div class="field">
+            <div class="field" style="flex:1;min-width:0">
               <label for="tad-atolye">Atölye</label>
               <select id="tad-atolye" onchange="tadilatFormAtolyeSet(this.value)">
                 ${myAtolyelerAdmin.includes('imalat') ? `<option value="imalat" ${tadilatFormAtolyeGet()==='imalat'?'selected':''}>İmalat Atölye</option>` : ''}
@@ -3407,9 +3410,10 @@ function renderAdmin(){
             <input type="hidden" id="tad-atolye" value="${myAtolyelerAdmin[0]}">
             <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px">Atölye: ${myAtolyelerAdmin[0]==='tadilat'?(ico('wrench',14)+' Tadilat Atölye'):(ico('factory',14)+' İmalat Atölye')} <span style="opacity:.7">(tek atölyene açılıyor)</span></div>`}
           </div>
-          <button class="btn-primary" style="width:100%;padding:15px 0;font-size:15.5px" onclick="addTadilat()">+ Talep Oluştur</button>
+          </div>
+          <button class="btn-primary" style="width:100%;padding:11px 0;font-size:14.5px" onclick="addTadilat()">+ Talep Oluştur</button>
         </div>
-        <div style="max-height:calc(100vh - 300px);overflow-y:auto;padding-right:4px">
+        <div style="padding-right:4px">
           ${myAtolyelerAdmin.map(a=>{
             const list = tadilatBekleyenler(a);
             return `<div class="sec-h" style="margin-top:0">${a==='tadilat'?(ico('wrench',14)+' Tadilat Atölye'):(ico('factory',14)+' İmalat Atölye')} — Bekleyen (${list.length})</div>
