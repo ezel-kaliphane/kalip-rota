@@ -1179,6 +1179,13 @@ function renderStokDuzeltModal(){
     </div></div>`;
 }
 
+/* Durum rozeti — hem Genel Bakış tablosu hem kalem pencereleri aynısını kullanıyor, o yüzden
+   renderStokGenelBakis içinden modül seviyesine çıkarıldı (kopyalanmadı). */
+const durumPill = s => s.durum==='negatif'
+    ? `<span class="sg-pill" style="color:var(--danger-text);background:var(--danger-bg);border:1px solid var(--danger-border)"><span style="width:6px;height:6px;border-radius:50%;background:var(--danger)"></span>Negatif</span>`
+    : s.durum==='altlimit'
+    ? `<span class="sg-pill" style="color:var(--warn-text);background:var(--warn-bg);border:1px solid var(--warn-border)"><span style="width:6px;height:6px;border-radius:50%;background:var(--warn)"></span>Alt limit</span>`
+    : `<span class="sg-pill" style="color:var(--success-text);background:var(--success-bg);border:1px solid var(--success-border)"><span style="width:6px;height:6px;border-radius:50%;background:var(--success)"></span>Normal</span>`;
 function stokGenelSatirlar(){
   const satirlar = [];
   if(isAdminTabVisible('takimStok')){
@@ -1348,11 +1355,6 @@ function renderStokGenelBakis(){
   const sayfa = Math.min(stokGenelSayfa, toplamSayfa);
   const sayfaSatirlari = satirlar.slice((sayfa-1)*STOK_GENEL_SAYFA_BOYUT, sayfa*STOK_GENEL_SAYFA_BOYUT);
 
-  const durumPill = s => s.durum==='negatif'
-    ? `<span class="sg-pill" style="color:var(--danger-text);background:var(--danger-bg);border:1px solid var(--danger-border)"><span style="width:6px;height:6px;border-radius:50%;background:var(--danger)"></span>Negatif</span>`
-    : s.durum==='altlimit'
-    ? `<span class="sg-pill" style="color:var(--warn-text);background:var(--warn-bg);border:1px solid var(--warn-border)"><span style="width:6px;height:6px;border-radius:50%;background:var(--warn)"></span>Alt limit</span>`
-    : `<span class="sg-pill" style="color:var(--success-text);background:var(--success-bg);border:1px solid var(--success-border)"><span style="width:6px;height:6px;border-radius:50%;background:var(--success)"></span>Normal</span>`;
 
   // Sayfa numarası düğmeleri — çok sayfa varsa ilk/son + aktifin etrafındaki birkaç sayfa gösterilir.
   const sayfaNolari = (()=>{
@@ -1593,30 +1595,40 @@ function stokListeKapat(){ stokListeModalTur = null; render(); }
 function stokKritikTablo(liste, bosMetin){
   if(liste.length===0) return `<div style="color:var(--text-muted);font-size:12.5px;padding:10px 2px">${bosMetin}</div>`;
   const duzeltilebilir = (typeof stokDuzeltYetkisi==='function') && stokDuzeltYetkisi();
+  /* HIZALAMA: .sg-table-wrap'te thead ile HER tbody satırı ayrı birer tablo (display:table +
+     table-layout:fixed). Genişlikler iki tarafa da AYNI sırayla yazılmazsa sütunlar kayar —
+     ilk halde yalnız başlıktaki son sütunda width vardı ve başlıklar veriyle hizalanmıyordu. */
+  const gen = duzeltilebilir
+    ? ['12%','27%','11%','10%','8%','12%','14%','6%']
+    : ['13%','29%','12%','11%','9%','13%','13%'];
+  const basliklar = ['Kod','Malzeme','Tür','Stok','Alt Limit','Durum','Son Hareket'].concat(duzeltilebilir?['']:[]);
   return `<div class="sg-table-wrap" style="margin-bottom:6px">
     <table><thead><tr>
-      <th>Kod</th><th>Malzeme</th><th>Tür</th><th>Stok</th><th>Alt Limit</th><th>Son Hareket</th>
-      ${duzeltilebilir?'<th style="width:56px"></th>':''}
+      ${basliklar.map((b,k)=>`<th style="width:${gen[k]}">${b}</th>`).join('')}
     </tr></thead><tbody>
-      ${liste.map(s=>`<tr class="${Number(s.stokSayi)<0?'sg-neg':''}">
-        <td class="mono" style="font-weight:500;font-size:12.5px">${esc(s.kod)}</td>
-        <td style="font-weight:500">${esc(s.malzeme)}</td>
-        <td style="color:var(--text-muted)">${esc(s.kaynak||s.tur)}</td>
-        <td style="font-weight:700;color:${Number(s.stokSayi)<0?'var(--danger)':'var(--warn)'}">${esc(s.stokText)}</td>
-        <td class="mono" style="color:var(--text-muted)">${s.altLimit||'—'}</td>
-        <td style="color:var(--text-subtle)">${s.sonHareketTs?esc(fmtDT(s.sonHareketTs)):'—'}</td>
-        ${duzeltilebilir?`<td><button class="del-btn" title="Stoğu elle düzelt" onclick="stokDuzeltAc('${escJs(s.id)}',${Number(s.stokSayi)||0})">${ico('edit',14)}</button></td>`:''}
-      </tr>`).join('')}
+      ${liste.map(s=>{
+        const h = [
+          `<td class="mono" style="width:${gen[0]};font-weight:500;font-size:12.5px">${esc(s.kod)}</td>`,
+          `<td style="width:${gen[1]};font-weight:500">${esc(s.malzeme)}</td>`,
+          `<td style="width:${gen[2]};color:var(--text-muted)">${esc(s.kaynak||s.tur)}</td>`,
+          `<td style="width:${gen[3]};font-weight:700;color:${Number(s.stokSayi)<0?'var(--danger)':Number(s.stokSayi)===0?'var(--warn)':'var(--text)'}">${esc(s.stokText)}</td>`,
+          `<td class="mono" style="width:${gen[4]};color:var(--text-muted)">${s.altLimit||'—'}</td>`,
+          `<td style="width:${gen[5]}">${durumPill(s)}</td>`,
+          `<td style="width:${gen[6]};color:var(--text-subtle)">${s.sonHareketTs?esc(fmtDT(s.sonHareketTs)):'—'}</td>`,
+        ];
+        if(duzeltilebilir) h.push(`<td style="width:${gen[7]}"><button class="del-btn" title="Stoğu elle düzelt" onclick="stokDuzeltAc('${escJs(s.id)}',${Number(s.stokSayi)||0})">${ico('edit',14)}</button></td>`);
+        return `<tr class="${Number(s.stokSayi)<0?'sg-neg':''}">${h.join('')}</tr>`;
+      }).join('')}
     </tbody></table>
   </div>`;
 }
 
 function stokListeBasligi(tur){
-  if(tur==='kritik')  return 'Kritik Stok';
-  if(tur==='tumu')    return 'Tüm Kalemler';
-  if(tur==='Takım')   return 'Takım & Sarf Kalemleri';
-  if(tur==='Hammadde')return 'Hammadde Kalemleri';
-  if(tur==='Karbür')  return 'Karbür Kalemleri';
+  if(tur==='kritik')   return 'Kritik Stok';
+  if(tur==='tumu')     return 'Tüm Kalemler';
+  if(tur==='Takım')    return 'Takım & Sarf Kalemleri';
+  if(tur==='Hammadde') return 'Hammadde Kalemleri';
+  if(tur==='Karbür')   return 'Karbür Kalemleri';
   return 'Stok Kalemleri';
 }
 function renderStokListeModal(){
