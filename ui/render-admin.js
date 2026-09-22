@@ -1362,34 +1362,42 @@ function renderStokGenelBakis(){
   })();
 
   const kpiAktifMi = tur => stokGenelTurFiltre===tur;
-  const kpiIkon = (i,aktif) => `<span style="width:28px;height:28px;border-radius:8px;background:${aktif?'color-mix(in srgb,currentColor 15%,transparent)':'var(--panel-alt)'};display:flex;align-items:center;justify-content:center;color:${aktif?'#fff':'var(--text-muted)'};flex:none">${i}</span>`;
+  const kpiIkon = (i,aktif) => `<span style="width:24px;height:24px;border-radius:7px;background:${aktif?'color-mix(in srgb,currentColor 15%,transparent)':'var(--panel-alt)'};display:flex;align-items:center;justify-content:center;color:${aktif?'#fff':'var(--text-muted)'};flex:none">${i}</span>`;
   const kpiOk = aktif => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${aktif?'#fff':'var(--text-subtle)'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"></path><path d="M7 7h10v10"></path></svg>`;
-  const kpiTikla = tur => `onclick="stokGenelTurDegistir('${stokGenelTurFiltre===tur?'tumu':tur}')" style="cursor:pointer"`;
+  /* Kart tıklaması artık TÜR FİLTRESİ değil, o türün kalem penceresini açıyor (kullanıcı isteği).
+     Tür filtresi kaybolmadı — tablonun üstündeki "Tür:" açılır menüsü aynı işi yapıyor ve
+     kartın "aktif" vurgusu hala o filtreyi yansıtıyor. */
+  const kpiTikla = tur => `onclick="stokListeAc('${tur}')" style="cursor:pointer" title="${esc(tur==='tumu'?'Tüm kalemleri':tur+' kalemlerini')} pencerede aç"`;
   return `
     <div class="stok-genel-kpi">
+      <div class="sgk-card ${stokGenelTurFiltre==='tumu'?'aktif':''}" ${kpiTikla('tumu')}>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">${kpiIkon(ico('list',16),stokGenelTurFiltre==='tumu')}${kpiOk(stokGenelTurFiltre==='tumu')}</div>
+        <div style="margin-top:6px"><div class="sgk-num">${sayMalzeme+sayTakim+sayKarbur}</div><div class="sgk-label">Tüm Kalemler</div>
+        <div style="font-size:12px;margin-top:4px;color:${stokGenelTurFiltre==='tumu'?'color-mix(in srgb,currentColor 70%,transparent)':'var(--text-subtle)'}">üç kaynak bir arada</div></div>
+      </div>
       <div class="sgk-card ${kpiAktifMi('Hammadde')?'aktif':''}" ${kpiTikla('Hammadde')}>
         <div style="display:flex;justify-content:space-between;align-items:flex-start">${kpiIkon(ico('katman',16),kpiAktifMi('Hammadde'))}${kpiOk(kpiAktifMi('Hammadde'))}</div>
-        <div style="margin-top:8px"><div class="sgk-num">${sayMalzeme}</div><div class="sgk-label">Hammadde Kalemi</div>
+        <div style="margin-top:6px"><div class="sgk-num">${sayMalzeme}</div><div class="sgk-label">Hammadde Kalemi</div>
         <div style="font-size:12px;margin-top:4px;color:${kpiAktifMi('Hammadde')?'color-mix(in srgb,currentColor 70%,transparent)':'var(--text-subtle)'}">stockItems</div></div>
       </div>
       <div class="sgk-card ${kpiAktifMi('Takım')?'aktif':''}" ${kpiTikla('Takım')}>
         <div style="display:flex;justify-content:space-between;align-items:flex-start">${kpiIkon(ico('wrench',16),kpiAktifMi('Takım'))}${kpiOk(kpiAktifMi('Takım'))}</div>
-        <div style="margin-top:8px"><div class="sgk-num">${sayTakim}</div><div class="sgk-label">Takım & Sarf Kalemi</div>
+        <div style="margin-top:6px"><div class="sgk-num">${sayTakim}</div><div class="sgk-label">Takım & Sarf Kalemi</div>
         <div style="font-size:12px;margin-top:4px;color:${kpiAktifMi('Takım')?'color-mix(in srgb,currentColor 70%,transparent)':'var(--text-subtle)'}">toolCatalog</div></div>
       </div>
       <div class="sgk-card ${kpiAktifMi('Karbür')?'aktif':''}" ${kpiTikla('Karbür')}>
         <div style="display:flex;justify-content:space-between;align-items:flex-start">${kpiIkon(ico('elmas',16),kpiAktifMi('Karbür'))}${kpiOk(kpiAktifMi('Karbür'))}</div>
-        <div style="margin-top:8px"><div class="sgk-num">${sayKarbur}</div><div class="sgk-label">Karbür Kalemi</div>
+        <div style="margin-top:6px"><div class="sgk-num">${sayKarbur}</div><div class="sgk-label">Karbür Kalemi</div>
         <div style="font-size:12px;margin-top:4px;color:${kpiAktifMi('Karbür')?'color-mix(in srgb,currentColor 70%,transparent)':'var(--text-subtle)'}">Fire havuzu: ${fireSayisi} parça</div></div>
       </div>
-      <div class="sgk-card uyari" style="cursor:pointer" title="Stoğu biten kalemleri aç" onclick="stokKritikAc()">
+      <div class="sgk-card uyari" style="cursor:pointer" title="Stoğu biten kalemleri pencerede aç" onclick="stokListeAc('kritik')">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <span style="width:40px;height:40px;border-radius:8px;background:color-mix(in srgb,currentColor 15%,transparent);display:flex;align-items:center;justify-content:center">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
           </span>
           <span style="background:var(--panel);color:var(--danger-text);font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:6px">ACİL</span>
         </div>
-        <div style="margin-top:8px"><div class="sgk-num">${sayKritik}</div><div class="sgk-label">Alt Limit / Negatif</div>
+        <div style="margin-top:6px"><div class="sgk-num">${sayKritik}</div><div class="sgk-label">Alt Limit / Negatif</div>
         <div style="font-size:12px;margin-top:4px">${sayNegatif} negatif stok · işlem devam ediyor</div></div>
       </div>
     </div>
@@ -1576,9 +1584,11 @@ function stokKritikVeri(){
    Satırlardaki düzeltme butonu Genel Bakış'takiyle aynı fonksiyonu (stokDuzeltAc) çağırıyor,
    yani yetki de aynı: yalnızca SuperAdmin. Düzeltme penceresi bunun ÜSTÜNE açılıyor (kabuktaki
    modal zincirinde sonra geldiği için), kapanınca liste yerinde kalıyor. */
-let stokKritikModalAcik = false;
-function stokKritikAc(){ stokKritikModalAcik = true; render(); }
-function stokKritikKapat(){ stokKritikModalAcik = false; render(); }
+/* KPI kartlarının hepsi aynı pencereyi açıyor, yalnızca hangi kümeyi göstereceği değişiyor:
+   'tumu' | 'Hammadde' | 'Takım' | 'Karbür' | 'kritik'. */
+let stokListeModalTur = null;
+function stokListeAc(tur){ stokListeModalTur = tur; render(); }
+function stokListeKapat(){ stokListeModalTur = null; render(); }
 
 function stokKritikTablo(liste, bosMetin){
   if(liste.length===0) return `<div style="color:var(--text-muted);font-size:12.5px;padding:10px 2px">${bosMetin}</div>`;
@@ -1601,37 +1611,59 @@ function stokKritikTablo(liste, bosMetin){
   </div>`;
 }
 
-function renderStokKritikModal(){
-  if(!stokKritikModalAcik) return '';
-  const { bitenler, altLimit } = stokKritikVeri();
-  const kartaGirmeyen = bitenler.filter(s=>s.durum==='normal').length;
-  const turOzet = Object.entries(bitenler.reduce((a,s)=>{ const k=s.kaynak||s.tur; a[k]=(a[k]||0)+1; return a; },{}))
-    .map(([k,v])=>`${esc(k)} ${v}`).join(' · ');
-  return `<div class="modal-overlay" onclick="if(event.target===this)stokKritikKapat()">
+function stokListeBasligi(tur){
+  if(tur==='kritik')  return 'Kritik Stok';
+  if(tur==='tumu')    return 'Tüm Kalemler';
+  if(tur==='Takım')   return 'Takım & Sarf Kalemleri';
+  if(tur==='Hammadde')return 'Hammadde Kalemleri';
+  if(tur==='Karbür')  return 'Karbür Kalemleri';
+  return 'Stok Kalemleri';
+}
+function renderStokListeModal(){
+  const tur = stokListeModalTur;
+  if(!tur) return '';
+  const kritikMi = (tur==='kritik');
+  let govde, altBilgi;
+  if(kritikMi){
+    const { bitenler, altLimit } = stokKritikVeri();
+    const kartaGirmeyen = bitenler.filter(x=>x.durum==='normal').length;
+    const ozet = Object.entries(bitenler.reduce((a,x)=>{ const k=x.kaynak||x.tur; a[k]=(a[k]||0)+1; return a; },{}))
+      .map(([k,v])=>`${esc(k)} ${v}`).join(' · ');
+    altBilgi = ozet;
+    govde = `<div class="sec-h" style="margin-top:0">Stoğu bitenler
+        <span class="ayar-deger mono" style="margin-left:8px">${bitenler.length}</span></div>
+      <div style="font-size:12px;color:var(--text-muted);margin:-6px 0 10px;line-height:1.5">
+        Stoğu sıfıra inmiş ya da eksiye düşmüş kalemler; takım çıkışında bunlar reddedilir.${
+          kartaGirmeyen>0?` <b style="color:var(--warn)">${kartaGirmeyen} tanesi</b> alt limiti tanımlı olmadığı için "Alt Limit / Negatif" sayacına girmiyor.`:''}
+      </div>
+      ${stokKritikTablo(bitenler, 'Stoğu biten kalem yok.')}
+      <div class="sec-h">Alt limitin altında
+        <span class="ayar-deger mono" style="margin-left:8px">${altLimit.length}</span></div>
+      <div style="font-size:12px;color:var(--text-muted);margin:-6px 0 10px">Stok var ama tanımlı alt limitin altına inmiş — en kritik oran en üstte.</div>
+      ${stokKritikTablo(altLimit, 'Alt limitin altına inen kalem yok.')}`;
+  } else {
+    /* Liste, tabloyla AYNI sıralamada: önce sorunlular (negatif, sonra alt limit), sonra normaller. */
+    const oncelik = x => x.durum==='negatif' ? 0 : x.durum==='altlimit' ? 1 : 2;
+    const liste = stokGenelSatirlar()
+      .filter(x=> tur==='tumu' ? true : x.tur===tur)
+      .sort((a,b)=> oncelik(a)-oncelik(b) || Number(a.stokSayi)-Number(b.stokSayi) || String(a.kod).localeCompare(String(b.kod)));
+    const sorunlu = liste.filter(x=>x.durum!=='normal').length;
+    altBilgi = `${liste.length} kalem${sorunlu?` · ${sorunlu} tanesi alt limit / negatif`:''}`;
+    govde = stokKritikTablo(liste, 'Kalem yok.');
+  }
+  return `<div class="modal-overlay" onclick="if(event.target===this)stokListeKapat()">
     <div class="modal-box" style="max-width:1060px;width:100%;max-height:86vh;display:flex;flex-direction:column;padding:0">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px 22px 14px;border-bottom:1px solid var(--border);flex:none">
         <div style="min-width:0">
-          <div style="font-size:18px;font-weight:700;letter-spacing:-.2px">Kritik Stok</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${esc(fmtDT(Date.now()))} itibarıyla${turOzet?` · ${turOzet}`:''}</div>
+          <div style="font-size:18px;font-weight:700;letter-spacing:-.2px">${esc(stokListeBasligi(tur))}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${esc(fmtDT(Date.now()))} itibarıyla${altBilgi?` · ${altBilgi}`:''}</div>
         </div>
-        <button class="icon-btn" style="flex:none" title="Kapat" onclick="stokKritikKapat()">${ico('x',16)}</button>
+        <button class="icon-btn" style="flex:none" title="Kapat" onclick="stokListeKapat()">${ico('x',16)}</button>
       </div>
-      <div style="flex:1;min-height:0;overflow-y:auto;padding:16px 22px 22px">
-        <div class="sec-h" style="margin-top:0">Stoğu bitenler
-          <span class="ayar-deger mono" style="margin-left:8px">${bitenler.length}</span></div>
-        <div style="font-size:12px;color:var(--text-muted);margin:-6px 0 10px;line-height:1.5">
-          Stoğu sıfıra inmiş ya da eksiye düşmüş kalemler; takım çıkışında bunlar reddedilir.${
-            kartaGirmeyen>0?` <b style="color:var(--warn)">${kartaGirmeyen} tanesi</b> alt limiti tanımlı olmadığı için "Alt Limit / Negatif" sayacına girmiyor.`:''}
-        </div>
-        ${stokKritikTablo(bitenler, 'Stoğu biten kalem yok.')}
-
-        <div class="sec-h">Alt limitin altında
-          <span class="ayar-deger mono" style="margin-left:8px">${altLimit.length}</span></div>
-        <div style="font-size:12px;color:var(--text-muted);margin:-6px 0 10px">Stok var ama tanımlı alt limitin altına inmiş — en kritik oran en üstte.</div>
-        ${stokKritikTablo(altLimit, 'Alt limitin altına inen kalem yok.')}
-      </div>
+      <div style="flex:1;min-height:0;overflow-y:auto;padding:16px 22px 22px">${govde}</div>
     </div></div>`;
 }
+
 function stokBolumSayisi(key){
   if(key==='takim')    return toolCatalogReady ? toolCatalogArray().length : null;
   if(key==='karbur')   return karburKatalogReady ? karburKatalogArray().length : null;
@@ -3869,7 +3901,7 @@ function renderAdmin(){
      gerekiyor; bu yüzden #bubble-root gibi morph'a rağmen yaşayan bir kök kullanılmıyor. */
   if(isCanliPanelView(view)) body = introHintHtml() + canliPanelTabsHtml() + body;
 
-  return `<div class="root-wide theme-${resolvedTheme()}">${sidebar}<div class="admin-shell-body"><div class="print-brand">ROTA TAKİP · YÖNETİCİ RAPORU</div>${header}${body}</div>${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}${tadilatAkisModalId ? renderTadilatAkisModal() : ''}${karburPickerFor ? renderKarburPicker() : ''}${renderStokKritikModal()}${stokDuzeltRowId ? renderStokDuzeltModal() : ''}</div>`;
+  return `<div class="root-wide theme-${resolvedTheme()}">${sidebar}<div class="admin-shell-body"><div class="print-brand">ROTA TAKİP · YÖNETİCİ RAPORU</div>${header}${body}</div>${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}${tadilatAkisModalId ? renderTadilatAkisModal() : ''}${karburPickerFor ? renderKarburPicker() : ''}${renderStokListeModal()}${stokDuzeltRowId ? renderStokDuzeltModal() : ''}</div>`;
 }
 function setReportFilterFieldLight(field, val){ reportFilter[field]=val; renderTableOnly(); }
 function renderTableOnly(){ render(); } // basit yaklaşım: filtre değişince tam yeniden çizim yeterli hızda çalışır

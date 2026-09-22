@@ -371,12 +371,12 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .stok-bolumler{padding:16px 24px 0;margin-bottom:0;flex-wrap:wrap}
 .stok-icerik .settings-wrap{padding-top:16px;overflow:visible;flex:none}
 /* Genel Bakış — üç kaynağı birleştiren özet (bkz. renderStokGenelBakis()) */
-.stok-genel-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:24px 24px 0}
-.sgk-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:11px 14px;box-shadow:var(--card-shadow)}
+.stok-genel-kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:14px 24px 0}
+.sgk-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 12px;box-shadow:var(--card-shadow)}
 .sgk-card.uyari{background:var(--danger);border-color:var(--danger);color:var(--on-warn)}
 .sgk-card.aktif{background:var(--sidebar-bg);border-color:var(--sidebar-bg);color:#fff}
-.sgk-num{font-family:'Inter',sans-serif;font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1}
-.sgk-label{font-size:13px;font-weight:500;color:var(--text);margin-top:4px}
+.sgk-num{font-family:'Inter',sans-serif;font-size:21px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.sgk-label{font-size:12.5px;font-weight:500;color:var(--text);margin-top:4px}
 .sgk-card.uyari .sgk-label{color:var(--on-warn)}
 /* .aktif kartının zemini --sidebar-bg; o iki gövdede de koyu, beyaz doğru. */
 .sgk-card.aktif .sgk-label{color:#fff}
