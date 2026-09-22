@@ -3329,7 +3329,7 @@ function renderAdmin(){
     } else {
       body += `
       <div class="tad-layout">
-        <div>
+        <div class="tad-form">
           <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px">
             <div style="font-size:16px;font-weight:700">Yeni Tadilat Talebi</div>
             <div style="font-size:11.5px;color:var(--text-muted)"><span class="zorunlu">*</span> zorunlu</div>
@@ -3355,9 +3355,9 @@ function renderAdmin(){
               </div>
             </div>
             ${tadilatOnHazirIstekListesi().length>0 ? `
-            <div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px">
+            <div class="tad-sablon-kutu" style="background:var(--panel-alt);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px">
               <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:5px">Hazır ifadeler — işaretlediğin, açıklamaya otomatik eklenir</div>
-              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px 12px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 12px">
                 ${tadilatOnHazirIstekListesi().map(p=>{
                   const sel = tadPresetSelections[p.id] || {checked:false, value:''};
                   return `<label style="display:flex;align-items:center;gap:5px;padding:3px 0;cursor:pointer;font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);font-weight:400">
@@ -3371,7 +3371,7 @@ function renderAdmin(){
             </div>` : ''}
             <div class="field">
               <label for="tad-aciklama">Ne işlem yapılacak?<span class="zorunlu">*</span></label>
-              <textarea id="tad-aciklama" placeholder="yapılacak işi tarif et" oninput="newTadilatForm.aciklama=this.value" style="min-height:56px">${esc(newTadilatForm.aciklama)}</textarea>
+              <textarea id="tad-aciklama" placeholder="yapılacak işi tarif et" oninput="newTadilatForm.aciklama=this.value" style="min-height:48px">${esc(newTadilatForm.aciklama)}</textarea>
             </div>
           </div>
 

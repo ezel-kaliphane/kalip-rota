@@ -217,6 +217,21 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .body-pad:has(.tad-layout){display:flex;flex-direction:column;overflow:hidden}
 .tad-layout{flex:1;display:grid;grid-template-columns:560px minmax(0,1fr);gap:20px;min-height:0}
 .tad-layout > *{min-height:0;overflow-y:auto}
+/* Tadilat formu TEK EKRANA sigsin. Tahtada (Admin-Tadilat) form tek bir panel ve bolumler
+   yalnizca basliklarla ayriliyor — uc ayri cerceveli kutu yok. Uc kutunun kenarlik+dolgu+
+   bosluk maliyeti ~72px idi; tek panele inince o geri kazaniliyor. Alan sikistirmasi
+   SADECE bu forma kapsandi (.tad-form), diger ekranlardaki .field olcusu degismiyor. */
+.tad-form{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px 16px}
+.tad-form .tad-grup{border:none;background:transparent;padding:0;margin-bottom:10px}
+.tad-form .tad-grup-baslik{margin-bottom:7px}
+.tad-form .field{gap:4px;margin-bottom:10px}
+.tad-form input,.tad-form select,.tad-form textarea{padding:9px 12px}
+/* Hazir ifadeler kutusu formun EN IRI parcasi (10 sablonda 176px) ve boyu kullanicinin
+   ayarladigi sablon sayisina bagli — sabit kirpmak yerine kendi ic kaydirmasi var, boylece
+   kac sablon eklenirse eklensin zorunlu alanlar ve "+ Talep Olustur" ekranda kaliyor.
+   Uzun ekranda kirpmaya gerek yok, tamami gorunuyor. */
+.tad-form .tad-sablon-kutu{max-height:122px;overflow-y:auto}
+@media (min-height:880px){ .tad-form .tad-sablon-kutu{max-height:none} }
 @media (max-width:1180px){
   .body-pad:has(.tad-layout){display:block;overflow-y:auto}
   .tad-layout{grid-template-columns:1fr;flex:none;min-height:0}
