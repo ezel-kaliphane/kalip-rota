@@ -634,6 +634,8 @@ let matrixGroupFilter = 'Tümü';
 function setMatrixGroupFilter(v){ matrixGroupFilter = v; render(); }
 let matrixAtolyeFilter = 'tumu'; // 'tumu' | 'imalat' | 'tadilat'
 function setMatrixAtolyeFilter(v){ matrixAtolyeFilter = v; render(); }
+let matrixArama = '';
+function setMatrixArama(v){ matrixArama = v; render(); }
 let isYogunluguAcikMakine = null; // "İş Yoğunluğu" sekmesinde detayı açık olan makine satırı
 function toggleIsYogunluguDetay(label){ isYogunluguAcikMakine = isYogunluguAcikMakine===label ? null : label; render(); }
 // İş Yoğunluğu'nun 4 görünümü (liste/özet/hafta/pano) — seçim cihazda hatırlanır.

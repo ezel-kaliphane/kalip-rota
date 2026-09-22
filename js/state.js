@@ -20,6 +20,15 @@ const esc = s => (s==null?"":String(s)).replace(/[&<>"']/g, c=>({"&":"&amp;","<"
 const escJs = s => esc(String(s==null?"":s).replace(/\\/g,"\\\\").replace(/'/g,"\\'"));
 const fmtDT = ts => new Date(ts).toLocaleString("tr-TR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"});
 const fmtDur = ms => { const m=Math.round(ms/60000); return m<60?`${m} dk`:`${Math.floor(m/60)} sa ${m%60} dk`; };
+// Bekleme süresi — fmtDur günlerce bekleyen bir talep için "76 sa 12 dk" diyor ve
+// okunmuyor. 24 saatin altında fmtDur ile aynı, üstünde gün/saat.
+const fmtBekleme = ms => {
+  const dk = Math.max(0, Math.round(ms/60000));
+  if(dk < 60) return `${dk} dk`;
+  const sa = Math.floor(dk/60);
+  if(sa < 24) return `${sa} sa ${dk%60} dk`;
+  return `${Math.floor(sa/24)} gün ${sa%24} sa`;
+};
 const fmtElapsed = ms => { const s=Math.max(0,Math.floor(ms/1000)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60; const p=n=>String(n).padStart(2,"0"); return h>0?`${p(h)}:${p(m)}:${p(sec)}`:`${p(m)}:${p(sec)}`; };
 // ÖNEMLİ DÜZELTME: Eskiden toISOString() kullanıyordu — bu HER ZAMAN UTC döndürür. Türkiye
 // UTC+3 olduğu için, yerel saatle 00:00-03:00 arası başlayan işler yanlışlıkla BİR ÖNCEKİ
@@ -230,14 +239,14 @@ function uzunDurusluKayitlar(){
   const esik = uzunDurusEsikMs();
   const sonuc = [];
   entriesArray().forEach(e=>{
-    if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON){
+    if(e.status==='duruş' && e.duruşTs && !isVerimlilikDisiDurus(e.duruşNedeni)){
       const ms = nowTick - e.duruşTs;
       if(ms>=esik) sonuc.push({ tur:'entry', makine:e.makine, isEmriNo:e.isEmriNo||e.talepNo, operatorName:e.operatorName, operatorUsername:e.operatorUsername, neden:e.duruşNedeni, ms, ref:e });
     }
   });
   tadilatArray().forEach(t=>{
     tadilatOperasyonlarArray(t).forEach(op=>{
-      if(op.status==='duruş' && op.duruşTs && op.duruşNedeni!==GUN_SONU_REASON){
+      if(op.status==='duruş' && op.duruşTs && !isVerimlilikDisiDurus(op.duruşNedeni)){
         const ms = nowTick - op.duruşTs;
         if(ms>=esik) sonuc.push({ tur:'tadilat', makine:op.makine, isEmriNo:t.uKodu, operatorName:op.operatorName, operatorUsername:op.operatorUsername, neden:op.duruşNedeni, ms, ref:op });
       }
@@ -431,6 +440,8 @@ function consumeStock(itemId, lotId, miktar, meta){
     const lot = (item.lots||{})[lotId]; if(!lot) return;
     const yeniBoy = (Number(lot.boy)||0) - Number(miktar);
     DB.ref(`stockItems/${itemId}/lots/${lotId}/boy`).set(yeniBoy);
+    DB.ref(`stockItems/${itemId}/sonHareketTs`).set(Date.now()); // Genel Bakış "Son Hareket" sütunu için denormalize alan
+    DB.ref(`stockItems/${itemId}/sonHareketAciklama`).set('Üretim tüketimi'+(meta.isEmriNo?' · '+meta.isEmriNo:''));
     const hid = uid();
     const hareket = {
       itemId, lotId, itemKod: item.kod||'', itemIsim: `${item.cap||''} (${lot.boy}${item.birim||'mm'} çubuk)`, miktar: -Number(miktar), birim: item.birim||'mm',
@@ -441,6 +452,8 @@ function consumeStock(itemId, lotId, miktar, meta){
   } else {
     const yeniMiktar = (Number(item.miktar)||0) - Number(miktar);
     DB.ref('stockItems/'+itemId+'/miktar').set(yeniMiktar);
+    DB.ref('stockItems/'+itemId+'/sonHareketTs').set(Date.now()); // Genel Bakış "Son Hareket" sütunu için denormalize alan
+    DB.ref('stockItems/'+itemId+'/sonHareketAciklama').set('Üretim tüketimi'+(meta.isEmriNo?' · '+meta.isEmriNo:''));
     const hid = uid();
     const hareket = {
       itemId, itemKod: item.kod||'', itemIsim: item.isim||'', miktar: -Number(miktar), birim: item.birim||'',
@@ -501,6 +514,8 @@ function stokGirisCubukEkle(){
   if(boy<=0){ toast('Boy (mm) girin'); return; }
   const lotId = uid();
   DB.ref(`stockItems/${itemId}/lots/${lotId}`).set({ boy }).then(()=>{
+    DB.ref(`stockItems/${itemId}/sonHareketTs`).set(Date.now()); // Genel Bakış "Son Hareket" sütunu için denormalize alan
+    DB.ref(`stockItems/${itemId}/sonHareketAciklama`).set('Yeni çubuk eklendi');
     toast('Yeni çubuk eklendi');
     stokGirisGeriDon();
   });
@@ -516,6 +531,8 @@ function stockGirisKaydet(){
       if(!result.committed){ toast('İşlem tamamlanamadı, tekrar deneyin'); return; }
       const sonrakiMiktar = Number(result.snapshot.val())||0;
       DB.ref('stockItems/'+itemId+'/siparisAcik').set(siparisAcik);
+      DB.ref('stockItems/'+itemId+'/sonHareketTs').set(Date.now()); // Genel Bakış "Son Hareket" sütunu için denormalize alan
+      DB.ref('stockItems/'+itemId+'/sonHareketAciklama').set('Stok girişi');
       const hid = uid();
       const hareket = {
         itemId, itemKod: item.kod||'', itemIsim: item.isim||'', miktar: miktar, birim: item.birim||'',
@@ -524,7 +541,7 @@ function stockGirisKaydet(){
       };
       DB.ref('stockHareketleri/'+hid).set(hareket);
       stockHareketleri[hid] = hareket;
-      stockItems[itemId] = { ...item, miktar: sonrakiMiktar, siparisAcik };
+      stockItems[itemId] = { ...item, miktar: sonrakiMiktar, siparisAcik, sonHareketTs: Date.now() };
       toast(`Giriş kaydedildi: ${item.kod||''} (+${miktar})`);
       stokGirisGeriDon();
     }).catch(err=>{
@@ -696,30 +713,31 @@ function addStockItem(){
   const kod = (document.getElementById('stok-kod')?.value||'').trim();
   if(!kod){ toast('Stok kodu girin'); return; }
   const id = uid();
+  const altLimit = Number(document.getElementById('stok-alt-limit')?.value||0);
   if(tur==='boy'){
     const cap = (document.getElementById('stok-cap')?.value||'').trim();
     const birim = document.getElementById('stok-birim-boy')?.value||'mm';
     const ilkBoy = Number(document.getElementById('stok-ilk-boy')?.value||0);
     if(ilkBoy<=0){ toast('İlk boy (mm) girin'); return; }
     const lotId = uid();
-    DB.ref('stockItems/'+id).set({ kod, tur:'boy', cap, birim, lots: { [lotId]: { boy: ilkBoy } } }).then(()=>{
+    DB.ref('stockItems/'+id).set({ kod, tur:'boy', cap, birim, altLimit, lots: { [lotId]: { boy: ilkBoy } } }).then(()=>{
       toast('Boy takipli stok kalemi eklendi (1 çubuk ile)');
-      ['stok-kod','stok-cap','stok-ilk-boy'].forEach(fid=>{ const el=document.getElementById(fid); if(el) el.value=''; });
+      ['stok-kod','stok-cap','stok-ilk-boy','stok-alt-limit'].forEach(fid=>{ const el=document.getElementById(fid); if(el) el.value=''; });
     });
   } else {
     const isim = (document.getElementById('stok-isim')?.value||'').trim();
     const birim = document.getElementById('stok-birim')?.value||'adet';
     const miktar = Number(document.getElementById('stok-miktar')?.value||0);
     const mode = document.getElementById('stok-mode')?.value||'oto';
-    DB.ref('stockItems/'+id).set({ kod, tur:'adet', isim, birim, miktar, mode }).then(()=>{
+    DB.ref('stockItems/'+id).set({ kod, tur:'adet', isim, birim, miktar, mode, altLimit }).then(()=>{
       toast('Stok kalemi eklendi');
-      ['stok-kod','stok-isim','stok-miktar'].forEach(fid=>{ const el=document.getElementById(fid); if(el) el.value=''; });
+      ['stok-kod','stok-isim','stok-miktar','stok-alt-limit'].forEach(fid=>{ const el=document.getElementById(fid); if(el) el.value=''; });
     });
   }
 }
 function updateStockItemField(id, field, val){
   if(!canManageStock()) return;
-  DB.ref('stockItems/'+id+'/'+field).set(field==='miktar' ? Number(val) : val);
+  DB.ref('stockItems/'+id+'/'+field).set((field==='miktar'||field==='altLimit') ? Number(val) : val);
 }
 function deleteStockItem(id){
   if(!canManageStock()) return;

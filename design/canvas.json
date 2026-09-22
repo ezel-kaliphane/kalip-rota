@@ -1,14 +1,31 @@
 {
   "pages": [
     { "id": "page-1", "name": "Stok" },
-    { "id": "page-2", "name": "Ayarlar" }
+    { "id": "page-2", "name": "Ayarlar" },
+    { "id": "page-3", "name": "Tasarım Dili" },
+    { "id": "page-4", "name": "Yön Seçimi" },
+    { "id": "page-5", "name": "Uygulama Kabuğu — Yeni Yapı" }
   ],
   "artboards": [
     { "file": "Simdi.dc.html", "title": "Stok — şimdi", "page": "page-1", "x": 0, "y": 0, "w": 1440, "h": 900 },
     { "file": "Main.dc.html", "title": "Stok — öneri", "page": "page-1", "x": 1560, "y": 0, "w": 1440, "h": 900, "is_interactive": true },
     { "file": "StokMobil.dc.html", "title": "Stok — öneri, telefon", "page": "page-1", "x": 3120, "y": 0, "w": 390, "h": 844, "is_interactive": true },
     { "file": "AyarlarSimdi.dc.html", "title": "Ayarlar — şimdi", "page": "page-2", "x": 0, "y": 0, "w": 1440, "h": 900 },
-    { "file": "Ayarlar.dc.html", "title": "Ayarlar — öneri", "page": "page-2", "x": 1560, "y": 0, "w": 1440, "h": 900, "is_interactive": true }
+    { "file": "Ayarlar.dc.html", "title": "Ayarlar — öneri", "page": "page-2", "x": 1560, "y": 0, "w": 1440, "h": 900, "is_interactive": true },
+    { "file": "TasarimDiliSimdi.dc.html", "title": "Tasarım Dili — şimdi", "page": "page-3", "x": 0, "y": 0, "w": 1440, "h": 1320 },
+    { "file": "BilesenKutuphanesi.dc.html", "title": "Bileşen Kütüphanesi — öneri", "page": "page-3", "x": 1560, "y": 0, "w": 1440, "h": 2620 },
+    { "file": "DirectionA.dc.html", "title": "Yön A — Açık, temiz SaaS", "page": "page-4", "x": 0, "y": 0, "w": 760, "h": 660 },
+    { "file": "DirectionB.dc.html", "title": "Yön B — Koyu, endüstriyel", "page": "page-4", "x": 840, "y": 0, "w": 760, "h": 660 },
+    { "file": "DirectionC.dc.html", "title": "Yön C — Sıcak nötr, yumuşak", "page": "page-4", "x": 1680, "y": 0, "w": 760, "h": 660 },
+    { "file": "StokTakibiOneri.dc.html", "title": "Stok Takibi", "page": "page-5", "x": 0, "y": 0, "w": 1440, "h": 920 },
+    { "file": "CanliPanelOneri.dc.html", "title": "Canlı Panel", "page": "page-5", "x": 1560, "y": 0, "w": 1440, "h": 920 },
+    { "file": "AnalizOneri.dc.html", "title": "Analiz", "page": "page-5", "x": 3120, "y": 0, "w": 1440, "h": 920 },
+    { "file": "TadilatOneri.dc.html", "title": "Tadilat", "page": "page-5", "x": 0, "y": 1040, "w": 1440, "h": 920 },
+    { "file": "IsYogunluguOneri.dc.html", "title": "İş Yoğunluğu", "page": "page-5", "x": 1560, "y": 1040, "w": 1440, "h": 920 },
+    { "file": "BildirimlerOneri.dc.html", "title": "Bildirimler", "page": "page-5", "x": 3120, "y": 1040, "w": 1440, "h": 920 },
+    { "file": "ExcelYuklemeOneri.dc.html", "title": "Excel Yükleme", "page": "page-5", "x": 0, "y": 2080, "w": 1440, "h": 920 },
+    { "file": "OperatorlerOneri.dc.html", "title": "Operatörler", "page": "page-5", "x": 1560, "y": 2080, "w": 1440, "h": 920 },
+    { "file": "AyarlarOneri.dc.html", "title": "Ayarlar", "page": "page-5", "x": 3120, "y": 2080, "w": 1440, "h": 920 }
   ],
   "annotations": [
     {
@@ -50,7 +67,55 @@
       "y": 960,
       "w": 620,
       "text": "ÖNERİ — 5 başlık, 13 madde\n\nKİŞİLER · MAKİNELER · ÜRETİM · VERİ · BİLDİRİMLER\nStok ekranıyla aynı ray deseni — uygulamada tek bir gezinme dili.\n\n18 → 13, çünkü:\n· 3 stok ayarı Stok → Kurulum'a taşındı\n· \"+ Kullanıcı Ekle\" ve \"+ Makine Ekle\" üst seviye sekme olmaktan çıkıp kendi ekranlarında birer butona indi\n\n\"Makine Erişimi\" Kişiler grubunda: gerçekten bir kişi ayarı.\n\nStok Excel yüklemeleri Veri Listeleri'nden çıkıp her modülün Kalemler bölümüne gitti; burada yalnızca üretim referans listeleri kaldı."
+    },
+    {
+      "id": "tasarimdili-simdi",
+      "page": "page-3",
+      "x": 0,
+      "y": 1360,
+      "w": 620,
+      "text": "ŞİMDİ — kurulu bir renk/font kimliği var (Oswald marka, Inter gövde, JetBrains Mono kod, turuncu #FF9046 accent) ama ORTAK BİR ÖLÇEK yok: 9 farklı radius, serbest font-size seçimi, .chip üç farklı anlamda (~52 kullanım), .sub-tab-btn yalnızca render-admin.js'de. Ekranlar aynı boyaları kullanıyor ama farklı kurallarla."
+    },
+    {
+      "id": "bilesenkutuphanesi-oneri",
+      "page": "page-3",
+      "x": 1560,
+      "y": 2660,
+      "w": 620,
+      "text": "ÖNERİ — aynı kimlik, tek ölçek. 6 basamaklı tipografi, 4 basamaklı radius/8px spacing. .chip artık YALNIZCA filtre; gezinme her zaman .tab-btn/.sub-tab-btn. Her bileşenin (buton/tab/chip/badge/switch) varsayılan-hover-disabled/aktif state'leri burada tanımlı — ekran redesign'ları bunları olduğu gibi kullanacak, yeniden icat etmeyecek."
+    },
+    {
+      "id": "yon-a-not",
+      "page": "page-4",
+      "x": 0,
+      "y": 700,
+      "w": 720,
+      "text": "YÖN A — Açık, temiz SaaS\n\nBeyaz zemin, tek net accent (indigo). Başlıklarda Manrope, gövdede Inter — Oswald yok.\n\nArtı: en yüksek okunabilirlik, aydınlık atölye/ofis ortamında ekran parlaması sorunsuz.\nEksi: uygulamanın bugünkü \"teknik/atölye\" kimliğinden en uzak olan; koyu tema tercih edenler için tema seçeneği gerekir."
+    },
+    {
+      "id": "yon-b-not",
+      "page": "page-4",
+      "x": 840,
+      "y": 700,
+      "w": 720,
+      "text": "YÖN B — Koyu, endüstriyel\n\nTuruncu yerine güvenlik sarısı (#FFC53D) accent, daha keskin köşeler (4-6px), Oswald başlıklarda büyük harf + geniş harf aralığı, kartlarda sol kenarlık vurgusu.\n\nArtı: bugünkü koyu/teknik kimliğin devamı ama daha keskin, daha \"kontrol odası\" hissi; mevcut kullanıcı alışkanlığına en yakın.\nEksi: sarı/amber uyarı renkleriyle (warn) çakışma riski var — ayrıştırma gerekir."
+    },
+    {
+      "id": "yon-c-not",
+      "page": "page-4",
+      "x": 1680,
+      "y": 700,
+      "w": 720,
+      "text": "YÖN C — Sıcak nötr, yumuşak\n\nKrem zemin, kilden turuncu (#C1653A) accent, büyük radius (16-20px), başlıklarda Sora.\n\nArtı: en \"insancıl\"/yorgunluk yaratmayan görünüm, uzun mesai için göz yorgunluğu düşük.\nEksi: bugünkü sert/teknik kimlikten en uzak ikincisi; iş emri kodları gibi yoğun veri ekranlarında yumuşaklık okunabilirliği düşürebilir — test edilmeli."
+    },
+    {
+      "id": "stok-takibi-yeni-not",
+      "page": "page-5",
+      "x": 0,
+      "y": 960,
+      "w": 1440,
+      "text": "YENİ YAPI KARARI — Banani'de üretilen bir referans ekran beğenildi, hem görsel kalite hem YAPI benimsendi, tüm admin ekranlarına uygulandı (soldan sağa, yukarıdan aşağıya: Stok Takibi · Canlı Panel · Analiz · Tadilat · İş Yoğunluğu · Bildirimler · Excel Yükleme · Operatörler · Ayarlar).\n\nDeğişenler:\n1) Üst sekmeler → SOL SABİT SİDEBAR (rozet sayılarıyla: Tadilat, Bildirimler) — her ekranda birebir aynı, tek gezinme dili.\n2) Takım & Sarf / Karbür / Malzeme → TEK 'Stok Takibi' ekranında sekmeler.\n3) Rapor + Makine Matrisi + Tamamlanan Kodlar → TEK 'Canlı Panel' ekranında birleşti (matrix + KPI + son tamamlananlar aynı ekranda).\n4) Ayarlar'ın 18 sekmesi 4 gruba indi: Genel & Kurulum / Makineler / Üretim Kuralları / Erişim & Yetkiler — Kişiler → Operatörler'e, Veri Listeleri → Excel Yükleme'ye, Bildirimlerim/Uyarılar → Bildirimler'e kendi nav öğesi olarak taşındı.\n\nKRİTİK: 'Zimmet' sekmesi (Stok Takibi) örnek veri — toolZimmet backend'de aktif değil, kodlarken kaldırılmalı ya da gerçek özelliğe bağlanmalı (bkz. BACKEND.md §9). Analiz ekranındaki not: Makine Detay Modalı kendi bağımsız formülünü kullanıyor (DATA_LOGIC_AUDIT.md Bulgu M2) — kodlarken bu tutarsızlık ele alınmalı, mockup sadece mevcut davranışı yansıtıyor.\n\nEtkilenen kısıtlar: STOK_BOLUM_TANIM ve stok bölüm anahtarları (adminTabPermissions/takimStokViews) bu birleşmeyle yeniden tasarlanmalı — TASARIM_ENVANTERI.md güncellendi."
     }
   ],
-  "launch": { "view": "canvas", "page": "page-1" }
+  "launch": { "view": "canvas", "page": "page-5" }
 }

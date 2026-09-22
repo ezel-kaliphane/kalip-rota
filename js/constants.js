@@ -27,10 +27,20 @@ const DEFAULT_DURUS_REASONS = ["Arıza / Bakım","Malzeme Bekleniyor","Kalıp/Ta
 const GUN_SONU_REASON = "Gün Sonu (Mesai Bitti, yarın devam edilecek)";
 const TADILAT_REASON = "Tadilat";
 const TADILAT_SONRASI_REASON = "Tadilat Sonrası Ayar";
+// PLANLI MOLA (2026-09-21) — operatörün kontrolünde OLMAYAN, önceden planlanmış duruş:
+// öğle arası, vardiya arası. Gün Sonu ile aynı muameleyi görür: süresi duruşToplamMs'e
+// değil excludedMs'e yazılır, dolayısıyla verimlilik paydasına girmez.
+// DİKKAT: listedeki "Operatör Molası" ile aynı şey DEĞİL — o operatörün kendi inisiyatifiyle
+// verdiği aradır ve verimlilikten düşülmez (bilinçli). Ayrımı bozmayın.
+const PLANLI_MOLA_REASON = "Planlı Mola (Öğle / Vardiya Arası)";
+// Verimlilik paydasına GİRMEYEN duruş nedenleri. excludedMs/excludedLog bu nedenler için
+// birikir; duruşToplamMs/durusLog için değil. Yeni bir "sayılmayan" neden eklenecekse
+// TEK yer burasıdır.
+function isVerimlilikDisiDurus(r){ return r===GUN_SONU_REASON || r===PLANLI_MOLA_REASON; }
 function getDurusReasons(){
   const custom = (STATE.durusReasons && STATE.durusReasons.length>0) ? STATE.durusReasons : DEFAULT_DURUS_REASONS;
   const hasTadilat = custom.some(r=>isTadilatReason(r));
-  return [...custom, ...(hasTadilat?[]:[TADILAT_REASON]), GUN_SONU_REASON, "Diğer"];
+  return [...custom, ...(hasTadilat?[]:[TADILAT_REASON]), PLANLI_MOLA_REASON, GUN_SONU_REASON, "Diğer"];
 }
 // Admin'in Duruş Nedenleri listesine "Tadilat", "Tadilat Duruşu" gibi kendi yazdığı bir metin
 // eklemiş olması ihtimaline karşı esnek (bulanık) eşleştirme — birebir "Tadilat" yazmasına gerek yok.
@@ -43,12 +53,12 @@ function isTadilatReason(r){
 function isTadilatRelated(r){ return !!r && String(r).toLowerCase().includes('tadilat'); }
 function effectiveDurusMs(e){
   let d = e.duruşToplamMs||0;
-  if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON) d += Math.max(0, nowTick - e.duruşTs);
+  if(e.status==='duruş' && e.duruşTs && !isVerimlilikDisiDurus(e.duruşNedeni)) d += Math.max(0, nowTick - e.duruşTs);
   return d;
 }
 function effectiveExcludedMs(e){
   let d = e.excludedMs||0;
-  if(e.status==='duruş' && e.duruşTs && e.duruşNedeni===GUN_SONU_REASON) d += Math.max(0, nowTick - e.duruşTs);
+  if(e.status==='duruş' && e.duruşTs && isVerimlilikDisiDurus(e.duruşNedeni)) d += Math.max(0, nowTick - e.duruşTs);
   return d;
 }
 function effectiveDurusReason(e){
@@ -56,7 +66,7 @@ function effectiveDurusReason(e){
   // önceki (Gün Sonu'ndan önceki) GERÇEK bir duruştan kalma süre birikmiş olabilir.
   // Bu durum sadece "şu an duraklı" iken değil, iş sonradan devam edip bitse bile
   // kalıcı olarak veride kalıyor — o yüzden statüden bağımsız olarak düzeltiyoruz.
-  if(e.duruşNedeni===GUN_SONU_REASON && (e.duruşToplamMs||0)>0) return 'Belirtilmemiş (önceki duraklama)';
+  if(isVerimlilikDisiDurus(e.duruşNedeni) && (e.duruşToplamMs||0)>0) return 'Belirtilmemiş (önceki duraklama)';
   return e.duruşNedeni || 'Belirtilmemiş';
 }
 // H DÜZELTMESİ — Duruş Olay Listesi: Eskiden bir kaydın duruş bilgisi TEK bir kümülatif sayı
@@ -89,7 +99,7 @@ function entryDurusEvents(e){
   } else if((e.duruşToplamMs||0) > 0){
     events.push({ neden: effectiveDurusReason(e), sureMs: e.duruşToplamMs, ts: e.startTs });
   }
-  if(e.status==='duruş' && e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON){
+  if(e.status==='duruş' && e.duruşTs && !isVerimlilikDisiDurus(e.duruşNedeni)){
     const liveExtra = Math.max(0, nowTick - e.duruşTs);
     if(liveExtra>0) events.push({ neden: e.duruşNedeni||'Belirtilmemiş', sureMs: liveExtra, ts: e.duruşTs, live:true });
   }
@@ -109,9 +119,10 @@ function entryExcludedEvents(e){
   } else if((e.excludedMs||0) > 0){
     events.push({ neden: GUN_SONU_REASON, sureMs: e.excludedMs, ts: e.startTs });
   }
-  if(e.status==='duruş' && e.duruşTs && e.duruşNedeni===GUN_SONU_REASON){
+  if(e.status==='duruş' && e.duruşTs && isVerimlilikDisiDurus(e.duruşNedeni)){
     const liveExtra = Math.max(0, nowTick - e.duruşTs);
-    if(liveExtra>0) events.push({ neden: GUN_SONU_REASON, sureMs: liveExtra, ts: e.duruşTs, live:true });
+    // Canlı olayın nedeni artık sabit değil: Gün Sonu da olabilir Planlı Mola da.
+    if(liveExtra>0) events.push({ neden: e.duruşNedeni||GUN_SONU_REASON, sureMs: liveExtra, ts: e.duruşTs, live:true });
   }
   return events;
 }

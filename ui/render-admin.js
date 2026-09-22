@@ -159,7 +159,10 @@ function renderTadilatAkisModal(){
 function renderAnalizSefLive(){
   const liveEntries = [...entriesArray(), ...buildTadilatSynthetic()].filter(e=>!isFasonMachine(e.makine));
   const liveMachines = allMachines().filter(m=>!isFasonMachine(m.code));
-  let calisiyor=0, durusta=0, gunsonu=0, bosta=0;
+  // planliDurus = gün sonu + planlı mola (isVerimlilikDisiDurus'un tanımladığı küme).
+  // durusta ise artık YALNIZCA plansız duruş — öğle arasında yarım atölyenin
+  // "Duruşta" görünmesi panoda alarm gibi okunuyordu.
+  let calisiyor=0, durusta=0, planliDurus=0, bosta=0;
   liveMachines.forEach(m=>{
     const label = `${m.code} · ${m.name}`;
     const tadilatHere = tadilatAktifOnMachine(label);
@@ -168,7 +171,7 @@ function renderAnalizSefLive(){
     const stoppedEntries = machineEntries.filter(e=>e.status==='duruş');
     const stopped = !tadilatHere && !running && stoppedEntries.length>0;
     if(tadilatHere || running) calisiyor++;
-    else if(stopped){ (stoppedEntries.every(e=>e.duruşNedeni===GUN_SONU_REASON) ? gunsonu++ : durusta++); }
+    else if(stopped){ (stoppedEntries.every(e=>isVerimlilikDisiDurus(e.duruşNedeni)) ? planliDurus++ : durusta++); }
     else bosta++;
   });
   const uzun = uzunDurusluKayitlar();
@@ -179,7 +182,7 @@ function renderAnalizSefLive(){
   const bugunEntries = liveEntries.filter(e => e.startTs < dayEndMs && (e.endTs||nowTick) >= dayStartMs);
   const bugunDurusAgg = {};
   collectDurusEvents(bugunEntries).forEach(ev=>{
-    if(ev.neden===GUN_SONU_REASON || !Number.isFinite(ev.sureMs) || ev.sureMs<=0) return;
+    if(isVerimlilikDisiDurus(ev.neden) || !Number.isFinite(ev.sureMs) || ev.sureMs<=0) return;
     const overlap = msOverlap(ev.ts, ev.sureMs, dayStartMs, dayEndMs);
     if(overlap<=0) return;
     (bugunDurusAgg[ev.neden] ||= { ms:0, count:0 });
@@ -201,7 +204,7 @@ function renderAnalizSefLive(){
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px">
       ${counter('Çalışıyor', calisiyor, 'var(--success)')}
       ${counter('Duruşta', durusta, 'var(--warn)')}
-      ${counter('Gün Sonu Bekliyor', gunsonu, 'var(--gunsonu)')}
+      ${counter('Planlı Duruş', planliDurus, 'var(--gunsonu)')}
       ${counter('Boşta', bosta, 'var(--text-muted)')}
     </div>
     <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:14px">
@@ -309,6 +312,7 @@ function renderAnalizKisiBazli(){
   html += `<div style="display:flex;gap:18px;margin-top:10px;padding-top:12px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-muted)">
     <span style="display:flex;align-items:center;gap:6px"><i style="width:9px;height:9px;border-radius:2px;background:var(--success);display:inline-block"></i>Çalışma</span>
     <span style="display:flex;align-items:center;gap:6px"><i style="width:9px;height:9px;border-radius:2px;background:var(--warn);display:inline-block"></i>Duruş</span>
+    <span style="display:flex;align-items:center;gap:6px"><i style="width:9px;height:9px;border-radius:2px;background:var(--text-faint, #3a4148);display:inline-block"></i>Gün sonu / planlı mola (hariç)</span>
     <span style="margin-left:auto">Mesai bitişi ${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')} · sonrası fazla mesai sayılır</span>
   </div></div>`;
 
@@ -380,7 +384,7 @@ function renderOperatorGunGunTablosu(op){
       <span><span style="display:inline-block;width:10px;height:10px;background:var(--success);border-radius:2px;margin-right:4px"></span>Çalışma</span>
       <span><span style="display:inline-block;width:10px;height:10px;background:var(--warn);border-radius:2px;margin-right:4px"></span>Duruş</span>
       <span><span style="display:inline-block;width:10px;height:10px;background:var(--panel-alt);border:1px solid var(--border);border-radius:2px;margin-right:4px"></span>Boşta / kayıt yok</span>
-      <span><span style="display:inline-block;width:10px;height:10px;background:#3a4148;border-radius:2px;margin-right:4px"></span>Gün Sonu (hariç tutulan)</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--text-faint, #3a4148);border-radius:2px;margin-right:4px"></span>Gün sonu / planlı mola (hariç tutulan)</span>
     </div>`;
 }
 /* Analiz sekmesi — "Operatör Analizi" görünümü: tek bir operatörü seçip performansına derinlemesine
@@ -735,7 +739,7 @@ function renderMalzemeStokAyarlar(){
             <div style="font-size:11.5px;color:var(--text-muted)">Kapatırsan bu modülle ilgili hiçbir alan/ekran operatörlere görünmez, hiçbir stok işlemi yapılmaz — tek tuşla tamamen devre dışı kalır.</div>
           </div>
         </label>
-        <div style="font-size:12px;color:var(--text-muted);max-width:640px">Stok kalemi yönetimi ve tüketim geçmişi için üst menüdeki <b>Stok → Malzeme (çelik)</b> bölümüne bak.</div>`;
+        <div style="font-size:12px;color:var(--text-muted);max-width:640px">Stok kalemi yönetimi ve tüketim geçmişi için üst menüdeki <b>Stok → Hammadde</b> bölümüne bak.</div>`;
 }
 
 let malzemeAramaMetni = '';
@@ -762,6 +766,7 @@ function renderMalzemeStokScreen(){
               <input id="stok-cap" placeholder="Çap (ör. Ø18)" style="width:120px">
               <select id="stok-birim-boy" style="width:90px"><option value="mm">mm</option><option value="cm">cm</option></select>
               <input id="stok-ilk-boy" type="number" placeholder="İlk çubuğun boyu" style="width:150px">
+              <input id="stok-alt-limit" type="number" placeholder="Alt limit (toplam boy)" style="width:160px">
             </div>
             <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Aynı kod+çap için sonradan başka çubuk (lot) eklemek istersen, aşağıdaki listeden o kalemin altına "+ Yeni Çubuk" ile ekleyebilirsin.</div>
           ` : `
@@ -771,6 +776,7 @@ function renderMalzemeStokScreen(){
               <select id="stok-birim" style="width:100px"><option value="adet">Adet</option><option value="kg">Kg</option></select>
               <input id="stok-miktar" type="number" placeholder="Başlangıç miktarı" style="width:140px">
               <select id="stok-mode" style="width:170px"><option value="oto">Otomatik (Adet kadar)</option><option value="manuel">Manuel (operatör girer)</option></select>
+              <input id="stok-alt-limit" type="number" placeholder="Alt limit" style="width:110px">
             </div>
           `}
           <button class="btn-primary" style="width:auto;padding:10px 18px;margin-top:10px" onclick="addStockItem()">+ Ekle</button>
@@ -784,9 +790,12 @@ function renderMalzemeStokScreen(){
             if(it.tur==='boy'){
               const lots = lotsArray(it);
               return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
                   <div><span class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)}</span> <span style="color:var(--text-muted);font-size:12.5px">${esc(it.cap||'')} · Boy Takip · ${lots.length} çubuk</span></div>
-                  <button class="del-btn" onclick="deleteStockItem('${it.id}')" title="Kalemi tamamen sil">${ico('trash',14)}</button>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted)">Alt limit <input type="number" value="${it.altLimit||0}" style="width:90px" onchange="updateStockItemField('${it.id}','altLimit',this.value)"></label>
+                    <button class="del-btn" onclick="deleteStockItem('${it.id}')" title="Kalemi tamamen sil">${ico('trash',14)}</button>
+                  </div>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:6px">
                   ${lots.length===0 ? `<div style="font-size:12px;color:var(--text-muted)">Çubuk yok — yeni çubuk eklemek için Kod ile Giriş'ten ara.</div>` : lots.map(lot=>`
@@ -807,6 +816,7 @@ function renderMalzemeStokScreen(){
                 <option value="oto" ${it.mode==='oto'?'selected':''}>Otomatik (Adet kadar)</option>
                 <option value="manuel" ${it.mode==='manuel'?'selected':''}>Manuel (operatör girer)</option>
               </select>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted)">Alt limit <input type="number" value="${it.altLimit||0}" style="width:90px" onchange="updateStockItemField('${it.id}','altLimit',this.value)"></label>
               <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-muted);cursor:pointer">
                 <input type="checkbox" style="width:auto" ${it.siparisAcik?'checked':''} onchange="toggleStockItemSiparisAcik('${it.id}')">
                 Sipariş açık
@@ -928,9 +938,10 @@ function renderMalzemeStokScreen(){
    kalır (toolCatalog* / karbur* / stockItems*), hiçbiri veri paylaşmaz. Yetkiler değişmedi:
    takım ve karbür için mevcut sekme izinleri, malzeme için canManageStock() (SuperAdmin+Şef). */
 const STOK_BOLUMLERI = [
+  { key:'genel',   ikon:'chart',  label:'Genel Bakış',     alt:'üç kaynak bir arada',  gor:()=>true },
   { key:'takim',   ikon:'wrench', label:'Takım & Sarf',    alt:'freze, matkap, sarf',  gor:()=>isAdminTabVisible('takimStok') },
   { key:'karbur',  ikon:'elmas',  label:'Karbür',          alt:'çubuk + tel erozyon',  gor:()=>isAdminTabVisible('karbur') },
-  { key:'malzeme', ikon:'katman', label:'Malzeme (çelik)', alt:'boy ve adet takibi',   gor:()=>canManageStock() }
+  { key:'malzeme', ikon:'katman', label:'Hammadde', alt:'boy ve adet takibi',   gor:()=>canManageStock() }
 ];
 
 /* ---- Bölümler: her modülde aynı fiiller, aynı sırada ----
@@ -986,7 +997,7 @@ const STOK_BOLUM_TANIM = {
     ]
   }
 };
-let stokSubView = 'takim';
+let stokSubView = 'genel';
 let malzemeSubView = 'durum'; // 'durum' | 'giris' | 'hareketler' | 'kodgiris' | 'excel' — bkz. renderMalzemeStokScreen
 function setMalzemeSubView(k){
   malzemeSubView = k;
@@ -1008,25 +1019,364 @@ function setStokSubView(v){
   if(v==='malzeme') malzemeHareketGerekli();
   render();
 }
+/* ==================== GENEL BAKIŞ — üç kaynağı birleştiren özet (2026-09-15) ====================
+   Takım (toolCatalog+toolStock), Karbür (karburKatalog+karburStok) ve Malzeme (stockItems) — üç
+   ayrı veri kaynağı, ortak bir satır şekline (kod/malzeme/tür/stok/altLimit/durum/sonHareket)
+   normalize edilip TEK bir tabloda gösteriliyor. VERİ KATMANI YİNE AYRI (STOK_BOLUMLERI'nin
+   üstündeki yorumla aynı ilke) — bu sadece bir okuma/özet katmanı, hiçbir yazma işlemi burada
+   yapılmıyor. Erişim kontrolü MEVCUT kurallarla birebir aynı (isAdminTabVisible/canManageStock) —
+   kişi bazlı ince ayarlar (takimStokViews gibi) burada GENİŞLETİLMEDİ, sadece kaynağın modül
+   seviyesinde hiç görünüp görünmeyeceği kontrol ediliyor. */
+let stokGenelArama = '';
+function stokGenelSatirlar(){
+  const satirlar = [];
+  if(isAdminTabVisible('takimStok')){
+    toolCatalogArray().forEach(it=>{
+      const stok = Number((toolStock[it.id]||{}).miktar)||0;
+      const altLimit = Number(it.altLimit)||0;
+      satirlar.push({
+        id:'takim_'+it.id, kod: it.canias||it.kod||it.id, malzeme: it.ad||it.isim||'—', tur:'Takım', turEtiket:'takım',
+        stokText: stok+' adet', stokSayi: stok, altLimit,
+        durum: stok<0 ? 'negatif' : (altLimit>0 && stok<altLimit) ? 'altlimit' : 'normal',
+        sonHareketTs: Number((toolStock[it.id]||{}).sonHareketTs)||0,
+        sonHareketAciklama: (toolStock[it.id]||{}).sonHareketAciklama||'', kaynak:'Takım & Sarf'
+      });
+    });
+  }
+  if(isAdminTabVisible('karbur')){
+    karburKatalogArray().forEach(k=>{
+      const stok = karburStokAdet(k.id);
+      const altLimit = Number(k.altLimit)||0;
+      satirlar.push({
+        id:'karbur_'+k.id, kod:k.kod, malzeme: `Ø${karburFmt(k.disCap)} ${k.kalite||''}`.trim()||'—', tur:'Karbür',
+        turEtiket: (k.kullanim==='kesim') ? 'kesim' : 'adet',
+        stokText: stok+' adet', stokSayi: stok, altLimit,
+        durum: stok<0 ? 'negatif' : (altLimit>0 && stok<altLimit) ? 'altlimit' : 'normal',
+        sonHareketTs: Number((karburStok[k.id]||{}).sonHareketTs)||0,
+        sonHareketAciklama: (karburStok[k.id]||{}).sonHareketAciklama||'', kaynak:'Karbür'
+      });
+    });
+  }
+  if(canManageStock()){
+    stockItemsArray().forEach(it=>{
+      const altLimit = Number(it.altLimit)||0;
+      let stok, stokText;
+      let turEtiket;
+      if(it.tur==='boy'){
+        stok = lotsArray(it).reduce((s,l)=>s+(Number(l.boy)||0),0);
+        stokText = stok+' '+(it.birim||'mm');
+        turEtiket = lotsArray(it).length+' lot';
+      } else {
+        stok = Number(it.miktar)||0;
+        stokText = stok+' '+(it.birim||'adet');
+        turEtiket = 'adet';
+      }
+      satirlar.push({
+        id:'malzeme_'+it.id, kod: it.kod||it.id, malzeme: it.isim || it.cap || '—', tur:'Hammadde', turEtiket,
+        stokText, stokSayi: stok, altLimit,
+        durum: stok<0 ? 'negatif' : (altLimit>0 && stok<altLimit) ? 'altlimit' : 'normal',
+        sonHareketTs: Number(it.sonHareketTs)||0, sonHareketAciklama: it.sonHareketAciklama||'', kaynak:'Hammadde'
+      });
+    });
+  }
+  return satirlar;
+}
+/* Genel Bakış'ın "Son Hareketler" paneli — item üzerindeki denormalize sonHareketTs/Aciklama
+   YETERLİ değil (kim/ne kadar bilgisi yok), bu yüzden üç hareket log'undan GERÇEK son kayıtları
+   çekiyoruz. Bulk okuma DEĞİL — hepsi .indexOn:["ts"] (database.rules.json) sayesinde
+   orderByChild('ts').limitToLast(N) ile ucuz, hedefli bir sorgu (mevcut "maliyet optimizasyonu"
+   deseniyle aynı ilke — bkz. BACKEND.md §8). Sadece bir kere yükleniyor, ekran açık kaldığı
+   sürece yeniden sorgulanmıyor (diğer ensureXLoaded fonksiyonlarıyla aynı desen). */
+let stokSonHareketler = null;
+let stokSonHareketlerLoading = false;
+/* İkon, kaynak modüle değil EYLEM türüne göre seçiliyor (kullanıcının verdiği tam referansla
+   birebir): giriş=aşağı ok, çıkış=yukarı ok, karbür tahsis=makas, sayım=pano-onay. */
+function stokHareketSvg(eylem){
+  const yollar = {
+    giris:  'M19 14l-7 7m0 0l-7-7m7 7V3',
+    cikis:  'M5 10l7-7m0 0l7 7m-7-7v18',
+    tahsis: 'M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879a3 3 0 11-4.242-4.242L10.758 10.5m1.363 1.363L19 19',
+    sayim:  'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'
+  };
+  const d = yollar[eylem] || yollar.cikis;
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"></path></svg>`;
+}
+function ensureStokSonHareketlerLoaded(cb){
+  if(stokSonHareketler || stokSonHareketlerLoading) return;
+  stokSonHareketlerLoading = true;
+  Promise.all([
+    DB.ref('toolMoves').orderByChild('ts').limitToLast(6).once('value').catch(()=>null),
+    DB.ref('karburHareketleri').orderByChild('ts').limitToLast(6).once('value').catch(()=>null),
+    DB.ref('stockHareketleri').orderByChild('ts').limitToLast(6).once('value').catch(()=>null)
+  ]).then(([toolSnap, karburSnap, malzemeSnap])=>{
+    const hepsi = [];
+    if(toolSnap) toolSnap.forEach(c=>{
+      const v = c.val();
+      const eylem = v.tip==='giris' ? 'giris' : 'cikis';
+      hepsi.push({ kod: v.canias||'', baslik: (eylem==='giris'?'Stok girişi':(v.makine?v.makine+' çıkışı':'Takım çıkışı')),
+        altBaslik: `${v.canias||''} ${v.miktar>0?'+':''}${v.miktar} · ${v.operatorName||''}`.trim(), ts: v.ts||0, svg: stokHareketSvg(eylem) });
+    });
+    if(karburSnap) karburSnap.forEach(c=>{
+      const v = c.val();
+      if(v.tip==='tahsis') hepsi.push({ kod: v.kod||'', baslik:'Karbür tahsis'+(v.isEmriNo?' · '+v.isEmriNo:''),
+        altBaslik: `${v.parca||v.kod||''}${v.mm?' · '+v.mm+'mm':''}`, ts: v.ts||0, svg: stokHareketSvg('tahsis') });
+      else { const eylem = v.tip==='giris' ? 'giris' : v.tip==='sayim' ? 'sayim' : 'cikis';
+        hepsi.push({ kod: v.kod||'', baslik: v.tip==='giris'?'Stok girişi':v.tip==='sayim'?'Sayım düzeltme':'Karbür hareketi',
+        altBaslik: `${v.kod||''} ${v.adet>0?'+':''}${v.adet||0} · ${v.operatorName||''}`.trim(), ts: v.ts||0, svg: stokHareketSvg(eylem) }); }
+    });
+    if(malzemeSnap) malzemeSnap.forEach(c=>{
+      const v = c.val();
+      const eylem = v.tip==='giris' ? 'giris' : v.tip==='sayim' ? 'sayim' : 'cikis';
+      hepsi.push({ kod: v.itemKod||'', baslik: v.tip==='giris'?'Stok girişi':v.tip==='sayim'?'Sayım düzeltme':'Stok hareketi',
+        altBaslik: `${v.itemKod||''} ${v.miktar>0?'+':''}${v.miktar||0}${v.birim||''} · ${v.operatorName||''}`.trim(), ts: v.ts||0, svg: stokHareketSvg(eylem) });
+    });
+    hepsi.sort((a,b)=>b.ts-a.ts);
+    stokSonHareketler = hepsi.slice(0,6);
+    stokSonHareketlerLoading = false;
+    if(cb) cb();
+  }).catch(()=>{ stokSonHareketlerLoading = false; stokSonHareketler = []; });
+}
+let stokGenelTurFiltre = 'tumu';   // 'tumu' | 'Takım' | 'Karbür' | 'Hammadde'
+let stokGenelSiralama = 'artan';   // 'artan' | 'azalan' — stok miktarına göre
+let stokGenelSayfa = 1;
+const STOK_GENEL_SAYFA_BOYUT = 50;
+function stokGenelSiralamaDegistir(){
+  stokGenelSiralama = stokGenelSiralama==='artan' ? 'azalan' : 'artan';
+  stokGenelSayfa = 1;
+  render();
+}
+function stokGenelTurDegistir(v){ stokGenelTurFiltre = v; stokGenelSayfa = 1; render(); }
+function stokGenelSayfaGit(n){ stokGenelSayfa = n; render(); }
+/* Genel Bakış'ın üst başlığındaki "Excel Yükle"/"Stok Girişi" butonları — üç kaynağı birden
+   temsil eden TEK bir hedef olmadığı için, o an seçili Tür filtresine (ya da varsayılan olarak
+   Hammadde'ye) yönlendiriyor; ilgili modülün zaten var olan Excel/Giriş bölümünü açıyor. */
+function stokGenelHedefModul(){ return stokGenelTurFiltre==='Takım' ? 'takim' : stokGenelTurFiltre==='Karbür' ? 'karbur' : 'malzeme'; }
+// hedefOverride: üst başlık her sekmede sabit kaldığı için (bkz. renderStokScreen), o an
+// hangi modül açıksa butonlar ONA gitsin diye kullanılıyor — Genel Bakış'tayken override
+// verilmez, filtre bazlı stokGenelHedefModul() devreye girer.
+function stokGenelExcelAc(hedefOverride){
+  const hedef = hedefOverride || stokGenelHedefModul();
+  setStokSubView(hedef);
+  if(hedef==='takim') setToolAdminSubView('excel'); else if(hedef==='karbur') karburSetSubView('excel'); else setMalzemeSubView('excel');
+}
+function stokGenelGirisAc(hedefOverride){
+  const hedef = hedefOverride || stokGenelHedefModul();
+  setStokSubView(hedef);
+  if(hedef==='takim') setToolAdminSubView('giris'); else if(hedef==='karbur') karburSetSubView('giris'); else setMalzemeSubView('giris');
+}
+function stokGenelZamanKisa(ts){
+  if(!ts) return '—';
+  const fark = Date.now()-ts;
+  const dk = Math.floor(fark/60000);
+  if(dk<1) return 'az önce';
+  if(dk<60) return dk+' dk';
+  const sa = Math.floor(dk/60);
+  if(sa<24) return sa+' sa';
+  return Math.floor(sa/24)+' gün';
+}
+function renderStokGenelBakis(){
+  ensureToolCatalogLoaded(()=>safeRender());
+  ensureToolStockLoaded(()=>safeRender());
+  ensureKarburKatalogLoaded(()=>safeRender());
+  ensureKarburStokLoaded(()=>safeRender());
+  ensureStokSonHareketlerLoaded(()=>safeRender());
+  const tumu = stokGenelSatirlar();
+  const q = trNorm(stokGenelArama.trim());
+  let satirlar = q ? tumu.filter(s=>trNorm(`${s.kod} ${s.malzeme}`).includes(q)) : tumu.slice();
+  if(stokGenelTurFiltre!=='tumu') satirlar = satirlar.filter(s=>s.tur===stokGenelTurFiltre);
+  satirlar.sort((a,b)=> stokGenelSiralama==='artan' ? a.stokSayi-b.stokSayi : b.stokSayi-a.stokSayi);
+  const kritik = tumu.filter(s=>s.durum!=='normal').sort((a,b)=>a.stokSayi-b.stokSayi).slice(0,8);
+  const sayTakim = tumu.filter(s=>s.tur==='Takım').length;
+  const sayKarbur = tumu.filter(s=>s.tur==='Karbür').length;
+  const sayMalzeme = tumu.filter(s=>s.tur==='Hammadde').length;
+  const sayKritik = tumu.filter(s=>s.durum!=='normal').length;
+  const sayNegatif = tumu.filter(s=>s.durum==='negatif').length;
+  const fireSayisi = karburFireArray().length;
+
+  const toplamSayfa = Math.max(1, Math.ceil(satirlar.length/STOK_GENEL_SAYFA_BOYUT));
+  const sayfa = Math.min(stokGenelSayfa, toplamSayfa);
+  const sayfaSatirlari = satirlar.slice((sayfa-1)*STOK_GENEL_SAYFA_BOYUT, sayfa*STOK_GENEL_SAYFA_BOYUT);
+
+  const durumPill = s => s.durum==='negatif'
+    ? `<span class="sg-pill" style="color:var(--danger-text);background:var(--danger-bg);border:1px solid var(--danger-border)"><span style="width:6px;height:6px;border-radius:50%;background:var(--danger)"></span>Negatif</span>`
+    : s.durum==='altlimit'
+    ? `<span class="sg-pill" style="color:var(--warn-text);background:var(--warn-bg);border:1px solid var(--warn-border)"><span style="width:6px;height:6px;border-radius:50%;background:var(--warn)"></span>Alt limit</span>`
+    : `<span class="sg-pill" style="color:var(--success-text);background:var(--success-bg);border:1px solid var(--success-border)"><span style="width:6px;height:6px;border-radius:50%;background:var(--success)"></span>Normal</span>`;
+
+  // Sayfa numarası düğmeleri — çok sayfa varsa ilk/son + aktifin etrafındaki birkaç sayfa gösterilir.
+  const sayfaNolari = (()=>{
+    if(toplamSayfa<=7) return Array.from({length:toplamSayfa},(_,i)=>i+1);
+    const set = new Set([1,2,toplamSayfa-1,toplamSayfa,sayfa-1,sayfa,sayfa+1].filter(n=>n>=1&&n<=toplamSayfa));
+    return Array.from(set).sort((a,b)=>a-b);
+  })();
+
+  const kpiAktifMi = tur => stokGenelTurFiltre===tur;
+  const kpiIkon = (i,aktif) => `<span style="width:40px;height:40px;border-radius:8px;background:${aktif?'color-mix(in srgb,currentColor 15%,transparent)':'var(--panel-alt)'};display:flex;align-items:center;justify-content:center;color:${aktif?'#fff':'var(--text-muted)'};flex:none">${i}</span>`;
+  const kpiOk = aktif => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${aktif?'#fff':'var(--text-subtle)'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"></path><path d="M7 7h10v10"></path></svg>`;
+  const kpiTikla = tur => `onclick="stokGenelTurDegistir('${stokGenelTurFiltre===tur?'tumu':tur}')" style="cursor:pointer"`;
+  return `
+    <div class="stok-genel-kpi">
+      <div class="sgk-card ${kpiAktifMi('Hammadde')?'aktif':''}" ${kpiTikla('Hammadde')}>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">${kpiIkon(ico('katman',16),kpiAktifMi('Hammadde'))}${kpiOk(kpiAktifMi('Hammadde'))}</div>
+        <div style="margin-top:22px"><div class="sgk-num">${sayMalzeme}</div><div class="sgk-label">Hammadde Kalemi</div>
+        <div style="font-size:12px;margin-top:4px;color:${kpiAktifMi('Hammadde')?'color-mix(in srgb,currentColor 70%,transparent)':'var(--text-subtle)'}">stockItems</div></div>
+      </div>
+      <div class="sgk-card ${kpiAktifMi('Takım')?'aktif':''}" ${kpiTikla('Takım')}>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">${kpiIkon(ico('wrench',16),kpiAktifMi('Takım'))}${kpiOk(kpiAktifMi('Takım'))}</div>
+        <div style="margin-top:22px"><div class="sgk-num">${sayTakim}</div><div class="sgk-label">Takım & Sarf Kalemi</div>
+        <div style="font-size:12px;margin-top:4px;color:${kpiAktifMi('Takım')?'color-mix(in srgb,currentColor 70%,transparent)':'var(--text-subtle)'}">toolCatalog</div></div>
+      </div>
+      <div class="sgk-card ${kpiAktifMi('Karbür')?'aktif':''}" ${kpiTikla('Karbür')}>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">${kpiIkon(ico('elmas',16),kpiAktifMi('Karbür'))}${kpiOk(kpiAktifMi('Karbür'))}</div>
+        <div style="margin-top:22px"><div class="sgk-num">${sayKarbur}</div><div class="sgk-label">Karbür Kalemi</div>
+        <div style="font-size:12px;margin-top:4px;color:${kpiAktifMi('Karbür')?'color-mix(in srgb,currentColor 70%,transparent)':'var(--text-subtle)'}">Fire havuzu: ${fireSayisi} parça</div></div>
+      </div>
+      <div class="sgk-card uyari">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <span style="width:40px;height:40px;border-radius:8px;background:color-mix(in srgb,currentColor 15%,transparent);display:flex;align-items:center;justify-content:center">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+          </span>
+          <span style="background:var(--panel);color:var(--danger-text);font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:6px">ACİL</span>
+        </div>
+        <div style="margin-top:22px"><div class="sgk-num">${sayKritik}</div><div class="sgk-label">Alt Limit / Negatif</div>
+        <div style="font-size:12px;margin-top:4px;color:color-mix(in srgb,currentColor 85%,transparent)">${sayNegatif} negatif stok · işlem devam ediyor</div></div>
+      </div>
+    </div>
+    <div class="stok-genel-body">
+      <div class="sg-table-wrap">
+        <div style="display:flex;align-items:center;gap:10px;padding:16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+          <span style="font-size:15px;font-weight:700;color:var(--text)">Stok Kalemleri</span>
+          <span style="font-size:12px;font-weight:600;color:var(--text-muted);background:var(--panel-alt);border-radius:6px;padding:2px 8px">${satirlar.length} / ${tumu.length}</span>
+          <div style="display:flex;gap:8px;margin-left:auto">
+            <select class="sg-filtre-chip" style="width:auto" onchange="stokGenelTurDegistir(this.value)">
+              <option value="tumu" ${stokGenelTurFiltre==='tumu'?'selected':''}>Tür: Tümü</option>
+              <option value="Hammadde" ${stokGenelTurFiltre==='Hammadde'?'selected':''}>Tür: Hammadde</option>
+              <option value="Takım" ${stokGenelTurFiltre==='Takım'?'selected':''}>Tür: Takım & Sarf</option>
+              <option value="Karbür" ${stokGenelTurFiltre==='Karbür'?'selected':''}>Tür: Karbür</option>
+            </select>
+            <button class="sg-filtre-chip" onclick="stokGenelSiralamaDegistir()">Stok: ${stokGenelSiralama==='artan'?'Artan':'Azalan'}</button>
+          </div>
+        </div>
+        <table><thead><tr><th>Kod</th><th>Malzeme</th><th>Tür</th><th>Stok</th><th>Alt Limit</th><th>Durum</th><th>Son Hareket</th></tr></thead><tbody>
+          ${sayfaSatirlari.length===0 ? `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px">${stokGenelArama.trim()?'Aramayla eşleşen kalem yok.':'Henüz erişebildiğin bir stok kaynağı yok.'}</td></tr>` : sayfaSatirlari.map(s=>`
+            <tr class="${s.durum==='negatif'?'sg-neg':''}">
+              <td class="mono" style="color:var(--text);font-weight:500;font-size:12.5px">${esc(s.kod)}</td>
+              <td style="font-weight:500;color:var(--text)">${esc(s.malzeme)}</td>
+              <td style="color:var(--text-muted)">${esc(s.turEtiket)}</td>
+              <td style="font-weight:700;color:${s.durum==='negatif'?'var(--danger)':'var(--text)'}">${esc(s.stokText)}</td>
+              <td class="mono" style="color:var(--text-muted)">${s.altLimit||'—'}</td>
+              <td>${durumPill(s)}</td>
+              <td style="color:var(--text-subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px" title="${esc(s.sonHareketAciklama ? s.sonHareketAciklama+' · '+stokGenelZamanKisa(s.sonHareketTs) : stokGenelZamanKisa(s.sonHareketTs))}">${s.sonHareketAciklama ? esc(s.sonHareketAciklama)+' · '+stokGenelZamanKisa(s.sonHareketTs) : stokGenelZamanKisa(s.sonHareketTs)}</td>
+            </tr>
+          `).join('')}
+        </tbody></table>
+        <div class="sg-sayfalama">
+          <span>Sayfa ${sayfa} / ${toplamSayfa} · ${satirlar.length} kalem</span>
+          <div style="display:flex;gap:4px;align-items:center">
+            <button class="sg-sayfa-btn" ${sayfa<=1?'disabled':''} onclick="stokGenelSayfaGit(${sayfa-1})">‹</button>
+            ${sayfaNolari.map((n,i)=>`${i>0 && n-sayfaNolari[i-1]>1 ? `<span style="color:var(--text-muted)">…</span>` : ''}<button class="sg-sayfa-btn ${n===sayfa?'active':''}" onclick="stokGenelSayfaGit(${n})">${n}</button>`).join('')}
+            <button class="sg-sayfa-btn" ${sayfa>=toplamSayfa?'disabled':''} onclick="stokGenelSayfaGit(${sayfa+1})">›</button>
+          </div>
+        </div>
+      </div>
+      <div class="sg-side">
+        <div class="sg-panel">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--panel-alt);margin-bottom:2px">
+            <span class="sg-panel-title" style="margin-bottom:0">Kritik Stok</span>
+            <span style="font-size:12px;color:var(--danger-text);font-weight:600;background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:9999px;padding:2px 9px">${sayKritik} kalem</span>
+          </div>
+          ${kritik.length===0 ? `<div style="font-size:12px;color:var(--text-muted);padding:12px 0">Kritik kalem yok.</div>` : kritik.map(s=>`
+            <div class="sg-crit-row" style="justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:12px;min-width:0">
+                <span style="width:32px;height:32px;border-radius:8px;background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger-text);display:flex;align-items:center;justify-content:center;flex:none">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </span>
+                <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.malzeme)}</div><div class="mono" style="font-size:11px;color:var(--text-subtle)">${esc(s.kod)}</div></div>
+              </div>
+              <div style="font-size:14px;font-weight:700;color:var(--danger-text);flex:none">${s.stokSayi}</div>
+            </div>
+          `).join('')}
+          ${kritik.length>0 ? `<button style="width:100%;margin-top:16px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;justify-content:center;gap:6px" onclick="stokGenelTurDegistir('tumu'); stokGenelSiralama='artan'; render()">Tümünü Gör ${ico('chevronRight',14)}</button>` : ''}
+        </div>
+        <div class="sg-panel">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--panel-alt);margin-bottom:2px">
+            <span class="sg-panel-title" style="margin-bottom:0">Son Hareketler</span>
+            <button style="font-size:12px;font-weight:500;color:var(--accent)" onclick="openMyPushHistoryModal()">pushLog</button>
+          </div>
+          ${!stokSonHareketler ? `<div style="font-size:12px;color:var(--text-muted);padding:12px 0">Yükleniyor…</div>` : stokSonHareketler.length===0 ? `<div style="font-size:12px;color:var(--text-muted);padding:12px 0">Hareket kaydı yok.</div>` : stokSonHareketler.map(s=>`
+            <div class="sg-crit-row" style="align-items:flex-start;justify-content:space-between;gap:8px">
+              <div style="display:flex;align-items:flex-start;gap:10px;min-width:0">
+                <span style="width:32px;height:32px;border-radius:8px;background:var(--panel-alt);color:var(--text-muted);display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px">${s.svg}</span>
+                <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.baslik)}</div><div style="font-size:11px;color:var(--text-subtle);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.altBaslik)}</div></div>
+              </div>
+              <div style="font-size:12px;color:var(--text-subtle);flex:none;white-space:nowrap">${stokGenelZamanKisa(s.ts)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+    <div style="margin:0 24px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:16px;justify-content:space-between;background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:12px;padding:16px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="width:32px;height:32px;border-radius:8px;background:var(--warn-med);border:1px solid var(--warn-border);color:var(--warn-text);display:flex;align-items:center;justify-content:center;flex:none">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        </span>
+        <div style="font-size:12.5px;color:var(--text);line-height:1.5">
+          <b>Negatif stok politikası:</b> takım çıkışı eksiye düşebilir (bilinçli tasarım) — kırmızı satırlar operatörü engellemez, SuperAdmin sayımda kapatır. Malzeme stoğu transaction kullanmaz, eşzamanlı tüketimde dikkat.
+        </div>
+      </div>
+      <button style="flex:none;padding:9px 18px;background:var(--panel);border:1px solid var(--border);border-radius:8px;font-size:12.5px;font-weight:700;color:var(--text);box-shadow:var(--card-shadow)" onclick="stokGenelGirisAc()">Sayım Aç</button>
+    </div>`;
+}
 function renderStokScreen(){
   const gorunur = STOK_BOLUMLERI.filter(b=>b.gor());
   if(!gorunur.length) return `<div class="settings-wrap"><div style="color:var(--text-muted);font-size:12.5px">Stok ekranlarına erişim yetkin yok.</div></div>`;
   if(!gorunur.some(b=>b.key===stokSubView)) stokSubView = gorunur[0].key;
   if(stokSubView==='malzeme') malzemeHareketGerekli();
 
-  /* Seviye 2 — MODÜL RAYI. Eskiden bu da yatay bir .sub-tabs satırıydı ve üstündeki ana
-     sekmelerle birebir aynı görünüyordu; hangisinin ana sekme hangisinin modül olduğu
-     ayırt edilmiyordu. Artık geniş ekranda SOLDA DİKEY duruyor — dar ekranda CSS onu
-     yatay kaydırılabilir bir şeride çeviriyor (bkz. ui/styles.css .stok-ray). */
-  const ray = `<div class="stok-ray">
-    <div class="stok-ray-baslik">Stok Modülleri</div>
-    ${gorunur.map(b=>`<button class="stok-ray-btn ${stokSubView===b.key?'active':''}" onclick="setStokSubView('${escJs(b.key)}')">
-      ${ico(b.ikon,17)}
-      <span class="stok-ray-metin">
-        <span class="stok-ray-ad">${esc(b.label)}</span>
-        <span class="stok-ray-alt">${esc(b.alt)}</span>
-      </span>
-    </button>`).join('')}
+  /* Üst başlık + arama — ARTIK HER modül sekmesinde sabit (tasarım tuvaliyle birebir, bkz.
+     design/StokTakibiOneri.dc.html). Önceden sadece Genel Bakış'ta gösteriliyordu; kullanıcı
+     sekme değiştirince bu barın kaybolup sekme şeridinin yer değiştirmesinden rahatsız oldu —
+     artık konum sabit, sadece kırıntı/hedef aktif sekmeye göre değişiyor. Arama kutusu her
+     zaman Genel Bakış'ın aggregasyonunu süzer (stokGenelArama) ve yazınca oraya geçer, çünkü
+     diğer modüllerin kendi arama kutuları zaten kendi ekranlarında var. */
+  const ustAktifTanim = STOK_BOLUMLERI.find(b=>b.key===stokSubView);
+  const ustHedef = stokSubView==='genel' ? stokGenelHedefModul() : stokSubView;
+  const topHeader = `<div class="stok-top-header">
+    <div style="flex:none">
+      <div class="stok-top-crumb">Stok / ${esc(ustAktifTanim ? ustAktifTanim.label : 'Genel Bakış')}</div>
+      <div class="stok-top-title">Stok Takibi</div>
+    </div>
+    <div style="flex:1;display:flex;justify-content:center;min-width:180px">
+      <label class="stok-top-search">
+        ${ico('search',14)}
+        <input placeholder="Kod, CANIAS no veya malzeme ara…" value="${esc(stokGenelArama)}" oninput="stokGenelArama=this.value; stokGenelSayfa=1; setStokSubView('genel'); render()">
+        <kbd style="font-size:10px;color:var(--text-subtle);border:1px solid var(--border);padding:1px 5px;border-radius:4px;flex:none">⌘K</kbd>
+      </label>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:none">
+      <button class="btn-ghost" style="width:auto;display:flex;align-items:center;gap:7px;padding:9px 15px;box-shadow:var(--card-shadow)" onclick="stokGenelExcelAc('${escJs(ustHedef)}')" title="${esc(STOK_BOLUMLERI.find(b=>b.key===ustHedef).label)} → Excel Yükle">${ico('upload',14)} Excel Yükle</button>
+      <button class="btn-primary" style="width:auto;display:flex;align-items:center;gap:6px;padding:9px 17px;box-shadow:var(--card-shadow)" onclick="stokGenelGirisAc('${escJs(ustHedef)}')" title="${esc(STOK_BOLUMLERI.find(b=>b.key===ustHedef).label)} → Giriş">${ico('plus',14)} Stok Girişi</button>
+      <button class="icon-btn" style="position:relative;border-color:var(--border);width:38px;height:38px;border-radius:8px" onclick="openMyPushHistoryModal()" title="Bildirimler">
+        ${ico('bell',16)}${unreadPushCount()>0?`<span style="position:absolute;top:7px;right:7px;width:8px;height:8px;background:var(--accent);border:2px solid var(--panel);border-radius:50%"></span>`:''}
+      </button>
+    </div>
+  </div>`;
+
+  /* Seviye 2 — MODÜL SEKMELERİ (2026-09-15: dikey rayın yerini yatay sekme şeridi aldı, Stok
+     Takibi tasarım tuvaliyle hizalı — bkz. design/StokTakibiOneri.dc.html). Okuma/yazma mantığı
+     (STOK_BOLUMLERI, setStokSubView) DEĞİŞMEDİ, sadece hangi HTML'e sarıldığı değişti. Sayımlar
+     sadece o kaynağın verisi ZATEN yüklüyse gösteriliyor — sırf rozet göstermek için ekstra
+     Firebase okuması TETİKLENMİYOR (bkz. app genelindeki "maliyet optimizasyonu" ilkesi). */
+  const ray = `<div class="stok-tab-row">
+    ${gorunur.map(b=>{
+      const sayi = stokBolumSayisi(b.key);
+      return `<button class="stok-tab-btn ${stokSubView===b.key?'active':''}" onclick="setStokSubView('${escJs(b.key)}')">
+        ${ico(b.ikon,15)} ${esc(b.label)}${sayi!=null ? `<span class="stb-ct">${sayi}</span>` : ''}
+      </button>`;
+    }).join('')}
+    <div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);white-space:nowrap;padding:0 4px">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--success);flex:none"></span>RTDB canlı: stockItems · toolStock · karburStok
+    </div>
   </div>`;
 
   /* Seviye 3 — BÖLÜMLER. Üç modülün üçü de kendi satırını kendi çiziyordu; artık tek yerden,
@@ -1044,11 +1394,19 @@ function renderStokScreen(){
   </div>` : '';
 
   let icerik;
-  if(stokSubView==='takim')       icerik = renderToolStokManagementScreen();
+  if(stokSubView==='genel')       icerik = renderStokGenelBakis();
+  else if(stokSubView==='takim')  icerik = renderToolStokManagementScreen();
   else if(stokSubView==='karbur') icerik = renderKarburScreen();
-  else                            icerik = `<div class="settings-wrap">${renderMalzemeStokScreen()}</div>`;
+  else if(stokSubView==='malzeme') icerik = `<div class="settings-wrap">${renderMalzemeStokScreen()}</div>`;
+  else                             icerik = '';
 
-  return `<div class="stok-govde">${ray}<div class="stok-icerik">${bolumSatiri}${icerik}</div></div>`;
+  return `<div class="stok-govde">${topHeader}${ray}<div class="stok-icerik">${bolumSatiri}${icerik}</div></div>`;
+}
+function stokBolumSayisi(key){
+  if(key==='takim')    return toolCatalogReady ? toolCatalogArray().length : null;
+  if(key==='karbur')   return karburKatalogReady ? karburKatalogArray().length : null;
+  if(key==='malzeme')  return canManageStock() ? stockItemsArray().length : null;
+  return null; // 'genel' — tek bir sayı yerine KPI kartlarında gösteriliyor
 }
 
 // "İş Yoğunluğu" sekmesi — operatörlerin "Bitir" sırasında işaretlediği sonrakiMakine alanına
@@ -1101,20 +1459,29 @@ function iyVeri(){
 const iyKod = l => String(l||'').split(' · ')[0];
 const iyAd  = l => String(l||'').split(' · ').slice(1).join(' · ');
 // Yoğunluk rengi — eşikler ekranda tek anlam taşısın diye dört görünümde de aynı.
+// MVP SINIRI (2026-09-21): eşik MUTLAK iş emri sayısı; makine kapasitesine göre
+// normalize EDİLMEDİ. Günde 5 iş çıkaran bir pres ile günde 1 iş çıkaran bir ısıl
+// işlem fırını, 5 bekleyen işte aynı kırmızıyı alıyor — birinde yarım günlük yük,
+// diğerinde bir haftalık. Doğrusu eşiği makine başına beklenen çıktıya bölmek ya da
+// sayıyı süreye çevirmek ("kaç günlük iş bekliyor"), ama bunun için makine kapasite
+// verisi gerekiyor ve o veri modelde yok. Kısıt bazlı planlama/optimizasyon aşamasında
+// zaten çözülecek; o zamana kadar bilinçli olarak mutlak sayıda kalıyor.
 const iyRenk = n => n>=5 ? 'var(--danger)' : n>=3 ? 'var(--accent)' : 'var(--success)';
 
 /* --- ORTAK PARÇALAR ----------------------------------------------------- */
 function iyKpiHtml(v){
-  const kpi = (label, value, color, sub) => `<div class="analiz-chart-box">
-    <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">${label}</div>
-    <div class="mono" style="font-size:26px;font-weight:700;margin-top:8px;color:${color}">${value}</div>
-    ${sub?`<div style="font-size:10.5px;color:var(--text-muted);margin-top:4px">${sub}</div>`:''}
+  // --nc: kartın rayı ve sayısı aynı rengi paylaşıyor. "Belirsiz" sıfırdan büyükse
+  // kart zemini de hafifçe tonlanıyor — bu ekranda aksiyon gerektiren tek KPI o.
+  const kpi = (label, value, color, sub, vurgu) => `<div class="analiz-chart-box iy-kpi${vurgu?' iy-kpi-vurgu':''}" style="--nc:${color}">
+    <div class="iy-kpi-label">${label}</div>
+    <div class="mono iy-kpi-value">${value}</div>
+    ${sub?`<div class="iy-kpi-sub">${sub}</div>`:''}
   </div>`;
-  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:14px">
+  return `<div class="iy-kpi-grid">
     ${kpi('Bekleyen İş Emri', v.toplamIsEmri, 'var(--accent)', 'sıradaki operasyonu bekliyor')}
     ${kpi('Toplam Adet', v.toplamAdet, 'var(--success)', 'Press hariç — çift eşleşmesi adet toplamaz')}
     ${kpi('Dolu Makine Sayısı', v.doluMakine, 'var(--warn)', 'en az bir iş bekleyen makine')}
-    ${kpi('Belirsiz', v.belirsizSayi, 'var(--danger)', 'sıradaki makinesi işaretlenmemiş')}
+    ${kpi('Belirsiz', v.belirsizSayi, 'var(--danger)', 'sıradaki makinesi işaretlenmemiş', v.belirsizSayi>0)}
   </div>`;
 }
 // Bir kaydın son durumuna göre kısa özet + renk — arama sonucu kartlarında kullanılıyor.
@@ -1227,35 +1594,34 @@ function iyPresDetayHtml(r){
 /* --- GÖRÜNÜM: LİSTE — telefon öncelikli makine kartları ------------- */
 function iyListeHtml(v){
   if(v.rows.length===0) return `<div class="analiz-chart-box" style="text-align:center;color:var(--text-muted);padding:28px 16px">Şu an sıradaki operasyonu bekleyen iş emri yok.</div>`;
-  return `<div style="display:flex;flex-direction:column;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+  return `<div class="iy-list">
     ${v.rows.map(r=>{
       const acik = isYogunluguAcikMakine===r.label;
       const belirsiz = r.label==='Belirsiz';
       const renk = belirsiz ? 'var(--danger)' : iyRenk(r.isEmriSayisi);
-      return `<div style="background:var(--panel)">
-        <div style="padding:11px 14px;cursor:pointer" onclick="toggleIsYogunluguDetay('${escJs(r.label)}')">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-            <div style="min-width:0">
-              <div class="mono" style="font-size:12.5px;font-weight:600;color:${belirsiz?'var(--danger)':'var(--accent)'};white-space:nowrap">${esc(iyKod(r.label))}</div>
-              <div style="font-size:11.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(iyAd(r.label) || (belirsiz?'sıradaki makinesi işaretlenmemiş':''))}</div>
-            </div>
-            <div style="display:flex;align-items:baseline;gap:7px;white-space:nowrap">
+      return `<div class="iy-row${acik?' open':''}" style="--nc:${renk}">
+        <button class="iy-head" onclick="toggleIsYogunluguDetay('${escJs(r.label)}')">
+          <span style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <span style="display:flex;align-items:baseline;gap:9px;min-width:0;flex-wrap:wrap">
+              <span class="mono" style="font-size:13px;font-weight:700;color:${belirsiz?'var(--danger)':'var(--accent)'};white-space:nowrap">${esc(iyKod(r.label))}</span>
+              <span style="font-size:11.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(iyAd(r.label) || (belirsiz?'sıradaki makinesi işaretlenmemiş':''))}</span>
+              ${r.isPres ? `<span class="matrix-tag" style="--sb:var(--tadilat-info)">Çift eşleşme</span>` : ''}
+            </span>
+            <span style="display:flex;align-items:baseline;gap:7px;white-space:nowrap;flex:none">
               <span class="mono" style="font-size:19px;font-weight:700">${r.isEmriSayisi}</span>
-              <span class="mono" style="font-size:12px;color:var(--text-muted)">${r.isPres ? `/ ${v.hazirCiftSayisi} hazır` : `/ ${r.toplamAdet} adet`}</span>
+              <span class="mono" style="font-size:12px;color:${r.isPres?'var(--success)':'var(--text-muted)'}">${r.isPres ? `/ ${v.hazirCiftSayisi} hazır` : `/ ${r.toplamAdet} adet`}</span>
               <span style="color:var(--text-muted)">${acik?ico('chevronUp',14):ico('chevronDown',14)}</span>
-            </div>
-          </div>
-          <div style="margin-top:8px;height:5px;border-radius:3px;background:var(--panel-alt);overflow:hidden">
-            <div style="height:100%;width:${Math.round(r.isEmriSayisi/v.enYuksek*100)}%;background:${renk}"></div>
-          </div>
-        </div>
-        ${acik ? `<div style="background:var(--panel-alt);padding:4px 14px 12px">
-          ${r.isPres ? iyPresDetayHtml(r) : r.isEmriler.map(e=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;flex-wrap:wrap">
+            </span>
+          </span>
+          <span class="iy-bar"><span style="width:${Math.round(r.isEmriSayisi/v.enYuksek*100)}%"></span></span>
+        </button>
+        ${acik ? `<div class="iy-detay">
+          ${r.isPres ? iyPresDetayHtml(r) : r.isEmriler.map(e=>`<div class="iy-detay-row">
             <span class="mono" style="color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline dotted" onclick="openIyGecmisModal('${escJs(e.isEmriNo)}')">${esc(e.talepNo||e.isEmriNo)}</span>
             <span style="color:var(--text-muted)">${esc(e.makine||'—')}</span>
-            <span>Adet: ${esc(e.adet||'—')}</span>
+            <span class="mono sag">${esc(e.adet||'—')}</span>
             <span style="color:var(--text-muted)">${esc(e.operatorName||e.operatorUsername||'')}</span>
-            <span style="color:var(--text-muted)">Bitiş: ${e.endTs?fmtDT(e.endTs):'—'}</span>
+            <span class="mono sag" style="color:var(--text-muted)">${e.endTs?fmtDT(e.endTs):'—'}</span>
           </div>`).join('')}
         </div>` : ''}
       </div>`;
@@ -1345,40 +1711,46 @@ function iyHaftaHtml(v){
 function iyPanoHtml(v, tamEkran){
   const rows = v.rows;
   const yari = Math.ceil(rows.length/2);
+  // Pano 4-6 metreden okunuyor; sekme içindeki önizleme ise masaüstü mesafesinden.
+  // Aynı fonksiyon iki ölçek taşıyor — önizleme ölçüleri bilinçli olarak eski değerler,
+  // yani sekme görünümü bu turda değişmiyor, sadece ?pano=1 büyüyor.
+  const S = tamEkran
+    ? { kod:34, ad:22, sayi:44, bolu:22, bar:22, kpi:48, kpiEt:15, baslik:44, alt:16, kol:'minmax(0,330px) 1fr 150px', pad:'14px 0', dis:'30px 44px 34px', bas:'30px 44px 24px' }
+    : { kod:17, ad:14, sayi:22, bolu:14, bar:16, kpi:30, kpiEt:13, baslik:26, alt:13, kol:'minmax(0,230px) 1fr 88px', pad:'9px 0',  dis:'22px 30px 26px', bas:'24px 30px 20px' };
   const kolon = (liste) => liste.map(r=>`
-    <div style="display:grid;grid-template-columns:minmax(0,230px) 1fr 88px;align-items:center;gap:16px;padding:9px 0;border-top:1px solid var(--panel-alt)">
+    <div style="display:grid;grid-template-columns:${S.kol};align-items:center;gap:16px;padding:${S.pad};border-top:1px solid var(--panel-alt)">
       <div style="display:flex;align-items:baseline;gap:9px;min-width:0">
-        <span class="mono" style="flex:0 0 auto;font-size:17px;font-weight:700;color:${r.label==='Belirsiz'?'var(--danger)':'var(--accent)'};white-space:nowrap">${esc(iyKod(r.label))}</span>
-        <span style="flex:1;min-width:0;font-size:14px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(iyAd(r.label))}</span>
+        <span class="mono" style="flex:0 0 auto;font-size:${S.kod}px;font-weight:700;color:${r.label==='Belirsiz'?'var(--danger)':'var(--accent)'};white-space:nowrap">${esc(iyKod(r.label))}</span>
+        <span style="flex:1;min-width:0;font-size:${S.ad}px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(iyAd(r.label))}</span>
       </div>
-      <div style="height:16px;border-radius:4px;background:var(--panel);overflow:hidden"><div style="height:100%;width:${Math.round(r.isEmriSayisi/v.enYuksek*100)}%;background:${r.label==='Belirsiz'?'var(--danger)':iyRenk(r.isEmriSayisi)};border-radius:4px"></div></div>
+      <div style="height:${S.bar}px;border-radius:4px;background:var(--panel);overflow:hidden"><div style="height:100%;width:${Math.round(r.isEmriSayisi/v.enYuksek*100)}%;background:${r.label==='Belirsiz'?'var(--danger)':iyRenk(r.isEmriSayisi)};border-radius:4px"></div></div>
       <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:6px;white-space:nowrap">
-        <span class="mono" style="font-size:22px;font-weight:700">${r.isEmriSayisi}</span>
-        <span class="mono" style="font-size:14px;color:var(--text-muted)">/${r.isPres ? v.hazirCiftSayisi : r.toplamAdet}</span>
+        <span class="mono" style="font-size:${S.sayi}px;font-weight:700">${r.isEmriSayisi}</span>
+        <span class="mono" style="font-size:${S.bolu}px;color:var(--text-muted)">/${r.isPres ? v.hazirCiftSayisi : r.toplamAdet}</span>
       </div>
     </div>`).join('');
-  const kpiMini = (label, value, color) => `<div style="text-align:right"><div style="font-size:13px;font-weight:600;letter-spacing:.6px;color:var(--text-muted)">${label}</div><div class="mono" style="font-size:30px;font-weight:700;color:${color}">${value}</div></div>`;
+  const kpiMini = (label, value, color) => `<div style="text-align:right"><div style="font-size:${S.kpiEt}px;font-weight:600;letter-spacing:.6px;color:var(--text-muted)">${label}</div><div class="mono" style="font-size:${S.kpi}px;font-weight:700;color:${color}">${value}</div></div>`;
 
   return `<div style="background:var(--bg);${tamEkran?'min-height:100vh;':'border:1px solid var(--border);border-radius:12px;'}overflow:hidden">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:24px 30px 20px;border-bottom:1px solid var(--border)">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:${S.bas};border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:baseline;gap:18px">
-        <span style="font-family:'Oswald',sans-serif;font-size:26px;font-weight:600;letter-spacing:2px">İŞ YOĞUNLUĞU</span>
-        <span style="font-size:13px;color:var(--text-muted)">sıradaki makineye göre bekleyen iş emri</span>
+        <span class="pano-title" style="font-size:${S.baslik}px">İŞ YOĞUNLUĞU</span>
+        <span style="font-size:${S.alt}px;color:var(--text-muted)">sıradaki makineye göre bekleyen iş emri</span>
       </div>
       <div style="display:flex;align-items:center;gap:28px;flex-wrap:wrap">
         ${kpiMini('BEKLEYEN İŞ EMRİ', v.toplamIsEmri, 'var(--accent)')}
         ${kpiMini('TOPLAM ADET', v.toplamAdet, 'var(--success)')}
         ${kpiMini('BELİRSİZ', v.belirsizSayi, 'var(--danger)')}
-        <span class="mono" style="font-size:26px;font-weight:700">${fmtDT(Date.now()).split(' ').pop()}</span>
+        <span class="mono" style="font-size:${S.kpi-4}px;font-weight:700">${fmtDT(Date.now()).split(' ').pop()}</span>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:0 40px;padding:22px 30px 26px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:0 40px;padding:${S.dis}">
       <div>${kolon(rows.slice(0,yari))}</div>
       <div>${kolon(rows.slice(yari))}</div>
     </div>
     ${v.belirsizSayi>0 ? `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 30px;background:var(--panel);border-top:1px solid var(--border)">
-      <span class="mono" style="padding:6px 12px;border-radius:6px;background:var(--danger);color:var(--on-warn);font-size:13px;font-weight:700;letter-spacing:.5px;white-space:nowrap">BELİRSİZ ${v.belirsizSayi}</span>
-      <span style="font-size:14px;color:var(--text-muted)">sıradaki makinesi işaretlenmemiş — operatörler "Bitir" ekranında sonraki makineyi seçmiyor</span>
+      <span class="mono" style="padding:6px 12px;border-radius:6px;background:var(--danger);color:var(--on-warn);font-size:${S.alt}px;font-weight:700;letter-spacing:.5px;white-space:nowrap">BELİRSİZ ${v.belirsizSayi}</span>
+      <span style="font-size:${S.alt+1}px;color:var(--text-muted)">sıradaki makinesi işaretlenmemiş — operatörler "Bitir" ekranında sonraki makineyi seçmiyor</span>
     </div>` : ''}
   </div>`;
 }
@@ -1398,6 +1770,174 @@ function renderIsYogunlugu(){
     ${govde}
   </div>${iyGecmisModalIsEmriNo ? renderIyGecmisModal() : ''}`;
 }
+/* Sidebar'ın "Yönetim" grubundaki Excel Yükleme/Operatörler — henüz kendi ekranları yok (bu,
+   TASARIM_ENVANTERI.md'deki A.11/A.12, ayrı bir aşama), şimdilik var olan gerçek işlevlere
+   (Stok → Hammadde → Excel, Ayarlar → Personel Ayarları) yönlendiriyor. */
+function gotoExcelYukleme(){ setView('stokYonetim'); setStokSubView('malzeme'); setMalzemeSubView('excel'); }
+function gotoOperatorler(){ setView('adminSettings'); setSettingsSubTab('personelAyarlari'); }
+/* Makine Matrisi — 2026-09-16: kullanıcının verdiği koyu Material-3 referansına göre yeniden
+   tasarlandı (kart üstü renk çubuğu, durum rozeti, ayrı "Detay" butonu, alt özet/senkron
+   şeridi). Tüm veri/filtre mantığı ESKİSİYLE AYNI (workMsFor/statusPriority/sortedMachines,
+   matrixSort/matrixGroupFilter/matrixAtolyeFilter + setter'ları, tadilatAktifOnMachine,
+   live()/fmtElapsed) — sadece çıktı markup'ı değişti. Eskiden inline view dispatch'i içindeydi,
+   diğer render* fonksiyonları (renderStokScreen, renderIsYogunlugu) gibi ayrı bir fonksiyona
+   çıkarıldı. Referanstaki sabit 26 makine/İş Emri/operatör verisi KULLANILMADI — hepsi gerçek
+   allMachines()/entriesArray()/buildTadilatSynthetic() üzerinden hesaplanıyor. Referans Tailwind+
+   Material Symbols font kullanıyordu; bu uygulamada build adımı/Tailwind yok, mevcut ico()/ICONS
+   SVG ikon sistemi ve düz CSS class'ları (.matrix-*) ile birebir görsel karşılığı üretildi. */
+function renderMakineMatrisi(){
+  // Tadilat Atölye makineleri "entries" tablosunda hiç iz bırakmaz (orada sadece üretim işleri
+  // var) — tadilat operasyonlarını da senkron kayıt gibi katmazsak bu makineler burada hep
+  // "hiç kullanılmadı"/boşta görünür, geçmiş tadilat işleri hiç okunmaz.
+  const entries = [...entriesArray(), ...buildTadilatSynthetic()];
+  const workMsFor = (code) => {
+    const label = resolveMachineLabel(code);
+    const seenGroups = new Set();
+    return entries.filter(e=>e.makine===label).reduce((s,e)=>{
+      if(e.groupId){ if(seenGroups.has(e.groupId)) return s; seenGroups.add(e.groupId); }
+      const endClip = e.endTs || nowTick;
+      const wallMs = Math.max(0, endClip - e.startTs);
+      return s + Math.max(0, wallMs - (e.duruşToplamMs||0));
+    }, 0);
+  };
+  const statusPriority = (code) => {
+    const label = resolveMachineLabel(code);
+    if(tadilatAktifOnMachine(label)) return -1;
+    const machineEntries = entries.filter(e=>e.makine===label);
+    if(machineEntries.some(e=>e.status==='devam')) return 0;
+    if(machineEntries.some(e=>e.status==='duruş')) return 1;
+    return 2;
+  };
+  const tumMakineler = allMachines();
+  const aramaN = trNorm(matrixArama.trim());
+  const sortedMachines = tumMakineler.slice()
+    .filter(m => matrixGroupFilter==='Tümü' || machineGroupOf(m.code)===matrixGroupFilter)
+    .filter(m => matrixAtolyeFilter==='tumu' || machineAtolyeOf(m.code)===matrixAtolyeFilter)
+    .filter(m => !aramaN || trNorm(m.code+' '+m.name).includes(aramaN))
+    .sort((a,b)=>{
+    if(matrixSort==='calisma') return workMsFor(b.code) - workMsFor(a.code);
+    if(matrixSort==='renk') return statusPriority(a.code) - statusPriority(b.code) || a.code.localeCompare(b.code);
+    return a.code.localeCompare(b.code);
+  });
+  const groupNames = ['Tümü', ...MACHINE_GROUPS.map(g=>g.name), 'Diğer'];
+
+  // Referanstaki sabit 12/11/0/3 sayaçları yerine gerçek durum dağılımı (tüm makineler, filtreden
+  // bağımsız — özet şeridi ekranda ne süzülmüş olursa olsun bütünü göstermeli).
+  let calisanSay=0, durusSay=0, tadilatSay=0;
+  tumMakineler.forEach(m=>{
+    const label = resolveMachineLabel(m.code);
+    if(tadilatAktifOnMachine(label)){ tadilatSay++; return; }
+    const me = entries.filter(e=>e.makine===label);
+    if(me.some(e=>e.status==='devam')) calisanSay++;
+    else if(me.some(e=>e.status==='duruş')) durusSay++;
+  });
+  const bosSay = Math.max(0, tumMakineler.length - calisanSay - durusSay - tadilatSay);
+  const imalatSay = tumMakineler.filter(m=>machineAtolyeOf(m.code)==='imalat').length;
+  const tadilatAtolyeSay = tumMakineler.filter(m=>machineAtolyeOf(m.code)==='tadilat').length;
+
+  let out = `<div class="matrix-wrap">
+    <div class="matrix-toolbar">
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button class="chip ${matrixAtolyeFilter==='tumu'?'active':''}" style="font-size:13.5px;padding:9px 16px" onclick="setMatrixAtolyeFilter('tumu')">${ico('list',13)} Tüm Makineler <b style="margin-left:4px;opacity:.8">${tumMakineler.length}</b></button>
+        <button class="chip ${matrixAtolyeFilter==='imalat'?'active':''}" style="font-size:13.5px;padding:9px 16px" onclick="setMatrixAtolyeFilter('imalat')">${ico('factory',13)} İmalat Atölye <b style="margin-left:4px;opacity:.8">${imalatSay}</b></button>
+        <button class="chip ${matrixAtolyeFilter==='tadilat'?'active':''}" style="font-size:13.5px;padding:9px 16px" onclick="setMatrixAtolyeFilter('tadilat')">${ico('wrench',13)} Tadilat Atölye <b style="margin-left:4px;opacity:.8">${tadilatAtolyeSay}</b></button>
+      </div>
+      <label class="stok-top-search" style="max-width:280px">
+        ${ico('search',14)}
+        <input placeholder="Kod veya ad ile süz…" value="${esc(matrixArama)}" oninput="setMatrixArama(this.value)">
+      </label>
+    </div>
+    <div class="matrix-toolbar" style="margin-bottom:14px">
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${groupNames.map(g=>`<button class="chip ${matrixGroupFilter===g?'active':''}" onclick="setMatrixGroupFilter('${g}')">${g}</button>`).join('')}
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="chip ${matrixSort==='alpha'?'active':''}" onclick="setMatrixSort('alpha')">Alfabetik</button>
+        <button class="chip ${matrixSort==='calisma'?'active':''}" onclick="setMatrixSort('calisma')">Çalışma Süresine Göre</button>
+        <button class="chip ${matrixSort==='renk'?'active':''}" onclick="setMatrixSort('renk')">Renge Göre</button>
+      </div>
+    </div>
+    <div class="matrix-legend">
+      <span><span class="legend-dot" style="background:var(--success)"></span>Çalışıyor <b>${calisanSay}</b></span>
+      <span><span class="legend-dot" style="background:var(--warn)"></span>Duruşta <b>${durusSay}</b></span>
+      <span><span class="legend-dot" style="background:var(--danger)"></span>Boşta <b>${bosSay}</b></span>
+      <span><span class="legend-dot" style="background:var(--tadilat-info)"></span>Tadilat Yapıyor <b>${tadilatSay}</b></span>
+    </div>
+    <div class="matrix-grid">`;
+
+  sortedMachines.forEach(m=>{
+    const label = `${m.code} · ${m.name}`;
+    const tadilatHere = tadilatAktifOnMachine(label);
+    const machineEntries = entries.filter(e=>e.makine===label);
+    const runningEntries = machineEntries.filter(e=>e.status==='devam');
+    const stoppedEntries = machineEntries.filter(e=>e.status==='duruş');
+    const running = !tadilatHere && runningEntries.length>0;
+    const stopped = !tadilatHere && !running && stoppedEntries.length>0;
+    const border = tadilatHere ? 'var(--tadilat-info)' : running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
+    const bg = tadilatHere ? 'var(--tadilat-soft)' : running?'var(--success-bg)':stopped?'var(--warn-bg)':'var(--danger-bg)';
+    const lastFinished = (!running&&!stopped&&!tadilatHere) ? machineEntries.slice().sort((a,b)=>b.startTs-a.startTs)[0] : null;
+    const durusAlert = uzunDurusUyariEnabled() && stopped && stoppedEntries.some(e=>e.duruşTs && !isVerimlilikDisiDurus(e.duruşNedeni) && (nowTick-e.duruşTs)>=uzunDurusEsikMs());
+    /* Kartin sag ustundeki renkli nokta TEK BASINA durumu anlatiyordu; renk korlugunde ve
+       gun sonu mavisi ile yonetici aksani (teal) yan yana geldiginde ayirt edilemiyordu.
+       Nokta yerine ayni rengi tasiyan kisa bir metin etiketi (.matrix-tag) basiyoruz. */
+    const durumEtiket = tadilatHere ? 'Tadilat'
+      : running ? 'Çalışıyor'
+      : stopped ? (durusAlert ? 'Uzun duruş'
+                 : stoppedEntries.every(e=>isVerimlilikDisiDurus(e.duruşNedeni)) ? 'Planlı' : 'Duruş')
+      : 'Boşta';
+    const etiketRengi = durusAlert ? 'var(--danger)' : border;
+
+    out += `<div class="matrix-card${durusAlert?' durus-alert':''}" style="background:${bg};border-color:${durusAlert?'var(--danger)':border}" onclick="openMachineDetail('${escJs(m.code)}')">
+      ${durusAlert ? `<span class="durus-alert-badge" title="Uzun süredir duruşta">${ico('alert',14)}</span>` : ''}
+      <div class="matrix-card-top"><span class="matrix-code">${m.code}</span><span class="matrix-tag" style="--sb:${etiketRengi}">${durumEtiket}</span></div>
+      <div class="matrix-name">${esc(m.name)}</div>`;
+    if(tadilatHere){
+      const { tadilat: tt, operasyon: top } = tadilatHere;
+      out += `<div class="matrix-sub" style="color:var(--tadilat-info);font-weight:700">${ico('wrench',14)} ${esc(tt.uKodu)}</div>
+        <div class="matrix-sub">${esc(top.operatorUsername)} · ${live(()=> fmtElapsed(tadilatOpDurationBreakdown(top).netMs))}</div>`;
+    } else if(running){
+      if(runningEntries.length===1){
+        const info = runningEntries[0];
+        out += `<div class="matrix-sub">${esc(info.talepNo || info.isEmriNo)} · ${esc(info.operatorUsername)}</div>
+          <div class="matrix-sub">${live(()=> fmtElapsed(entryDurationBreakdown(info).netMs))} çalışıyor</div>`;
+      } else {
+        out += `<div class="matrix-sub" style="font-weight:700">${runningEntries.length} İş Emri Aktif</div>
+          <div class="matrix-sub" style="opacity:.7">Detay için tıkla</div>`;
+      }
+    } else if(stopped){
+      if(stoppedEntries.length===1){
+        const info = stoppedEntries[0];
+        out += `<div class="matrix-sub">${esc(info.talepNo || info.isEmriNo)} · ${esc(info.operatorUsername)}</div>
+          <div class="matrix-sub">Duruş: "${esc(info.duruşNedeni)}"</div>`;
+      } else {
+        out += `<div class="matrix-sub" style="font-weight:700">${stoppedEntries.length} İş Duraklatıldı</div>
+          <div class="matrix-sub" style="opacity:.7">Detay için tıkla</div>`;
+      }
+    } else if(lastFinished){
+      out += `<div class="matrix-sub">Son: ${esc(lastFinished.operatorUsername)} · ${fmtDT(lastFinished.startTs)}</div>
+        ${lastFinished._isTadilat && lastFinished.aciklama ? `<div class="matrix-sub" style="opacity:.8">${esc(lastFinished.aciklama)}</div>` : ''}`;
+    } else {
+      out += `<div class="matrix-sub">Hiç kullanılmadı</div>`;
+    }
+    out += `</div>`;
+  });
+
+  out += `</div>
+    <div class="matrix-footer">
+      <div class="matrix-footer-stats">
+        <span>${ico('factory',14)} Toplam Makine: <b>${tumMakineler.length}</b></span>
+        <span><span class="mf-dot" style="background:var(--success)"></span>${calisanSay} Çalışıyor</span>
+        <span><span class="mf-dot" style="background:var(--warn)"></span>${durusSay} Duruşta</span>
+        <span><span class="mf-dot" style="background:var(--tadilat-info)"></span>${tadilatSay} Tadilatta</span>
+      </div>
+      <div class="matrix-footer-sync">
+        ${ico('repeat',14)} Son güncelleme: <b>${fmtDT(nowTick)}</b>
+        <button class="chip" onclick="render()">${ico('repeat',13)} Yenile</button>
+      </div>
+    </div>
+  </div>`;
+  return out;
+}
 function renderAdmin(){
   /* Stok sekmesi uc bolumlu (takim / karbur / malzeme), asagida `stokYonetim` olarak ayrica ele
      aliniyor — bu yuzden burada karsiligi yok. */
@@ -1413,44 +1953,67 @@ function renderAdmin(){
   const operatorEntries = Object.entries(STATE.operators).filter(([k,v])=>!v.isAdmin);
   const uzunDurusList = (uzunDurusUyariEnabled() && isAdminTabVisible('uzunDurusUyari')) ? uzunDurusluKayitlar() : [];
   const uzunDevamEdenList = (uzunDevamEdenUyariEnabled() && isAdminTabVisible('uzunDevamEdenUyari')) ? uzunDevamEdenKayitlar() : [];
-  const header = `
-    <div class="admin-header">
-      <div style="display:flex;align-items:center;gap:10px">${connDot()}<span style="font-size:20px">${ico('factory',14)}</span><span class="brand">ROTA TAKİP · YÖNETİCİ RAPORU</span></div>
-      <div style="display:flex;gap:10px">
-        ${themeToggleHtml()}
-        ${uzunDurusList.length>0 ? `<button class="icon-btn" style="position:relative;border-color:var(--danger);color:var(--danger)" onclick="openUzunDurusModal()" title="Uzun süredir duruşta olanlar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-          <span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${uzunDurusList.length}</span>
-        </button>` : ''}
-        ${uzunDevamEdenList.length>0 ? `<button class="icon-btn" style="position:relative;border-color:var(--warn);color:var(--warn)" onclick="openUzunDevamEdenModal()" title="Uzun süredir devam ediyor görünen (kapatılmayı unutulmuş olabilir)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          <span style="position:absolute;top:-4px;left:-4px;background:var(--warn);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${uzunDevamEdenList.length}</span>
-        </button>` : ''}
-        ${canViewMessages() ? `<button class="icon-btn" style="position:relative" onclick="openMessagesModal()" title="Mesajlar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M2 6l10 7 10-7"></path></svg>
-          ${unreadMessageCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadMessageCount()}</span>` : ''}
-        </button>` : ''}
-        <button class="icon-btn" style="position:relative" onclick="openMyPushHistoryModal()" title="Bildirimlerim">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-          ${unreadPushCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadPushCount()}</span>` : ''}
-        </button>
-        <button class="icon-btn-labeled" onclick="setView('adminSettings')" style="${view==='adminSettings'?'border-color:var(--accent);color:var(--accent)':''}">${ico('gear',14)} Ayarlar</button>
-        <button class="icon-btn-labeled" onclick="doLogout()" style="padding:10px 20px;font-size:14px;font-weight:600">${ico('logout',14)} Çıkış</button>
+  /* YENİ ADMİN KABUĞU (2026-09-15): eskiden bu blok tek bir `header` (üst şerit: marka+ikonlar,
+     altında yatay .tabs) üretiyordu. Şimdi ikiye ayrıldı: `sidebar` (sol sabit nav — eski .tabs +
+     Ayarlar + Çıkış, BİREBİR aynı isAdminTabVisible()/canCreateTadilat()/stokErisimVar() koşullarıyla)
+     ve `topbar` (marka artık sidebar'da olduğu için sadece durum/aksiyon ikonları kaldı: uzun duruş,
+     uzun devam eden, mesajlar, bildirimlerim, çıkış — hiçbiri kaldırılmadı, sadece yeri değişti).
+     Ayarlar butonu artık sidebar'da bir nav item. Tema değiştir butonu (themeToggleHtml())
+     2026-09-21'de topbar'a GERİ eklendi — admin artık kendi açık/koyu paletine sahip (bkz.
+     ui/styles.css .root-wide.theme-light / .root-wide.theme-dark). */
+  const sidebar = `
+    <nav class="admin-sidebar">
+      <div class="admin-sidebar-brand">
+        <div class="admin-sidebar-mark">B</div>
+        <div><div class="admin-sidebar-name">BOM-ROTA</div><div class="admin-sidebar-sub">Üretim Takip</div></div>
       </div>
+      ${isAdminTabVisible('rapor') ? `<button class="admin-nav-item ${view==='report'?'active':''}" onclick="setView('report')">${ico('list',14)} Rapor</button>` : ''}
+      ${isAdminTabVisible('matrix') ? `<button class="admin-nav-item ${view==='matrix'?'active':''}" onclick="setView('matrix')">${ico('factory',14)} Makine Matrisi</button>` : ''}
+      ${isAdminTabVisible('completed') ? `<button class="admin-nav-item ${view==='completed'?'active':''}" onclick="setView('completed')">${ico('check',14)} Tamamlanan Kodlar</button>` : ''}
+      ${isAdminTabVisible('isYogunlugu') ? `<button class="admin-nav-item ${view==='isYogunlugu'?'active':''}" onclick="setView('isYogunlugu')">${ico('box',14)} İş Yoğunluğu</button>` : ''}
+      ${!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz') ? `<button class="admin-nav-item ${view==='analiz'?'active':''}" onclick="setView('analiz')">${ico('chart',14)} Analiz</button>` : ''}
+      ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="admin-nav-item ${view==='tadilatYonetim'?'active':''}" onclick="setView('tadilatYonetim')">${ico('wrench',14)} Tadilat</button>` : ''}
+      ${stokErisimVar() ? `<button class="admin-nav-item ${view==='stokYonetim'?'active':''}" onclick="setView('stokYonetim')">${ico('box',14)} Stok</button>` : ''}
+      <button class="admin-nav-item" onclick="openMyPushHistoryModal()">${ico('bell',14)} Bildirimler${unreadPushCount()>0?`<span class="admin-nav-badge">${unreadPushCount()}</span>`:''}</button>
+      ${session.isAdmin ? `
+      <div class="admin-sidebar-sec">Yönetim</div>
+      <button class="admin-nav-item" onclick="gotoExcelYukleme()">${ico('upload',14)} Excel Yükleme</button>
+      <button class="admin-nav-item" onclick="gotoOperatorler()">${ico('users',14)} Operatörler</button>
+      <button class="admin-nav-item ${view==='adminSettings'?'active':''}" onclick="setView('adminSettings')">${ico('gear',14)} Ayarlar</button>
+      ` : ''}
+      <div class="admin-sidebar-user">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="admin-sidebar-avatar" title="${connOK?'Buluta bağlı (senkron)':'Bağlantı yok — internet kontrol edin'}">${esc((session.displayName||session.username||'').slice(0,2).toUpperCase())}<span style="position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:${connOK?'var(--success)':'var(--danger)'};border:2px solid var(--sidebar-bg);border-radius:50%"></span></div>
+          <div><div class="admin-sidebar-uname">${esc(session.displayName||session.username)}</div><div class="admin-sidebar-urole"><span style="width:6px;height:6px;border-radius:50%;background:${connOK?'var(--success)':'var(--danger)'};display:inline-block"></span>${session.isSuperAdmin?'SuperAdmin':session.isSef?'Şef':session.isUretimSef?'Üretim Şef':'Yönetici'}</div></div>
+        </div>
+        <button class="admin-nav-item" style="width:auto;padding:6px" onclick="doLogout()" title="Çıkış Yap">${ico('logout',15)}</button>
+      </div>
+    </nav>`;
+  const header = `
+    <div class="admin-topbar">
+      ${uzunDurusList.length>0 ? `<button class="icon-btn" style="position:relative;border-color:var(--danger);color:var(--danger)" onclick="openUzunDurusModal()" title="Uzun süredir duruşta olanlar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        <span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${uzunDurusList.length}</span>
+      </button>` : ''}
+      ${uzunDevamEdenList.length>0 ? `<button class="icon-btn" style="position:relative;border-color:var(--warn);color:var(--warn)" onclick="openUzunDevamEdenModal()" title="Uzun süredir devam ediyor görünen (kapatılmayı unutulmuş olabilir)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <span style="position:absolute;top:-4px;left:-4px;background:var(--warn);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${uzunDevamEdenList.length}</span>
+      </button>` : ''}
+      ${canViewMessages() ? `<button class="icon-btn" style="position:relative" onclick="openMessagesModal()" title="Mesajlar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M2 6l10 7 10-7"></path></svg>
+        ${unreadMessageCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadMessageCount()}</span>` : ''}
+      </button>` : ''}
+      <button class="icon-btn" style="position:relative" onclick="openMyPushHistoryModal()" title="Bildirimlerim">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+        ${unreadPushCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadPushCount()}</span>` : ''}
+      </button>
+      ${themeToggleHtml()}
+      <button class="icon-btn-labeled" onclick="doLogout()">${ico('logout',14)} Çıkış</button>
     </div>
     ${uzunDurusModalOpen ? renderUzunDurusModal() : ''}
     ${uzunDevamEdenModalOpen ? renderUzunDevamEdenModal() : ''}
     ${messagesModalOpen ? renderMessagesModal() : ''}
-    ${myPushHistoryModalOpen ? renderMyPushHistoryModal() : ''}
-    <div class="tabs" style="padding:12px 24px 0">
-      ${isAdminTabVisible('rapor') ? `<button class="tab-btn ${view==='report'?'active':''}" onclick="setView('report')">${ico('list',14)} Rapor</button>` : ''}
-      ${isAdminTabVisible('matrix') ? `<button class="tab-btn ${view==='matrix'?'active':''}" onclick="setView('matrix')">${ico('factory',14)} Makine Matrisi</button>` : ''}
-      ${isAdminTabVisible('completed') ? `<button class="tab-btn ${view==='completed'?'active':''}" onclick="setView('completed')">${ico('check',14)} Tamamlanan Kodlar</button>` : ''}
-      ${isAdminTabVisible('isYogunlugu') ? `<button class="tab-btn ${view==='isYogunlugu'?'active':''}" onclick="setView('isYogunlugu')">${ico('box',14)} İş Yoğunluğu</button>` : ''}
-      ${!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz') ? `<button class="tab-btn ${view==='analiz'?'active':''}" onclick="setView('analiz')">${ico('chart',14)} Analiz</button>` : ''}
-      ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="tab-btn ${view==='tadilatYonetim'?'active':''}" onclick="setView('tadilatYonetim')">${ico('wrench',14)} Tadilat</button>` : ''}
-      ${stokErisimVar() ? `<button class="tab-btn ${view==='stokYonetim'?'active':''}" onclick="setView('stokYonetim')">${ico('box',14)} Stok</button>` : ''}
-    </div>`;
+    ${myPushHistoryModalOpen ? renderMyPushHistoryModal() : ''}`;
 
   let body = '';
   if(view==='adminSettings' && !session.isAdmin){ view = 'report'; }
@@ -1966,112 +2529,7 @@ function renderAdmin(){
     }
     body += `</div>`;
   } else if(view==='matrix'){
-    // Tadilat Atölye makineleri "entries" tablosunda hiç iz bırakmaz (orada sadece üretim işleri
-    // var) — tadilat operasyonlarını da senkron kayıt gibi katmazsak bu makineler burada hep
-    // "hiç kullanılmadı"/boşta görünür, geçmiş tadilat işleri hiç okunmaz (Analiz ekranı için
-    // zaten yapılan aynı düzeltme — bkz. buildTadilatSynthetic).
-    const entries = [...entriesArray(), ...buildTadilatSynthetic()];
-    const workMsFor = (code) => {
-      const label = resolveMachineLabel(code);
-      // A1 düzeltmesiyle aynı mantık: "Çoklu İş Emri" (groupId) kayıtları aynı makinede aynı
-      // anda birden fazla kayıt oluşturuyor ama fiziksel olarak makine TEK süre meşgul —
-      // burada da (sadece sıralama için kullanılsa da) mükerrer sayılmasın diye tekilleştiriyoruz.
-      const seenGroups = new Set();
-      return entries.filter(e=>e.makine===label).reduce((s,e)=>{
-        if(e.groupId){ if(seenGroups.has(e.groupId)) return s; seenGroups.add(e.groupId); }
-        const endClip = e.endTs || nowTick;
-        const wallMs = Math.max(0, endClip - e.startTs);
-        return s + Math.max(0, wallMs - (e.duruşToplamMs||0));
-      }, 0);
-    };
-    const statusPriority = (code) => {
-      const label = resolveMachineLabel(code);
-      if(tadilatAktifOnMachine(label)) return -1;
-      const machineEntries = entries.filter(e=>e.makine===label);
-      if(machineEntries.some(e=>e.status==='devam')) return 0;
-      if(machineEntries.some(e=>e.status==='duruş')) return 1;
-      return 2;
-    };
-    const sortedMachines = allMachines().slice()
-      .filter(m => matrixGroupFilter==='Tümü' || machineGroupOf(m.code)===matrixGroupFilter)
-      .filter(m => matrixAtolyeFilter==='tumu' || machineAtolyeOf(m.code)===matrixAtolyeFilter)
-      .sort((a,b)=>{
-      if(matrixSort==='calisma') return workMsFor(b.code) - workMsFor(a.code);
-      if(matrixSort==='renk') return statusPriority(a.code) - statusPriority(b.code) || a.code.localeCompare(b.code);
-      return a.code.localeCompare(b.code);
-    });
-    const groupNames = ['Tümü', ...MACHINE_GROUPS.map(g=>g.name), 'Diğer'];
-    body = `<div class="matrix-wrap">
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-        <button class="chip ${matrixAtolyeFilter==='tumu'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setMatrixAtolyeFilter('tumu')">Tüm Makineler</button>
-        <button class="chip ${matrixAtolyeFilter==='imalat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setMatrixAtolyeFilter('imalat')">${ico('factory',14)} İmalat Atölye</button>
-        <button class="chip ${matrixAtolyeFilter==='tadilat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setMatrixAtolyeFilter('tadilat')">${ico('wrench',14)} Tadilat Atölye</button>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-        ${groupNames.map(g=>`<button class="chip ${matrixGroupFilter===g?'active':''}" onclick="setMatrixGroupFilter('${g}')">${g}</button>`).join('')}
-      </div>
-      <div class="matrix-legend">
-        <span><span class="legend-dot" style="background:var(--success)"></span>Çalışıyor</span>
-        <span><span class="legend-dot" style="background:var(--warn)"></span>Duruşta</span>
-        <span><span class="legend-dot" style="background:var(--danger)"></span>Boşta</span>
-        <span><span class="legend-dot" style="background:var(--tadilat-info)"></span>Tadilat Yapıyor</span>
-        <span style="margin-left:auto;display:flex;gap:8px">
-          <button class="chip ${matrixSort==='alpha'?'active':''}" onclick="setMatrixSort('alpha')">Alfabetik</button>
-          <button class="chip ${matrixSort==='calisma'?'active':''}" onclick="setMatrixSort('calisma')">Çalışma Süresine Göre</button>
-          <button class="chip ${matrixSort==='renk'?'active':''}" onclick="setMatrixSort('renk')">Renge Göre</button>
-        </span>
-      </div>
-      <div class="matrix-grid">`;
-    sortedMachines.forEach(m=>{
-      const label = `${m.code} · ${m.name}`;
-      const tadilatHere = tadilatAktifOnMachine(label);
-      const machineEntries = entries.filter(e=>e.makine===label);
-      const runningEntries = machineEntries.filter(e=>e.status==='devam');
-      const stoppedEntries = machineEntries.filter(e=>e.status==='duruş');
-      const running = !tadilatHere && runningEntries.length>0;
-      const stopped = !tadilatHere && !running && stoppedEntries.length>0;
-      const bg = tadilatHere ? (resolvedTheme()==='light'?'var(--tadilat-soft)':'#3b2a5c') : resolvedTheme()==='light'
-        ? (running?'#d1fae5':stopped?'#fef3c7':'#fee2e2')
-        : (running?'#1a4d2e':stopped?'#4a3f0a':'#3d1f1f');
-      const border = tadilatHere ? 'var(--tadilat-info)' : running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
-      const dotColor = tadilatHere ? 'var(--tadilat-info)' : running?'var(--success)':stopped?'var(--warn)':'var(--danger)';
-      const lastFinished = (!running&&!stopped&&!tadilatHere) ? machineEntries.slice().sort((a,b)=>b.startTs-a.startTs)[0] : null;
-      const durusAlert = uzunDurusUyariEnabled() && stopped && stoppedEntries.some(e=>e.duruşTs && e.duruşNedeni!==GUN_SONU_REASON && (nowTick-e.duruşTs)>=uzunDurusEsikMs());
-      body += `<div class="matrix-card${durusAlert?' durus-alert':''}" style="background:${bg};border-color:${durusAlert?'var(--danger)':border};position:relative" onclick="openMachineDetail('${escJs(m.code)}')">
-        ${durusAlert ? `<span class="durus-alert-badge" title="Uzun süredir duruşta">${ico('alert',14)}</span>` : ''}
-        <div class="matrix-card-top"><span class="matrix-code">${m.code}</span><span class="matrix-dot" style="background:${dotColor}"></span></div>
-        <div class="matrix-name">${esc(m.name)}</div>`;
-      if(tadilatHere){
-        const { tadilat: tt, operasyon: top } = tadilatHere;
-        body += `<div class="matrix-sub" style="color:var(--tadilat-info);font-weight:700">${ico('wrench',14)} ${esc(tt.uKodu)}</div>
-          <div class="matrix-sub">${esc(top.operatorUsername)} · ${live(()=> fmtElapsed(tadilatOpDurationBreakdown(top).netMs))}</div>`;
-      } else if(running){
-        if(runningEntries.length===1){
-          const info = runningEntries[0];
-          body += `<div class="matrix-sub">${esc(info.talepNo || info.isEmriNo)} · ${esc(info.operatorUsername)}</div>
-            <div class="matrix-sub">${live(()=> fmtElapsed(entryDurationBreakdown(info).netMs))} çalışıyor</div>`;
-        } else {
-          body += `<div class="matrix-sub" style="font-weight:700">${runningEntries.length} İş Emri Aktif</div>
-            <div class="matrix-sub" style="opacity:.7">Detay için tıkla</div>`;
-        }
-      } else if(stopped){
-        if(stoppedEntries.length===1){
-          const info = stoppedEntries[0];
-          body += `<div class="matrix-sub">${esc(info.talepNo || info.isEmriNo)} · ${esc(info.operatorUsername)}</div>
-            <div class="matrix-sub">Duruş: "${esc(info.duruşNedeni)}"</div>`;
-        } else {
-          body += `<div class="matrix-sub" style="font-weight:700">${stoppedEntries.length} İş Duraklatıldı</div>
-            <div class="matrix-sub" style="opacity:.7">Detay için tıkla</div>`;
-        }
-      } else if(lastFinished){
-        body += `<div class="matrix-sub">Son: ${esc(lastFinished.operatorUsername)} · ${fmtDT(lastFinished.startTs)}</div>
-          ${lastFinished._isTadilat && lastFinished.aciklama ? `<div class="matrix-sub" style="opacity:.8">${esc(lastFinished.aciklama)}</div>` : ''}`;
-      } else {
-        body += `<div class="matrix-sub">Hiç kullanılmadı</div>`;
-      }
-      body += `</div>`;
-    });
-    body += `</div></div>`;
+    body = renderMakineMatrisi();
   } else if(view==='completed'){
     const birlesmeGroups = computeBirlesmeGroups();
     body = `<div class="completed-wrap">
@@ -2524,10 +2982,19 @@ function renderAdmin(){
     const renderBekleyenCard = (t) => {
       const expanded = tadilatExpandedIds.has(t.id);
       const gecmis = tadilatOperasyonlarArray(t).filter(o=>o.status==='tamamlandi');
-      return `<div class="completed-card" style="cursor:pointer" onclick="toggleTadilatExpand('${t.id}')">
+      // Bekleme süresi kartın kapalı halinde de görünüyor: unutulmuş talep listeye
+      // bakar bakmaz belli olsun diye (eskiden açılış tarihi sadece açınca görünüyordu).
+      // MVP eşiği: 3 gün sarı, 7 gün kırmızı — mutlak süre, talebin aciliyetini ya da
+      // atölye yükünü hesaba katmıyor (iyRenk ile aynı sınır).
+      const bekMs = Math.max(0, Date.now() - (t.olusturmaTs || Date.now()));
+      const bekRenk = bekMs >= 7*86400000 ? 'var(--danger)' : bekMs >= 3*86400000 ? 'var(--warn)' : 'var(--text-muted)';
+      return `<div class="completed-card" style="cursor:pointer;border-left-color:${bekRenk}" onclick="toggleTadilatExpand('${t.id}')">
         <div class="completed-header">
           <span class="completed-id mono" style="color:var(--warn)">${ico('hourglass',13)} ${esc(t.uKodu)}${tadilatKisaLabel(t)?` <span style="color:var(--text-muted);font-weight:400;font-size:.75em">${esc(tadilatKisaLabel(t))}</span>`:''}</span>
-          <span class="completed-meta">${expanded?ico('chevronUp',12):ico('chevronDown',12)}</span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span class="matrix-tag" style="--sb:${bekRenk}">${fmtBekleme(bekMs)} bekliyor</span>
+            <span class="completed-meta">${expanded?ico('chevronUp',12):ico('chevronDown',12)}</span>
+          </span>
         </div>
         ${expanded ? `
           <div style="font-size:12.5px;color:var(--text-muted);margin:8px 0 4px">${fmtDT(t.olusturmaTs)} · ${esc(t.olusturanName)}</div>
@@ -2595,44 +3062,81 @@ function renderAdmin(){
       <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;max-width:900px">Operatörler bu listeden bekleyen bir talebi alıp çalışır. "Son Operasyon" işaretlenene kadar talep tekrar tekrar bekleyenlere düşebilir (çok operasyonlu tadilatlar için). Bitirdiklerinde, varsa duraklattıkları üretim işi otomatik olarak "${TADILAT_SONRASI_REASON}" duruşuna geçer.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start">
         <div>
-          <div style="font-size:16px;font-weight:700;margin-bottom:14px">Yeni Tadilat Talebi</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-            <input id="tad-ukodu" class="mono" placeholder="U kodu" value="${esc(newTadilatForm.uKodu)}" oninput="newTadilatForm.uKodu=this.value" onblur="tadUkoduBlur('new')" style="flex:1;min-width:120px;padding:12px 14px;font-size:14.5px">
-            <button type="button" class="btn-ghost" style="padding:0 14px" title="Malzeme Ara" onclick="openMalzemeArama('new')">${ico('search',14)}</button>
-            <input id="tad-kisaaciklama" placeholder="Açıklama (zorunlu)" value="${esc(newTadilatForm.kisaAciklama)}" oninput="newTadilatForm.kisaAciklama=this.value; newTadilatForm.aciklamaManual=true" style="flex:1.5;min-width:140px;padding:12px 14px;font-size:14.5px">
-            <input id="tad-adet" inputmode="numeric" placeholder="Adet (zorunlu)" value="${esc(newTadilatForm.adet)}" style="width:110px;padding:12px 14px;font-size:14.5px" oninput="this.value=this.value.replace(/\\D/g,''); newTadilatForm.adet=this.value">
-          </div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">
-            <input id="tad-bolum" list="tadilat-bolum-options" placeholder="Talep eden bölüm (seç ya da yaz) (zorunlu)" value="${esc(newTadilatForm.bolum)}" oninput="newTadilatForm.bolum=this.value" onblur="render()" style="flex:1;min-width:140px;padding:12px 14px;font-size:14.5px">
-            <input id="tad-makine" list="tadilat-makine-options" placeholder="Talep edilen makine (zorunlu)" value="${esc(newTadilatForm.talepMakine)}" oninput="newTadilatForm.talepMakine=this.value" style="flex:1;min-width:140px;padding:12px 14px;font-size:14.5px">
-          </div>
-          <datalist id="tadilat-bolum-options">${tadilatBolumOptions().map(b=>`<option value="${b}">`).join('')}</datalist>
-          <datalist id="tadilat-makine-options">${isMerkezleriFor(newTadilatForm.bolum).map(k=>`<option value="${esc(k)}">`).join('')}</datalist>
-          <input id="tad-kisi" list="uretim-personeli-options" placeholder="Talep eden kişi (ad soyad) (zorunlu)" value="${esc(newTadilatForm.talepKisi)}" oninput="newTadilatForm.talepKisi=this.value" style="margin-bottom:10px;padding:12px 14px;font-size:14.5px">
-          <datalist id="uretim-personeli-options">${uretimPersoneliFor(newTadilatForm.bolum).map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
-          ${myAtolyelerAdmin.length>1 ? `
-          <select id="tad-atolye" style="margin-bottom:10px;padding:12px 14px;font-size:14.5px" onchange="tadilatFormAtolyeSet(this.value)">
-            ${myAtolyelerAdmin.includes('imalat') ? `<option value="imalat" ${tadilatFormAtolyeGet()==='imalat'?'selected':''}>${ico('factory',14)} İmalat Atölye</option>` : ''}
-            ${myAtolyelerAdmin.includes('tadilat') ? `<option value="tadilat" ${tadilatFormAtolyeGet()==='tadilat'?'selected':''}>${ico('wrench',14)} Tadilat Atölye</option>` : ''}
-          </select>` : `
-          <input type="hidden" id="tad-atolye" value="${myAtolyelerAdmin[0]}">
-          <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px">Atölye: ${myAtolyelerAdmin[0]==='tadilat'?(ico('wrench',14)+' Tadilat Atölye'):(ico('factory',14)+' İmalat Atölye')} <span style="opacity:.7">(tek atölyene açılıyor)</span></div>`}
-          ${tadilatOnHazirIstekListesi().length>0 ? `
-          <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px">
-            <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:6px">Hazır ifadeler — işaretlediğin, açıklamaya otomatik eklenir</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 14px">
-              ${tadilatOnHazirIstekListesi().map(p=>{
-                const sel = tadPresetSelections[p.id] || {checked:false, value:''};
-                return `<label style="display:flex;align-items:center;gap:5px;padding:3px 0;cursor:pointer;font-size:12px">
-                  <input type="checkbox" style="width:auto;flex-shrink:0;transform:scale(.85)" ${sel.checked?'checked':''} onchange="toggleTadPreset('${p.id}')">
-                  <span>${esc(p.hasParam ? p.text.split('{x}')[0] : p.text)}</span>
-                  ${p.hasParam ? `<input type="text" inputmode="decimal" placeholder="x" value="${esc(sel.value||'')}" oninput="setTadPresetValue('${p.id}', this.value)" style="width:34px;flex-shrink:0;padding:2px 4px;font-size:12px;display:inline-block">
-                  <span style="flex-shrink:0">${esc(p.text.split('{x}')[1]||'')}</span>` : ''}
-                </label>`;
-              }).join('')}
+          <div style="font-size:16px;font-weight:700;margin-bottom:4px">Yeni Tadilat Talebi</div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:14px"><span class="zorunlu">*</span> ile işaretli alanların hepsi zorunlu.</div>
+
+          <div class="tad-grup">
+            <div class="tad-grup-baslik"><span class="tad-grup-no">1</span> Ne yapılacak</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <div class="field" style="flex:1;min-width:170px">
+                <label for="tad-ukodu">U kodu<span class="zorunlu">*</span></label>
+                <div style="display:flex;gap:8px">
+                  <input id="tad-ukodu" class="mono" placeholder="ör. U-8841-M10" value="${esc(newTadilatForm.uKodu)}" oninput="newTadilatForm.uKodu=this.value" onblur="tadUkoduBlur('new')" style="flex:1;min-width:0">
+                  <button type="button" class="btn-ghost" style="padding:0 14px;flex:none" title="Malzeme Ara" onclick="openMalzemeArama('new')">${ico('search',14)}</button>
+                </div>
+              </div>
+              <div class="field" style="width:120px;flex:none">
+                <label for="tad-adet">Adet<span class="zorunlu">*</span></label>
+                <input id="tad-adet" inputmode="numeric" placeholder="0" value="${esc(newTadilatForm.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newTadilatForm.adet=this.value">
+              </div>
             </div>
-          </div>` : ''}
-          <textarea id="tad-aciklama" placeholder="Ne işlem yapılacak?" oninput="newTadilatForm.aciklama=this.value" style="min-height:110px;margin-bottom:14px;padding:12px 14px;font-size:14.5px">${esc(newTadilatForm.aciklama)}</textarea>
+            <div class="field">
+              <label for="tad-kisaaciklama">Kısa açıklama<span class="zorunlu">*</span></label>
+              <input id="tad-kisaaciklama" placeholder="listede görünecek tek satır" value="${esc(newTadilatForm.kisaAciklama)}" oninput="newTadilatForm.kisaAciklama=this.value; newTadilatForm.aciklamaManual=true">
+            </div>
+            ${tadilatOnHazirIstekListesi().length>0 ? `
+            <div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px">
+              <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:6px">Hazır ifadeler — işaretlediğin, açıklamaya otomatik eklenir</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 14px">
+                ${tadilatOnHazirIstekListesi().map(p=>{
+                  const sel = tadPresetSelections[p.id] || {checked:false, value:''};
+                  return `<label style="display:flex;align-items:center;gap:5px;padding:3px 0;cursor:pointer;font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);font-weight:400">
+                    <input type="checkbox" style="width:auto;flex-shrink:0;transform:scale(.85)" ${sel.checked?'checked':''} onchange="toggleTadPreset('${p.id}')">
+                    <span>${esc(p.hasParam ? p.text.split('{x}')[0] : p.text)}</span>
+                    ${p.hasParam ? `<input type="text" inputmode="decimal" placeholder="x" value="${esc(sel.value||'')}" oninput="setTadPresetValue('${p.id}', this.value)" style="width:34px;flex-shrink:0;padding:2px 4px;font-size:12px;display:inline-block">
+                    <span style="flex-shrink:0">${esc(p.text.split('{x}')[1]||'')}</span>` : ''}
+                  </label>`;
+                }).join('')}
+              </div>
+            </div>` : ''}
+            <div class="field">
+              <label for="tad-aciklama">Ne işlem yapılacak?<span class="zorunlu">*</span></label>
+              <textarea id="tad-aciklama" placeholder="yapılacak işi tarif et" oninput="newTadilatForm.aciklama=this.value" style="min-height:110px">${esc(newTadilatForm.aciklama)}</textarea>
+            </div>
+          </div>
+
+          <div class="tad-grup">
+            <div class="tad-grup-baslik"><span class="tad-grup-no">2</span> Kim istedi</div>
+            <div class="field">
+              <label for="tad-bolum">Talep eden bölüm<span class="zorunlu">*</span></label>
+              <input id="tad-bolum" list="tadilat-bolum-options" placeholder="seç ya da yaz" value="${esc(newTadilatForm.bolum)}" oninput="newTadilatForm.bolum=this.value" onblur="render()">
+            </div>
+            <div class="field">
+              <label for="tad-kisi">Talep eden kişi<span class="zorunlu">*</span></label>
+              <input id="tad-kisi" list="uretim-personeli-options" placeholder="ad soyad" value="${esc(newTadilatForm.talepKisi)}" oninput="newTadilatForm.talepKisi=this.value">
+            </div>
+            <datalist id="tadilat-bolum-options">${tadilatBolumOptions().map(b=>`<option value="${b}">`).join('')}</datalist>
+            <datalist id="uretim-personeli-options">${uretimPersoneliFor(newTadilatForm.bolum).map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+          </div>
+
+          <div class="tad-grup">
+            <div class="tad-grup-baslik"><span class="tad-grup-no">3</span> Nerede</div>
+            <div class="field">
+              <label for="tad-makine">Talep edilen makine<span class="zorunlu">*</span></label>
+              <input id="tad-makine" list="tadilat-makine-options" placeholder="makine kodu" value="${esc(newTadilatForm.talepMakine)}" oninput="newTadilatForm.talepMakine=this.value">
+            </div>
+            <datalist id="tadilat-makine-options">${isMerkezleriFor(newTadilatForm.bolum).map(k=>`<option value="${esc(k)}">`).join('')}</datalist>
+            ${myAtolyelerAdmin.length>1 ? `
+            <div class="field">
+              <label for="tad-atolye">Atölye</label>
+              <select id="tad-atolye" onchange="tadilatFormAtolyeSet(this.value)">
+                ${myAtolyelerAdmin.includes('imalat') ? `<option value="imalat" ${tadilatFormAtolyeGet()==='imalat'?'selected':''}>İmalat Atölye</option>` : ''}
+                ${myAtolyelerAdmin.includes('tadilat') ? `<option value="tadilat" ${tadilatFormAtolyeGet()==='tadilat'?'selected':''}>Tadilat Atölye</option>` : ''}
+              </select>
+            </div>` : `
+            <input type="hidden" id="tad-atolye" value="${myAtolyelerAdmin[0]}">
+            <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px">Atölye: ${myAtolyelerAdmin[0]==='tadilat'?(ico('wrench',14)+' Tadilat Atölye'):(ico('factory',14)+' İmalat Atölye')} <span style="opacity:.7">(tek atölyene açılıyor)</span></div>`}
+          </div>
           <button class="btn-primary" style="width:100%;padding:15px 0;font-size:15.5px" onclick="addTadilat()">+ Talep Oluştur</button>
         </div>
         <div style="max-height:calc(100vh - 300px);overflow-y:auto;padding-right:4px">
@@ -2750,7 +3254,7 @@ function renderAdmin(){
     body += `</tbody></table></div>${entryDetailId ? renderEntryDetailModal() : ''}`;
   }
 
-  return `<div class="root-wide theme-${resolvedTheme()}">${header}${body}${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}${tadilatAkisModalId ? renderTadilatAkisModal() : ''}${karburPickerFor ? renderKarburPicker() : ''}</div>`;
+  return `<div class="root-wide theme-${resolvedTheme()}">${sidebar}<div class="admin-shell-body"><div class="print-brand">ROTA TAKİP · YÖNETİCİ RAPORU</div>${header}${body}</div>${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}${tadilatAkisModalId ? renderTadilatAkisModal() : ''}${karburPickerFor ? renderKarburPicker() : ''}</div>`;
 }
 function setReportFilterFieldLight(field, val){ reportFilter[field]=val; renderTableOnly(); }
 function renderTableOnly(){ render(); } // basit yaklaşım: filtre değişince tam yeniden çizim yeterli hızda çalışır

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Manrope:wght@600;700;800&display=swap');
 
 /* =============== FIREBASE BULUT AYARI — SADECE BU KISMI DOLDURUN =============== */
 /* KURULUM_BULUT.md dosyasındaki adımları izleyin. Realtime Database'i aktif edip
@@ -53,6 +53,13 @@ table{border-collapse:collapse;width:100%}
 .header-left{display:flex;align-items:center;gap:10px}
 .brand-sub{font-size:11px;color:var(--text-muted);margin-top:1px}
 .icon-btn{background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:15px}
+/* Operatör başlığı 390px'te taşıyordu: marka bloğu + 6 icon-btn, kullanılabilir 354px'e
+   sığmıyor (styles.v2.css'te icon-btn 44px olduğu için taşma ~65px'e çıkıyor). Çözüm dokunma
+   hedefini küçültmek DEĞİL — eldivenli el için 44px bilinçli bir karardı. Bunun yerine telefonda
+   yalnızca Ayarlar ekranında birebir karşılığı OLMAYAN butonlar kalıyor (mesajlar, bildirimler,
+   ayarlar, çıkış); tema ve "mesaj gönder" zaten Ayarlar'ın içinde. Geri almak için tek satır:
+   .root-mobile .phone-hide kuralını sil. */
+.header-actions{display:flex;gap:5px}
 .icon-btn-labeled{display:flex;align-items:center;gap:6px;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 14px;color:var(--text-muted);font-size:13px}
 
 .tabs{display:flex;gap:6px;padding:12px 18px 0}
@@ -61,6 +68,15 @@ table{border-collapse:collapse;width:100%}
 
 .body-pad{flex:1;padding:18px;overflow-y:auto}
 .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+/* --- TADİLAT TALEP FORMU (5. adım) ---------------------------------------
+   Eskiden yedi alan iki sarmalayan satırda yan yanaydı ve hangisinin ne olduğu ancak
+   placeholder okununca anlaşılıyordu; "(zorunlu)" da placeholder'ın içindeydi, yani
+   yazmaya başlayınca kayboluyor ve ekran okuyucuya hiç ulaşmıyordu. Artık üç adım
+   (Ne / Kim istedi / Nerede) ve her alanda gerçek <label> + kırmızı yıldız. */
+.tad-grup{border:1px solid var(--border);border-radius:12px;padding:14px 16px 2px;margin-bottom:14px;background:var(--panel)}
+.tad-grup-baslik{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px}
+.tad-grup-no{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--accent-dim);color:var(--accent);font-size:11px;font-weight:700;flex:none}
+.zorunlu{color:var(--danger);margin-left:3px;font-weight:700}
 .field label{font-size:11.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
 .row{display:flex;gap:10px}
 .btn-primary{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--btn-primary-bg);color:var(--btn-primary-text);font-weight:700;font-size:14px;border:none;border-radius:10px;padding:12px 0;width:100%;box-shadow:var(--card-shadow)}
@@ -123,11 +139,12 @@ button .ic,.tab-btn .ic,.chip .ic{pointer-events:none}
 .lock-timer{font-family:'JetBrains Mono',monospace;font-size:44px;font-weight:700;margin-top:22px;letter-spacing:1px}
 .lock-meta{font-size:12.5px;color:var(--text-muted);margin-top:6px}
 .lock-note{font-size:13px;color:var(--text-muted);font-style:italic;margin-top:14px;max-width:320px}
-.durus-reason-box{font-size:13px;color:var(--warn);font-style:italic;margin-top:16px;max-width:320px;background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:8px;padding:10px 14px}
+/* Renk artık --nc ile geliyor: gün sonu / planlı mola mavi, tadilat mor, gerisi warn.
+   Üç ekranda da aynı kutu — bkz. render-common.js durusReasonBoxHtml(). */
+.durus-reason-box{--nc:var(--warn);font-size:13px;color:var(--nc);font-style:italic;margin-top:16px;max-width:320px;background:color-mix(in srgb,var(--nc) 8%,transparent);border:1px solid color-mix(in srgb,var(--nc) 27%,transparent);border-radius:8px;padding:10px 14px}
 .lock-hint{font-size:11.5px;color:var(--text-muted);margin-top:18px;max-width:260px;line-height:1.5}
 .durus-chip-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:340px}
 
-.admin-header{display:flex;align-items:center;justify-content:space-between;padding:11px 24px;border-bottom:1px solid var(--border)}
 .admin-stats{display:flex;gap:24px;padding:8px 24px;font-size:13px;color:var(--text-muted);border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap}
 .filter-bar{display:flex;gap:10px;align-items:center;padding:10px 24px;border-bottom:1px solid var(--border);flex-wrap:wrap}
 .filter-input{background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;width:auto}
@@ -141,16 +158,58 @@ th{text-align:left;padding:10px 12px;color:var(--text-muted);font-size:11.5px;te
 td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px solid var(--border)}
 
 .matrix-wrap{padding:20px 24px;overflow-y:auto;flex:1}
-.matrix-legend{display:flex;gap:10px;align-items:center;margin-bottom:18px;font-size:12.5px;color:var(--text-muted);flex-wrap:wrap}
+/* --- İŞ YOĞUNLUĞU (3. adım) -----------------------------------------------
+   Yoğunluk artık yalnızca dolu çubuğun rengiyle değil, satırın 4px sol rayıyla da
+   anlatılıyor — "durum tek başına renkle anlatılmasın" kuralının aynısı (bkz. matrix-tag).
+   Renk --nc ile geliyor, .notice / .durus-reason-box ile aynı desen.
+   Pano'nun başlığı eskiden satır içinde 'Oswald' yazıyordu; styles.v2.css'te o font
+   yüklenmiyor, bu yüzden sınıfa taşındı. */
+.iy-list{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.iy-row{border-left:4px solid var(--nc,transparent);border-bottom:1px solid var(--border)}
+.iy-row:last-child{border-bottom:none}
+.iy-row.open{background:var(--panel-alt)}
+.iy-head{width:100%;text-align:left;background:transparent;border:none;color:var(--text);cursor:pointer;padding:11px 14px;display:flex;flex-direction:column;gap:8px}
+.iy-bar{display:block;height:5px;border-radius:3px;background:var(--panel-alt);overflow:hidden}
+.iy-bar>span{display:block;height:100%;background:var(--nc,var(--accent))}
+.iy-detay{background:var(--bg);padding:4px 14px 12px;overflow-x:auto}
+.iy-detay-row{display:grid;grid-template-columns:116px minmax(150px,1fr) 96px 132px 118px;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px}
+.iy-detay-row .sag{text-align:right}
+.iy-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:14px}
+.iy-kpi{border-left:4px solid var(--nc);min-width:0}
+.iy-kpi-vurgu{background:color-mix(in srgb,var(--nc) 7%,transparent)}
+.iy-kpi-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.iy-kpi-value{font-size:30px;font-weight:700;margin-top:8px;color:var(--nc)}
+.iy-kpi-sub{font-size:10.5px;color:var(--text-muted);margin-top:4px}
+.pano-title{font-family:'Oswald',sans-serif;letter-spacing:2px;font-weight:600}
+.matrix-toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.matrix-legend{display:flex;gap:14px;align-items:center;margin-bottom:14px;font-size:12.5px;color:var(--text-muted);flex-wrap:wrap}
+.matrix-legend b{color:var(--text);font-weight:700;margin-left:2px}
 .legend-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
 .matrix-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
-.matrix-card{border:1px solid;border-radius:12px;padding:12px 14px;min-height:92px;cursor:pointer;transition:transform .1s;box-shadow:var(--card-shadow)}
+.matrix-card{position:relative;border:1px solid;border-radius:12px;padding:12px 14px;min-height:92px;cursor:pointer;transition:transform .1s;box-shadow:var(--card-shadow)}
 .matrix-card:hover{transform:translateY(-1px)}
 .matrix-card-top{display:flex;align-items:center;justify-content:space-between}
 .matrix-code{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px}
-.matrix-dot{width:10px;height:10px;border-radius:50%}
+/* Sadece operatör kartlarında kullanılıyor. Eskiden sınıf eksikti (display yok, bu yüzden
+   span'da width/height işlemiyordu) ve 5 çağrı yerinin hepsi aynı satır içi düzeltmeyi
+   tekrarlıyordu. Sınıf tamamlandı; çağrı yerlerinde artık sadece renk kalıyor. */
+.matrix-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+/* Uyarı kutusu — operatör listesinde iki kez (tadilat sonrası ayar bekleyenler,
+   "aynı anda N aktif işin var"), ikisi de satır içi yazılmıştı. */
+.notice{--nc:var(--warn);background:color-mix(in srgb,var(--nc) 8%,transparent);border:2px solid var(--nc);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+.notice-title{display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:700;color:var(--nc);margin-bottom:8px}
+.notice-sub{font-size:12.5px;color:var(--text-muted)}
+.notice-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border-radius:8px;padding:8px 12px;margin-top:6px;cursor:pointer}
+.empty-state{text-align:center;color:var(--text-muted);padding:40px 0}
 .matrix-name{font-size:12px;color:var(--text-muted);margin-top:2px;margin-bottom:8px}
 .matrix-sub{font-size:11.5px;opacity:.9;margin-top:2px}
+.matrix-footer{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;margin-top:18px;padding:13px 18px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--card-shadow)}
+.matrix-footer-stats{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12.5px;color:var(--text-muted)}
+.matrix-footer-stats b{color:var(--text)}
+.mf-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.matrix-footer-sync{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-muted)}
+.matrix-footer-sync b{color:var(--text);font-family:'JetBrains Mono',monospace;font-weight:600}
+
 
 .modal-overlay{position:fixed;inset:0;background:#000000a0;display:flex;align-items:center;justify-content:center;z-index:500;padding:20px}
 /* Duruş nedeni seçici — alttan açılan sheet (mockup tasarımı). Gerçek bir modal (arka planı
@@ -216,23 +275,70 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .settings-wrap{padding:20px 24px;overflow-y:auto;flex:1}
 .sub-tabs{display:flex;gap:8px;margin-bottom:18px}
 
-/* ===== STOK EKRANI — modül rayı =====
-   Stok üç seviyeli: ana sekme (Stok) → modül (Takım/Karbür/Malzeme) → bölüm. Üçü de yatay
-   satır olunca hangisinin ne olduğu ayırt edilmiyordu. Modül seviyesi artık geniş ekranda
-   SOLDA DİKEY duruyor; dar ekranda (aşağıdaki media) yatay kaydırılabilir şeride dönüşüyor,
-   çünkü 480px'e 236px'lik bir ray sığmaz. */
-.stok-govde{display:flex;flex:1;min-height:0}
-.stok-ray{width:236px;flex:none;display:flex;flex-direction:column;gap:6px;padding:20px 0 20px 24px;overflow-y:auto}
-.stok-ray-baslik{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600;padding:0 4px 6px}
-.stok-ray-btn{display:flex;align-items:center;gap:11px;text-align:left;width:100%;padding:11px 13px;border-radius:10px;border:1px solid var(--border);background:var(--panel);color:var(--text)}
-.stok-ray-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
-.stok-ray-metin{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
-.stok-ray-ad{font-size:13.5px;font-weight:500}
-.stok-ray-btn.active .stok-ray-ad{font-weight:600}
-.stok-ray-alt{font-size:11px;color:var(--text-muted)}
+/* ===== STOK EKRANI — modül sekmeleri (2026-09-15: dikey ray → yatay sekme şeridi) =====
+   Stok üç seviyeli: ana sekme (Stok) → modül (Genel Bakış/Takım/Karbür/Malzeme) → bölüm. Modül
+   seviyesi artık geniş VE dar ekranda aynı: yatay, kaydırılabilir sekme şeridi — Stok Takibi
+   tasarım tuvaliyle (design/StokTakibiOneri.dc.html) hizalı. */
+.stok-govde{display:flex;flex-direction:column;flex:1;min-height:0}
+/* Üst başlık + arama — sadece Genel Bakış'ta (design/StokTakibiOneri.dc.html ile birebir),
+   diğer modüllerin kendi arama/aksiyon akışı zaten var, burada tekrarlanmıyor. */
+.stok-top-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;flex:none;flex-wrap:wrap;background:var(--panel);border-bottom:1px solid var(--border)}
+.stok-top-crumb{font-size:11px;color:var(--text-subtle);font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+.stok-top-title{font-family:'Inter',sans-serif;font-size:24px;font-weight:700;margin-top:2px;color:var(--text);letter-spacing:-.02em}
+.stok-top-search{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text-subtle);font-size:13px;width:100%;max-width:520px}
+.stok-top-search input{border:none;background:none;padding:0;width:100%;color:var(--text);font-size:13px}
+.stok-top-search input::placeholder{color:var(--text-subtle)}
+.stok-tab-row{display:flex;align-items:center;gap:8px;padding:20px 24px 0;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex:none}
+.stok-tab-row::-webkit-scrollbar{display:none}
+.stok-tab-btn{display:flex;align-items:center;gap:8px;flex:0 0 auto;white-space:nowrap;padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-muted);font-size:12.5px;font-weight:500;box-shadow:var(--card-shadow)}
+.stok-tab-btn:hover{background:var(--panel-alt)}
+.stok-tab-btn .stb-ct{font-size:11px;font-weight:700;background:var(--panel-alt);color:var(--text-muted);border-radius:9999px;padding:1px 7px}
+.stok-tab-btn.active{background:var(--sidebar-bg);color:#fff;border-color:var(--sidebar-bg)}
+.stok-tab-btn.active:hover{background:var(--sidebar-bg)}
+.stok-tab-btn.active .stb-ct{background:var(--accent);color:var(--btn-primary-text)}
 .stok-icerik{flex:1;min-width:0;display:flex;flex-direction:column;overflow-y:auto}
-.stok-bolumler{padding:20px 24px 0;margin-bottom:0;flex-wrap:wrap}
+.stok-bolumler{padding:16px 24px 0;margin-bottom:0;flex-wrap:wrap}
 .stok-icerik .settings-wrap{padding-top:16px;overflow:visible;flex:none}
+/* Genel Bakış — üç kaynağı birleştiren özet (bkz. renderStokGenelBakis()) */
+.stok-genel-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:24px 24px 0}
+.sgk-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--card-shadow)}
+.sgk-card.uyari{background:var(--danger);border-color:var(--danger);color:var(--on-warn)}
+.sgk-card.aktif{background:var(--sidebar-bg);border-color:var(--sidebar-bg);color:#fff}
+.sgk-num{font-family:'Inter',sans-serif;font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.sgk-label{font-size:14px;font-weight:500;color:var(--text);margin-top:4px}
+.sgk-card.uyari .sgk-label{color:var(--on-warn)}
+/* .aktif kartının zemini --sidebar-bg; o iki gövdede de koyu, beyaz doğru. */
+.sgk-card.aktif .sgk-label{color:#fff}
+.stok-genel-body{display:grid;grid-template-columns:2.8fr 1fr;gap:24px;padding:24px;flex:1;min-height:0}
+.sg-table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;min-width:0;display:flex;flex-direction:column;box-shadow:var(--card-shadow)}
+.sg-table-wrap table{display:block;overflow-y:auto;flex:1}
+.sg-table-wrap thead,.sg-table-wrap tbody tr{display:table;width:100%;table-layout:fixed}
+.sg-table-wrap thead{position:sticky;top:0;background:var(--panel-alt);z-index:1}
+.sg-table-wrap th{padding:12px 16px;font-size:11px;color:var(--text-subtle);text-transform:uppercase;letter-spacing:.04em;font-weight:700;border-bottom:1px solid var(--border)}
+.sg-table-wrap td{padding:14px 16px;font-size:13px;border-bottom:1px solid var(--panel-alt)}
+.sg-table-wrap tbody tr:hover{background:var(--panel-alt)}
+.sg-table-wrap tbody tr:last-child td{border-bottom:none}
+.sg-side{display:flex;flex-direction:column;gap:20px;overflow-y:auto;min-width:0}
+.sg-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--card-shadow)}
+.sg-panel-title{font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text)}
+.sg-crit-row{display:flex;align-items:flex-start;gap:9px;padding:12px 0;border-bottom:1px solid var(--panel-alt)}
+.sg-crit-row:last-child{border-bottom:none;padding-bottom:0}
+.sg-crit-row:first-child{padding-top:0}
+.sg-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:9999px;padding:2px 10px}
+.sg-sayfalama{margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-muted);flex:none}
+.sg-sayfa-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-muted);background:var(--panel)}
+.sg-sayfa-btn:hover:not(:disabled){background:var(--panel-alt)}
+.sg-sayfa-btn:disabled{opacity:.4}
+
+/* Negatif stok satırı — eskiden sabit rgba(254,226,226,.35) (açık kırmızı zemin) vardı;
+   koyu temada hem görünmüyor hem de zemin/metin kontrastını bozuyordu. Artık jetonla
+   tonlanan zemin + 3px sol ray (ray tabloda border yerine inset gölge, çünkü <tr>
+   border-collapse altında sol kenarlık almıyor). */
+.sg-table-wrap tr.sg-neg td{background:color-mix(in srgb,var(--danger) 7%,transparent)}
+.sg-table-wrap tr.sg-neg td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
+.sg-sayfa-btn.active{background:var(--sidebar-bg);color:#fff;border-color:var(--sidebar-bg);font-weight:700}
+.sg-filtre-chip{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 12px;background:var(--panel)}
+.sg-filtre-chip:hover{background:var(--panel-alt)}
 .sub-tab-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:12.5px;font-weight:500}
 .sub-tab-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
 .op-settings-row{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;max-width:1120px;flex-wrap:nowrap}
@@ -266,16 +372,101 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .route-chip{background:var(--panel-alt);border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--text)}
 .route-arrow{color:var(--text-muted)}
 
+/* ===================== ADMİN KABUĞU — SOL SIDEBAR (YENİ PALET) =====================
+   .root-wide SADECE admin tarafında kullanılıyor (operatör .root-mobile kullanıyor, bkz.
+   ui/render-operator.js) — bu yüzden burada tanımlanan palet override'ı ve flex-direction
+   değişikliği operatörü hiç etkilemiyor.
+   2026-09-21 — kullanıcı "çok karanlık, göz yoruyor" dedi ve admin'e tema seçeneğini (açık/koyu)
+   GERİ istedi, ikisi için de "yaratıcı" yeni paletler seçti (görsel palet seçici widget'ından):
+   açık = "Sage Paper" (sıcak kağıt zemin, koyu yeşil vurgu), koyu = "Warm Graphite Coral"
+   (sıcak/kahverengi-gri zemin — soğuk lacivert-siyah DEĞİL, mercan vurgu). Bu yüzden tek sabit
+   .root-wide bloğu yerine `.root-wide.theme-light` / `.root-wide.theme-dark` kullanılıyor —
+   ikisi birden (specificity 0,2,0) tek başına `.theme-light`'ı (0,1,0) her zaman yeniyor, sıraya
+   bağlı değil. themeToggleHtml() tekrar admin sidebar'ına eklendi (renderAdmin()). */
+.root-wide{ flex-direction:row; }
+.root-wide.theme-light{
+  /* "Cool Mist" — 2026-09-21, kullanıcının palet seçicisinden 2. seçim (Sage Paper'ın yerine). */
+  --bg:#F2F5F9; --panel:#FFFFFF; --panel-alt:#E8EDF3; --border:#D7DEE7;
+  --text:#1E2733; --text-muted:#7C8896; --text-subtle:#A3ADBA;
+  --accent:#0E93A0; --accent-hover:#0B7A85; --accent-dim:#0E93A014;
+  --success:#2F9E6E; --success-text:#25805A; --success-bg:#2F9E6E14; --success-border:#2F9E6E44;
+  --warn:#C7962C; --warn-text:#9C7620; --warn-bg:#C7962C14; --warn-border:#C7962C44;
+  --danger:#C1443A; --danger-text:#99362E; --danger-bg:#C1443A14; --danger-border:#C1443A44;
+  --sidebar-bg:#161C24;
+  --btn-primary-bg:#0E93A0; --btn-primary-text:#FFFFFF;
+  --chip-active-bg:#0E93A014; --chip-active-border:#0E93A0; --chip-active-text:#0E93A0;
+  --card-shadow:0 1px 3px rgba(20,30,40,.08); --radius-pill:9999px;
+  --success-row:#2F9E6E14;
+  --warn-soft:#C7962C12; --warn-med:#C7962C1F;
+  --on-warn:#FFFFFF; --on-success:#FFFFFF;
+}
+.root-wide.theme-dark{
+  /* "Midnight Indigo" — 2026-09-21, kullanıcının palet seçicisinden 2. seçim (Warm Graphite
+     Coral'ın yerine). --danger, seçilen mercan tonuna (#F0806E) çok yakın ama biraz daha
+     doygun (#E86F5C) — bu app'te bildirim rozetleri gibi yerler var(--danger)'ı DÜZ dolgu +
+     beyaz metinle kullanıyor, önceki (çok açık) tondaki kontrast sorununu tekrarlamamak için
+     (bkz. Aşama 3/4 notları). --btn-primary-text de bu yüzden koyu: --accent açık bir periwinkle,
+     üstünde beyaz metin okunmuyor. */
+  --bg:#1B1C2E; --panel:#252740; --panel-alt:#2E304D; --border:#3A3D5C;
+  --text:#E8E9F5; --text-muted:#9C9FC0; --text-subtle:#6F7296;
+  --accent:#8B9BFF; --accent-hover:#A3B0FF; --accent-dim:#8B9BFF1A;
+  --success:#5FD1A0; --success-text:#7EDBB3; --success-bg:#5FD1A01A; --success-border:#5FD1A044;
+  --warn:#F0B95E; --warn-text:#F0B95E; --warn-bg:#F0B95E1A; --warn-border:#F0B95E44;
+  --danger:#E86F5C; --danger-text:#F0917F; --danger-bg:#E86F5C1A; --danger-border:#E86F5C44;
+  --sidebar-bg:#131425;
+  --btn-primary-bg:#8B9BFF; --btn-primary-text:#171830;
+  --chip-active-bg:#8B9BFF1A; --chip-active-border:#8B9BFF; --chip-active-text:#B3BEFF;
+  --card-shadow:0 2px 8px rgba(0,0,0,.4); --radius-pill:9999px;
+  --success-row:#5FD1A01A;
+  --warn-soft:#F0B95E12; --warn-med:#F0B95E1F;
+  --on-warn:#241C04; --on-success:#0A2A1C;
+}
+.admin-sidebar{width:256px;flex:none;background:var(--sidebar-bg);display:flex;flex-direction:column;padding:24px 16px 16px;gap:6px;overflow-y:auto;border-right:1px solid rgba(255,255,255,.05)}
+.admin-sidebar-brand{display:flex;align-items:center;gap:12px;padding:0 8px 24px;flex:none}
+.admin-sidebar-mark{width:36px;height:36px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-weight:700;color:#fff;font-size:16px;flex:none}
+.admin-sidebar-name{font-family:'Inter',sans-serif;font-size:13.5px;font-weight:700;color:#fff;line-height:1.3;letter-spacing:-.01em}
+.admin-sidebar-sub{font-size:11px;color:#94A3B8;margin-top:1px}
+.admin-nav-item{display:flex;align-items:center;gap:11px;padding:10.5px 14px;border-radius:8px;color:#94A3B8;font-size:13.5px;font-weight:500;text-align:left;width:100%;position:relative;background:transparent;border:none;font-family:'Inter',sans-serif}
+.admin-nav-item:hover{background:#1E232B;color:#fff}
+.admin-nav-item.active{background:rgba(148,163,184,.16);color:#fff;font-weight:600}
+.admin-nav-item.active::before{content:'';position:absolute;left:-16px;top:6px;bottom:6px;width:3px;background:var(--accent);border-radius:0 3px 3px 0}
+.admin-nav-badge{margin-left:auto;background:var(--accent);color:var(--btn-primary-text);font-size:11px;font-weight:700;border-radius:9999px;padding:2px 8px;line-height:1.5}
+.admin-sidebar-user{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;border-radius:10px;background:#171B22;border:1px solid rgba(255,255,255,.05);flex:none}
+.admin-sidebar-avatar{width:36px;height:36px;border-radius:50%;background:#334155;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600;flex:none;position:relative}
+.admin-sidebar-uname{font-size:13px;font-weight:600;color:#fff;line-height:1.3}
+.admin-sidebar-urole{font-size:11px;color:#94A3B8;display:flex;align-items:center;gap:5px}
+.admin-sidebar-sec{font-size:10.5px;color:#475569;font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin:14px 6px 4px}
+.admin-shell-body{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+/* Marka artık sidebar'da (yazdırılmıyor, bkz. @media print) — yazdırılan sayfalarda üstte bir
+   başlık kalsın diye görünmez bir yedek satır, sadece @media print'te görünür hale geliyor. */
+.print-brand{display:none}
+.admin-topbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:14px 24px 0;flex:none}
+@media (max-width:900px){
+  .root-wide{flex-direction:column}
+  .admin-sidebar{width:auto;flex-direction:row;align-items:center;padding:10px 14px;gap:6px;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch}
+  .admin-sidebar-brand{padding:0 10px 0 0}
+  .admin-nav-item{flex:0 0 auto;white-space:nowrap;padding:9px 12px}
+  .admin-nav-item.active::before{left:6px;right:6px;top:auto;bottom:-8px;height:2px;width:auto}
+  .admin-sidebar-user{margin-top:0;margin-left:auto;border-top:none;padding:0 0 0 6px}
+  .admin-topbar{padding:calc(12px + env(safe-area-inset-top)) 16px 0}
+}
+
 .auth-wrap{padding:40px 24px;display:flex;flex-direction:column;gap:24px}
 .auth-header{display:flex;align-items:center;gap:10px;justify-content:center}
 .auth-form{display:flex;flex-direction:column;gap:14px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:340px;margin:0 auto;width:100%}
-.error-text{font-size:12.5px;color:var(--danger);background:#f8717122;border:1px solid #f8717155;border-radius:8px;padding:8px 10px}
+/* LİTERAL RENK TARAMASI (2026-09-21) — aşağıdaki mürekkepler eskiden #fff idi.
+   --danger koyu gövdede #F86D63/#F4726A; üzerine beyaz metin 2.9:1 veriyor, 10-12px
+   rozet metni için gereken 4.5:1'in çok altında. --on-warn iki gövdede de doğru
+   mürekkebi veriyor (koyu: #241C04 -> 5.6:1, açık: #FFFFFF -> 6.4:1).
+   Aynı sorun --accent üzerinde de var (teal #22B8C8 üzerine beyaz 2.4:1); orada
+   --btn-primary-text zaten doğru mürekkebi tutuyor. */
+.error-text{font-size:12.5px;color:var(--danger);background:color-mix(in srgb,var(--danger) 13%,transparent);border:1px solid color-mix(in srgb,var(--danger) 33%,transparent);border-radius:8px;padding:8px 10px}
 .hint{font-size:11.5px;color:var(--text-muted);text-align:center;line-height:1.5}
 
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel-alt);border:1px solid var(--border);padding:9px 16px;border-radius:20px;font-size:13px;color:var(--text);z-index:999;display:none}
 .toast.show{display:block}
 .toast-big{position:fixed;top:175px;left:50%;transform:translateX(-50%);background:var(--panel);border:2px solid var(--accent);padding:18px 30px;border-radius:14px;font-size:18px;font-weight:700;color:var(--text);z-index:1000;display:none;text-align:center;max-width:min(92vw,520px);box-shadow:0 10px 30px rgba(0,0,0,.45);line-height:1.4}
-.toast-big::before{content:'!';position:absolute;top:-14px;left:-14px;background:var(--danger);color:#fff;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;box-shadow:0 3px 10px rgba(0,0,0,.5);border:2px solid var(--bg)}
+.toast-big::before{content:'!';position:absolute;top:-14px;left:-14px;background:var(--danger);color:var(--on-warn);width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;box-shadow:0 3px 10px rgba(0,0,0,.5);border:2px solid var(--bg)}
 .toast-big.show{display:block}
 /* Onay varyantı — Excel yüklemesi gibi uzun süren ve "oldu mu olmadı mı" diye merak edilen
    işlerin sonucu için. Uyarı hâlinden iki farkı var: yeşil kenarlık + onay rozeti, ve ekranın
@@ -294,12 +485,12 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 
 /* =============== UZUN DURUŞ UYARISI =============== */
 @keyframes durusPulse{
-  0%{box-shadow:0 0 0 0 rgba(239,68,68,.55)}
-  70%{box-shadow:0 0 0 9px rgba(239,68,68,0)}
-  100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}
+  0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--danger) 55%,transparent)}
+  70%{box-shadow:0 0 0 9px color-mix(in srgb,var(--danger) 0%,transparent)}
+  100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--danger) 0%,transparent)}
 }
 .matrix-card.durus-alert{animation:durusPulse 1.8s infinite}
-.durus-alert-badge{position:absolute;top:-6px;right:-6px;background:var(--danger);color:#fff;font-size:10px;font-weight:800;border-radius:10px;padding:2px 6px;min-width:16px;text-align:center;line-height:1.3;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+.durus-alert-badge{position:absolute;top:-6px;right:-6px;background:var(--danger);color:var(--on-warn);font-size:10px;font-weight:800;border-radius:10px;padding:2px 6px;min-width:16px;text-align:center;line-height:1.3;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 
 /* =============== MOBİL DOKUNMA HEDEFİ İYİLEŞTİRMELERİ =============== */
 /* iOS Safari, 16px'in altındaki input font-size'larda alanı otomatik yakınlaştırır — bu can
@@ -329,26 +520,22 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .sub-tabs::-webkit-scrollbar{display:none}
   .sub-tab-btn{flex:0 0 auto;white-space:nowrap;padding:10px 16px;min-height:40px}
 
-  /* Stok modül rayı: dar ekranda 236px'lik dikey ray sığmaz — yatay kaydırılabilir şeride
-     dönüşüyor. Alt açıklama satırı ("freze, matkap, sarf") burada gizleniyor, yoksa şerit
-     gereksiz yer kaplıyor. Modül butonu dolu zeminli kaldığı için altındaki bölüm
-     satırından (çerçeveli .sub-tab-btn) hâlâ ayırt ediliyor. */
-  .stok-govde{flex-direction:column}
-  .stok-ray{width:auto;flex-direction:row;padding:14px 18px 0;gap:8px;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-  .stok-ray::-webkit-scrollbar{display:none}
-  .stok-ray-baslik{display:none}
-  .stok-ray-alt{display:none}
-  .stok-ray-btn{flex:0 0 auto;white-space:nowrap;width:auto;min-height:44px;padding:10px 14px}
+  /* Stok modül sekmeleri zaten yatay (bkz. .stok-tab-row) — dar ekranda sadece kenar boşluğu
+     daraltılıyor, dokunma hedefi büyütülüyor. */
+  .stok-top-header{padding:14px 18px 0}
+  .stok-top-search{width:100%}
+  .stok-tab-row{padding:14px 18px 0}
+  .stok-tab-btn{min-height:40px}
   .stok-icerik{overflow-y:visible}
   .stok-bolumler{padding:14px 18px 0}
-
-  /* Admin üst başlığı (logo + buton grubu) — dar ekranda taşıyordu, artık alt satıra sarıyor. */
-  .admin-header{flex-wrap:wrap;gap:10px;padding:14px 16px}
+  .stok-genel-kpi{padding:14px 18px 0;grid-template-columns:repeat(2,1fr)}
+  .stok-genel-body{padding:14px 18px 18px;grid-template-columns:1fr}
 
   /* K1 (çentik telafisi, 2. yarı): apple-mobile-web-app-status-bar-style=black-translucent
      PWA olarak ana ekrandan açıldığında içeriği durum çubuğunun altına uzatıyor — üst safe
-     area telafisi olmadan başlık, saatin/çentiğin arkasına giriyordu. */
-  .header,.admin-header{padding-top:calc(14px + env(safe-area-inset-top))}
+     area telafisi olmadan başlık, saatin/çentiğin arkasına giriyordu. Admin artık .admin-topbar
+     kullanıyor (bkz. ADMİN KABUĞU bloğu) — o kendi @media(max-width:900px) kuralında ele alınıyor. */
+  .header{padding-top:calc(14px + env(safe-area-inset-top))}
 
   /* K4 düzeltmesi: yukarıdaki dokunma hedefi kuralları padding üzerinden çalışıyordu, ama
      şablonlarda çoğu buton inline style="padding:…" ile yazılmış — inline stil her zaman
@@ -396,11 +583,12 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .root-mobile > .tabs{display:none}
 
   .bottom-nav{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;position:fixed;left:0;right:0;bottom:0;margin:0;background:var(--panel);border-top:1px solid var(--border);padding:8px 6px calc(10px + env(safe-area-inset-bottom));z-index:400}
+  .root-mobile .phone-hide{display:none}
   .bn-item{position:relative;background:transparent;border:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px 4px;border-radius:16px;color:var(--text-muted);min-height:66px;width:100%;font-family:'Inter',sans-serif;-webkit-tap-highlight-color:transparent}
   .bn-item.active{background:var(--accent-dim);color:var(--accent)}
   .bn-ico{display:flex;align-items:center;justify-content:center;height:26px}
   .bn-lbl{font-size:12.5px;font-weight:600;letter-spacing:-.2px}
-  .bn-badge{position:absolute;top:4px;right:10px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:9px;padding:0 5px;line-height:1.6}
+  .bn-badge{position:absolute;top:4px;right:10px;background:var(--danger);color:var(--on-warn);font-size:10px;font-weight:700;border-radius:9px;padding:0 5px;line-height:1.6}
 
   /* AKTİF İŞ BALONCUĞU — eskiden altta sabit bir şerit (.active-strip) olarak duruyordu ve bazı
      ekranlarda (ör. Tadilat aktif ekranındaki 3 butonlu sütun) o ekranın kendi fixed butonlarının
@@ -433,7 +621,7 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
   @keyframes bubbleFade{0%,100%{opacity:.5}50%{opacity:1}}
   .bubble-time{font-size:17px;font-weight:800;color:var(--text);line-height:1.05}
   .bubble-unit{font-size:9.5px;font-weight:700;color:var(--text-muted);letter-spacing:.3px}
-  .bubble-badge{position:absolute;top:-4px;right:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:9px;padding:1px 5px;line-height:1.5;box-shadow:0 0 0 2px var(--bg)}
+  .bubble-badge{position:absolute;top:-4px;right:-4px;background:var(--danger);color:var(--on-warn);font-size:10px;font-weight:700;border-radius:9px;padding:1px 5px;line-height:1.5;box-shadow:0 0 0 2px var(--bg)}
 
   /* O3 düzeltmesi: eskiden burası sabit 196px (bottom-nav + aktif iş şeridi ikisi de varmış gibi)
      bırakıyordu — aktif iş yokken şerit hiç render olmuyordu, o zaman listenin altında ekranın
@@ -500,9 +688,9 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
 @media print{
   @page{margin:12mm}
   html,body{background:#fff!important;color:#000!important;height:auto!important;overflow:visible!important}
-  .bottom-nav,.active-bubble,.tabs,.sub-tabs,.filter-bar,.icon-btn,.icon-btn-labeled,.btn-primary,.btn-ghost,.del-btn,.chip,.modal-overlay,.toast,.toast-big{display:none!important}
-  .admin-header{position:static!important;border-bottom:2px solid #000;padding:0 0 8px!important}
-  .admin-header .brand{color:#000!important}
+  .bottom-nav,.active-bubble,.tabs,.sub-tabs,.filter-bar,.icon-btn,.icon-btn-labeled,.btn-primary,.btn-ghost,.del-btn,.chip,.modal-overlay,.toast,.toast-big,.admin-sidebar,.admin-topbar{display:none!important}
+  .root-wide{flex-direction:column!important}
+  .print-brand{display:block!important;font-family:'Oswald',sans-serif;font-size:17px;letter-spacing:1.5px;font-weight:600;color:#000!important;padding:0 0 8px;border-bottom:2px solid #000;margin-bottom:8px}
   .root-mobile,.root-desktop,.body-pad,.matrix-wrap,.settings-wrap,.table-wrap{height:auto!important;max-height:none!important;overflow:visible!important;padding:0!important}
   table{width:100%!important;border-collapse:collapse;font-size:10pt}
   th,td{border:1px solid #999!important;padding:4px 6px!important;color:#000!important;white-space:normal!important}
@@ -520,9 +708,6 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .root-wide .tab-btn{flex:0 0 auto;padding:9px 18px;font-size:13px;transition:color .12s,border-color .12s,background .12s}
   .root-wide .tab-btn:hover{color:var(--text);border-color:var(--text-muted)}
   .root-wide .tab-btn.active:hover{color:var(--accent);border-color:var(--accent)}
-
-  /* Üst başlık kaydırırken sabit kalsın */
-  .admin-header{position:sticky;top:0;z-index:60;background:var(--bg)}
 
   /* İstatistik şeridi: tek satır metin yığını yerine ayrılmış bloklar */
   .admin-stats{gap:0;padding:11px 24px}
@@ -611,3 +796,9 @@ td{padding:10px 12px;color:var(--text);vertical-align:top;border-bottom:1px soli
   /* Grafik kutusu başlıkları biraz daha okunur */
   .analiz-chart-box{background:var(--panel)}
 }
+
+/* MATRIS DURUM ETIKETI (2026-09-21) — render-admin.js artik kartin sag ustune renkli nokta
+   (.matrix-dot) yerine ayni rengi tasiyan kisa bir metin etiketi basiyor. Durumun tek basina
+   renkle anlatilmamasi icin; renk korlugunde ve gun sonu mavisi ile aksan yan yana geldiginde
+   nokta ayirt edilemiyordu. .sbadge ile ayni --sb mekanigi. */
+.matrix-tag{display:inline-flex;align-items:center;flex:none;font-family:'Inter',sans-serif;font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;line-height:1;white-space:nowrap;color:var(--sb);background:color-mix(in srgb,var(--sb) 12%,transparent);border:1px solid color-mix(in srgb,var(--sb) 35%,transparent);border-radius:var(--radius-pill);padding:4px 7px}

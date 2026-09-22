@@ -611,6 +611,7 @@ function doToolGiris(){
       const updates = {};
       updates['toolMoves/'+moveId] = moveRec;
       updates['toolStock/'+itemId+'/sonHareketTs'] = now;
+      updates['toolStock/'+itemId+'/sonHareketAciklama'] = 'Stok girişi';
       updates['toolStock/'+itemId+'/siparisAcik'] = siparisAcik;
       // Stok alt limitin üzerine çıktıysa uyarı bayrağını da sıfırla — Aşama 4'te bir düşüşte
       // tekrar uyarabilsin diye (bkz. görev talimatı §9).
@@ -922,6 +923,7 @@ function doToolCikis(){
       const updates = {};
       updates['toolMoves/'+moveId] = moveRec;
       updates['toolStock/'+itemId+'/sonHareketTs'] = now;
+      updates['toolStock/'+itemId+'/sonHareketAciklama'] = (makine ? makine+' çıkış' : 'Takım çıkışı'); // Genel Bakış "Son Hareket" sütunu için
       DB.ref().update(updates).then(()=>{
         toolOpFoundStock = { ...(toolOpFoundStock||{}), miktar: sonrakiMiktar, sonHareketTs: now };
         toolLastMove = { id: moveId, ad: it.ad, ...moveRec };

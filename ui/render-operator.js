@@ -9,10 +9,10 @@ function renderOperator(){
 
   const header = `
     <div class="header">
-      <div class="header-left">${connDot()}<span style="font-size:20px">${ico('factory',14)}</span><div><div class="brand">ROTA TAKİP</div><div class="brand-sub">${esc(session.username)} · ${esc(session.displayName)}</div></div></div>
-      <div style="display:flex;gap:6px">
-        ${themeToggleHtml()}
-        <button class="icon-btn" onclick="openSendMessage()" title="Mesaj / Öneri Gönder">
+      <div class="header-left">${connDot()}<div><div class="brand">ROTA TAKİP</div><div class="brand-sub">${esc(session.username)} · ${esc(session.displayName)}</div></div></div>
+      <div class="header-actions">
+        <span class="phone-hide">${themeToggleHtml()}</span>
+        <button class="icon-btn phone-hide" onclick="openSendMessage()" title="Mesaj / Öneri Gönder">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
         </button>
         ${canViewMessages() ? `<button class="icon-btn" style="position:relative" onclick="openMessagesModal()" title="Mesajlar">
@@ -52,7 +52,7 @@ function renderOperator(){
         <div class="lock-machine">${esc(op.makine||'—')}</div>
         <div class="lock-timer" style="color:var(--warn)">${live(()=> op.duruşTs ? fmtElapsed(nowTick-op.duruşTs) : '—:—')}</div>
         <div class="lock-meta">${op.duruşTs ? 'duruş süresi' : 'seçim yapılıyor — duruş henüz başlamadı'}</div>
-        <div class="durus-reason-box" style="${isTadDurus?'color:var(--tadilat-info);background:var(--tadilat-med);border-color:var(--tadilat-border)':''}">${isTadDurus?(ico('wrench',13)+' '):''}"${esc(op.duruşNedeni)}"</div>
+        ${durusReasonBoxHtml(op.duruşNedeni)}
         <div class="lock-actions lock-actions-nav-clear" style="display:flex;gap:10px;margin-top:24px">
           <button class="btn-start" style="width:auto;padding:13px 26px" onclick="devamEtTadilatDurus()">${ico('play',14)} Duraklatmayı Devam Ettir</button>
         </div>
@@ -142,13 +142,13 @@ function renderOperator(){
     });
     body = `<div class="body-pad">
       <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px">Fason makinelerdeki (dışarı gönderilen) tüm aktif işler — kim başlatmış olursa olsun burada görünür ve kapatılabilir.</div>
-      ${groups.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Fasonda bekleyen iş yok.</div>` : groups.map(g=>{
+      ${groups.length===0 ? `<div class="empty-state">Fasonda bekleyen iş yok.</div>` : groups.map(g=>{
         if(g.members.length===1){
           const e = g.members[0];
           const dotColor = e.status==='duruş'?'var(--warn)':'var(--success)';
           const subInfo = e.status==='duruş' ? `Duruşta: "${esc(e.duruşNedeni)}"` : `${fmtElapsed(entryDurationBreakdown(e).netMs)} · ${esc(e.operatorUsername)} başlattı`;
           return `<div class="card" style="cursor:pointer" onclick="openActiveDetail('${e.id}')">
-            <div class="card-header"><span class="card-id">${esc(e.talepNo || e.isEmriNo)}</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
+            <div class="card-header"><span class="card-id">${esc(e.talepNo || e.isEmriNo)}</span><span class="matrix-dot" style="background:${dotColor}"></span></div>
             ${e.talepNo ? `<div style="font-size:11px;color:var(--text-muted);margin:-4px 0 4px" class="mono">U kodu: ${esc(e.isEmriNo)}</div>` : ''}
             <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(e.makine)}</span></div>
             <div class="op-foot">${subInfo}${e.adet?` · Adet: ${esc(e.adet)}`:''}</div>
@@ -158,7 +158,7 @@ function renderOperator(){
         const anyDurus = g.members.some(m=>m.status==='duruş');
         const dotColor = anyDurus ? 'var(--warn)' : 'var(--success)';
         return `<div class="card" style="cursor:pointer" onclick="openGroupDetail('${g.groupId}')">
-          <div class="card-header"><span class="card-id">${g.members.length} İş Emri Aktif</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
+          <div class="card-header"><span class="card-id">${g.members.length} İş Emri Aktif</span><span class="matrix-dot" style="background:${dotColor}"></span></div>
           <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(makine)}</span></div>
           <div class="op-foot">${g.members.map(m=>`${esc(m.talepNo || m.isEmriNo)} (${m.status==='duruş'?'duruşta':fmtElapsed(entryDurationBreakdown(m).netMs)})`).join(', ')}</div>
         </div>`;
@@ -343,7 +343,7 @@ function renderOperator(){
         <button class="chip" onclick="setGecmisPreset(30)">Son 30 Gün</button>
         ${(gecmisFrom||gecmisTo||gecmisSearch) ? `<button class="btn-ghost" onclick="clearGecmisFilter()">${ico('x',14)} Temizle</button>` : ''}
       </div>
-      ${myAll.length===0 ? `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Bu aralıkta kayıt yok.</div>` : myAll.map(e=>{
+      ${myAll.length===0 ? `<div class="empty-state">Bu aralıkta kayıt yok.</div>` : myAll.map(e=>{
         if(e._isTadilat){
           const durT = e.endTs ? fmtDur(e.endTs-e.startTs) : fmtElapsed(entryDurationBreakdown(e).netMs)+' (sürüyor)';
           const statusLabelT = e.status==='tamamlandi' ? (e._sonOperasyon?'Tadilat Tamamlandı':'Operasyon Bitti (Devamı Var)') : 'Tadilat — Devam Ediyor';
@@ -428,10 +428,10 @@ function renderOperator(){
     // işler sadece arka planda durmasın, operatör buraya her girdiğinde göze çarpsın.
     const bekleyenAyar = mine.filter(e => e.status==='duruş' && e.duruşNedeni===TADILAT_SONRASI_REASON);
     if(bekleyenAyar.length>0){
-      body += `<div style="background:var(--tadilat-soft);border:2px solid var(--tadilat-info);border-radius:12px;padding:14px 16px;margin-bottom:16px">
-        <div style="font-size:13.5px;font-weight:700;color:var(--tadilat-info);margin-bottom:8px">${ico('wrench',14)} Devam Etmeyi Bekleyen ${bekleyenAyar.length} Duraklatılmış İş Var</div>
+      body += `<div class="notice" style="--nc:var(--tadilat-info)">
+        <div class="notice-title">${ico('wrench',14)} Devam Etmeyi Bekleyen ${bekleyenAyar.length} Duraklatılmış İş Var</div>
         ${bekleyenAyar.map(e=>`
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border-radius:8px;padding:8px 12px;margin-top:6px;cursor:pointer" onclick="openActiveDetail('${e.id}')">
+          <div class="notice-row" onclick="openActiveDetail('${e.id}')">
             <div><span class="mono" style="color:var(--accent);font-weight:700">${esc(e.talepNo || e.isEmriNo)}</span> <span style="font-size:11.5px;color:var(--text-muted)">${esc(e.makine)}</span></div>
             <span style="font-size:11.5px;color:var(--tadilat-info)">Tadilat sonrası ayar →</span>
           </div>
@@ -446,16 +446,16 @@ function renderOperator(){
     const myTadilatSessions = myAllTadilatSessions();
     const totalActiveCount = groups.length + myTadilatSessions.length;
     if(totalActiveCount>1){
-      body += `<div style="background:var(--warn-soft);border:2px solid var(--warn);border-radius:12px;padding:14px 16px;margin-bottom:16px">
-        <div style="font-size:13.5px;font-weight:700;color:var(--warn);margin-bottom:6px">${ico('alert',14)} Aynı anda ${totalActiveCount} aktif işin var</div>
-        <div style="font-size:12.5px;color:var(--text-muted)">${groups.length>0?(ico('factory',13)+` ${groups.length} üretim işi`):''}${groups.length>0 && myTadilatSessions.length>0?' · ':''}${myTadilatSessions.length>0?(ico('wrench',13)+` ${myTadilatSessions.length} tadilat`):''}</div>
+      body += `<div class="notice">
+        <div class="notice-title">${ico('alert',14)} Aynı anda ${totalActiveCount} aktif işin var</div>
+        <div class="notice-sub">${groups.length>0?(ico('factory',13)+` ${groups.length} üretim işi`):''}${groups.length>0 && myTadilatSessions.length>0?' · ':''}${myTadilatSessions.length>0?(ico('wrench',13)+` ${myTadilatSessions.length} tadilat`):''}</div>
       </div>`;
     }
-    if(groups.length===0 && myTadilatSessions.length===0) body += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Henüz aktif işlem yok.<br><span style="font-size:12px">"+ Yeni Kayıt" ile bir makine başlat.</span></div>`;
+    if(groups.length===0 && myTadilatSessions.length===0) body += `<div class="empty-state">Henüz aktif işlem yok.<br><span style="font-size:12px">"+ Yeni Kayıt" ile bir makine başlat.</span></div>`;
     myTadilatSessions.forEach(({tadilat: mt, operasyon: mop})=>{
       const isPaused = mop.status==='duruş';
       body += `<div class="card" style="cursor:pointer;border-color:${isPaused?'var(--warn)':'var(--tadilat-info)'};border-left:4px solid ${isPaused?'var(--warn)':'var(--tadilat-info)'}" onclick="setView('tadilat')">
-        <div class="card-header"><span class="card-id" style="color:${isPaused?'var(--warn)':'var(--tadilat-info)'}">${ico('wrench',14)} ${esc(mt.uKodu)}</span><span class="matrix-dot" style="background:${isPaused?'var(--warn)':'var(--tadilat-info)'};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
+        <div class="card-header"><span class="card-id" style="color:${isPaused?'var(--warn)':'var(--tadilat-info)'}">${ico('wrench',14)} ${esc(mt.uKodu)}</span><span class="matrix-dot" style="background:${isPaused?'var(--warn)':'var(--tadilat-info)'}"></span></div>
         <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(mop.makine||'—')}</span></div>
         <div class="op-foot">${isPaused ? (mop.duruşTs ? `${live(()=> fmtElapsed(nowTick-mop.duruşTs))} duruşta · "${esc(mop.duruşNedeni)}"` : `seçim yapılıyor · "${esc(mop.duruşNedeni)}"`) : `${live(()=> fmtElapsed(tadilatOpDurationBreakdown(mop).netMs))} çalışıyor · Tadilat${mt.adet?` · Adet: ${esc(mt.adet)}`:''}`}</div>
       </div>`;
@@ -466,7 +466,7 @@ function renderOperator(){
         const dotColor = e.status==='duruş'?'var(--warn)':'var(--success)';
         const subInfo = e.status==='duruş' ? `Duruşta: "${esc(e.duruşNedeni)}"` : `${live(()=> fmtElapsed(entryDurationBreakdown(e).netMs))} çalışıyor`;
         body += `<div class="card" style="cursor:pointer" onclick="openActiveDetail('${e.id}')">
-          <div class="card-header"><span class="card-id">${esc(e.talepNo || e.isEmriNo)}</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
+          <div class="card-header"><span class="card-id">${esc(e.talepNo || e.isEmriNo)}</span><span class="matrix-dot" style="background:${dotColor}"></span></div>
           ${e.talepNo ? `<div style="font-size:11px;color:var(--text-muted);margin:-4px 0 4px" class="mono">U kodu: ${esc(e.isEmriNo)}</div>` : ''}
           <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(e.makine)}</span></div>
           <div class="op-foot">${subInfo}${e.adet?` · Adet: ${esc(e.adet)}`:''}</div>
@@ -476,7 +476,7 @@ function renderOperator(){
         const anyDurus = g.members.some(m=>m.status==='duruş');
         const dotColor = anyDurus ? 'var(--warn)' : 'var(--success)';
         body += `<div class="card" style="cursor:pointer" onclick="openGroupDetail('${g.groupId}')">
-          <div class="card-header"><span class="card-id">${g.members.length} İş Emri Aktif</span><span class="matrix-dot" style="background:${dotColor};width:9px;height:9px;border-radius:50%;display:inline-block"></span></div>
+          <div class="card-header"><span class="card-id">${g.members.length} İş Emri Aktif</span><span class="matrix-dot" style="background:${dotColor}"></span></div>
           <div class="op-top" style="margin-bottom:6px"><span class="op-code">${esc(makine)}</span></div>
           <div class="op-foot">${g.members.map(m=>`${esc(m.talepNo || m.isEmriNo)} (${m.status==='duruş'?'duruşta':live(()=> fmtElapsed(entryDurationBreakdown(m).netMs))})`).join(', ')}</div>
         </div>`;

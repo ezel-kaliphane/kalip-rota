@@ -43,7 +43,10 @@ function defaultBubblePos(){
 // Baloncuğun kenarlığı işin durumuna göre renk alır: çalışıyor / duruşta / tadilat / gün sonu.
 function activeBubbleColor(e){
   if(e.status!=='duruş') return 'var(--success)';
-  if(e.duruşNedeni===GUN_SONU_REASON) return 'var(--gunsonu)';
+  // Kilit ekranindaki durus kutusu planli molayi da gun sonu mavisiyle gosteriyor
+  // (bkz. render-common.js durusReasonBoxHtml). Baloncuk ayni isi yapan ayni gosterge,
+  // ham sabitle kalirsa ayni durus iki yerde iki renk gorunuyordu.
+  if(isVerimlilikDisiDurus(e.duruşNedeni)) return 'var(--gunsonu)';
   if(isTadilatRelated(e.duruşNedeni)) return 'var(--tadilat-info)';
   return 'var(--warn)';
 }

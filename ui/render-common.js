@@ -256,9 +256,10 @@ function renderEntryAkisChain(e){
   allEvents.forEach(ev=>{
     const workMs = Math.max(0, ev.ts - cursor);
     chain.push(akisConnectorHtml(fmtDur(workMs), 'var(--success)'));
-    const isGunSonu = ev.tip==='gunsonu';
-    chain.push(akisNodeHtml('Duraklatıldı', isGunSonu?'var(--gunsonu)':'var(--warn)', fmtDT(ev.ts), '', esc(ev.neden||'')));
-    chain.push(akisConnectorHtml(`${fmtDur(ev.sureMs)}${isGunSonu?' (Gün Sonu)':''}`, isGunSonu?'var(--gunsonu)':'var(--warn)'));
+    const isVerimDisi = ev.tip==='gunsonu';
+    const verimDisiEtiket = ev.neden===PLANLI_MOLA_REASON ? ' (Planlı Mola)' : isVerimDisi ? ' (Gün Sonu)' : '';
+    chain.push(akisNodeHtml('Duraklatıldı', isVerimDisi?'var(--gunsonu)':'var(--warn)', fmtDT(ev.ts), '', esc(ev.neden||'')));
+    chain.push(akisConnectorHtml(`${fmtDur(ev.sureMs)}${verimDisiEtiket}`, isVerimDisi?'var(--gunsonu)':'var(--warn)'));
     cursor = ev.ts + ev.sureMs;
     chain.push(akisNodeHtml('Devam Edildi', 'var(--tadilat-info)', fmtDT(cursor), '', ''));
   });
@@ -706,6 +707,19 @@ function renderLogin(){
   </div>`;
 }
 
+/* Duruş nedeni kutusu üç ekranda birebir aynı: tekli kilit ekranı, çoklu iş emri (grup)
+   ekranı ve tadilat aktif ekranı. Üçünde de aynı uzun üçlü koşul satır içi tekrarlanıyordu.
+   Renk --nc ile veriliyor (statusBadge'deki --sb ile aynı desen), ikon nedene göre:
+   gün sonu → ay, planlı mola → saat, tadilat → anahtar. */
+function durusReasonBoxHtml(neden){
+  const nc = isVerimlilikDisiDurus(neden) ? 'var(--gunsonu)'
+    : isTadilatRelated(neden) ? 'var(--tadilat-info)' : '';
+  const ikon = neden===GUN_SONU_REASON ? (ico('moon',13)+' ')
+    : neden===PLANLI_MOLA_REASON ? (ico('clock',13)+' ')
+    : isTadilatRelated(neden) ? (ico('wrench',13)+' ') : '';
+  return `<div class="durus-reason-box"${nc?` style="--nc:${nc}"`:''}>${ikon}"${esc(neden)}"</div>`;
+}
+
 /* ===================== RENDER: KİLİT EKRANI (aktif operasyon) ===================== */
 function renderGroupScreen(groupId, groupMembers){
   const makine = groupMembers[0]?.makine || '—';
@@ -713,7 +727,7 @@ function renderGroupScreen(groupId, groupMembers){
   const ref = groupMembers[0];
   const header = `
     <div class="header">
-      <div class="header-left">${connDot()}<span style="font-size:20px">${ico('factory',14)}</span><div><div class="brand">ROTA TAKİP</div><div class="brand-sub">${esc(session.username)} · ${esc(session.displayName)}</div></div></div>
+      <div class="header-left">${connDot()}<div><div class="brand">ROTA TAKİP</div><div class="brand-sub">${esc(session.username)} · ${esc(session.displayName)}</div></div></div>
       <button class="icon-btn" onclick="doLogout()" title="Çıkış">${ico('logout',14)}</button>
     </div>
     <div style="padding:14px 18px 0">
@@ -741,7 +755,7 @@ function renderGroupScreen(groupId, groupMembers){
     <div class="lock-machine">${groupMembers.map(e=>esc(e.talepNo || e.isEmriNo)).join(', ')}</div>
     <div class="lock-timer" style="${anyDurus?'color:var(--warn)':''}">${live(()=> anyDurus?fmtElapsed(nowTick-ref.duruşTs):fmtElapsed(entryDurationBreakdown(ref).netMs))}</div>
     <div class="lock-meta">${anyDurus?'duruş süresi (tüm iş emirleri için ortak)':`${groupMembers.length} iş emri bu makinede aynı anda aktif`}</div>
-    ${anyDurus ? `<div class="durus-reason-box" style="${ref.duruşNedeni===GUN_SONU_REASON?'color:var(--gunsonu);background:var(--gunsonu-soft);border-color:var(--gunsonu-border)':isTadilatRelated(ref.duruşNedeni)?'color:var(--tadilat-info);background:var(--tadilat-soft);border-color:var(--tadilat-border)':''}">${ref.duruşNedeni===GUN_SONU_REASON?(ico('moon',13)+' '):isTadilatRelated(ref.duruşNedeni)?(ico('wrench',13)+' '):''}"${esc(ref.duruşNedeni)}"</div>` : ''}
+    ${anyDurus ? durusReasonBoxHtml(ref.duruşNedeni) : ''}
     <div style="margin-top:20px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:8px;text-align:left">
       <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;padding:0 2px">Parti parti dönebilir — her iş emrini ayrı ayrı bitirebilirsin</div>
       ${groupMembers.map(e=>`
@@ -789,7 +803,7 @@ function renderGroupScreen(groupId, groupMembers){
 function renderLockScreen(active){
   const header = `
     <div class="header">
-      <div class="header-left">${connDot()}<span style="font-size:20px">${ico('factory',14)}</span><div><div class="brand">ROTA TAKİP</div><div class="brand-sub">${esc(session.username)} · ${esc(session.displayName)}</div></div></div>
+      <div class="header-left">${connDot()}<div><div class="brand">ROTA TAKİP</div><div class="brand-sub">${esc(session.username)} · ${esc(session.displayName)}</div></div></div>
       <button class="icon-btn" onclick="doLogout()" title="Çıkış">${ico('logout',14)}</button>
     </div>
     <div style="padding:14px 18px 0">
@@ -828,7 +842,7 @@ function renderLockScreen(active){
         <div class="lock-machine">${esc(active.makine)}</div>
         <div class="lock-timer" style="color:var(--warn)">${live(()=> fmtElapsed(nowTick-active.duruşTs))}</div>
         <div class="lock-meta">duruş süresi</div>
-        <div class="durus-reason-box" style="${active.duruşNedeni===GUN_SONU_REASON?'color:var(--gunsonu);background:var(--gunsonu-soft);border-color:var(--gunsonu-border)':isTadilatRelated(active.duruşNedeni)?'color:var(--tadilat-info);background:var(--tadilat-soft);border-color:var(--tadilat-border)':''}">${active.duruşNedeni===GUN_SONU_REASON?(ico('moon',13)+' '):isTadilatRelated(active.duruşNedeni)?(ico('wrench',13)+' '):''}"${esc(active.duruşNedeni)}"</div>
+        ${durusReasonBoxHtml(active.duruşNedeni)}
         <div class="lock-actions" style="display:flex;gap:10px;margin-top:28px">
           <button class="btn-start" style="width:auto;padding:13px 26px" onclick="devamEt('${active.id}')">${ico('play',14)} Devam Ettir</button>
         </div>
@@ -891,6 +905,8 @@ const ICONS = {
   factory:'<path d="M3 21h18"/><path d="M4 21V11l5 3V11l5 3V8l5 3v10"/><path d="M8 21v-3"/>',
   history:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 7.5V12l3 2"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
+  upload:'<path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14"/>',
+  users:'<circle cx="9" cy="7" r="4"/><path d="M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"/><path d="M17 3.13a4 4 0 0 1 0 7.75"/><path d="M23 21v-1a6 6 0 0 0-4-5.65"/>',
   wrench:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
   box:'<path d="M21 16V8l-9-5-9 5v8l9 5 9-5z"/><path d="M3.3 7L12 12l8.7-5"/><path d="M12 22V12"/>',
   gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',

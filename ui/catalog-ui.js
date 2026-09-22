@@ -62,7 +62,8 @@ function renderMalzemeAramaModal(){
 // Bir günün 24 saatlik zaman çizelgesinde (Gantt), verilen kayıtları saat bazlı segmentler
 // olarak çizen ORTAK fonksiyon — Makine Gantt'ı (analizSubTab==='genel') ve Kişi Gantt'ı
 // (analizSubTab==='kisi') birbirinden bağımsız aynı çizim mantığını tekrarlamasın diye tek
-// yerden. Her segment kendi içinde çalışma (yeşil) / duruş (sarı) / Gün Sonu (koyu gri)
+// yerden. Her segment kendi içinde çalışma (yeşil) / duruş (sarı) / hariç tutulan
+// (gün sonu + planlı mola, nötr gri)
 // oranına göre renkleniyor; segmentin OLMADIĞI boşluklar track'in kendi arka planıyla
 // (var(--panel-alt)) otomatik olarak "boşta" gibi görünür, ayrıca renklendirmeye gerek yok.
 function renderGanttSegmentsHtml(entries, dayStartMs, rangeEndMs, titleFn){
@@ -95,7 +96,7 @@ function renderGanttSegmentsHtml(entries, dayStartMs, rangeEndMs, titleFn){
       exclMs = Math.min(Math.max(0, totalMs - durusMs), (e.excludedMs||0) * share);
       if(e.status==='duruş' && e.duruşTs){
         const liveExtra = msOverlap(e.duruşTs, Math.max(0, nowTick - e.duruşTs), segStart, segEndForSeg);
-        if(e.duruşNedeni===GUN_SONU_REASON) exclMs = Math.min(Math.max(0, totalMs-durusMs), exclMs+liveExtra);
+        if(isVerimlilikDisiDurus(e.duruşNedeni)) exclMs = Math.min(Math.max(0, totalMs-durusMs), exclMs+liveExtra);
         else durusMs = Math.min(totalMs, durusMs+liveExtra);
       }
     }
@@ -104,10 +105,10 @@ function renderGanttSegmentsHtml(entries, dayStartMs, rangeEndMs, titleFn){
     const durusPct = totalMs>0 ? Math.round(durusMs/totalMs*100) : 0;
     const exclPct = Math.max(0, 100-workPct-durusPct);
     let bg;
-    if(exclPct>=99) bg = '#3a4148';
+    if(exclPct>=99) bg = 'var(--text-faint, #3a4148)';
     else if(workPct>=99) bg = 'var(--success)';
     else if(durusPct>=99) bg = 'var(--warn)';
-    else bg = `linear-gradient(to right, var(--success) 0%, var(--success) ${workPct}%, var(--warn) ${workPct}%, var(--warn) ${workPct+durusPct}%, #3a4148 ${workPct+durusPct}%, #3a4148 100%)`;
+    else bg = `linear-gradient(to right, var(--success) 0%, var(--success) ${workPct}%, var(--warn) ${workPct}%, var(--warn) ${workPct+durusPct}%, var(--text-faint, #3a4148) ${workPct+durusPct}%, var(--text-faint, #3a4148) 100%)`;
     const titleTxt = titleFn ? titleFn(e) : `${e.isEmriNo||e.talepNo||''} · ${e.makine||''}`;
     return `<div class="analiz-gantt-seg" style="left:${leftPct}%;width:${widthPct}%;background:${bg}" title="${esc(titleTxt)} · ${fmtDT(e.startTs)}–${e.endTs?fmtDT(e.endTs):'şu an'}"></div>`;
   }).join('');

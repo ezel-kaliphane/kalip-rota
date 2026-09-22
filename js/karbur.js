@@ -626,6 +626,7 @@ function karburPlanKaydet(){
     const updates = {};
     results.forEach(r => {
       updates[(r.tip === 'stok' ? 'karburStok/' : 'karburFire/') + r.id + '/sonHareketTs'] = now;
+      if(r.tip === 'stok') updates['karburStok/' + r.id + '/sonHareketAciklama'] = 'Karbür tahsis · Plan #' + planNo;
     });
 
     /* Çubuk tüketimini belgeleyen stok hareketleri — onceki/sonraki adet transaction'ın
@@ -1007,18 +1008,20 @@ function karburKatalogEkle(){
   if(!canManageKarbur()) return;
   const kodEl = document.getElementById('karbur-yeni-kod');
   const adetEl = document.getElementById('karbur-yeni-adet');
+  const altLimitEl = document.getElementById('karbur-yeni-alt-limit');
   const kod = ((kodEl && kodEl.value) || '').trim().toUpperCase();
   const adet = parseInt((adetEl && adetEl.value) || '0', 10) || 0;
+  const altLimit = parseInt((altLimitEl && altLimitEl.value) || '0', 10) || 0;
   const p = karburParseKod(kod);
   if(!p){ toast('Kod formatı: C18XH156X3XVA90 (dış çap / boy / delik / kalite)'); return; }
   if(karburKatalogArray().some(k => k.kod === p.kod)){ toast('Bu kod zaten kayıtlı'); return; }
   const id = DB.ref('karburKatalog').push().key, now = Date.now();
   const rec = { kod: p.kod, onek: p.onek, alanlar: p.alanlar, disCap: p.disCap, boy: p.boy,
-                delik: p.delik, kalite: p.kalite, tur: p.tur, kullanim: p.kullanim,
+                delik: p.delik, kalite: p.kalite, tur: p.tur, kullanim: p.kullanim, altLimit,
                 aktif: true, updatedTs: now, updatedBy: session.username };
   const updates = {};
   updates['karburKatalog/' + id] = rec;
-  updates['karburStok/' + id] = { adet, sonHareketTs: now };
+  updates['karburStok/' + id] = { adet, sonHareketTs: now, sonHareketAciklama: 'Kalem açılışı' };
   if(adet > 0){
     const hid = DB.ref('karburHareketleri').push().key;
     updates['karburHareketleri/' + hid] = { tip: 'giris', katalogId: id, kod: p.kod, adet, oncekiAdet: 0,
@@ -1031,6 +1034,7 @@ function karburKatalogEkle(){
     DB.ref('settings/karburKatalogVersion').set(firebase.database.ServerValue.increment(1));
     if(kodEl) kodEl.value = '';
     if(adetEl) adetEl.value = '';
+    if(altLimitEl) altLimitEl.value = '';
     toast('Kalem eklendi: ' + p.kod);
     render();
   }).catch(err => toast('Eklenemedi: ' + ((err && err.message) || 'hata')));
@@ -1055,6 +1059,7 @@ function karburStokGiris(){
       oncekiAdet: sonraki - adet, sonrakiAdet: sonraki, isEmriNo: '', mm: 0, aciklama: 'stok girişi',
       kaynak: 'elle', operatorUsername: session.username, operatorName: session.displayName, ts: now };
     updates['karburStok/' + it.id + '/sonHareketTs'] = now;
+    updates['karburStok/' + it.id + '/sonHareketAciklama'] = 'Stok girişi';
     DB.ref().update(updates).then(() => {
       karburStok[it.id] = { adet: sonraki, sonHareketTs: now };
       karburGirisKod = ''; karburGirisAdet = '';
@@ -1357,6 +1362,15 @@ function karburSetKullanim(katalogId, v){
     karburResetPlan();
     toast(it.kod + ' → ' + (v === 'kesim' ? 'kesim planına girer' : 'adet olarak tüketilir'));
     render();
+  }).catch(err => toast('Güncellenemedi: ' + ((err && err.message) || 'hata')));
+}
+/* Genel Bakış'taki "Alt Limit Altı" hesabı için — Takım & Sarf'taki toolCatalog.altLimit ile aynı
+   fikir, Karbür'de önceden hiç yoktu. */
+function karburSetAltLimit(katalogId, val){
+  if(!canManageKarbur()) return;
+  const altLimit = parseInt(val, 10) || 0;
+  DB.ref('karburKatalog/' + katalogId + '/altLimit').set(altLimit).then(() => {
+    karburKatalog[katalogId] = Object.assign({}, karburKatalog[katalogId], { altLimit });
   }).catch(err => toast('Güncellenemedi: ' + ((err && err.message) || 'hata')));
 }
 

@@ -490,6 +490,11 @@ function renderKarburStok(){
       <option value="adet" ${cur === 'adet' ? 'selected' : ''}>adet olarak tüketilir</option>
     </select>${kesimOlur ? '' : `<div style="font-size:10.5px;color:var(--text-muted)">ölçüleri koddan okunamadı</div>`}`;
   };
+  const altLimitHucre = k => yon
+    ? `<input value="${k.altLimit||0}" style="width:60px;text-align:right"
+         oninput="this.value=this.value.replace(/\D/g,'')"
+         onchange="karburSetAltLimit('${esc(k.id)}',this.value)" title="alt limit (Genel Bakış'ta kritik stok için)">`
+    : `${k.altLimit||0}`;
   const adetHucre = k => yon
     ? `<input value="${karburStokAdet(k.id)}" style="width:70px;text-align:right"
          oninput="this.value=this.value.replace(/\D/g,'')"
@@ -500,11 +505,12 @@ function renderKarburStok(){
     <div style="font-size:13px;font-weight:600;margin-bottom:4px">Kesim planına girenler</div>
     <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Boyu ${KARBUR_CUBUK_MIN} mm ve üzeri olanlar çubuk (kesilir), kısası hazır standart parça (istenen boya eşitse kesimsiz verilir).</div>
     ${kesimler.length ? `<table class="tbl"><thead><tr><th>Stok Kodu</th><th>Dış Çap</th><th>Delik</th><th>Kalite</th>
-      <th style="text-align:right">Boy</th><th>Tür</th><th style="text-align:right">Adet</th><th>Kullanım</th></tr></thead><tbody>
+      <th style="text-align:right">Boy</th><th>Tür</th><th style="text-align:right">Adet</th><th style="text-align:right">Alt Limit</th><th>Kullanım</th></tr></thead><tbody>
       ${kesimler.map(k => `<tr><td>${esc(k.kod)}</td><td>Ø${karburFmt(k.disCap)}</td><td>${esc(k.delik)}</td>
         <td>${esc(k.kalite)}</td><td style="text-align:right">${karburFmt(k.boy)} mm</td>
         <td style="font-size:11px;color:var(--text-muted)">${k.tur === 'cubuk' ? 'çubuk' : 'hazır parça'}</td>
         <td style="text-align:right;width:88px">${adetHucre(k)}</td>
+        <td style="text-align:right;width:70px">${altLimitHucre(k)}</td>
         <td style="width:200px">${kullanimSecici(k)}</td></tr>`).join('')}
     </tbody></table>` : `<div style="font-size:12.5px;color:var(--text-muted)">Kayıt yok.</div>`}
   </div>
@@ -513,11 +519,12 @@ function renderKarburStok(){
     <div style="font-size:13px;font-weight:600;margin-bottom:4px">Adet olarak tüketilenler</div>
     <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Kesilik gelen kalemler (ör. somun elmasları) — kesim planına hiç girmez, doğrudan adet düşülür. Bir kalemi listeler arasında taşımak için sağdaki <b>Kullanım</b> seçeneğini değiştir.</div>
     ${adetler.length ? `<table class="tbl"><thead><tr><th>Stok Kodu</th><th>Ölçüler</th><th>Kalite</th>
-      <th style="text-align:right">Adet</th><th>Kullanım</th></tr></thead><tbody>
+      <th style="text-align:right">Adet</th><th style="text-align:right">Alt Limit</th><th>Kullanım</th></tr></thead><tbody>
       ${adetler.map(k => `<tr><td>${esc(k.kod)}</td>
         <td style="font-size:11px;color:var(--text-muted)">${(k.alanlar || []).map(karburFmt).join(' × ') || '—'}</td>
         <td>${esc(k.kalite)}</td>
         <td style="text-align:right;width:88px">${adetHucre(k)}</td>
+        <td style="text-align:right;width:70px">${altLimitHucre(k)}</td>
         <td style="width:200px">${kullanimSecici(k)}</td></tr>`).join('')}
     </tbody></table>` : `<div style="font-size:12.5px;color:var(--text-muted)">Kayıt yok.</div>`}
   </div>
@@ -551,6 +558,7 @@ function renderKarburStok(){
     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
       <div class="field" style="width:230px"><label>Stok Kodu</label><input id="karbur-yeni-kod" placeholder="C18XH156X3XVA90"></div>
       <div class="field" style="width:96px"><label>Adet</label><input id="karbur-yeni-adet" placeholder="0"></div>
+      <div class="field" style="width:96px"><label>Alt Limit</label><input id="karbur-yeni-alt-limit" placeholder="0"></div>
       <button type="button" class="btn-ghost" onclick="karburKatalogEkle()">+ Ekle</button>
       <span style="font-size:11px;color:var(--text-muted)">önek serbest (C/V/S ya da hiç) · üç ölçülü kodlar kesime, diğerleri adete varsayılır</span>
     </div></div>` : ''}`;

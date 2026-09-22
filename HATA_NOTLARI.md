@@ -5,6 +5,43 @@ hatayı ikinci kez yazmamak. En yeni üstte.
 
 ---
 
+## 2026-09-21 — Bayat çalışma kopyası: neredeyse geri alınan iki düzeltme
+
+**Belirti.** Yoktu — canlıya çıkmadı. İş Yoğunluğu yaması çalıştırılırken bir assert
+patladı: yama `index.html` içinde `styles.css?v=24` arıyordu, elindeki kopyada `v=23`
+yazıyordu.
+
+**Sebep.** Kod cihazda duruyor, üzerinde çalışılan kopya başka bir yere alınıyor
+(stage → yamala → geri yaz). Geri yazmak, alınan kopyayı **tazelemiyor**. Bir önceki
+adımın değişiklikleri cihaza yazıldıktan sonra da elde hâlâ o adımdan ÖNCEKİ dosyalar
+duruyordu. `index.html` tesadüfen sürüm numarası taşıdığı için assert patladı; asıl
+tehlike oydu değildi: aynı bayat sette `ui/styles.css` ve `ui/styles.v2.css` de vardı.
+Onlar geri yazılsaydı bir önceki adımda eklenen `.notice`, `.empty-state`,
+`.matrix-dot` düzeltmesi ve `durus-reason-box` renk devri **sessizce silinecekti** —
+ve diff temiz görüneceği için fark edilmeyecekti.
+
+**Aynı hafta ikinci kez.** Birkaç saat önce okuma tarafında aynısı olmuştu: bayat bir
+kopyaya bakıp "duruş nedeni seçicisi hâlâ eski koşulu kullanıyor, tutarsızlık var"
+sonucuna varılmıştı. Dosya yeniden alınınca görüldü ki düzeltme zaten yapılmıştı; rapor
+edilmeden önce tazelendiği için yanlış alarm verilmedi.
+
+**Asıl ders.** Her iki seferde de kurtaran şey bir assert'in tesadüfen patlaması ya da
+son anda akla gelen bir kontroldü — **tasarlanmış bir güvenlik ağı değil.** 15 Eylül
+notundaki "sürüm bumpını yaptım sanmak yetmiyor, `grep` ile doğrulamak gerekiyor" dersi
+burada da geçerli, sadece doğrulanacak şey farklı: *elindeki dosyanın cihazdaki dosya
+olduğunu* sanmak yetmiyor.
+
+**Kural (artık süreç adımı).**
+
+1. Her geri yazmadan **sonra** dosyaları yeniden al. Geri yazma, eldeki kopyayı
+   güncellemez.
+2. Geri yazmadan **önce** de bir kere karşılaştır: yamanın okuduğu kaynak ile o an
+   cihazda duran dosya aynı mı? Aynı değilse yamayı iptal et, tazele, baştan üret.
+3. Assert'ler bu işi yapmaya yetmez: assert yalnızca yamanın DOKUNDUĞU satırı görür.
+   Dosyanın dokunulmayan kısmındaki sürüm farkı hiçbir assert'i patlatmaz.
+
+---
+
 ## 2026-09-15 — Karbür KAYDET: stok yerinde dururken "stok yetmedi"
 
 **Belirti.** Karbür kesim planında KAYDET'e basınca *"C40XH40X13,5XST6, C18XH156X3XVA90,

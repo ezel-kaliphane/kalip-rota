@@ -282,11 +282,11 @@ function finishEntry(id, sonrakiMakine, forceSonOperasyon){
   const e = STATE.entries[id] || {};
   let extra = 0;
   if(e.status==='duruş' && e.duruşTs) extra = Date.now() - e.duruşTs;
-  const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
-  const duruşToplamMs = (e.duruşToplamMs||0) + (isGunSonu?0:extra);
-  const excludedMs = (e.excludedMs||0) + (isGunSonu?extra:0);
-  const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
-  const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
+  const isVerimDisi = isVerimlilikDisiDurus(e.duruşNedeni);
+  const duruşToplamMs = (e.duruşToplamMs||0) + (isVerimDisi?0:extra);
+  const excludedMs = (e.excludedMs||0) + (isVerimDisi?extra:0);
+  const durusLog = isVerimDisi ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
+  const excludedLog = isVerimDisi ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
   const updates = { endTs: Date.now(), status:'tamamlandi', duruşToplamMs, excludedMs, durusLog, excludedLog, finishedByUsername: session.username, finishedByName: session.displayName, sonrakiMakine: sonrakiMakine || null };
   if(forceSonOperasyon) updates.sonOperasyon = true;
   DB.ref('entries/'+id).update(updates);
@@ -309,10 +309,11 @@ function toggleDurus(open){ durusOpen=open; durusReasonSel=''; durusCustom=''; r
 // ekranla (canlı sayaç, matris) hiçbir etkileşim/görsel çakışma olmuyor.
 const DURUS_DESCRIPTIONS = {
   [GUN_SONU_REASON]: 'Süre verimlilikten düşülmez',
+  [PLANLI_MOLA_REASON]: 'Planlı ara — süre verimlilikten düşülmez',
 };
 function durusOptionDesc(r){
   if(DURUS_DESCRIPTIONS[r]) return DURUS_DESCRIPTIONS[r];
-  if(isTadilatRelated(r) && r!==GUN_SONU_REASON) return 'Tadilat sekmesine düşer';
+  if(isTadilatRelated(r) && !isVerimlilikDisiDurus(r)) return 'Tadilat sekmesine düşer';
   return '';
 }
 // Hangi ekrandan (tekli iş / çoklu iş emri grubu / tadilat duraklatma) açıldığını anlayıp
@@ -325,19 +326,19 @@ function confirmDurusAny(){
 }
 function durusOptionsListHtml(){
   const reasons = getDurusReasons();
-  const normal = reasons.filter(r=>r!==GUN_SONU_REASON && !isTadilatRelated(r) && r!=='Diğer');
-  const special = reasons.filter(r=>(r===GUN_SONU_REASON || isTadilatRelated(r)) && r!=='Diğer');
+  const normal = reasons.filter(r=>!isVerimlilikDisiDurus(r) && !isTadilatRelated(r) && r!=='Diğer');
+  const special = reasons.filter(r=>(isVerimlilikDisiDurus(r) || isTadilatRelated(r)) && r!=='Diğer');
   const hasDiger = reasons.includes('Diğer');
   const optionCard = (r,i)=>{
-    const isGunSonu = r===GUN_SONU_REASON;
-    const isTad = !isGunSonu && isTadilatRelated(r);
+    const isOzelDurum = isVerimlilikDisiDurus(r);
+    const isTad = !isOzelDurum && isTadilatRelated(r);
     const isActive = durusReasonSel===r;
-    const color = isGunSonu ? 'var(--gunsonu)' : isTad ? 'var(--tadilat-info)' : 'var(--warn)';
+    const color = isOzelDurum ? 'var(--gunsonu)' : isTad ? 'var(--tadilat-info)' : 'var(--warn)';
     const desc = durusOptionDesc(r);
-    return `<button class="durus-option-card" style="${isActive?`border-color:${color};background:${isGunSonu?'var(--gunsonu-soft)':isTad?'var(--tadilat-soft)':'var(--accent-dim)'}`:''}" onclick="pickDurusReason(${i})">
+    return `<button class="durus-option-card" style="${isActive?`border-color:${color};background:${isOzelDurum?'var(--gunsonu-soft)':isTad?'var(--tadilat-soft)':'var(--accent-dim)'}`:''}" onclick="pickDurusReason(${i})">
       <span class="durus-radio" style="${isActive?`border-color:${color}`:''}"><span style="width:10px;height:10px;border-radius:50%;background:${isActive?color:'transparent'}"></span></span>
       <span>
-        <div class="durus-option-name" style="${isActive||isGunSonu||isTad?`color:${color}`:''}">${esc(r)}</div>
+        <div class="durus-option-name" style="${isActive||isOzelDurum||isTad?`color:${color}`:''}">${esc(r)}</div>
         ${desc?`<div class="durus-option-desc">${esc(desc)}</div>`:''}
       </span>
     </button>`;
@@ -440,7 +441,7 @@ function confirmNextOp(){
 function carryGunSonuToOtherPausedEntries(username, excludeIds){
   const now = Date.now();
   const excluded = excludeIds instanceof Set ? excludeIds : new Set(excludeIds||[]);
-  entriesArray().filter(e => e.operatorUsername===username && e.status==='duruş' && !excluded.has(e.id) && e.duruşNedeni!==GUN_SONU_REASON).forEach(e=>{
+  entriesArray().filter(e => e.operatorUsername===username && e.status==='duruş' && !excluded.has(e.id) && !isVerimlilikDisiDurus(e.duruşNedeni)).forEach(e=>{
     const extra = e.duruşTs ? Math.max(0, now - e.duruşTs) : 0;
     const duruşToplamMs = (e.duruşToplamMs||0) + extra;
     const durusLog = appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
@@ -512,11 +513,11 @@ function devamEt(id){
   // duruşToplamMs'e İKİNCİ KEZ ekliyor ve durusLog'a sahte bir olay daha yazıyordu.
   if(e.status!=='duruş'){ toast('Bu iş zaten devam ediyor'); return; }
   const extra = e.duruşTs ? (Date.now() - e.duruşTs) : 0;
-  const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
-  const duruşToplamMs = (e.duruşToplamMs||0) + (isGunSonu?0:extra);
-  const excludedMs = (e.excludedMs||0) + (isGunSonu?extra:0);
-  const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
-  const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
+  const isVerimDisi = isVerimlilikDisiDurus(e.duruşNedeni);
+  const duruşToplamMs = (e.duruşToplamMs||0) + (isVerimDisi?0:extra);
+  const excludedMs = (e.excludedMs||0) + (isVerimDisi?extra:0);
+  const durusLog = isVerimDisi ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
+  const excludedLog = isVerimDisi ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
   DB.ref('entries/'+id).update({ status:'devam', duruşTs:null, duruşNedeni:null, duruşToplamMs, excludedMs, durusLog, excludedLog })
     .catch(err=>{ console.error('devamEt hatası', err); toast('Devam ettirilemedi: '+(err&&err.message||'hata')); });
   toast('Operasyona devam ediliyor');
@@ -557,11 +558,11 @@ function devamGrup(groupId){
     // (ör. tadilat dönüşünde sadece kaynak üye devam ettirilir), bu yüzden üye bazında kontrol.
     if(e.status!=='duruş') return;
     const extra = e.duruşTs ? (now - e.duruşTs) : 0;
-    const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
-    const duruşToplamMs = (e.duruşToplamMs||0) + (isGunSonu?0:extra);
-    const excludedMs = (e.excludedMs||0) + (isGunSonu?extra:0);
-    const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
-    const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
+    const isVerimDisi = isVerimlilikDisiDurus(e.duruşNedeni);
+    const duruşToplamMs = (e.duruşToplamMs||0) + (isVerimDisi?0:extra);
+    const excludedMs = (e.excludedMs||0) + (isVerimDisi?extra:0);
+    const durusLog = isVerimDisi ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
+    const excludedLog = isVerimDisi ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
     DB.ref('entries/'+e.id).update({ status:'devam', duruşTs:null, duruşNedeni:null, duruşToplamMs, excludedMs, durusLog, excludedLog });
   });
   toast('Tüm iş emirleri devam ediyor');
@@ -588,7 +589,7 @@ function finishGrup(groupId, sonrakiMakine, sonrakiMakineKodu){
   const withDurus = members.map(e=>{
     let extra = 0;
     if(e.status==='duruş' && e.duruşTs) extra = now - e.duruşTs;
-    const isGunSonu = e.duruşNedeni===GUN_SONU_REASON;
+    const isVerimDisi = isVerimlilikDisiDurus(e.duruşNedeni);
     // Not: durusLog'a BÖLÜŞTÜRÜLMEMİŞ (tam) süre yazılıyor — çünkü fiziksel olarak makine
     // TEK bir süre kadar duraklamış, aşağıdaki "share" oranı sadece adet bazlı raporlama
     // amaçlı bir dağıtım, gerçek olayın kendisi değil.
@@ -597,9 +598,9 @@ function finishGrup(groupId, sonrakiMakine, sonrakiMakineKodu){
     // msOverlap'ın gün bölme hesabını kaydırıyor hem de collectDurusEvents'in grup tekilleştirme
     // anahtarını (groupId|ts|sureMs|neden) üyeler arasında farklılaştırıp aynı fiziksel duruşun
     // birden çok kez sayılmasına yol açabiliyordu.
-    const durusLog = isGunSonu ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
-    const excludedLog = isGunSonu ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
-    return { e, duruşToplamMs: (e.duruşToplamMs||0) + (isGunSonu?0:extra), excludedMs: (e.excludedMs||0) + (isGunSonu?extra:0), durusLog, excludedLog };
+    const durusLog = isVerimDisi ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
+    const excludedLog = isVerimDisi ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
+    return { e, duruşToplamMs: (e.duruşToplamMs||0) + (isVerimDisi?0:extra), excludedMs: (e.excludedMs||0) + (isVerimDisi?extra:0), durusLog, excludedLog };
   });
   const totalAdet = withDurus.reduce((s,x)=>s+(Number(x.e.adet)||0), 0);
   const n = withDurus.length;
