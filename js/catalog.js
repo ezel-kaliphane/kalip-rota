@@ -313,17 +313,27 @@ const DEFAULT_BOLUM_KURALLARI = {
 let tadilatBolumKurallari = {}; // Firebase 'tadilatBolumKurallari' — { "Civata": {mode:'include', prefixes:['B']}, ... }
 function getBolumKurallari(){ return { ...DEFAULT_BOLUM_KURALLARI, ...(tadilatBolumKurallari||{}) }; }
 /* ===================== YÖNETİCİ SEKME ERİŞİMİ =====================
-   SuperAdmin, HER yönetici/şef hesabı için AYRI AYRI, üst menüdeki ana sekmelerden (Rapor,
-   Makine Matrisi, Tamamlanan Kodlar, Analiz, Tadilat) hangilerini görebileceğini belirler —
+   SuperAdmin, HER yönetici/şef hesabı için AYRI AYRI, sol menüdeki ana öğelerden (Rapor,
+   Canlı Panel'in üç sekmesi, İş Yoğunluğu, Analiz, Tadilat, Stok) hangilerini görebileceğini belirler —
    global bir açma/kapama değil, kullanıcı bazında ("LV sadece şunlara erişsin" gibi).
    SuperAdmin kendisi HER ZAMAN hepsini görür, bu ayardan etkilenmez. Bir kullanıcı için hiç
    ayar girilmemişse varsayılan olarak TÜM sekmeler görünür sayılır (mevcut davranışı bozmamak için).
 */
 let adminTabPermissions = {}; // { "LV": {rapor:true, matrix:false, ...}, "SEF": {...}, ... }
+/* CANLI PANEL (22.09.2026) — 'matrix' ve 'completed' artık ayrı nav öğeleri değil, tek bir
+   "Canlı Panel" ekranının sekmeleri; yanlarına yeni 'genelBakis' sekmesi geldi. ANAHTAR ADLARI
+   DEĞİŞMEDİ: adminTabPermissions/<user>/matrix|completed yayında yazılı veri, ad değişirse
+   sessiz izin kaybı olur. Değişen yalnızca etiketler (Stok · ... konvansiyonuyla aynı) ve
+   'genelBakis'in listeye eklenmesi. 'genelBakis' RTDB'de hiç yazılı olmadığı için
+   isAdminTabVisible'daki `mine[key] !== false` kuralı gereği herkese varsayılan AÇIK gelir —
+   kimse ekran kaybetmez. Sırada matrix'ten önce: fallbackKey listeyi baştan taradığı için
+   rapor'u kapalı olan biri artık Canlı Panel'in ilk sekmesine düşer, matrise değil.
+   Rapor BİRLEŞMEDİ, kendi nav öğesi olarak ayrı duruyor. */
 const ADMIN_TAB_DEFS = [
   { key:'rapor', label:'Rapor' },
-  { key:'matrix', label:'Makine Matrisi' },
-  { key:'completed', label:'Tamamlanan Kodlar' },
+  { key:'genelBakis', label:'Canlı Panel · Genel Bakış' },
+  { key:'matrix', label:'Canlı Panel · Makine Matrisi' },
+  { key:'completed', label:'Canlı Panel · Tamamlanan Kodlar' },
   { key:'isYogunlugu', label:'İş Yoğunluğu' },
   { key:'analiz', label:'Analiz' },
   { key:'tadilat', label:'Tadilat' },
@@ -921,6 +931,7 @@ function entryDurationBreakdown(e){
   return { wallMs, durusMs, excludedMs, netMs };
 }
 
+let _analizCache = null, _analizCacheKey = null, _analizCacheEntries = null, _analizCacheTadilat = null;
 function computeAnalizData(fromDate, toDate, atolyeFilter){
   const tadilatSynthetic = buildTadilatSynthetic();
   // DÜZELTME: Kullanıcı tarih kutusunu TEMİZLERSE (input type=date boşaltılabilir) fromDate/toDate
@@ -932,6 +943,27 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
   const _gecerliTarih = d => (typeof d==='string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d : _bugun;
   fromDate = _gecerliTarih(fromDate); toDate = _gecerliTarih(toDate);
   if(fromDate > toDate){ const _t = fromDate; fromDate = toDate; toDate = _t; }
+  /* ÖNBELLEK (22.09.2026) — Genel Bakış, şefin ve rapor izni olmayan herkesin VARSAYILAN İNİŞ
+     EKRANI olduğu için bu hesap artık ekranda oturan her kullanıcıda LIVE_FULL_EVERY (15 sn) başına
+     bir tetikleniyor. Önceden yalnızca bilinçli açılan Analiz ekranındaydı.
+
+     Anahtar computeCompletedRoutes'un deseninden TÜRETİLDİ ama AYNISI DEĞİL, çünkü bu fonksiyon
+     nowTick'i sekiz yerde kullanıyor (açık kayıtların süresi `e.endTs || nowTick`, gün içi
+     kullanılabilirlik tavanı dayElapsedCapMs). Saf referans anahtarı verimliliği DONDURURDU.
+     Bu yüzden anahtağa dakika kovası eklendi: çıktının çözünürlüğü zaten dakika
+     (workMin/availMin = Math.round(ms/60000), verimlilik tam sayı yüzde), yani kova içinde
+     görünür bir bilgi kaybolmuyor — en fazla ±1 dakikalık bir yuvarlama geçişi <60 sn gecikiyor.
+     Veri değişimi beklemiyor: STATE.entries ya da tadilatlar referansı değişir değişmez anahtar
+     düşüyor, yani Firebase güncellemesi anında yansıyor.
+
+     SINIR: tek slot (computeCompletedRoutes gibi). Analiz ekranı tek render'da farklı
+     argümanlarla iki kez çağırıyorsa slot takla atar — bu yalnızca kazancı kaybettirir, sonucu
+     bozmaz. Makine/atölye ayarları anahtarda yok; değişmeleri nadir ve dakika kovası zaten
+     bayatlığı 60 saniyeyle sınırlıyor. */
+  const _analizKey = fromDate+'|'+toDate+'|'+(atolyeFilter||'tumu')+'|'+Math.floor(nowTick/60000);
+  if(_analizCacheKey === _analizKey && _analizCacheEntries === STATE.entries && _analizCacheTadilat === tadilatlar){
+    return _analizCache;
+  }
   // E ve F düzeltmeleri için aralığın sınırlarını ms cinsinden de tutuyoruz.
   const rangeStartMs = new Date(fromDate+'T00:00:00').getTime();
   const rangeEndMs = new Date(toDate+'T00:00:00').getTime() + 86400000; // toDate'in SONU (ertesi günün başlangıcı)
@@ -1174,7 +1206,12 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
   }).sort((a,b)=>b.workMin-a.workMin);
 
   const anyOperatorAnomaly = perOperator.some(op=>op.hasPhysicalAnomaly);
-  return { perMachine, perOperator, totals, overtimeList, isSingleDay, dayStartMs, fromDate, toDate, anyPhysicalAnomaly: anyPhysicalAnomaly||anyOperatorAnomaly };
+  const _sonuc = { perMachine, perOperator, totals, overtimeList, isSingleDay, dayStartMs, fromDate, toDate, anyPhysicalAnomaly: anyPhysicalAnomaly||anyOperatorAnomaly };
+  _analizCache = _sonuc;
+  _analizCacheKey = _analizKey;
+  _analizCacheEntries = STATE.entries;
+  _analizCacheTadilat = tadilatlar;
+  return _sonuc;
 }
 
 // renderAdmin() analiz sekmesini çizerken hesapladığı veriyi burada saklıyor — grafik init'i

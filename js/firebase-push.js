@@ -320,7 +320,11 @@ async function doLogin(){
   _scopedLoadsDone = true;
   loadMyPushHistory();
   loadMessages();
-  view = session.isAdmin ? ((session.isSef || session.isUretimSef) ? 'matrix' : 'report') : 'list';
+  /* Şef/Üretim Şef girince Canlı Panel'e düşüyor — 22.09.2026'ya kadar doğrudan 'matrix' yazılıydı,
+     artık ekranın ilk GÖRÜNÜR sekmesine (normalde Genel Bakış) gidiyor. adminTabPermissions henüz
+     yüklenmemişse hepsi görünür sayılır ve izinler gelince renderAdmin'in fallback'i düzeltir —
+     eski sabit değerin davranışıyla aynı sınıfta. */
+  view = session.isAdmin ? ((session.isSef || session.isUretimSef) ? canliPanelDefaultView() : 'report') : 'list';
   if(!session.isAdmin) newForm.makine = op.defaultMachine || '';
   render();
 }

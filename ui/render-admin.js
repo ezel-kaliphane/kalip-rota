@@ -1880,9 +1880,16 @@ function renderMakineMatrisi(){
     /* Kartin sag ustundeki renkli nokta TEK BASINA durumu anlatiyordu; renk korlugunde ve
        gun sonu mavisi ile yonetici aksani (teal) yan yana geldiginde ayirt edilemiyordu.
        Nokta yerine ayni rengi tasiyan kisa bir metin etiketi (.matrix-tag) basiyoruz. */
+    /* 22.09.2026 — tek "Planlı" etiketi Gün Sonu ile Planlı Mola'yı aynı kefeye koyuyordu; ikisi
+       operasyonel olarak farklı şey (biri vardiya bitişi, diğeri öğle/vardiya arası). Ayırım veride
+       zaten duruyordu — isVerimlilikDisiDurus bir alan değil, e.duruşNedeni'nin üzerinde çalışan bir
+       yüklem ve iki neden ayrı sabitler — yani yeni alan gerekmedi, sadece etiket dallandı.
+       Karışık durumda (biri gün sonu, diğeri mola) eski 'Planlı' etiketi korunuyor. */
     const durumEtiket = tadilatHere ? 'Tadilat'
       : running ? 'Çalışıyor'
       : stopped ? (durusAlert ? 'Uzun duruş'
+                 : stoppedEntries.every(e=>e.duruşNedeni===GUN_SONU_REASON) ? 'Gün sonu'
+                 : stoppedEntries.every(e=>e.duruşNedeni===PLANLI_MOLA_REASON) ? 'Planlı mola'
                  : stoppedEntries.every(e=>isVerimlilikDisiDurus(e.duruşNedeni)) ? 'Planlı' : 'Duruş')
       : 'Boşta';
     const etiketRengi = durusAlert ? 'var(--danger)' : border;
@@ -1938,12 +1945,274 @@ function renderMakineMatrisi(){
   </div>`;
   return out;
 }
+/* ===================== CANLI PANEL — SEKME KABUĞU (A.9, 22.09.2026) =====================
+   Makine Matrisi ve Tamamlanan Kodlar artık ayrı nav öğesi değil; yeni Genel Bakış ile birlikte
+   tek bir "Canlı Panel" ekranının üç sekmesi. Rapor BİRLEŞMEDİ — kendi nav öğesi olarak duruyor,
+   reportVisibleIds/reportSelectedIds da onunla birlikte kaldı.
+
+   İZİN SEMANTİĞİ — bu adımın en pahalı hata ihtimali olduğu için açıkça yazıyorum: üç sekmenin
+   üç AYRI anahtarı var ('genelBakis', 'matrix', 'completed') ve BİRLEŞTİRİLMİYOR. Nav öğesi
+   üçünden en az biri görünürse çiziliyor, sekme şeridi yalnızca görünür olanları basıyor. Yani
+   "LV sadece Tamamlanan Kodlar'ı görsün" ayarı bozulmadan çalışmaya devam ediyor: LV Canlı
+   Panel'e girer ve tek sekme görür. ADMIN_TAB_DEFS'in fallback mantığının bir kademe aşağı
+   uygulanması bu; analizViews/takimStokViews ile aynı desen, yeni desen icat edilmedi. */
+const CANLI_PANEL_TABS = [
+  { view:'genelBakis', key:'genelBakis', label:'Genel Bakış' },
+  { view:'matrix',     key:'matrix',     label:'Makine Matrisi' },
+  { view:'completed',  key:'completed',  label:'Tamamlanan Kodlar' },
+];
+function isCanliPanelView(v){ return CANLI_PANEL_TABS.some(t=>t.view===v); }
+function canliPanelVisible(){ return CANLI_PANEL_TABS.some(t=>isAdminTabVisible(t.key)); }
+/* Nav öğesine tıklandığında ve şef yönlendirmesinde ilk GÖRÜNÜR sekmeye düşülüyor — kullanıcıyı
+   izni olmayan bir sekmeye atıp oradan geri sektirmemek için. */
+function canliPanelDefaultView(){
+  const t = CANLI_PANEL_TABS.find(x=>isAdminTabVisible(x.key));
+  return t ? t.view : 'report';
+}
+function canliPanelTabsHtml(){
+  const gorunur = CANLI_PANEL_TABS.filter(t=>isAdminTabVisible(t.key));
+  // Tek sekme kalmışsa şerit bilgi taşımıyor, sadece yer kaplıyor — Tamamlanan ekranındaki
+  // birleşme sekmelerinin `birlesmeGroups.length>0` koşuluyla aynı mantık.
+  if(gorunur.length < 2) return '';
+  return `<div class="sub-tabs">${gorunur.map(t=>`<button class="sub-tab-btn ${view===t.view?'active':''}" onclick="setView('${t.view}')">${esc(t.label)}</button>`).join('')}</div>`;
+}
+
+/* ===================== GİRİŞ İPUCU =====================
+   Makine Matrisi / Tamamlanan Kodlar'ı eski yerinde arayan kullanıcı için TEK SEFERLİK bir
+   ipucu — kalıcı şerit DEĞİL, 3 görüşte kendiliğinden kayboluyor. Sayaç localStorage'da:
+   cihaz bazlı, kişisel ve geçici bir tercih, Firebase'e yazmanın anlamı yok. Anahtar öneki
+   rt_ — mevcut rt_bubble_pos ile aynı konvansiyon.
+   ADLANDIRMA: "baloncuk" DEĞİL, "giriş ipucu" / .intro-hint. O ad bu kod tabanında
+   ui/bubble.js'teki sürüklenebilir aktif iş baloncuğuna (#bubble-root, .active-bubble) ait;
+   ikisini aynı adla anmak sonradan yanlış dosyada arattırır. */
+const INTRO_HINT_KEY = 'rt_canli_panel_hint';
+const INTRO_HINT_LIMIT = 3;
+/* Karar oturum başına BİR kez veriliyor ve sabitleniyor: sayaç her render'da artsaydı ipucu
+   ekranda dururken bir sonraki tik'te aniden kaybolurdu. */
+let _introHintShow = null;
+function introHintCount(){
+  try { return parseInt(localStorage.getItem(INTRO_HINT_KEY), 10) || 0; }
+  catch(_){ return INTRO_HINT_LIMIT; } // localStorage kapalıysa ipucu hiç gösterilmiyor
+}
+function dismissIntroHint(){
+  _introHintShow = false;
+  try { localStorage.setItem(INTRO_HINT_KEY, String(INTRO_HINT_LIMIT)); } catch(_){}
+  render();
+}
+function introHintHtml(){
+  if(_introHintShow === null){
+    _introHintShow = introHintCount() < INTRO_HINT_LIMIT;
+    if(_introHintShow){
+      try { localStorage.setItem(INTRO_HINT_KEY, String(introHintCount() + 1)); } catch(_){}
+    }
+  }
+  if(!_introHintShow) return '';
+  return `<div class="intro-hint">
+    <span class="intro-hint-ico">${ico('clock',16)}</span>
+    <div class="intro-hint-body">
+      <div class="intro-hint-title">Makine Matrisi ve Tamamlanan Kodlar buraya taşındı</div>
+      <div class="intro-hint-sub">Üç ekran tek <b>Canlı Panel</b> oldu; üstteki sekmelerden ulaşırsın. <b>Rapor</b> değişmedi, sol menüde kendi yerinde duruyor.</div>
+    </div>
+    <button class="btn-primary intro-hint-btn" onclick="dismissIntroHint()">Anladım</button>
+  </div>`;
+}
+
+/* ===================== CANLI PANEL — GENEL BAKIŞ =====================
+   Canlı Panel'in ilk sekmesi. İzleme ekranı olduğu için tek prensip: bilgi TIKLANINCA değil
+   BAKINCA görünür — Uzun Duruşlar, Kapatılmamış Olabilir ve Son Tamamlananlar rozet ya da
+   uyarı ikonu değil, üçü de kalıcı panel.
+
+   Tüm veri MEVCUT fonksiyonlardan geliyor, yeni alan/hesap yok: allMachines + entriesArray +
+   buildTadilatSynthetic (Makine Matrisi'nin aynısı), uzunDurusluKayitlar, uzunDevamEdenKayitlar,
+   computeCompletedRoutes, computeAnalizData.
+
+   Tahtada (Admin-CanliPanel) olup burada BİLEREK OLMAYANLAR — gerekçeleri
+   notes/TASARIM_KUYRUGU.md §1'de:
+   · "+2,1 puan" ve "dün aynı saatte 24" — önceki dönemle kıyas. Geçmiş veriden hesaplanabilir
+     ama yeni hesap = kapsam genişlemesi; ayrıca aynı ifade Admin-Rapor'u geçersiz saymanın
+     gerekçesiydi, başka ekranda sessizce kabul etmek o kararla çelişirdi.
+   · "Uzun boşta" dikkat kategorisi — kodda boşta süresi için eşik kavramı yok; eklemek yeni bir
+     ayar alanı demek (Ayarlar adımı bloke).
+   Verimlilik alt metni tahtadaki "net çalışma / (çalışma + duruş)" DEĞİL: gerçek formül
+   computeAnalizData'daki Çalışma / Kullanılabilirlik (workMin/availMin, bkz. Analiz ekranı). */
+function renderGenelBakis(){
+  const entries = [...entriesArray(), ...buildTadilatSynthetic()];
+  const tumMakineler = allMachines();
+  /* Durum sayımı Makine Matrisi ile BİREBİR aynı sırayla yapılıyor (tadilat → devam → duruş →
+     boşta). İkisi aynı ekranın iki sekmesi; sayıların birbirini tutmaması en hızlı fark edilen
+     ve en çok güven kaybettiren hata olurdu. */
+  let calisanSay = 0, tadilatSay = 0;
+  const durustakiler = [];
+  tumMakineler.forEach(m=>{
+    const label = resolveMachineLabel(m.code);
+    if(tadilatAktifOnMachine(label)){ tadilatSay++; return; }
+    const me = entries.filter(e=>e.makine===label);
+    if(me.some(e=>e.status==='devam')){ calisanSay++; return; }
+    const durusta = me.filter(e=>e.status==='duruş');
+    if(durusta.length > 0) durustakiler.push({ m, durusta });
+  });
+  const durusSay = durustakiler.length;
+  const bosSay = Math.max(0, tumMakineler.length - calisanSay - durusSay - tadilatSay);
+
+  /* Uyarı listeleri topbar'daki İKİ KOŞULUN AYNISIYLA alınıyor (modül açık mı + kullanıcının o
+     uyarıyı görme izni var mı). Aynı veriyi ikinci bir yerde daha gevşek koşulla göstermek,
+     uyarısı kapatılmış bir kullanıcının onu burada görmesi demek olurdu. */
+  const uzunDurusList = (uzunDurusUyariEnabled() && isAdminTabVisible('uzunDurusUyari')) ? uzunDurusluKayitlar() : [];
+  const uzunDevamEdenList = (uzunDevamEdenUyariEnabled() && isAdminTabVisible('uzunDevamEdenUyari')) ? uzunDevamEdenKayitlar() : [];
+  const esikDk = Math.round(uzunDurusEsikMs()/60000);
+  const esikSaat = Math.round(uzunDevamEdenEsikMs()/3600000);
+
+  const bugun = dateKey(Date.now());
+  const gunBasiMs = new Date(bugun+'T00:00:00').getTime();
+  const tamamlananlar = computeCompletedRoutes().slice().sort((a,b)=>b.finishedAt-a.finishedAt);
+  const bugunTamamlanan = tamamlananlar.filter(r=>r.finishedAt >= gunBasiMs);
+  /* Adet ROTA başına anlamlı, kayıt başına değil: aynı iş emrinin her operasyonu aynı adedi
+     taşıyor, operasyonlar boyunca toplamak adedi operasyon sayısı kadar katlardı. */
+  const bugunAdet = bugunTamamlanan.reduce((s,r)=>{
+    const e = r.entries.find(x=>Number(x.adet) > 0);
+    return s + (e ? Number(e.adet) : 0);
+  }, 0);
+  /* DİKKAT İSTEYENLER listesi KPI'lardan ÖNCE hesaplanıyor: "Duruşta" KPI'ı MAKİNE sayıyor, alt
+     satırı da aynı birimde olmalı. (22.09.2026 düzeltmesi: alt satır önce uzunDurusluKayitlar()'ın
+     uzunluğunu basıyordu — o KAYIT sayıyor. Tek makinede eşiği aşmış iki kayıt varsa ekranda
+     "Duruşta 1" başlığının altında "2 tanesi eşiği aştı" yazıyordu.) */
+  const GB_KART_LIMIT = 8;
+  const dikkat = durustakiler.map(({m, durusta})=>{
+    // En uzun süredir duraklamış kayıt kartın yüzü oluyor — görülmesi gereken en eski sorun.
+    const info = durusta.slice().sort((a,b)=>(a.duruşTs||Infinity)-(b.duruşTs||Infinity))[0];
+    const alert = uzunDurusUyariEnabled() && durusta.some(e=>e.duruşTs && !isVerimlilikDisiDurus(e.duruşNedeni) && (nowTick-e.duruşTs)>=uzunDurusEsikMs());
+    return { m, info, alert, sayi: durusta.length, bas: (info && info.duruşTs) ? info.duruşTs : null };
+  }).sort((a,b)=> (b.alert - a.alert) || ((a.bas||Infinity) - (b.bas||Infinity)));
+  // Uyarıyı görme izni olmayana eşik bilgisi hiç verilmiyor — "0" yazmak "yok" demek olurdu.
+  const uzunDurusGorunur = uzunDurusUyariEnabled() && isAdminTabVisible('uzunDurusUyari');
+  const uzunDurusMakineSay = uzunDurusGorunur ? dikkat.filter(d=>d.alert).length : 0;
+
+  const todayTotals = computeAnalizData(bugun, bugun, 'tumu').totals;
+  const verimRenk = todayTotals.verimlilik>=70 ? 'var(--success)' : todayTotals.verimlilik>=40 ? 'var(--warn)' : 'var(--danger)';
+
+  // İş Yoğunluğu'ndaki KPI deseninin aynısı (.iy-kpi + --nc) — yeni kart tipi icat edilmedi.
+  const kpi = (label, value, color, sub, vurgu) => `<div class="analiz-chart-box iy-kpi${vurgu?' iy-kpi-vurgu':''}" style="--nc:${color}">
+    <div class="iy-kpi-label">${label}</div>
+    <div class="mono iy-kpi-value">${value}</div>
+    ${sub?`<div class="iy-kpi-sub">${sub}</div>`:''}
+  </div>`;
+
+  let out = `<div class="matrix-wrap">
+    <div class="iy-kpi-grid">
+      ${kpi('Çalışıyor', `${calisanSay}<span style="font-size:15px;color:var(--text-muted);font-weight:600"> / ${tumMakineler.length}</span>`, 'var(--success)', `${durusSay} duruşta · ${tadilatSay} tadilatta · ${bosSay} boşta`)}
+      ${kpi('Duruşta', durusSay, 'var(--warn)', !uzunDurusGorunur ? 'duruştaki makine' : uzunDurusMakineSay>0 ? `${uzunDurusMakineSay} makine ${esikDk} dk eşiğini aştı` : `${esikDk} dk eşiğini aşan yok`, uzunDurusMakineSay>0)}
+      ${kpi('Bugün Tamamlanan', bugunTamamlanan.length, 'var(--accent)', bugunAdet>0 ? `${bugunAdet} adet · tamamlanan rota` : 'tamamlanan rota')}
+      ${kpi('Vardiya Verimliliği', `%${todayTotals.verimlilik}`, verimRenk, `Çalışma / Kullanılabilirlik · ${fmtDur(todayTotals.workMin*60000)} / ${fmtDur(todayTotals.availMin*60000)}`)}
+    </div>
+    <div class="gb-grid">`;
+
+  /* DİKKAT İSTEYENLER — duruştaki makineler, uzun duruş önce. Kartlar Makine Matrisi'nin
+     .matrix-card deseninin aynısı: aynı şeyi iki farklı görsel dille anlatmamak için. */
+  out += `<div class="analiz-chart-box">
+      <div class="gb-panel-head">
+        <span class="gb-panel-title">Dikkat İsteyenler <b class="mono">${dikkat.length}</b></span>
+        <span class="matrix-legend" style="margin:0">
+          <span><span class="legend-dot" style="background:var(--danger)"></span>Uzun duruş <b>${dikkat.filter(d=>d.alert).length}</b></span>
+          <span><span class="legend-dot" style="background:var(--warn)"></span>Duruş <b>${dikkat.filter(d=>!d.alert).length}</b></span>
+        </span>
+      </div>`;
+  if(dikkat.length === 0){
+    out += `<div class="empty-state">Duruşta makine yok.</div>`;
+  } else {
+    out += `<div class="matrix-grid">`;
+    dikkat.slice(0, GB_KART_LIMIT).forEach(d=>{
+      const renk = d.alert ? 'var(--danger)' : 'var(--warn)';
+      const zemin = d.alert ? 'var(--danger-bg)' : 'var(--warn-bg)';
+      /* Etiket Makine Matrisi'yle aynı kademeyi kullanıyor: Gün Sonu ile Planlı Mola artık
+         tek "Planlı" altında toplanmıyor (ikisi farklı şey — vardiya bitişi / öğle arası). */
+      const etiket = d.alert ? 'Uzun duruş'
+        : (d.info && d.info.duruşNedeni===GUN_SONU_REASON) ? 'Gün sonu'
+        : (d.info && d.info.duruşNedeni===PLANLI_MOLA_REASON) ? 'Planlı mola'
+        : 'Duruş';
+      out += `<div class="matrix-card${d.alert?' durus-alert':''}" style="background:${zemin};border-color:${renk}" onclick="openMachineDetail('${escJs(d.m.code)}')">
+        <div class="matrix-card-top"><span class="matrix-code">${d.m.code}</span><span class="matrix-tag" style="--sb:${renk}">${etiket}</span></div>
+        <div class="matrix-name">${esc(d.m.name)}</div>
+        ${d.sayi>1
+          ? `<div class="matrix-sub" style="font-weight:700">${d.sayi} iş duraklatıldı</div><div class="matrix-sub" style="opacity:.7">Detay için tıkla</div>`
+          : `<div class="matrix-sub">${esc((d.info && (d.info.talepNo||d.info.isEmriNo))||'—')} · ${esc((d.info && d.info.operatorUsername)||'—')}</div>
+             <div class="matrix-sub">${esc((d.info && d.info.duruşNedeni)||'—')}</div>`}
+        ${d.bas ? `<div class="matrix-sub mono" style="color:${renk};font-weight:700">${live(()=> fmtDur(Math.max(0, nowTick - d.bas)))}</div>` : ''}
+      </div>`;
+    });
+    out += `</div>`;
+    if(dikkat.length > GB_KART_LIMIT && isAdminTabVisible('matrix')){
+      out += `<button class="btn-ghost gb-more" onclick="setView('matrix')">${dikkat.length - GB_KART_LIMIT} makine daha · ${tumMakineler.length} makinenin tamamı için Makine Matrisi</button>`;
+    }
+  }
+  out += `</div>`;
+
+  /* SAĞ RAY — üçü de kalıcı panel. Süreler burada live() ile sarılmıyor: hepsi 30 dk / 14 saat
+     mertebesinde, saniyelik tik anlam taşımıyor; renderLiveBits zaten her 15. tik'te tam render
+     yapıyor (bkz. ui/live.js kapsam notu), yani en fazla 15 saniyelik bayatlık oluyor. */
+  out += `<div class="gb-rail">
+      <div class="notice" style="--nc:var(--danger);margin-bottom:0">
+        <div class="notice-title">${ico('alert',15)} Uzun Duruşlar <span style="margin-left:auto">${uzunDurusList.length}</span></div>`;
+  if(uzunDurusList.length === 0){
+    out += `<div class="notice-sub">${esikDk} dk eşiğini aşan duruş yok.</div>`;
+  } else {
+    uzunDurusList.slice(0,5).forEach(u=>{
+      out += `<div class="notice-row" onclick="openUzunDurusModal()">
+        <span style="min-width:0"><b class="mono">${esc(String(u.makine||'').split(' · ')[0])}</b> <span style="color:var(--text-muted)">${esc(u.neden||'')}</span></span>
+        <span class="mono" style="color:var(--danger);font-weight:700;flex:none">${fmtDur(u.ms)}</span>
+      </div>`;
+    });
+    if(uzunDurusList.length > 5){
+      out += `<div class="notice-sub" style="margin-top:8px">+${uzunDurusList.length - 5} tane daha — listeyi açmak için bir satıra tıkla.</div>`;
+    }
+  }
+  out += `</div>
+      <div class="notice" style="--nc:var(--warn);margin-bottom:0">
+        <div class="notice-title">${ico('clock',15)} Kapatılmamış Olabilir <span style="margin-left:auto">${uzunDevamEdenList.length}</span></div>`;
+  if(uzunDevamEdenList.length === 0){
+    out += `<div class="notice-sub">${esikSaat} saatten uzun süredir "devam" görünen kayıt yok.</div>`;
+  } else {
+    uzunDevamEdenList.slice(0,5).forEach(u=>{
+      out += `<div class="notice-row" onclick="openUzunDevamEdenModal()">
+        <span style="min-width:0"><b class="mono">${esc(String(u.makine||'').split(' · ')[0])}</b> <span style="color:var(--text-muted)">${esc(u.operatorUsername||'')}</span></span>
+        <span class="mono" style="color:var(--warn);font-weight:700;flex:none">${fmtDur(u.ms)}</span>
+      </div>`;
+    });
+    if(uzunDevamEdenList.length > 5){
+      out += `<div class="notice-sub" style="margin-top:8px">+${uzunDevamEdenList.length - 5} tane daha — listeyi açmak için bir satıra tıkla.</div>`;
+    }
+  }
+  out += `</div>
+      <div class="analiz-chart-box">
+        <div class="gb-panel-head">
+          <span class="gb-panel-title">Son Tamamlananlar</span>
+          ${isAdminTabVisible('completed') ? `<button class="btn-ghost" style="padding:4px 10px;font-size:11px" onclick="setView('completed')">Tümü</button>` : ''}
+        </div>`;
+  if(tamamlananlar.length === 0){
+    out += `<div class="notice-sub">Henüz tamamlanan rota yok.</div>`;
+  } else {
+    tamamlananlar.slice(0,6).forEach(r=>{
+      const talepNo = r.entries.find(e=>e.talepNo)?.talepNo || '';
+      const son = r.entries[r.entries.length-1] || {};
+      out += `<div class="gb-row" onclick="openRouteDetail('${escJs(r.isEmriNo)}', ${r.finishedAt})">
+        <span class="mono" style="color:var(--accent);font-weight:600;flex:none">${esc(talepNo || r.isEmriNo)}</span>
+        <span style="color:var(--text-muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(son.operatorUsername||'')}</span>
+        <span style="color:var(--text-muted);font-size:11.5px;flex:none">${fmtDur(Math.max(0, nowTick - r.finishedAt))} önce</span>
+      </div>`;
+    });
+  }
+  out += `</div>
+    </div>
+  </div>
+  </div>${routeModal ? renderRouteModal() : ''}`;
+  return out;
+}
+
 function renderAdmin(){
   /* Stok sekmesi uc bolumlu (takim / karbur / malzeme), asagida `stokYonetim` olarak ayrica ele
      aliniyor — bu yuzden burada karsiligi yok. */
-  const viewToTabKey = { report:'rapor', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilatYonetim:'tadilat' };
+  const viewToTabKey = { report:'rapor', genelBakis:'genelBakis', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilatYonetim:'tadilat' };
   if(viewToTabKey[view] && !isAdminTabVisible(viewToTabKey[view])){
-    const tabKeyToView = { rapor:'report', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilat:'tadilatYonetim', takimStok:'stokYonetim', karbur:'stokYonetim' };
+    const tabKeyToView = { rapor:'report', genelBakis:'genelBakis', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilat:'tadilatYonetim', takimStok:'stokYonetim', karbur:'stokYonetim' };
     const fallbackKey = ADMIN_TAB_DEFS.map(t=>t.key).find(k=>isAdminTabVisible(k) && (k!=='tadilat' || canCreateTadilat()) && (k!=='analiz' || !(session.isSef || session.isUretimSef)));
     view = fallbackKey ? tabKeyToView[fallbackKey] : 'report';
   }
@@ -1968,8 +2237,7 @@ function renderAdmin(){
         <div><div class="admin-sidebar-name">BOM-ROTA</div><div class="admin-sidebar-sub">Üretim Takip</div></div>
       </div>
       ${isAdminTabVisible('rapor') ? `<button class="admin-nav-item ${view==='report'?'active':''}" onclick="setView('report')">${ico('list',14)} Rapor</button>` : ''}
-      ${isAdminTabVisible('matrix') ? `<button class="admin-nav-item ${view==='matrix'?'active':''}" onclick="setView('matrix')">${ico('factory',14)} Makine Matrisi</button>` : ''}
-      ${isAdminTabVisible('completed') ? `<button class="admin-nav-item ${view==='completed'?'active':''}" onclick="setView('completed')">${ico('check',14)} Tamamlanan Kodlar</button>` : ''}
+      ${canliPanelVisible() ? `<button class="admin-nav-item ${isCanliPanelView(view)?'active':''}" onclick="setView('${canliPanelDefaultView()}')">${ico('clock',14)} Canlı Panel</button>` : ''}
       ${isAdminTabVisible('isYogunlugu') ? `<button class="admin-nav-item ${view==='isYogunlugu'?'active':''}" onclick="setView('isYogunlugu')">${ico('box',14)} İş Yoğunluğu</button>` : ''}
       ${!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz') ? `<button class="admin-nav-item ${view==='analiz'?'active':''}" onclick="setView('analiz')">${ico('chart',14)} Analiz</button>` : ''}
       ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="admin-nav-item ${view==='tadilatYonetim'?'active':''}" onclick="setView('tadilatYonetim')">${ico('wrench',14)} Tadilat</button>` : ''}
@@ -2017,7 +2285,7 @@ function renderAdmin(){
 
   let body = '';
   if(view==='adminSettings' && !session.isAdmin){ view = 'report'; }
-  if((session.isSef || session.isUretimSef) && view==='analiz'){ view = 'matrix'; }
+  if((session.isSef || session.isUretimSef) && view==='analiz'){ view = canliPanelDefaultView(); }
   if(session.isSef && view==='adminSettings' && settingsSubTab!=='veriListeleri' && settingsSubTab!=='stok' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'veriListeleri'; }
   if(session.isAdmin && !session.isSef && !session.isSuperAdmin && view==='adminSettings' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'bildirimlerim'; } // düz Yönetici: sadece kendi bildirimini (ve izin verilmişse Bildirim Ayarları'nı) yönetebilir
   if(view==='adminSettings'){
@@ -2282,7 +2550,7 @@ function renderAdmin(){
     } else if(settingsSubTab==='tabErisimi'){
       const adminAccounts = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin && (v.isAdmin || v.isSef || v.isUretimSef));
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Sekme Erişimi (Yönetici)</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Her yönetici/şef hesabı için, üst menüdeki ana sekmelerden hangilerini görebileceğini AYRI AYRI belirle (ör. "LV sadece Rapor ve Makine Matrisi'ni görsün" gibi). Ayrıca "${ico('alert',13)} Uzun Duruş Uyarısı" kutusuyla, üst bardaki uzun süredir duruşta olan işleri gösteren uyarı ikonunu kimin görebileceğini de ayrı ayrı kapatıp açabilirsin. SuperAdmin bu ayardan hiç etkilenmez, her zaman hepsini görür. Bir kullanıcı için hiçbir kutuyu kapatmazsan, o kullanıcı varsayılan olarak tüm sekmeleri/uyarıları görür.</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Her yönetici/şef hesabı için, sol menüdeki ana öğelerden hangilerini görebileceğini AYRI AYRI belirle (ör. "LV sadece Rapor ve Canlı Panel · Makine Matrisi'ni görsün" gibi). Canlı Panel'in üç sekmesinin (Genel Bakış / Makine Matrisi / Tamamlanan Kodlar) ayrı ayrı kutusu var: üçünü de kapatırsan Canlı Panel sol menüde hiç görünmez, birini açık bırakırsan kullanıcı ekrana girer ve yalnızca o sekmeyi görür. Ayrıca "${ico('alert',13)} Uzun Duruş Uyarısı" kutusuyla, üst bardaki uzun süredir duruşta olan işleri gösteren uyarı ikonunu kimin görebileceğini de ayrı ayrı kapatıp açabilirsin. SuperAdmin bu ayardan hiç etkilenmez, her zaman hepsini görür. Bir kullanıcı için hiçbir kutuyu kapatmazsan, o kullanıcı varsayılan olarak tüm sekmeleri/uyarıları görür.</div>
         ${adminAccounts.length===0 ? `<div style="color:var(--text-muted);font-size:13px">Henüz yönetici/şef hesabı yok.</div>` : `
         <div class="op-settings-table">
           ${adminAccounts.map(([code,v])=>`
@@ -2528,6 +2796,8 @@ function renderAdmin(){
       body += renderMalzemeStokAyarlar();
     }
     body += `</div>`;
+  } else if(view==='genelBakis'){
+    body = renderGenelBakis();
   } else if(view==='matrix'){
     body = renderMakineMatrisi();
   } else if(view==='completed'){
@@ -3253,6 +3523,11 @@ function renderAdmin(){
     });
     body += `</tbody></table></div>${entryDetailId ? renderEntryDetailModal() : ''}`;
   }
+
+  /* Canlı Panel'in üç sekmesi tek ekranın içinde: gövdenin başına sekme şeridi ve (varsa) tek
+     seferlik giriş ipucu eklenir. Sekmeye tıklamak setView → render, yani morph'u TETİKLEMESİ
+     gerekiyor; bu yüzden #bubble-root gibi morph'a rağmen yaşayan bir kök kullanılmıyor. */
+  if(isCanliPanelView(view)) body = introHintHtml() + canliPanelTabsHtml() + body;
 
   return `<div class="root-wide theme-${resolvedTheme()}">${sidebar}<div class="admin-shell-body"><div class="print-brand">ROTA TAKİP · YÖNETİCİ RAPORU</div>${header}${body}</div>${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}${tadilatAkisModalId ? renderTadilatAkisModal() : ''}${karburPickerFor ? renderKarburPicker() : ''}</div>`;
 }
