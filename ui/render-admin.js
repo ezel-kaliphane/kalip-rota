@@ -1263,9 +1263,9 @@ function ensureStokSonHareketlerLoaded(cb){
   if(stokSonHareketler || stokSonHareketlerLoading) return;
   stokSonHareketlerLoading = true;
   Promise.all([
-    DB.ref('toolMoves').orderByChild('ts').limitToLast(6).once('value').catch(()=>null),
-    DB.ref('karburHareketleri').orderByChild('ts').limitToLast(6).once('value').catch(()=>null),
-    DB.ref('stockHareketleri').orderByChild('ts').limitToLast(6).once('value').catch(()=>null)
+    DB.ref('toolMoves').orderByChild('ts').limitToLast(25).once('value').catch(()=>null),
+    DB.ref('karburHareketleri').orderByChild('ts').limitToLast(25).once('value').catch(()=>null),
+    DB.ref('stockHareketleri').orderByChild('ts').limitToLast(25).once('value').catch(()=>null)
   ]).then(([toolSnap, karburSnap, malzemeSnap])=>{
     const hepsi = [];
     if(toolSnap) toolSnap.forEach(c=>{
@@ -1289,7 +1289,7 @@ function ensureStokSonHareketlerLoaded(cb){
         altBaslik: `${v.itemKod||''} ${v.miktar>0?'+':''}${v.miktar||0}${v.birim||''} · ${v.operatorName||''}`.trim(), ts: v.ts||0, svg: stokHareketSvg(eylem) });
     });
     hepsi.sort((a,b)=>b.ts-a.ts);
-    stokSonHareketler = hepsi.slice(0,6);
+    stokSonHareketler = hepsi.slice(0,40);
     stokSonHareketlerLoading = false;
     if(cb) cb();
   }).catch(()=>{ stokSonHareketlerLoading = false; stokSonHareketler = []; });
@@ -1404,41 +1404,31 @@ function renderStokGenelBakis(){
       </div>
     </div>
     <div class="stok-genel-body">
-      <div class="sg-table-wrap">
-        <div style="display:flex;align-items:center;gap:10px;padding:16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
-          <span style="font-size:15px;font-weight:700;color:var(--text)">Stok Kalemleri</span>
-          <span style="font-size:12px;font-weight:600;color:var(--text-muted);background:var(--panel-alt);border-radius:6px;padding:2px 8px">${satirlar.length} / ${tumu.length}</span>
-          <div style="display:flex;gap:8px;margin-left:auto">
-            <select class="sg-filtre-chip" style="width:auto" onchange="stokGenelTurDegistir(this.value)">
-              <option value="tumu" ${stokGenelTurFiltre==='tumu'?'selected':''}>Tür: Tümü</option>
-              <option value="Hammadde" ${stokGenelTurFiltre==='Hammadde'?'selected':''}>Tür: Hammadde</option>
-              <option value="Takım" ${stokGenelTurFiltre==='Takım'?'selected':''}>Tür: Takım & Sarf</option>
-              <option value="Karbür" ${stokGenelTurFiltre==='Karbür'?'selected':''}>Tür: Karbür</option>
-            </select>
-            <button class="sg-filtre-chip" onclick="stokGenelSiralamaDegistir()">Stok: ${stokGenelSiralama==='artan'?'Artan':'Azalan'}</button>
-          </div>
+      <!-- Kalem tablosu buradan KALDIRILDI: kalem listeleri artik KPI kartlarina tiklayinca
+           acilan pencerelerde (stokListeAc) ve modul sekmelerinde duruyor, burada tekrar
+           ediyordu. Yerine son hareketler geldi ve sag raydaki kucuk kopyasi kalkti. -->
+      <div class="sg-table-wrap" style="padding:0 16px 8px">
+        <div style="display:flex;align-items:center;gap:10px;padding:16px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:15px;font-weight:700;color:var(--text)">Son Hareketler</span>
+          <span style="font-size:12px;font-weight:600;color:var(--text-muted);background:var(--panel-alt);border-radius:6px;padding:2px 8px">${stokSonHareketler ? stokSonHareketler.length : '…'}</span>
+          <button style="background:transparent;font-size:12px;font-weight:500;color:var(--accent);margin-left:auto" onclick="openMyPushHistoryModal()">pushLog</button>
         </div>
-        <table><thead><tr><th>Kod</th><th>Malzeme</th><th>Tür</th><th>Stok</th><th>Alt Limit</th><th>Durum</th><th>Son Hareket</th>${stokDuzeltYetkisi()?'<th style="width:56px"></th>':''}</tr></thead><tbody>
-          ${sayfaSatirlari.length===0 ? `<tr><td colspan="${stokDuzeltYetkisi()?8:7}" style="text-align:center;color:var(--text-muted);padding:20px">${stokGenelArama.trim()?'Aramayla eşleşen kalem yok.':'Henüz erişebildiğin bir stok kaynağı yok.'}</td></tr>` : sayfaSatirlari.map(s=>`
-            <tr class="${s.durum==='negatif'?'sg-neg':''}">
-              <td class="mono" style="color:var(--text);font-weight:500;font-size:12.5px">${esc(s.kod)}</td>
-              <td style="font-weight:500;color:var(--text)">${esc(s.malzeme)}</td>
-              <td style="color:var(--text-muted)">${esc(s.turEtiket)}</td>
-              <td style="font-weight:700;color:${s.durum==='negatif'?'var(--danger)':'var(--text)'}">${esc(s.stokText)}</td>
-              <td class="mono" style="color:var(--text-muted)">${s.altLimit||'—'}</td>
-              <td>${durumPill(s)}</td>
-              <td style="color:var(--text-subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px" title="${esc(s.sonHareketAciklama ? s.sonHareketAciklama+' · '+stokGenelZamanKisa(s.sonHareketTs) : stokGenelZamanKisa(s.sonHareketTs))}">${s.sonHareketAciklama ? esc(s.sonHareketAciklama)+' · '+stokGenelZamanKisa(s.sonHareketTs) : stokGenelZamanKisa(s.sonHareketTs)}</td>
-              ${stokDuzeltYetkisi()?`<td><button class="del-btn" title="Stoğu elle düzelt" onclick="stokDuzeltAc('${escJs(s.id)}',${s.stokSayi})">${ico('edit',14)}</button></td>`:''}
-            </tr>
-          `).join('')}
-        </tbody></table>
-        <div class="sg-sayfalama">
-          <span>Sayfa ${sayfa} / ${toplamSayfa} · ${satirlar.length} kalem</span>
-          <div style="display:flex;gap:4px;align-items:center">
-            <button class="sg-sayfa-btn" ${sayfa<=1?'disabled':''} onclick="stokGenelSayfaGit(${sayfa-1})">‹</button>
-            ${sayfaNolari.map((n,i)=>`${i>0 && n-sayfaNolari[i-1]>1 ? `<span style="color:var(--text-muted)">…</span>` : ''}<button class="sg-sayfa-btn ${n===sayfa?'active':''}" onclick="stokGenelSayfaGit(${n})">${n}</button>`).join('')}
-            <button class="sg-sayfa-btn" ${sayfa>=toplamSayfa?'disabled':''} onclick="stokGenelSayfaGit(${sayfa+1})">›</button>
-          </div>
+        <div style="overflow-y:auto">
+        ${!stokSonHareketler
+          ? `<div style="font-size:12.5px;color:var(--text-muted);padding:16px 0">Yükleniyor…</div>`
+          : stokSonHareketler.length===0
+            ? `<div style="font-size:12.5px;color:var(--text-muted);padding:16px 0">Henüz hareket yok.</div>`
+            : stokSonHareketler.map(h=>`
+          <div class="sg-crit-row" style="align-items:flex-start;justify-content:space-between;gap:10px">
+            <div style="display:flex;align-items:flex-start;gap:12px;min-width:0">
+              <span style="width:32px;height:32px;border-radius:8px;background:var(--panel-alt);color:var(--text-muted);display:flex;align-items:center;justify-content:center;flex:none">${h.svg}</span>
+              <div style="min-width:0">
+                <div style="font-size:12.5px;font-weight:700;color:var(--text)">${esc(h.baslik)}</div>
+                <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(h.altBaslik)}</div>
+              </div>
+            </div>
+            <div style="font-size:12px;color:var(--text-subtle);flex:none;white-space:nowrap">${stokGenelZamanKisa(h.ts)}</div>
+          </div>`).join('')}
         </div>
       </div>
       <div class="sg-side">
@@ -1459,21 +1449,6 @@ function renderStokGenelBakis(){
             </div>
           `).join('')}
           ${kritik.length>0 ? `<button style="width:100%;margin-top:16px;padding:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;justify-content:center;gap:6px" onclick="stokGenelTurDegistir('tumu'); stokGenelSiralama='artan'; render()">Tümünü Gör ${ico('chevronRight',14)}</button>` : ''}
-        </div>
-        <div class="sg-panel">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--panel-alt);margin-bottom:2px">
-            <span class="sg-panel-title" style="margin-bottom:0">Son Hareketler</span>
-            <button style="background:transparent;font-size:12px;font-weight:500;color:var(--accent)" onclick="openMyPushHistoryModal()">pushLog</button>
-          </div>
-          ${!stokSonHareketler ? `<div style="font-size:12px;color:var(--text-muted);padding:12px 0">Yükleniyor…</div>` : stokSonHareketler.length===0 ? `<div style="font-size:12px;color:var(--text-muted);padding:12px 0">Hareket kaydı yok.</div>` : stokSonHareketler.map(s=>`
-            <div class="sg-crit-row" style="align-items:flex-start;justify-content:space-between;gap:8px">
-              <div style="display:flex;align-items:flex-start;gap:10px;min-width:0">
-                <span style="width:32px;height:32px;border-radius:8px;background:var(--panel-alt);color:var(--text-muted);display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px">${s.svg}</span>
-                <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.baslik)}</div><div style="font-size:11px;color:var(--text-subtle);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.altBaslik)}</div></div>
-              </div>
-              <div style="font-size:12px;color:var(--text-subtle);flex:none;white-space:nowrap">${stokGenelZamanKisa(s.ts)}</div>
-            </div>
-          `).join('')}
         </div>
       </div>
     </div>
