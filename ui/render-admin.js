@@ -952,8 +952,8 @@ const STOK_BOLUMLERI = [
    iki gezinme seviyesi turuncuyken (--accent) üçüncü seviye uyarı/filtre gibi görünüyordu.
 
    ARTIK: satırı renderStokScreen tek yerden, .sub-tab-btn ile çiziyor. Ortak üç fiil
-   (Durum · Giriş · Hareketler) her modülde başta ve aynı sırada; modüle özel bölümler
-   sonra, Excel Yükle en sonda.
+   (Durum · Giriş · Hareketler) her modülde başta ve aynı sırada; modüle özel bölümler sonra.
+   22.09.2026: "Excel Yükle" bölümü üçünden de çıkarıldı, hepsi Excel Yükleme ekranında toplandı.
 
    ANAHTARLAR BİLEREK DEĞİŞMEDİ — yalnızca etiket, sıra ve stil ortaklaştı. Takım'ın bölüm
    görünürlük izinleri adminTabPermissions/<kullanıcı>/takimStokViews/<anahtar> altında bu
@@ -967,9 +967,9 @@ const STOK_BOLUM_TANIM = {
       { key:'liste',    label:'Durum' },
       { key:'giris',    label:'Giriş' },
       { key:'gecmis',   label:'Hareketler' },
-      { key:'konumlar', label:'Konumlar' },
-      { key:'excel',    label:'Excel Yükle' }
-    ]
+      { key:'konumlar', label:'Konumlar' }
+    ],
+    ayarla: k => { toolAdminSubView = k; }
   },
   karbur: {
     oku: () => karburSubView,
@@ -980,9 +980,9 @@ const STOK_BOLUM_TANIM = {
       { key:'giris',  label:'Giriş' },
       { key:'gecmis', label:'Hareketler' },
       { key:'plan',   label:'Kesim Planı' },
-      { key:'isemri', label:'İş Emri Tüketimi' },
-      { key:'excel',  label:'Excel Yükle' }
-    ]
+      { key:'isemri', label:'İş Emri Tüketimi' }
+    ],
+    ayarla: k => { karburSubView = k; }
   },
   malzeme: {
     oku: () => malzemeSubView,
@@ -992,9 +992,9 @@ const STOK_BOLUM_TANIM = {
       { key:'durum',      label:'Durum' },
       { key:'giris',      label:'Giriş' },
       { key:'hareketler', label:'Hareketler' },
-      { key:'kodgiris',   label:'Kod ile Giriş' },
-      { key:'excel',      label:'Excel Yükle' }
-    ]
+      { key:'kodgiris',   label:'Kod ile Giriş' }
+    ],
+    ayarla: k => { malzemeSubView = k; }
   }
 };
 let stokSubView = 'genel';
@@ -1313,9 +1313,12 @@ function stokGenelHedefModul(){ return stokGenelTurFiltre==='Takım' ? 'takim' :
 // hangi modül açıksa butonlar ONA gitsin diye kullanılıyor — Genel Bakış'tayken override
 // verilmez, filtre bazlı stokGenelHedefModul() devreye girer.
 function stokGenelExcelAc(hedefOverride){
-  const hedef = hedefOverride || stokGenelHedefModul();
-  setStokSubView(hedef);
-  if(hedef==='takim') setToolAdminSubView('excel'); else if(hedef==='karbur') karburSetSubView('excel'); else setMalzemeSubView('excel');
+  /* Modül içi Excel bölümleri kaldırıldı; düğme artık Excel Yükleme ekranını açıp ilgili
+     sekmeyi seçiyor. EXCEL_BOLUMLERI anahtarları modül anahtarlarıyla birebir aynı
+     (takim | karbur | malzeme), o yüzden ek eşleme gerekmiyor. Kullanıcının o sekmeye izni
+     yoksa renderExcelYukleme ilk görünür sekmeye düşürüyor. */
+  setView('excelYukleme');
+  setExcelSubView(hedefOverride || stokGenelHedefModul());
 }
 function stokGenelGirisAc(hedefOverride){
   const hedef = hedefOverride || stokGenelHedefModul();
@@ -1513,7 +1516,15 @@ function renderStokScreen(){
      çalışıyor (kapalı olan yalnızca operatöre görünürlük). */
   const bolumSatiriGizli = stokSubView === 'malzeme' && !stockEnabled();
   const bolumler = (tanim && !bolumSatiriGizli) ? tanim.bolumler.filter(x=>tanim.gor(x.key)) : [];
-  const aktif = tanim ? tanim.oku() : null;
+  /* "Excel Yükle" bölümü 22.09.2026'da üç modülden de çıkıp Excel Yükleme ekranına taşındı;
+     state'te kalmış eski değerin artık şeritte karşılığı yok ve hiçbir düğme seçili görünmüyordu.
+     Karşılığı olmayan her değer ilk görünür bölüme çekiliyor. Excel Yükleme ekranı renderStokScreen'den
+     GEÇMİYOR, o yüzden oranın kendi 'excel' değeri bu geri düşüşten etkilenmiyor. */
+  let aktif = tanim ? tanim.oku() : null;
+  if(tanim && tanim.ayarla && bolumler.length && !bolumler.some(x=>x.key===aktif)){
+    tanim.ayarla(bolumler[0].key);
+    aktif = tanim.oku();
+  }
   const bolumSatiri = bolumler.length ? `<div class="sub-tabs stok-bolumler">
     ${bolumler.map(x=>`<button class="sub-tab-btn ${aktif===x.key?'active':''}" onclick="${tanim.yaz(x.key)}">${esc(x.label)}</button>`).join('')}
   </div>` : '';

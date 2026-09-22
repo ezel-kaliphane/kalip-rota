@@ -58,7 +58,8 @@ function renderKarburScreen(){
   }
   if(!karburKatalogArray().length && karburSubView !== 'excel' && karburSubView !== 'stok'){
     html += `<div style="font-size:12.5px;color:var(--warn);background:var(--panel);border:1px solid var(--warn);border-radius:10px;padding:12px 14px;margin-bottom:16px">
-      Karbür kataloğu boş. Önce <b>Excel Yükle</b> sekmesinden stok kodlarını (ör. <code>C18XH156X3XVA90</code>) yükle ya da <b>Stok &amp; Fire</b> sekmesinden elle kalem ekle.</div>`;
+      Karbür kataloğu boş. Önce <b>Excel Yükleme</b> ekranının <b>Karbür</b> sekmesinden stok kodlarını (ör. <code>C18XH156X3XVA90</code>) yükle ya da <b>Stok &amp; Fire</b> sekmesinden elle kalem ekle.
+      <div style="margin-top:10px"><button class="btn-ghost" style="width:auto;padding:7px 14px" onclick="setView('excelYukleme'); setExcelSubView('karbur')">Excel Yükleme'ye git</button></div></div>`;
   }
 
   if(karburSubView === 'plan')        html += renderKarburPlan();

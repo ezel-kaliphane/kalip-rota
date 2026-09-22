@@ -388,7 +388,9 @@ function setAnalizViewPermission(username, key, val){
 const TAKIM_STOK_SUBTAB_DEFS = [
   { key:'liste', label:'Kalem Listesi' },
   { key:'konumlar', label:'Konumlar' },
-  { key:'excel', label:'Excel Yükle' },
+  /* 22.09.2026: bu bölüm Takım modülünden çıkıp Excel Yükleme ekranına taşındı; izin anahtarı
+     kayıtlı ayarlar bozulmasın diye AYNI kaldı, yalnızca etiket nereyi açtığını söylüyor. */
+  { key:'excel', label:'Excel Yükleme ekranı' },
   { key:'giris', label:'Stok Girişi' },
   { key:'gecmis', label:'Geçmiş' },
 ];
