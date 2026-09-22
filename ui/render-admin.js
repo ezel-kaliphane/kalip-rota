@@ -941,9 +941,7 @@ const STOK_BOLUMLERI = [
   { key:'genel',   ikon:'chart',  label:'Genel Bakış',     alt:'üç kaynak bir arada',  gor:()=>true },
   { key:'takim',   ikon:'wrench', label:'Takım & Sarf',    alt:'freze, matkap, sarf',  gor:()=>isAdminTabVisible('takimStok') },
   { key:'karbur',  ikon:'elmas',  label:'Karbür',          alt:'çubuk + tel erozyon',  gor:()=>isAdminTabVisible('karbur') },
-  { key:'malzeme', ikon:'katman', label:'Hammadde', alt:'boy ve adet takibi',   gor:()=>canManageStock() },
-  /* Genel Bakış'taki kırmızı ACIL kartının hedefi. En sona eklendi ki mevcut sekme sırası bozulmasın. */
-  { key:'kritik',  ikon:'alert',  label:'Kritik Stok',     alt:'biten ve alt limit',   gor:()=>true }
+  { key:'malzeme', ikon:'katman', label:'Hammadde', alt:'boy ve adet takibi',   gor:()=>canManageStock() }
 ];
 
 /* ---- Bölümler: her modülde aynı fiiller, aynı sırada ----
@@ -1384,7 +1382,7 @@ function renderStokGenelBakis(){
         <div style="margin-top:8px"><div class="sgk-num">${sayKarbur}</div><div class="sgk-label">Karbür Kalemi</div>
         <div style="font-size:12px;margin-top:4px;color:${kpiAktifMi('Karbür')?'color-mix(in srgb,currentColor 70%,transparent)':'var(--text-subtle)'}">Fire havuzu: ${fireSayisi} parça</div></div>
       </div>
-      <div class="sgk-card uyari" style="cursor:pointer" title="Kritik Stok sekmesini aç" onclick="setStokSubView('kritik')">
+      <div class="sgk-card uyari" style="cursor:pointer" title="Stouğu biten kalemleri yeni pencerede aç" onclick="stokKritikPencereAc()">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <span style="width:40px;height:40px;border-radius:8px;background:color-mix(in srgb,currentColor 15%,transparent);display:flex;align-items:center;justify-content:center">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
@@ -1540,7 +1538,6 @@ function renderStokScreen(){
   else if(stokSubView==='takim')  icerik = renderToolStokManagementScreen();
   else if(stokSubView==='karbur') icerik = renderKarburScreen();
   else if(stokSubView==='malzeme') icerik = `<div class="settings-wrap">${renderMalzemeStokScreen()}</div>`;
-  else if(stokSubView==='kritik') icerik = renderStokKritik();
   else                             icerik = '';
 
   return `<div class="stok-govde">${topHeader}${ray}<div class="stok-icerik">${bolumSatiri}${icerik}</div></div>`;
@@ -1571,53 +1568,94 @@ function stokKritikVeri(){
   return { bitenler, altLimit };
 }
 
-function stokKritikTablo(satirlar, bosMetin){
-  if(satirlar.length===0){
-    return `<div style="color:var(--text-muted);font-size:12.5px;padding:14px 2px">${bosMetin}</div>`;
-  }
-  const duzeltilebilir = (typeof stokDuzeltYetkisi==='function') && stokDuzeltYetkisi();
-  return `<div class="sg-table-wrap" style="margin-bottom:18px">
-    <table><thead><tr>
-      <th>Kod</th><th>Malzeme</th><th>Tür</th><th>Stok</th><th>Alt Limit</th><th>Son Hareket</th>
-      ${duzeltilebilir?'<th style="width:56px"></th>':''}
-    </tr></thead><tbody>
-      ${satirlar.map(s=>`<tr class="${Number(s.stokSayi)<0?'sg-neg':''}">
-        <td class="mono" style="font-weight:500;font-size:12.5px">${esc(s.kod)}</td>
-        <td style="font-weight:500">${esc(s.malzeme)}</td>
-        <td style="color:var(--text-muted)">${esc(s.kaynak||s.tur)}</td>
-        <td style="font-weight:700;color:${Number(s.stokSayi)<=0?'var(--danger)':'var(--warn)'}">${esc(s.stokText)}</td>
-        <td class="mono" style="color:var(--text-muted)">${s.altLimit||'—'}</td>
-        <td style="color:var(--text-subtle)">${s.sonHareketTs?fmtDT(s.sonHareketTs):'—'}</td>
-        ${duzeltilebilir?`<td><button class="del-btn" title="Stoğu elle düzelt" onclick="stokDuzeltAc('${escJs(s.id)}',${Number(s.stokSayi)||0})">${ico('edit',14)}</button></td>`:''}
-      </tr>`).join('')}
-    </tbody></table>
-  </div>`;
-}
+/* Kritik stok listesi AYRI BİR PENCEREDE açılıyor (uygulama içi sekme değil) — kullanıcı
+   ekranı bölmeden, sayım yaparken yan yana bakabilsin diye. Etiket yazdırmadaki
+   window.open('', '_blank') deseninin aynısı (bkz. js/toolstock.js printToolLabels): pencere
+   kendi kendine yeten bir HTML, ana sayfanın stilini devralmıyor, o yüzden Tezgâh jetonlarının
+   koyu değerleri buraya sabit yazıldı.
 
-function renderStokKritik(){
+   İçerik AÇILDIĞI ANIN görüntüsü (canlı değil) — sayım sırasında liste ayağının altından
+   kaymasın diye bilinçli; üstte alındığı saat yazıyor, yenilemek için pencere tekrar açılır. */
+function stokKritikPencereAc(){
   const { bitenler, altLimit } = stokKritikVeri();
   const kartaGirmeyen = bitenler.filter(s=>s.durum==='normal').length;
-  return `<div class="settings-wrap">
-    <div class="sec-h" style="margin-top:0">${ico('alert',15)} Stoğu bitenler
-      <span class="ayar-deger mono" style="margin-left:8px">${bitenler.length}</span></div>
-    <div style="font-size:12px;color:var(--text-muted);margin:-6px 0 10px">
-      Stoğu sıfıra inmiş ya da eksiye düşmüş kalemler. Takım çıkışında bunlar reddedilir.
-      ${kartaGirmeyen>0?`<b style="color:var(--warn)">${kartaGirmeyen} tanesi</b> alt limiti tanımlı olmadığı için "Alt Limit / Negatif" sayacına girmiyor.`:''}
+  const w = window.open('', '_blank');
+  if(!w){ toast('Pencere açılamadı — popup engelleyiciyi kontrol edin'); return; }
+
+  const satirlar = (liste, bosMetin) => liste.length===0
+    ? `<div class="bos">${bosMetin}</div>`
+    : `<table>
+        <thead><tr><th>Kod</th><th>Malzeme</th><th>Tür</th><th class="sag">Stok</th><th class="sag">Alt Limit</th><th>Son Hareket</th></tr></thead>
+        <tbody>${liste.map(s=>`<tr>
+          <td class="mono">${esc(s.kod)}</td>
+          <td>${esc(s.malzeme)}</td>
+          <td class="soluk">${esc(s.kaynak||s.tur)}</td>
+          <td class="sag ${Number(s.stokSayi)<0?'neg':'sifir'}">${esc(s.stokText)}</td>
+          <td class="sag soluk">${s.altLimit||'—'}</td>
+          <td class="soluk">${s.sonHareketTs?esc(fmtDT(s.sonHareketTs)):'—'}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+
+  const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8">
+<title>Kritik Stok — ${bitenler.length} biten</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;padding:22px 26px;background:#0B0D10;color:#E8EBEE;
+       font-family:Archivo,'Segoe UI',-apple-system,sans-serif;font-size:13px}
+  h1{font-size:19px;margin:0 0 3px;font-weight:700;letter-spacing:-.2px}
+  .ust{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  .zaman{font-size:11.5px;color:#7D8792}
+  .yazdir{background:#22B8C8;color:#03282D;border:none;border-radius:9px;padding:9px 16px;
+          font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.11em;color:#A5ADB6;
+     margin:24px 0 8px;font-weight:700}
+  h2 b{color:#E8EBEE;margin-left:6px}
+  .not{font-size:11.5px;color:#7D8792;margin:0 0 10px;line-height:1.5}
+  .not b{color:#F5BF4F}
+  table{width:100%;border-collapse:collapse;background:#121519;border:1px solid #1E2329;border-radius:12px;overflow:hidden}
+  th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#7D8792;
+     background:#181C21;padding:9px 12px;font-weight:700}
+  td{padding:8px 12px;border-top:1px solid #1E2329}
+  .sag{text-align:right}
+  .soluk{color:#A5ADB6}
+  .mono{font-family:'JetBrains Mono',Consolas,monospace;font-size:12px}
+  .neg{color:#F86D63;font-weight:700}
+  .sifir{color:#F5BF4F;font-weight:700}
+  .bos{color:#7D8792;padding:12px 2px}
+  @media print{
+    body{background:#fff;color:#000;padding:0}
+    .yazdir{display:none}
+    table{background:#fff;border-color:#bbb}
+    th{background:#eee;color:#000}
+    td{border-top:1px solid #ddd}
+    .soluk{color:#444}.neg,.sifir{color:#000}
+  }
+</style></head><body>
+  <div class="ust">
+    <div>
+      <h1>Kritik Stok</h1>
+      <div class="zaman">${esc(fmtDT(Date.now()))} itibarıyla · anlık görüntü</div>
     </div>
-    ${stokKritikTablo(bitenler, 'Stoğu biten kalem yok.')}
+    <button class="yazdir" onclick="window.print()">Yazdır</button>
+  </div>
 
-    <div class="sec-h">Alt limitin altında
-      <span class="ayar-deger mono" style="margin-left:8px">${altLimit.length}</span></div>
-    <div style="font-size:12px;color:var(--text-muted);margin:-6px 0 10px">Stok var ama tanımlı alt limitin altına inmiş — en kritik oran en üstte.</div>
-    ${stokKritikTablo(altLimit, 'Alt limitin altına inen kalem yok.')}
-  </div>`;
+  <h2>Stoğu bitenler <b>${bitenler.length}</b></h2>
+  <p class="not">Stoğu sıfıra inmiş ya da eksiye düşmüş kalemler; takım çıkışında bunlar reddedilir.${
+    kartaGirmeyen>0 ? ` <b>${kartaGirmeyen} tanesi</b> alt limiti tanımlı olmadığı için "Alt Limit / Negatif" sayacına girmiyor.` : ''}</p>
+  ${satirlar(bitenler, 'Stoğu biten kalem yok.')}
+
+  <h2>Alt limitin altında <b>${altLimit.length}</b></h2>
+  <p class="not">Stok var ama tanımlı alt limitin altına inmiş — en kritik oran en üstte.</p>
+  ${satirlar(altLimit, 'Alt limitin altına inen kalem yok.')}
+</body></html>`;
+
+  w.document.write(html);
+  w.document.close();
 }
-
 function stokBolumSayisi(key){
   if(key==='takim')    return toolCatalogReady ? toolCatalogArray().length : null;
   if(key==='karbur')   return karburKatalogReady ? karburKatalogArray().length : null;
   if(key==='malzeme')  return canManageStock() ? stockItemsArray().length : null;
-  if(key==='kritik'){ const v = stokKritikVeri(); return v.bitenler.length + v.altLimit.length; }
   return null; // 'genel' — tek bir sayı yerine KPI kartlarında gösteriliyor
 }
 
