@@ -2242,7 +2242,6 @@ function renderAdmin(){
       ${!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz') ? `<button class="admin-nav-item ${view==='analiz'?'active':''}" title="Analiz" onclick="setView('analiz')">${ico('chart',14)}<span class="nav-label">Analiz</span></button>` : ''}
       ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="admin-nav-item ${view==='tadilatYonetim'?'active':''}" title="Tadilat" onclick="setView('tadilatYonetim')">${ico('wrench',14)}<span class="nav-label">Tadilat</span></button>` : ''}
       ${stokErisimVar() ? `<button class="admin-nav-item ${view==='stokYonetim'?'active':''}" title="Stok" onclick="setView('stokYonetim')">${ico('box',14)}<span class="nav-label">Stok</span></button>` : ''}
-      <button class="admin-nav-item" title="Bildirimler" onclick="openMyPushHistoryModal()">${ico('bell',14)}<span class="nav-label">Bildirimler</span>${unreadPushCount()>0?`<span class="admin-nav-badge">${unreadPushCount()}</span>`:''}</button>
       ${session.isAdmin ? `
       <div class="admin-sidebar-sec">Yönetim</div>
       <button class="admin-nav-item" title="Excel Yükleme" onclick="gotoExcelYukleme()">${ico('upload',14)}<span class="nav-label">Excel Yükleme</span></button>
