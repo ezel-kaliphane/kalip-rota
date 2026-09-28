@@ -1393,7 +1393,10 @@ function renderStokGenelBakis(){
         <div style="display:flex;align-items:center;gap:10px;padding:16px 0;border-bottom:1px solid var(--border)">
           <span style="font-size:15px;font-weight:700;color:var(--text)">Son Hareketler</span>
           <span style="font-size:12px;font-weight:600;color:var(--text-muted);background:var(--panel-alt);border-radius:6px;padding:2px 8px">${stokSonHareketler ? stokSonHareketler.length : '…'}</span>
-          <button style="background:transparent;font-size:12px;font-weight:500;color:var(--accent);margin-left:auto" onclick="openMyPushHistoryModal()">pushLog</button>
+          <!-- 28.09.2026: buradaki "pushLog" dugmesi kaldirildi. Etiketi ham bir kod adiydi ve
+               stok hareketleriyle alakasiz sekilde KULLANICININ BILDIRIM GECMISINI aciyordu
+               (openMyPushHistoryModal). Bildirim gecmisine dogru erisim duruyor: bu ekranin
+               ust basligindaki zil ikonu, yonetici ust bari ve operator basligi. -->
         </div>
         <div style="overflow-y:auto">
         ${!stokSonHareketler
