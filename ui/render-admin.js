@@ -1387,7 +1387,7 @@ function renderStokGenelBakis(){
       </div>
       <div class="sgk-card uyari" style="cursor:pointer" title="Stoğu biten kalemleri pencerede aç" onclick="stokListeAc('kritik')">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <span style="width:40px;height:40px;border-radius:8px;background:color-mix(in srgb,currentColor 15%,transparent);display:flex;align-items:center;justify-content:center">
+          <span style="width:24px;height:24px;border-radius:7px;background:color-mix(in srgb,currentColor 15%,transparent);display:flex;align-items:center;justify-content:center;flex:none">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
           </span>
           <span style="background:var(--panel);color:var(--danger-text);font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:6px">ACİL</span>
@@ -1448,8 +1448,61 @@ function renderStokGenelBakis(){
           ${kritik.length>0 ? `<button style="width:100%;margin-top:16px;padding:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;justify-content:center;gap:6px" onclick="stokGenelTurDegistir('tumu'); render()">Tümünü Gör ${ico('chevronRight',14)}</button>` : ''}
         </div>
       </div>
+      <div class="sg-side">
+        <div class="sg-panel">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--panel-alt);margin-bottom:6px">
+            <span class="sg-panel-title" style="margin-bottom:0">Genel Durum</span>
+            <span style="font-size:11.5px;color:var(--text-subtle)">kaynak bazında</span>
+          </div>
+          ${stokGenelDurumTablosu(tumu)}
+        </div>
+      </div>
     </div>
     `;
+}
+/* ===================== GENEL DURUM TABLOSU (28.09.2026) =====================
+   Kritik Stok paneli ekranin ucte ikisini kapliyordu; daraltilinca bosalan yere kaynak
+   bazinda ozet geldi. Sayilar stokGenelSatirlar()'in AYNI ciktisindan turetiliyor, ayri
+   bir sorgu yok — KPI kartlari ve Kritik Stok ile ayni veriden beslendigi icin rakamlar
+   birbiriyle celismiyor.
+
+   Sutunlar bilerek ayrisik: "Stok yok" tam sifir, "Negatif" sifirin altinda, "Alt limit"
+   ise stogu VAR ama tanimli limitin altinda (durum==='altlimit'). Ucu toplanmaz, her biri
+   farkli bir aksiyon demek. */
+function stokGenelDurumTablosu(tumu){
+  const KAYNAKLAR = [
+    { tur:'Hammadde', ad:'Hammadde' },
+    { tur:'Takım',    ad:'Takım & Sarf' },
+    { tur:'Karbür',   ad:'Karbür' },
+  ];
+  const olc = liste => ({
+    kalem: liste.length,
+    yok: liste.filter(x=>Number(x.stokSayi)===0).length,
+    alt: liste.filter(x=>x.durum==='altlimit').length,
+    neg: liste.filter(x=>x.durum==='negatif').length,
+  });
+  const satir = (ad, o, kalin) => `<tr${kalin?' style="font-weight:700"':''}>
+    <td style="font-weight:${kalin?700:500}">${esc(ad)}</td>
+    <td class="mono" style="text-align:right">${o.kalem}</td>
+    <td class="mono" style="text-align:right;color:${o.yok?'var(--warn)':'var(--text-subtle)'}">${o.yok||'—'}</td>
+    <td class="mono" style="text-align:right;color:${o.alt?'var(--warn)':'var(--text-subtle)'}">${o.alt||'—'}</td>
+    <td class="mono" style="text-align:right;color:${o.neg?'var(--danger)':'var(--text-subtle)'}">${o.neg||'—'}</td>
+  </tr>`;
+  return `<div class="sg-table-wrap" style="padding:0">
+    <table style="font-size:12.5px">
+      <thead><tr>
+        <th>Kaynak</th>
+        <th style="text-align:right">Kalem</th>
+        <th style="text-align:right" title="Stoğu tam sıfır">Stok yok</th>
+        <th style="text-align:right" title="Stok var ama tanımlı alt limitin altında">Alt limit</th>
+        <th style="text-align:right" title="Stok sıfırın altına düşmüş">Negatif</th>
+      </tr></thead>
+      <tbody>
+        ${KAYNAKLAR.map(k=>satir(k.ad, olc(tumu.filter(x=>x.tur===k.tur)))).join('')}
+        ${satir('Toplam', olc(tumu), true)}
+      </tbody>
+    </table>
+  </div>`;
 }
 function renderStokScreen(){
   const gorunur = STOK_BOLUMLERI.filter(b=>b.gor());
