@@ -2030,13 +2030,13 @@ function renderIsYogunlugu(){
     ${govde}
   </div>${iyGecmisModalIsEmriNo ? renderIyGecmisModal() : ''}`;
 }
-/* Sidebar'ın "Yönetim" grubundaki Excel Yükleme/Operatörler — henüz kendi ekranları yok (bu,
-   TASARIM_ENVANTERI.md'deki A.11/A.12, ayrı bir aşama), şimdilik var olan gerçek işlevlere
-   (Stok → Hammadde → Excel, Ayarlar → Personel Ayarları) yönlendiriyor. */
+/* Sidebar'ın "Yönetim" grubundaki Excel Yükleme (A.11, 22.09.2026) ve Operatörler (A.12,
+   28.09.2026) artık KENDİ ekranlarına gidiyor; ikisi de eskiden var olan işlevlere
+   (Stok → Hammadde → Excel, Ayarlar → Personel Ayarları) yönlendiriyordu. */
 /* Eskiden Stok Takibi → Hammadde → Excel'e atıyordu; artık tüm yükleme akışlarını toplayan
    kendi ekranını açıyor (22.09.2026). */
 function gotoExcelYukleme(){ setView('excelYukleme'); }
-function gotoOperatorler(){ setView('adminSettings'); setSettingsSubTab('personelAyarlari'); }
+function gotoOperatorler(){ setView('operatorler'); }
 /* Ayarlar'a nav'dan girilince her zaman menuden baslanir; alt ekranda kalip donmek
    "neden burasi acildi" sorusunu dogururdu. */
 function gotoAyarlar(){ settingsSubTab='menu'; setView('adminSettings'); }
@@ -2541,9 +2541,6 @@ function renderAyarlarMenu(){
 
   const g4 = grup('Erişim &amp; Yetkiler', [
     sa && ayarSatiri({ etiket:'Sekme / Bölüm Erişimi', alt:"Kullanıcı bazlı — Canlı Panel'in üç sekmesi ayrı ayrı", deger:`${yoneticiSay} kişi`, hedef:'tabErisimi' }),
-    sa && ayarSatiri({ etiket:'Personel Ayarları', hedef:'personelAyarlari' }),
-    sa && ayarSatiri({ etiket:'Atölye Ayarları (Personel)', hedef:'personelAtolye' }),
-    sa && ayarSatiri({ etiket:'Kullanıcı Ekle', hedef:'addOperator' }),
   ], sa ? rolNotu : '');
 
   const tasinan = [
@@ -2580,6 +2577,7 @@ const EKRAN_BASLIKLARI = {
   stokYonetim:  { ustu:()=>{ const t=(typeof STOK_BOLUMLERI!=='undefined') ? STOK_BOLUMLERI.find(b=>b.key===stokSubView) : null;
                              return 'Stok / '+(t ? t.label : 'Genel Bakış'); }, baslik:'Stok Takibi' },
   excelYukleme: { ustu:'Yönetim', baslik:'Excel Yükleme' },
+  operatorler: { ustu:'Yönetim', baslik:'Operatörler' },
   adminSettings:{ ustu:'Yönetim', baslik:'Ayarlar' },
 };
 function ekranBasligiHtml(){
@@ -2697,6 +2695,145 @@ function setExcelSubView(k){
   if(k==='malzeme') malzemeSubView = 'excel';
   render();
 }
+/* ===================== OPERATORLER EKRANI (A.12, 28.09.2026) =====================
+   Sol bardaki "Operatorler" dugmesi eskiden Ayarlar -> Personel Ayarlari'na yonlendiriyordu.
+   Artik kendi ekrani var ve operator yasam dongusunun uc bolumu burada toplandi:
+
+     personel -> Personel Ayarlari  (varsayilan makine, coklu is, makine erisimi)
+     atolye   -> Atolye Ayarlari    (hangi personel hangi atolyede)
+     ekle     -> Kullanici Ekle     (yeni operator/kullanici acma)
+
+   A.11 Excel Yukleme ile AYNI desen: govdeler Ayarlar zincirinden buraya TASINDI (kopyalanmadi),
+   Ayarlar menusundeki uc satir kaldirildi, AYAR_ALT_SEKMELERI beyaz listesinden de dustuler ki
+   state'te kalmis eski deger bombos ekran vermesin. */
+function renderPersonelAyarlari(){
+  /* Ayarlar > personelAyarlari dalindan tasindi (A.12). */
+  let body = '';
+      const allUsersForSettings = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Personel Ayarları</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:760px">
+          <b>Varsayılan Makine:</b> "Başla" ekranında otomatik dolu gelir. <b>Çoklu İş:</b> aynı anda birden fazla makinede iş açabilir (ör. EDM operatörü). <b>Çoklu İş Emri:</b> tek makinede aynı anda birden fazla İş Emri No birlikte başlatabilir. <b>Fason Yetkisi:</b> "${ico('box',13)} Fasonda Bekleyen İşler" listesini görüp kapatabilir. <b>Mesaj Erişimi:</b> operatörlerin düzenleme mesajlarını (salt okunur) görebilir. <b>${ico('wrench',14)} Makine Erişimi:</b> hangi makinelerin "Çalışılan Makine" listesinde görüneceğini ayarlar.
+        </div>
+        <div class="op-settings-table">
+          ${allUsersForSettings.map(([code,v])=>`
+            <div class="op-settings-row" style="flex-wrap:nowrap;gap:14px">
+              <div style="min-width:150px">
+                <div class="op-settings-id">${esc(code)}</div>
+                <div class="op-settings-name">${esc(v.displayName)}${v.isSef?' · <span style="color:var(--gunsonu);font-size:11px">Şef</span>':v.isUretimSef?' · <span style="color:var(--gunsonu);font-size:11px">Üretim Şef</span>':v.isAdmin?' · <span style="color:var(--accent);font-size:11px">Yönetici</span>':''}</div>
+              </div>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${v.multiJob?'checked':''} onchange="toggleMultiJob('${code}')"> Çoklu İş
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${v.cokluIsEmri?'checked':''} onchange="toggleCokluIsEmri('${code}')"> Çoklu İş Emri
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${v.fasonYetkisi?'checked':''} onchange="toggleFasonYetkisi('${code}')"> Fason Yetkisi
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${v.messagesAccess?'checked':''} onchange="toggleMessagesAccess('${code}')"> Mesaj Erişimi
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${v.permTakimStokGor?'checked':''} onchange="toggleUserPerm('${code}','permTakimStokGor')"> ${ico('wrench',13)} Takım Stok: Görebilir/Çıkış
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${v.permTakimStokSayim?'checked':''} onchange="toggleUserPerm('${code}','permTakimStokSayim')"> ${ico('wrench',13)} Takım Stok: Sayım
+              </label>
+              <select class="filter-input" style="width:200px" onchange="updateDefaultMachine('${code}', this.value)">
+                <option value="">— Varsayılan Makine yok —</option>
+                ${allMachines().map(m=>{ const label=`${m.code} · ${m.name}`; return `<option value="${esc(label)}" ${v.defaultMachine===label?'selected':''}>${esc(label)}</option>`; }).join('')}
+              </select>
+              <button class="btn-ghost" style="white-space:nowrap;margin-left:auto" onclick="openMachineAccessModal('${escJs(code)}')">${ico('wrench',14)} Makine Erişimi</button>
+            </div>
+          `).join('')}
+        </div>`;
+  return body;
+}
+function renderPersonelAtolye(){
+  /* Ayarlar > personelAtolye dalindan tasindi (A.12). */
+  let body = '';
+      const allOpsForAtolye = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Atölye Ayarları (Personel)</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Her kullanıcıyı (operatör, şef, yönetici) İmalat ve/veya Tadilat Atölye personeli olarak işaretle — ikisi de işaretlenebilir. Tadilat sekmesinde/Talepler ekranında SADECE işaretli atölye(ler)in talepleri görünür; talep açma formundaki atölye seçeneği de buna göre sınırlanır. Hiçbiri işaretli değilse varsayılan İmalat Atölye sayılır.</div>
+        <div class="op-settings-table">
+          ${allOpsForAtolye.map(([code,v])=>{
+            const atolyeler = getUserAtolyeler(code);
+            return `
+            <div class="op-settings-row" style="flex-wrap:wrap">
+              <div class="op-settings-id">${esc(code)}</div>
+              <div class="op-settings-name">${esc(v.displayName)}${v.isSef?' · <span style="color:var(--gunsonu);font-size:11px">Şef</span>':v.isUretimSef?' · <span style="color:var(--gunsonu);font-size:11px">Üretim Şef</span>':v.isAdmin?' · <span style="color:var(--accent);font-size:11px">Yönetici</span>':''}</div>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin-right:14px">
+                <input type="checkbox" style="width:auto" ${atolyeler.includes('imalat')?'checked':''} onchange="toggleUserAtolye('${code}','imalat')">${ico('factory',14)} İmalat Atölye
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                <input type="checkbox" style="width:auto" ${atolyeler.includes('tadilat')?'checked':''} onchange="toggleUserAtolye('${code}','tadilat')">${ico('wrench',14)} Tadilat Atölye
+              </label>
+            </div>`;
+          }).join('')}
+        </div>`;
+  return body;
+}
+function renderKullaniciEkle(){
+  /* Ayarlar > addOperator dalindan tasindi (A.12). */
+  let body = '';
+      const allOps = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Yeni Kullanıcı Ekle</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:480px">Operatör için kullanıcı adı OPRT kodu olsun (ör. OPRT17). Şifreyi kendisi sonradan değiştirebilir.</div>
+        <div style="max-width:400px">
+          <div class="field"><label>Kullanıcı Kodu</label><input id="new-op-code" placeholder="ör. OPRT17"></div>
+          <div class="field"><label>Ad Soyad</label><input id="new-op-name" placeholder="ör. Mehmet YILMAZ"></div>
+          <div class="field"><label>Şifre (max 8 hane, rakam)</label><input id="new-op-pass" inputmode="numeric" maxlength="8" value="1234"></div>
+          <div style="font-size:11.5px;color:var(--text-muted);background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px">🔒 Yönetici/Şef/Üretim Şef ataması güvenlik nedeniyle artık buradan yapılamıyor. Kullanıcıyı normal operatör olarak ekledikten sonra, Firebase Console → Realtime Database → <span class="mono">operators/KODU/isAdmin</span> (ve gerekirse <span class="mono">isSef</span> ya da <span class="mono">isUretimSef</span>) alanını elle <span class="mono">true</span> yapman gerekiyor.</div>
+          <button class="btn-primary" onclick="addOperator()">+ Operatörü Ekle</button>
+        </div>
+        <div style="margin-top:28px;font-size:13px;font-weight:600;margin-bottom:8px">Kayıtlı Kullanıcılar (${allOps.length})</div>
+        <div class="op-settings-table">
+          ${allOps.map(([code,v])=>`
+            <div class="op-settings-row" style="flex-wrap:wrap">
+              <div class="op-settings-id">${esc(code)}</div>
+              <div class="op-settings-name">${esc(v.displayName)}${v.isSuperAdmin?' · <span style="color:var(--accent)">Süper Admin</span>':v.isSef?' · <span style="color:var(--gunsonu)">Şef</span>':v.isUretimSef?' · <span style="color:var(--gunsonu)">Üretim Şef</span>':v.isAdmin?' · <span style="color:var(--accent)">Yönetici</span>':''}</div>
+              ${v.isAdmin ? `<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
+                <input type="checkbox" style="width:auto" ${v.permReportEdit!==false?'checked':''} onchange="toggleUserPerm('${code}','permReportEdit')"> Rapor: Düzenleyebilir
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
+                <input type="checkbox" style="width:auto" ${v.permReportDelete?'checked':''} onchange="toggleUserPerm('${code}','permReportDelete')"> Rapor: Silebilir
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
+                <input type="checkbox" style="width:auto" ${v.permTadilatOlustur===true || (v.permTadilatOlustur!==false && (v.isSef || v.isUretimSef))?'checked':''} onchange="toggleTadilatYetkisi('${code}')"> Tadilat Oluşturabilir${v.isSef?' (Şef için varsayılan açık)':v.isUretimSef?' (Üretim Şef için varsayılan açık)':''}
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
+                <input type="checkbox" style="width:auto" ${v.permBildirimYonetimi?'checked':''} onchange="toggleUserPerm('${code}','permBildirimYonetimi')"> Bildirim Ayarlarını Yönetebilir
+              </label>` : ''}
+              ${code===session.username ? `<span style="font-size:11.5px;color:var(--text-muted)">(bu hesap — silinemez)</span>` : `<button class="del-btn" onclick="deleteOperator('${escJs(code)}')" title="Sil">${ico('trash',14)}</button>`}
+            </div>
+          `).join('')}
+        </div>` ;
+  return body;
+}
+const OPERATOR_BOLUMLERI = [
+  { key:'personel', label:'Personel Ayarları', alt:'varsayılan makine, çoklu iş, makine erişimi' },
+  { key:'atolye',   label:'Atölye Ayarları',   alt:'hangi personel hangi atölyede' },
+  { key:'ekle',     label:'Kullanıcı Ekle',    alt:'yeni operatör/kullanıcı aç' },
+];
+let operatorSubView = 'personel';
+function setOperatorSubView(k){ operatorSubView = k; render(); }
+function renderOperatorler(){
+  /* YETKI: bu uc satir Ayarlar menusunde `sa` ile, yani SADECE SuperAdmin'e ciziliyordu
+     (Sef'e degil — bkz. renderAyarlarMenu). Ekran birebir ayni kosulu kullaniyor; taşıma
+     sirasinda yetki genisletmek sessiz bir guvenlik degisikligi olurdu. */
+  if(!(session && session.isSuperAdmin)){
+    return `<div class="settings-wrap"><div style="color:var(--text-muted);font-size:12.5px">Bu ekrana erişim yetkin yok.</div></div>`;
+  }
+  if(!OPERATOR_BOLUMLERI.some(b=>b.key===operatorSubView)) operatorSubView = 'personel';
+  const serit = `<div class="sub-tabs" style="flex-wrap:wrap">
+    ${OPERATOR_BOLUMLERI.map(b=>`<button class="sub-tab-btn ${operatorSubView===b.key?'active':''}" title="${esc(b.alt)}" onclick="setOperatorSubView('${b.key}')">${esc(b.label)}</button>`).join('')}
+  </div>`;
+  let govde = '';
+  if(operatorSubView==='personel')    govde = renderPersonelAyarlari();
+  else if(operatorSubView==='atolye') govde = renderPersonelAtolye();
+  else if(operatorSubView==='ekle')   govde = renderKullaniciEkle();
+  return `<div class="settings-wrap">${serit}${govde}</div>`;
+}
 function renderExcelYukleme(){
   const gorunur = EXCEL_BOLUMLERI.filter(b=>b.gor());
   if(gorunur.length===0){
@@ -2754,8 +2891,8 @@ function renderAdmin(){
       ${stokErisimVar() ? `<button class="admin-nav-item ${view==='stokYonetim'?'active':''}" title="Stok" onclick="setView('stokYonetim')">${ico('box',14)}<span class="nav-label">Stok</span></button>` : ''}
       ${session.isAdmin ? `
       <div class="admin-sidebar-sec">Yönetim</div>
-      <button class="admin-nav-item" title="Excel Yükleme" onclick="gotoExcelYukleme()">${ico('upload',14)}<span class="nav-label">Excel Yükleme</span></button>
-      <button class="admin-nav-item" title="Operatörler" onclick="gotoOperatorler()">${ico('users',14)}<span class="nav-label">Operatörler</span></button>
+      <button class="admin-nav-item ${view==='excelYukleme'?'active':''}" title="Excel Yükleme" onclick="gotoExcelYukleme()">${ico('upload',14)}<span class="nav-label">Excel Yükleme</span></button>
+      ${session.isSuperAdmin ? `<button class="admin-nav-item ${view==='operatorler'?'active':''}" title="Operatörler" onclick="gotoOperatorler()">${ico('users',14)}<span class="nav-label">Operatörler</span></button>` : ''}
       <button class="admin-nav-item ${view==='adminSettings'?'active':''}" title="Ayarlar" onclick="gotoAyarlar()">${ico('gear',14)}<span class="nav-label">Ayarlar</span></button>
       ` : ''}
       <div class="admin-sidebar-user">
@@ -2801,9 +2938,9 @@ function renderAdmin(){
   /* Bir alt sekme kaldirildiginda (Veri Listeleri -> Excel Yukleme ekranina tasindi) eski deger
      state'te kalabiliyor; asagidaki if/else zincirinden dusup bombos bir Ayarlar ekrani veriyordu.
      Taninmayan her deger menuye donuyor. Rol zorlamalari bunun USTUNE calisiyor, sirasi onemli. */
-  const AYAR_ALT_SEKMELERI = ['menu','access','personelAyarlari','makineAyarlari','personelAtolye',
-    'addOperator','addMachine','bolumKurallari','tabErisimi','resimBul','uyarilar','bildirimlerim',
-    'bildirimGonder','durusReasons','tadilatSablonlari','takimStok','karbur','stok'];
+  const AYAR_ALT_SEKMELERI = ['menu','access','makineAyarlari','addMachine','bolumKurallari',
+    'tabErisimi','resimBul','uyarilar','bildirimlerim','bildirimGonder','durusReasons',
+    'tadilatSablonlari','takimStok','karbur','stok'];
   if(view==='adminSettings' && AYAR_ALT_SEKMELERI.indexOf(settingsSubTab)===-1){ settingsSubTab = 'menu'; }
   if(session.isSef && view==='adminSettings' && settingsSubTab!=='menu' && settingsSubTab!=='stok' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'menu'; }
   if(session.isAdmin && !session.isSef && !session.isSuperAdmin && view==='adminSettings' && settingsSubTab!=='menu' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'bildirimlerim'; } // düz Yönetici: sadece kendi bildirimini (ve izin verilmişse Bildirim Ayarları'nı) yönetebilir
@@ -2825,45 +2962,6 @@ function renderAdmin(){
           <label class="machine-check-row"><input type="checkbox" ${allowed.includes(m.code)?'checked':''} onchange="toggleMachineAccess('${accessOperator}','${m.code}')"><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</label>
         `).join('')}</div>`;
       }
-    } else if(settingsSubTab==='personelAyarlari'){
-      const allUsersForSettings = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Personel Ayarları</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:760px">
-          <b>Varsayılan Makine:</b> "Başla" ekranında otomatik dolu gelir. <b>Çoklu İş:</b> aynı anda birden fazla makinede iş açabilir (ör. EDM operatörü). <b>Çoklu İş Emri:</b> tek makinede aynı anda birden fazla İş Emri No birlikte başlatabilir. <b>Fason Yetkisi:</b> "${ico('box',13)} Fasonda Bekleyen İşler" listesini görüp kapatabilir. <b>Mesaj Erişimi:</b> operatörlerin düzenleme mesajlarını (salt okunur) görebilir. <b>${ico('wrench',14)} Makine Erişimi:</b> hangi makinelerin "Çalışılan Makine" listesinde görüneceğini ayarlar.
-        </div>
-        <div class="op-settings-table">
-          ${allUsersForSettings.map(([code,v])=>`
-            <div class="op-settings-row" style="flex-wrap:nowrap;gap:14px">
-              <div style="min-width:150px">
-                <div class="op-settings-id">${esc(code)}</div>
-                <div class="op-settings-name">${esc(v.displayName)}${v.isSef?' · <span style="color:var(--gunsonu);font-size:11px">Şef</span>':v.isUretimSef?' · <span style="color:var(--gunsonu);font-size:11px">Üretim Şef</span>':v.isAdmin?' · <span style="color:var(--accent);font-size:11px">Yönetici</span>':''}</div>
-              </div>
-              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                <input type="checkbox" style="width:auto" ${v.multiJob?'checked':''} onchange="toggleMultiJob('${code}')"> Çoklu İş
-              </label>
-              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                <input type="checkbox" style="width:auto" ${v.cokluIsEmri?'checked':''} onchange="toggleCokluIsEmri('${code}')"> Çoklu İş Emri
-              </label>
-              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                <input type="checkbox" style="width:auto" ${v.fasonYetkisi?'checked':''} onchange="toggleFasonYetkisi('${code}')"> Fason Yetkisi
-              </label>
-              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                <input type="checkbox" style="width:auto" ${v.messagesAccess?'checked':''} onchange="toggleMessagesAccess('${code}')"> Mesaj Erişimi
-              </label>
-              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                <input type="checkbox" style="width:auto" ${v.permTakimStokGor?'checked':''} onchange="toggleUserPerm('${code}','permTakimStokGor')"> ${ico('wrench',13)} Takım Stok: Görebilir/Çıkış
-              </label>
-              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                <input type="checkbox" style="width:auto" ${v.permTakimStokSayim?'checked':''} onchange="toggleUserPerm('${code}','permTakimStokSayim')"> ${ico('wrench',13)} Takım Stok: Sayım
-              </label>
-              <select class="filter-input" style="width:200px" onchange="updateDefaultMachine('${code}', this.value)">
-                <option value="">— Varsayılan Makine yok —</option>
-                ${allMachines().map(m=>{ const label=`${m.code} · ${m.name}`; return `<option value="${esc(label)}" ${v.defaultMachine===label?'selected':''}>${esc(label)}</option>`; }).join('')}
-              </select>
-              <button class="btn-ghost" style="white-space:nowrap;margin-left:auto" onclick="openMachineAccessModal('${escJs(code)}')">${ico('wrench',14)} Makine Erişimi</button>
-            </div>
-          `).join('')}
-        </div>`;
     } else if(settingsSubTab==='makineAyarlari'){
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Makine Ayarları</div>
         <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:760px">
@@ -2886,59 +2984,6 @@ function renderAdmin(){
             </div>
           `).join('')}
         </div>`;
-    } else if(settingsSubTab==='personelAtolye'){
-      const allOpsForAtolye = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Atölye Ayarları (Personel)</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Her kullanıcıyı (operatör, şef, yönetici) İmalat ve/veya Tadilat Atölye personeli olarak işaretle — ikisi de işaretlenebilir. Tadilat sekmesinde/Talepler ekranında SADECE işaretli atölye(ler)in talepleri görünür; talep açma formundaki atölye seçeneği de buna göre sınırlanır. Hiçbiri işaretli değilse varsayılan İmalat Atölye sayılır.</div>
-        <div class="op-settings-table">
-          ${allOpsForAtolye.map(([code,v])=>{
-            const atolyeler = getUserAtolyeler(code);
-            return `
-            <div class="op-settings-row" style="flex-wrap:wrap">
-              <div class="op-settings-id">${esc(code)}</div>
-              <div class="op-settings-name">${esc(v.displayName)}${v.isSef?' · <span style="color:var(--gunsonu);font-size:11px">Şef</span>':v.isUretimSef?' · <span style="color:var(--gunsonu);font-size:11px">Üretim Şef</span>':v.isAdmin?' · <span style="color:var(--accent);font-size:11px">Yönetici</span>':''}</div>
-              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin-right:14px">
-                <input type="checkbox" style="width:auto" ${atolyeler.includes('imalat')?'checked':''} onchange="toggleUserAtolye('${code}','imalat')">${ico('factory',14)} İmalat Atölye
-              </label>
-              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                <input type="checkbox" style="width:auto" ${atolyeler.includes('tadilat')?'checked':''} onchange="toggleUserAtolye('${code}','tadilat')">${ico('wrench',14)} Tadilat Atölye
-              </label>
-            </div>`;
-          }).join('')}
-        </div>`;
-    } else if(settingsSubTab==='addOperator'){
-      const allOps = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin);
-      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Yeni Kullanıcı Ekle</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:480px">Operatör için kullanıcı adı OPRT kodu olsun (ör. OPRT17). Şifreyi kendisi sonradan değiştirebilir.</div>
-        <div style="max-width:400px">
-          <div class="field"><label>Kullanıcı Kodu</label><input id="new-op-code" placeholder="ör. OPRT17"></div>
-          <div class="field"><label>Ad Soyad</label><input id="new-op-name" placeholder="ör. Mehmet YILMAZ"></div>
-          <div class="field"><label>Şifre (max 8 hane, rakam)</label><input id="new-op-pass" inputmode="numeric" maxlength="8" value="1234"></div>
-          <div style="font-size:11.5px;color:var(--text-muted);background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px">🔒 Yönetici/Şef/Üretim Şef ataması güvenlik nedeniyle artık buradan yapılamıyor. Kullanıcıyı normal operatör olarak ekledikten sonra, Firebase Console → Realtime Database → <span class="mono">operators/KODU/isAdmin</span> (ve gerekirse <span class="mono">isSef</span> ya da <span class="mono">isUretimSef</span>) alanını elle <span class="mono">true</span> yapman gerekiyor.</div>
-          <button class="btn-primary" onclick="addOperator()">+ Operatörü Ekle</button>
-        </div>
-        <div style="margin-top:28px;font-size:13px;font-weight:600;margin-bottom:8px">Kayıtlı Kullanıcılar (${allOps.length})</div>
-        <div class="op-settings-table">
-          ${allOps.map(([code,v])=>`
-            <div class="op-settings-row" style="flex-wrap:wrap">
-              <div class="op-settings-id">${esc(code)}</div>
-              <div class="op-settings-name">${esc(v.displayName)}${v.isSuperAdmin?' · <span style="color:var(--accent)">Süper Admin</span>':v.isSef?' · <span style="color:var(--gunsonu)">Şef</span>':v.isUretimSef?' · <span style="color:var(--gunsonu)">Üretim Şef</span>':v.isAdmin?' · <span style="color:var(--accent)">Yönetici</span>':''}</div>
-              ${v.isAdmin ? `<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
-                <input type="checkbox" style="width:auto" ${v.permReportEdit!==false?'checked':''} onchange="toggleUserPerm('${code}','permReportEdit')"> Rapor: Düzenleyebilir
-              </label>
-              <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
-                <input type="checkbox" style="width:auto" ${v.permReportDelete?'checked':''} onchange="toggleUserPerm('${code}','permReportDelete')"> Rapor: Silebilir
-              </label>
-              <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
-                <input type="checkbox" style="width:auto" ${v.permTadilatOlustur===true || (v.permTadilatOlustur!==false && (v.isSef || v.isUretimSef))?'checked':''} onchange="toggleTadilatYetkisi('${code}')"> Tadilat Oluşturabilir${v.isSef?' (Şef için varsayılan açık)':v.isUretimSef?' (Üretim Şef için varsayılan açık)':''}
-              </label>
-              <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);cursor:pointer;margin-right:10px">
-                <input type="checkbox" style="width:auto" ${v.permBildirimYonetimi?'checked':''} onchange="toggleUserPerm('${code}','permBildirimYonetimi')"> Bildirim Ayarlarını Yönetebilir
-              </label>` : ''}
-              ${code===session.username ? `<span style="font-size:11.5px;color:var(--text-muted)">(bu hesap — silinemez)</span>` : `<button class="del-btn" onclick="deleteOperator('${escJs(code)}')" title="Sil">${ico('trash',14)}</button>`}
-            </div>
-          `).join('')}
-        </div>` ;
     } else if(settingsSubTab==='addMachine'){
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Yeni Makine Ekle</div>
         <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:480px">Eklediğin makine anında tüm operatörlerin "Çalışılan Makine" listesinde görünür.</div>
@@ -3230,6 +3275,8 @@ function renderAdmin(){
       body += renderMalzemeStokAyarlar();
     }
     body += `</div>`;
+  } else if(view==='operatorler'){
+    body = renderOperatorler();
   } else if(view==='excelYukleme'){
     body = renderExcelYukleme();
   } else if(view==='genelBakis'){
