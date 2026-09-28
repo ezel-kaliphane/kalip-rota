@@ -578,7 +578,7 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
   /* Daralma kurallari .dar durumuna kapsandi (28.09.2026): sinif yoksa temeldeki 236px
      etiketli cubuk oldugu gibi geri geliyor, ikinci bir genislik tanimi yazilmadi. */
   .admin-sidebar.dar{width:64px;align-items:center;padding:18px 0 12px;gap:4px}
-  .admin-sidebar.dar .nav-label{display:none}
+  .admin-sidebar.dar .nav-label{max-width:0;opacity:0}
   /* Dar durumda marka satiri SATIR olarak kaliyor ve icinde yalnizca ac/kapa dugmesi var:
      isaret de yazi da gizli. Boylece dugme iki durumda da AYNI dikey noktada duruyor,
      yalnizca yatayda yer degistiriyor — eskiden satir sutuna donup dugme isaretin ALTINA
@@ -588,16 +588,48 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
      min-height ALT DOLGUYU DA icine sayiyor, o yuzden 36 degil 36+14=50px yaziliyor —
      36 yazilinca icerik alani 22px'e dusup dugmeyi yine 3px yukari itiyordu. */
   .admin-sidebar.dar .admin-sidebar-brand{padding:0 0 14px;justify-content:center;min-height:50px}
-  .admin-sidebar.dar .admin-sidebar-brand-yazi{display:none}
-  .admin-sidebar.dar .admin-sidebar-mark{display:none}
-  .admin-sidebar.dar .admin-sidebar-sec{display:none}
+  .admin-sidebar.dar .admin-sidebar-brand-yazi{max-width:0;opacity:0}
+  .admin-sidebar.dar .admin-sidebar-mark{width:0;min-width:0;opacity:0;overflow:hidden}
+  .admin-sidebar.dar .admin-sidebar-sec{max-height:0;margin-top:0;margin-bottom:0;opacity:0}
   .admin-sidebar.dar .admin-nav-item{width:40px;height:40px;min-height:40px;padding:0;justify-content:center;gap:0}
   .admin-sidebar.dar .admin-nav-item.active::before{left:-12px}
   /* Sayac rozeti 40px ikonun icine sigmaz — tahtadaki gibi kucuk bir noktaya iniyor. */
   .admin-sidebar.dar .admin-nav-badge{position:absolute;top:3px;right:3px;margin:0;width:8px;height:8px;min-width:0;
     padding:0;font-size:0;line-height:0;color:transparent;background:var(--accent);border-radius:50%}
   .admin-sidebar.dar .admin-sidebar-user{flex-direction:column;gap:8px;padding:0;background:transparent;border:none}
-  .admin-sidebar.dar .admin-sidebar-uname,.admin-sidebar.dar .admin-sidebar-urole{display:none}
+  .admin-sidebar.dar .admin-sidebar-uname,.admin-sidebar.dar .admin-sidebar-urole{max-width:0;opacity:0}
+}
+
+/* ===== KENAR CUBUGU GECIS ANIMASYONU (28.09.2026) =====
+   Calismasinin sarti: render() DOM dugumlerini koruyor (morph katmani — ayni .admin-sidebar
+   ve ayni .nav-label dugumu geri geliyor). innerHTML ile bastan cizilseydi element yeni
+   degerleriyle dogardi ve hicbir transition tetiklenmezdi.
+
+   Bu yuzden gizlemeler display:none DEGIL, olculebilir degerler: display animate edilemez,
+   max-width/width/opacity edilebilir. Etiketler max-width ile siyriliyor (genislikleri
+   metne bagli, auto'dan 0'a gecis animate olmaz), isaret sabit 36px oldugu icin width ile.
+
+   overflow-x:hidden sart — gecis sirasinda etiketler 64px'in disina tasiyor ve cubuk
+   overflow-x:auto oldugu icin bir an yatay kaydirma cubugu belirip titriyordu.
+
+   Ilk boyamada animasyon YOK: sinif ilk HTML'de basili geliyor, transition yalnizca
+   sonradan degisen ozellikte tetikleniyor. */
+@media (min-width:901px){
+  .admin-sidebar{transition:width .22s cubic-bezier(.4,0,.2,1);overflow-x:hidden}
+  .admin-sidebar .admin-nav-item{transition:background .14s,color .14s,width .22s cubic-bezier(.4,0,.2,1),gap .22s cubic-bezier(.4,0,.2,1),padding .22s cubic-bezier(.4,0,.2,1)}
+  .admin-sidebar .nav-label,
+  .admin-sidebar .admin-sidebar-brand-yazi,
+  .admin-sidebar .admin-sidebar-uname,
+  .admin-sidebar .admin-sidebar-urole{max-width:190px;overflow:hidden;white-space:nowrap;opacity:1;
+    transition:max-width .22s cubic-bezier(.4,0,.2,1),opacity .15s ease}
+  .admin-sidebar .admin-sidebar-mark{transition:width .22s cubic-bezier(.4,0,.2,1),opacity .15s ease}
+  .admin-sidebar .admin-sidebar-brand{transition:gap .22s cubic-bezier(.4,0,.2,1),padding .22s cubic-bezier(.4,0,.2,1)}
+  .admin-sidebar .admin-sidebar-sec{max-height:20px;overflow:hidden;
+    transition:max-height .22s cubic-bezier(.4,0,.2,1),margin .22s cubic-bezier(.4,0,.2,1),opacity .15s ease}
+  /* Hareket azaltma tercihi olanlar icin gecis kapali — durumlar aynen calismaya devam ediyor. */
+  @media (prefers-reduced-motion:reduce){
+    .admin-sidebar,.admin-sidebar *{transition:none !important}
+  }
 }
 
 /* ===== KENAR CUBUGU AC/KAPA DUGMESI (28.09.2026) =====
