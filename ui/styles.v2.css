@@ -493,11 +493,14 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
   --gunsonu:#10639F; --gunsonu-soft:#10639F0f; --gunsonu-med:#10639F1a; --gunsonu-border:#10639F40; --gunsonu-active-bg:#10639F55;
   --tadilat-info:#6039C4; --tadilat-soft:#6039C40f; --tadilat-med:#6039C41a; --tadilat-border:#6039C440; --tadilat-active-bg:#6039C455;
 
-  /* Yonetici acik: #0E93A0 orta tondu (iki yonde de 3.68:1), ayni hue'nun bir tik koyusu her iki yonde 5.08:1 veriyor. */
-  --accent:#0B7A85; --accent-hover:#09646D; --accent-dim:#0B7A851F; --accent-border:#0B7A8559;
+  /* Yonetici acik aksani. DIKKAT: onceki tur (#0B7A85) "5.08:1" diye gecmisti ama o olcum BEYAZ
+     PANELE karsiydi; asil zemin --bg (#EFF1F4) ve orada 4.45:1 ile esigin ALTINDA kaliyordu.
+     28.09.2026'da bir tik daha koyultuldu: #0A7078 -> zeminde 5.15:1, beyaz panelde 5.83:1,
+     uzerindeki beyaz yazi 5.83:1. Yeni bir ton denenirse HER IKI zemine karsi olculmeli. */
+  --accent:#0A7078; --accent-hover:#09646D; --accent-dim:#0A70781F; --accent-border:#0A707859;
   --btn-primary-bg:var(--accent); --btn-primary-text:#FFFFFF;
   --chip-active-bg:var(--accent-dim); --chip-active-border:var(--accent); --chip-active-text:var(--accent);
-  --focus:0 0 0 3px #0B7A854d;
+  --focus:0 0 0 3px #0A70784d;
   --sidebar-bg:#111A1D;
 }
 .root-wide.theme-dark{
