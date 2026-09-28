@@ -1456,7 +1456,7 @@ function renderStokScreen(){
     <div style="flex:1;display:flex;justify-content:center;min-width:180px">
       <label class="stok-top-search">
         ${ico('search',14)}
-        <input placeholder="Kod, CANIAS no veya malzeme ara…" value="${esc(stokGenelArama)}" oninput="stokGenelArama=this.value; setStokSubView('genel'); render()">
+        <input placeholder="Kod, CANIAS no veya malzeme ara…" value="${esc(stokGenelArama)}" oninput="stokAramaYaz(this.value)">
         <kbd style="font-size:10px;color:var(--text-subtle);border:1px solid var(--border);padding:1px 5px;border-radius:4px;flex:none">⌘K</kbd>
       </label>
     </div>
@@ -1554,8 +1554,38 @@ function stokKritikVeri(){
 /* KPI kartlarının hepsi aynı pencereyi açıyor, yalnızca hangi kümeyi göstereceği değişiyor:
    'tumu' | 'Hammadde' | 'Takım' | 'Karbür' | 'kritik'. */
 let stokListeModalTur = null;
-function stokListeAc(tur){ stokListeModalTur = tur; render(); }
-function stokListeKapat(){ stokListeModalTur = null; render(); }
+function stokListeAc(tur){ stokListeModalTur = tur; stokListeAramaIle = false; render(); }
+function stokListeKapat(){ stokListeModalTur = null; stokListeAramaIle = false; render(); }
+
+/* ===================== STOK ARAMASI (28.09.2026) =====================
+   Ust bardaki arama kutusu, Genel Bakis'taki stok tablosu kaldirilinca (ec06e25) suzecek
+   bir sey bulamiyordu: yaziliyor ama hicbir sey olmuyordu. Artik uc kaynagi birden
+   (Takim & Sarf + Karbur + Hammadde) tarayan "Tum Kalemler" penceresini aciyor ve suzuyor.
+
+   Arama kod, malzeme adi ve kaynak/tur alanlarinda geciyor; stokGenelSatirlar() zaten
+   ucunu birlestirdigi icin "her yeri arama" ek bir sorgu gerektirmiyor.
+
+   stokListeAramaIle: pencereyi ARAMANIN acip acmadigini tutuyor. Kullanici pencereyi KPI
+   kartindan actiysa arama kutusunu temizlemek onu kapatmamali; yalnizca aramanin actigi
+   pencere, arama silinince kapaniyor. */
+let stokListeAramaIle = false;
+function stokAramaYaz(v){
+  stokGenelArama = v;
+  const q = (v||'').trim();
+  if(q){
+    if(!stokListeModalTur){ stokListeModalTur = 'tumu'; stokListeAramaIle = true; }
+    setStokSubView('genel');
+    return; // setStokSubView zaten render ediyor
+  }
+  if(stokListeAramaIle){ stokListeModalTur = null; stokListeAramaIle = false; }
+  render();
+}
+/* Satir arama suzgeci — kod, isim ve kaynak/tur uzerinde, Turkce normalizasyonla. */
+function stokAramaSuz(liste){
+  const q = trNorm((stokGenelArama||'').trim());
+  if(!q) return liste;
+  return liste.filter(x=> trNorm(`${x.kod} ${x.malzeme} ${x.kaynak||x.tur}`).includes(q));
+}
 
 function stokKritikTablo(liste, bosMetin){
   if(liste.length===0) return `<div style="color:var(--text-muted);font-size:12.5px;padding:10px 2px">${bosMetin}</div>`;
@@ -1602,7 +1632,8 @@ function renderStokListeModal(){
   const kritikMi = (tur==='kritik');
   let govde, altBilgi;
   if(kritikMi){
-    const { bitenler, altLimit } = stokKritikVeri();
+    const ham = stokKritikVeri();
+    const bitenler = stokAramaSuz(ham.bitenler), altLimit = stokAramaSuz(ham.altLimit);
     const kartaGirmeyen = bitenler.filter(x=>x.durum==='normal').length;
     const ozet = Object.entries(bitenler.reduce((a,x)=>{ const k=x.kaynak||x.tur; a[k]=(a[k]||0)+1; return a; },{}))
       .map(([k,v])=>`${esc(k)} ${v}`).join(' · ');
@@ -1621,8 +1652,7 @@ function renderStokListeModal(){
   } else {
     /* Liste, tabloyla AYNI sıralamada: önce sorunlular (negatif, sonra alt limit), sonra normaller. */
     const oncelik = x => x.durum==='negatif' ? 0 : x.durum==='altlimit' ? 1 : 2;
-    const liste = stokGenelSatirlar()
-      .filter(x=> tur==='tumu' ? true : x.tur===tur)
+    const liste = stokAramaSuz(stokGenelSatirlar().filter(x=> tur==='tumu' ? true : x.tur===tur))
       .sort((a,b)=> oncelik(a)-oncelik(b) || Number(a.stokSayi)-Number(b.stokSayi) || String(a.kod).localeCompare(String(b.kod)));
     const sorunlu = liste.filter(x=>x.durum!=='normal').length;
     altBilgi = `${liste.length} kalem${sorunlu?` · ${sorunlu} tanesi alt limit / negatif`:''}`;
@@ -1632,7 +1662,8 @@ function renderStokListeModal(){
     <div class="modal-box" style="max-width:1060px;width:100%;max-height:86vh;display:flex;flex-direction:column;padding:0">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px 22px 14px;border-bottom:1px solid var(--border);flex:none">
         <div style="min-width:0">
-          <div style="font-size:18px;font-weight:700;letter-spacing:-.2px">${esc(stokListeBasligi(tur))}</div>
+          <div style="font-size:18px;font-weight:700;letter-spacing:-.2px">${esc(stokListeBasligi(tur))}${
+            (stokGenelArama||'').trim() ? ` <span style="font-weight:500;color:var(--text-muted);font-size:14px">— "${esc(stokGenelArama.trim())}" araması</span>` : ''}</div>
           <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${esc(fmtDT(Date.now()))} itibarıyla${altBilgi?` · ${altBilgi}`:''}</div>
         </div>
         <button class="icon-btn" style="flex:none" title="Kapat" onclick="stokListeKapat()">${ico('x',16)}</button>
