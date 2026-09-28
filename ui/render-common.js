@@ -586,12 +586,16 @@ function renderMachineModal(){
         ${totalDurusMs>0 ? renderDurusBreakdown(rows) : ''}
         ${dailyTable}
         ${ganttHtml}
-        <div class="sec-h" style="margin-top:0">${modalDateFilter ? modalDateFilter+' — Detay' : 'Tüm Kayıtlar — Detay (eskiden yeniye)'}</div>
+        <div class="sec-h" style="margin-top:0">${modalDateFilter ? modalDateFilter+' — Detay' : 'Tüm Kayıtlar — Detay (yeniden eskiye)'}</div>
         <table><thead><tr>
           ${canDeleteReport() ? `<th style="width:26px"><input type="checkbox" ${modalVisibleIds.length>0 && modalVisibleIds.every(id=>modalSelectedIds.has(id))?'checked':''} onchange="toggleModalSelectAll()"></th>` : ''}
           <th>Tarih</th><th>İş Emri No</th><th>Malzeme</th><th>Operatör</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th>Durum</th>${session.isSuperAdmin ? `<th style="width:36px"></th>` : ''}${canDeleteReport() ? `<th style="width:36px"></th>` : ''}
         </tr></thead><tbody>
-        ${(() => { const completedIdsForModal = computeCompletedRouteIds(); return rows.length===0 ? `<tr><td colspan="${8 + (canDeleteReport()?2:0) + (session.isSuperAdmin?1:0)}" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : rows.map(e=>{
+        ${(() => { const completedIdsForModal = computeCompletedRouteIds();
+          /* Detay listesi yeniden eskiye (28.09.2026, kullanici istegi). Sadece BU tablo:
+             rows kronolojik kalmali, Gantt ve gunluk tablo ona bagli. */
+          const detayRows = rows.slice().sort((a,b)=>(b.startTs||0)-(a.startTs||0));
+          return detayRows.length===0 ? `<tr><td colspan="${8 + (canDeleteReport()?2:0) + (session.isSuperAdmin?1:0)}" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : detayRows.map(e=>{
           if(e._isTadilat){
             const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : fmtElapsed(entryDurationBreakdown(e).netMs)+' (sürüyor)';
             const statusLabel = e.status==='tamamlandi' ? (e._sonOperasyon?'Tadilat Tamamlandı':'Operasyon Bitti (Devamı Var)') : 'Tadilat — Devam Ediyor';
