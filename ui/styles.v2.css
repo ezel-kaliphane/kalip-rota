@@ -587,11 +587,11 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
      ediyor; olmazsa dugme 3px yukari kayardi. box-sizing:border-box oldugu icin (bkz. *{...})
      min-height ALT DOLGUYU DA icine sayiyor, o yuzden 36 degil 36+14=50px yaziliyor —
      36 yazilinca icerik alani 22px'e dusup dugmeyi yine 3px yukari itiyordu. */
-  .admin-sidebar.dar .admin-sidebar-brand{padding:0 0 14px;justify-content:center;min-height:50px}
+  .admin-sidebar.dar .admin-sidebar-brand{padding:0 0 14px;gap:0;min-height:50px}
   .admin-sidebar.dar .admin-sidebar-brand-yazi{max-width:0;opacity:0}
   .admin-sidebar.dar .admin-sidebar-mark{width:0;min-width:0;opacity:0;overflow:hidden}
   .admin-sidebar.dar .admin-sidebar-sec{max-height:0;margin-top:0;margin-bottom:0;opacity:0}
-  .admin-sidebar.dar .admin-nav-item{width:40px;height:40px;min-height:40px;padding:0;justify-content:center;gap:0}
+  .admin-sidebar.dar .admin-nav-item{width:40px;height:40px;min-height:40px;padding:0 13px;gap:0}
   .admin-sidebar.dar .admin-nav-item.active::before{left:-12px}
   /* Sayac rozeti 40px ikonun icine sigmaz — tahtadaki gibi kucuk bir noktaya iniyor. */
   .admin-sidebar.dar .admin-nav-badge{position:absolute;top:3px;right:3px;margin:0;width:8px;height:8px;min-width:0;
@@ -641,7 +641,7 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
   color:#94A3B8;cursor:pointer;transition:background .14s,color .14s,border-color .14s}
 .sidebar-toggle:hover{background:#171B22;color:#fff;border-color:rgba(255,255,255,.08)}
 .sidebar-toggle:focus-visible{outline:none;box-shadow:var(--focus)}
-.admin-sidebar.dar .sidebar-toggle{margin-left:0}
+.admin-sidebar.dar .sidebar-toggle{margin-left:auto;margin-right:auto}
 /* 900px altinda yatay serit duzeni gecerli, orada daraltmanin karsiligi yok. */
 @media (max-width:900px){ .sidebar-toggle{display:none} }
 /* Yonetici kabugu viewport'a sabitlenir: tahtada da boyle (height:1020px + overflow:hidden).
