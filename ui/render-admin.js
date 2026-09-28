@@ -1320,6 +1320,17 @@ function stokGenelGirisAc(hedefOverride){
   setStokSubView(hedef);
   if(hedef==='takim') setToolAdminSubView('giris'); else if(hedef==='karbur') karburSetSubView('giris'); else setMalzemeSubView('giris');
 }
+/* "Son Hareketler" panelindeki Tümü düğmesi (28.09.2026). Panel üç kaynağın hareketlerini
+   birleştiriyor ama modüllerin her birinin KENDİ Hareketler bölümü var; tek bir "tüm
+   hareketler" ekranı yok. O yüzden Excel/Giriş düğmeleriyle aynı kuralı kullanıyor:
+   o an seçili Tür filtresine (yoksa Hammadde'ye) gidiyor.
+   Bölüm anahtarları modüller arasında farklı — Takım/Karbür'de 'gecmis', Hammadde'de
+   'hareketler' (bkz. STOK_BOLUM_TANIM); etiketleri aynı ("Hareketler"), anahtarları değil. */
+function stokGenelHareketlerAc(hedefOverride){
+  const hedef = hedefOverride || stokGenelHedefModul();
+  setStokSubView(hedef);
+  if(hedef==='takim') setToolAdminSubView('gecmis'); else if(hedef==='karbur') karburSetSubView('gecmis'); else setMalzemeSubView('hareketler');
+}
 function stokGenelZamanKisa(ts){
   if(!ts) return '—';
   const fark = Date.now()-ts;
@@ -1393,10 +1404,11 @@ function renderStokGenelBakis(){
         <div style="display:flex;align-items:center;gap:10px;padding:16px 0;border-bottom:1px solid var(--border)">
           <span style="font-size:15px;font-weight:700;color:var(--text)">Son Hareketler</span>
           <span style="font-size:12px;font-weight:600;color:var(--text-muted);background:var(--panel-alt);border-radius:6px;padding:2px 8px">${stokSonHareketler ? stokSonHareketler.length : '…'}</span>
-          <!-- 28.09.2026: buradaki "pushLog" dugmesi kaldirildi. Etiketi ham bir kod adiydi ve
-               stok hareketleriyle alakasiz sekilde KULLANICININ BILDIRIM GECMISINI aciyordu
-               (openMyPushHistoryModal). Bildirim gecmisine dogru erisim duruyor: bu ekranin
-               ust basligindaki zil ikonu, yonetici ust bari ve operator basligi. -->
+          <!-- Buradaki "pushLog" dugmesi 28.09.2026'da kaldirildi: etiketi ham bir kod adiydi ve
+               stok hareketleriyle alakasiz sekilde kullanicinin BILDIRIM GECMISINI aciyordu.
+               Yerine, panelin kendi isine bakan Tumu dugmesi geldi. -->
+          <button style="background:transparent;font-size:12px;font-weight:600;color:var(--accent);margin-left:auto;display:flex;align-items:center;gap:3px;padding:2px 4px"
+            title="Seçili türün tüm hareketlerini aç" onclick="stokGenelHareketlerAc()">Tümü ${ico('chevronRight',13)}</button>
         </div>
         <div style="overflow-y:auto">
         ${!stokSonHareketler
