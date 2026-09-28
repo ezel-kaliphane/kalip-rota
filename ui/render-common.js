@@ -1,7 +1,35 @@
 /* ===================== MAKİNE DETAY MODAL ===================== */
-function openMachineDetail(code){ machineModal = code; modalDateFilter=''; modalSelectedIds = new Set(); render(); }
-function closeMachineDetail(){ machineModal = null; modalSelectedIds = new Set(); render(); }
-function setModalDateFilter(v){ modalDateFilter = v; modalSelectedIds = new Set(); render(); }
+/* ===================== MAKINE DETAYI — SAYFALAMA (28.09.2026) =====================
+   Iki tablo da sinirsiz uzuyordu (C02'de 180 kayit); asagi inmek zordu. Ikisi de 10'ar
+   satira bolundu. Sayfa numaralari MODAL DURUMUNDA tutuluyor, kayitlarin kendisinde degil;
+   makine degisince, tarih filtresi degisince ve pencere kapaninca 1'e donuyor — yoksa
+   3 gunluk bir makineyi acinca bos 5. sayfa geliyordu.
+
+   Sayfa numarasi secimi stok ekranindaki kurala esit: 7'ye kadar hepsi, sonrasi
+   ilk iki + son iki + aktifin etrafi, aradaki bosluklar "…" ile. */
+const MODAL_SAYFA_BOYUT = 10;
+let modalGunSayfa = 1, modalDetaySayfa = 1;
+function modalGunSayfaGit(n){ modalGunSayfa = n; render(); }
+function modalDetaySayfaGit(n){ modalDetaySayfa = n; render(); }
+function modalSayfaSeridi(sayfa, toplamSayfa, fn){
+  if(toplamSayfa <= 1) return '';
+  const nolar = toplamSayfa <= 7
+    ? Array.from({length:toplamSayfa},(_,i)=>i+1)
+    : Array.from(new Set([1,2,toplamSayfa-1,toplamSayfa,sayfa-1,sayfa,sayfa+1].filter(n=>n>=1&&n<=toplamSayfa))).sort((a,b)=>a-b);
+  let dugmeler = `<button class="modal-pager-btn" ${sayfa<=1?'disabled':''} onclick="${fn}(${sayfa-1})" title="Onceki">‹</button>`;
+  let onceki = 0;
+  nolar.forEach(n=>{
+    if(onceki && n-onceki > 1) dugmeler += `<span class="modal-pager-ara">…</span>`;
+    dugmeler += `<button class="modal-pager-btn ${n===sayfa?'aktif':''}" onclick="${fn}(${n})">${n}</button>`;
+    onceki = n;
+  });
+  dugmeler += `<button class="modal-pager-btn" ${sayfa>=toplamSayfa?'disabled':''} onclick="${fn}(${sayfa+1})" title="Sonraki">›</button>`;
+  return `<div class="modal-pager">${dugmeler}<span class="modal-pager-bilgi">${sayfa} / ${toplamSayfa}</span></div>`;
+}
+
+function openMachineDetail(code){ machineModal = code; modalDateFilter=''; modalSelectedIds = new Set(); modalGunSayfa = 1; modalDetaySayfa = 1; render(); }
+function closeMachineDetail(){ machineModal = null; modalSelectedIds = new Set(); modalGunSayfa = 1; modalDetaySayfa = 1; render(); }
+function setModalDateFilter(v){ modalDateFilter = v; modalSelectedIds = new Set(); modalGunSayfa = 1; modalDetaySayfa = 1; render(); }
 function toggleModalSelect(id){ if(modalSelectedIds.has(id)) modalSelectedIds.delete(id); else modalSelectedIds.add(id); render(); }
 function toggleModalSelectAll(){
   const allSelected = modalVisibleIds.length>0 && modalVisibleIds.every(id=>modalSelectedIds.has(id));
@@ -482,7 +510,16 @@ function renderMachineModal(){
       return e.startTs < fDayEnd && eEnd >= fDayStart;
     });
   }
-  modalVisibleIds = rows.map(e=>e.id);
+  /* Detay listesi yeniden eskiye + 10'luk sayfalama. `rows` DEGISTIRILMIYOR: Gantt,
+     gunluk tablo, durus dagilimi ve sayaclar ondan besleniyor ve kronolojik sira bekliyor. */
+  const detayRows = rows.slice().sort((a,b)=>(b.startTs||0)-(a.startTs||0));
+  const detayToplamSayfa = Math.max(1, Math.ceil(detayRows.length / MODAL_SAYFA_BOYUT));
+  const detaySayfa = Math.min(Math.max(1, modalDetaySayfa), detayToplamSayfa);
+  const detaySayfaSatirlari = detayRows.slice((detaySayfa-1)*MODAL_SAYFA_BOYUT, detaySayfa*MODAL_SAYFA_BOYUT);
+  /* "Tumunu sec" artik SAYFADAKI kayitlari kapsiyor. Eskiden tum liste ekranda oldugu icin
+     "gordugun kadari" ile ayniydi; sayfalamadan sonra 10 satir gorunurken 180 kaydi secmek
+     toplu silmede tehlikeli bir surpriz olurdu. */
+  modalVisibleIds = detaySayfaSatirlari.map(e=>e.id);
 
   // GANTT (saat bazlı zaman çizelgesi) — sadece TEK BİR gün seçiliyken anlamlı (birden fazla
   // gün üst üste binerse saat ekseni anlamsızlaşır). Yukarıdaki "timeline-strip" gün SEÇİCİ,
@@ -547,10 +584,14 @@ function renderMachineModal(){
   let dailyTable = '';
   if(!modalDateFilter){
     const days = allDays.slice().reverse();
-    dailyTable = `<div class="sec-h" style="margin-top:0">Günlere Göre Özet</div>
+    const gunToplamSayfa = Math.max(1, Math.ceil(days.length / MODAL_SAYFA_BOYUT));
+    const gunSayfa = Math.min(Math.max(1, modalGunSayfa), gunToplamSayfa);
+    const gunSayfaSatirlari = days.slice((gunSayfa-1)*MODAL_SAYFA_BOYUT, gunSayfa*MODAL_SAYFA_BOYUT);
+    dailyTable = `<div class="sec-h" style="margin-top:0">Günlere Göre Özet
+      ${days.length>MODAL_SAYFA_BOYUT ? `<span class="modal-pager-bilgi" style="margin-left:8px">${(gunSayfa-1)*MODAL_SAYFA_BOYUT+1}–${Math.min(gunSayfa*MODAL_SAYFA_BOYUT, days.length)} / ${days.length} gün</span>` : ''}</div>
       <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px;margin-top:-8px">Her gün, o güne denk gelen kısmıyla ayrı ayrı hesaplanıyor — çok günlü/duraklamalı işler artık başladıkları güne toptan yazılmıyor. Verimlilik, standart mesaiye (${WORKDAY_MINUTES} dk) göre.</div>
       <table style="margin-bottom:20px"><thead><tr><th>Tarih</th><th>Kayıt Sayısı</th><th>İş Sayısı</th><th>Net Çalışma</th><th>Duruş</th><th>Verimlilik</th></tr></thead><tbody>
-      ${days.map(d=>{
+      ${gunSayfaSatirlari.map(d=>{
         const dd = byDayAll[d];
         const verim = Math.min(100, Math.round((dd.workMs/60000)/WORKDAY_MINUTES*100));
         return `<tr>
@@ -562,7 +603,8 @@ function renderMachineModal(){
           <td><span style="color:${verim>=70?'var(--success)':verim>=40?'var(--warn)':'var(--danger)'};font-weight:700">%${verim}</span></td>
         </tr>`;
       }).join('')}
-      </tbody></table>`;
+      </tbody></table>
+      ${modalSayfaSeridi(gunSayfa, gunToplamSayfa, 'modalGunSayfaGit')}`;
   }
 
   return `<div class="modal-overlay" onclick="if(event.target===this) closeMachineDetail()">
@@ -586,16 +628,13 @@ function renderMachineModal(){
         ${totalDurusMs>0 ? renderDurusBreakdown(rows) : ''}
         ${dailyTable}
         ${ganttHtml}
-        <div class="sec-h" style="margin-top:0">${modalDateFilter ? modalDateFilter+' — Detay' : 'Tüm Kayıtlar — Detay (yeniden eskiye)'}</div>
+        <div class="sec-h" style="margin-top:0">${modalDateFilter ? modalDateFilter+' — Detay' : 'Tüm Kayıtlar — Detay (yeniden eskiye)'}
+          ${detayRows.length>MODAL_SAYFA_BOYUT ? `<span class="modal-pager-bilgi" style="margin-left:8px">${(detaySayfa-1)*MODAL_SAYFA_BOYUT+1}–${Math.min(detaySayfa*MODAL_SAYFA_BOYUT, detayRows.length)} / ${detayRows.length}</span>` : ''}</div>
         <table><thead><tr>
           ${canDeleteReport() ? `<th style="width:26px"><input type="checkbox" ${modalVisibleIds.length>0 && modalVisibleIds.every(id=>modalSelectedIds.has(id))?'checked':''} onchange="toggleModalSelectAll()"></th>` : ''}
           <th>Tarih</th><th>İş Emri No</th><th>Malzeme</th><th>Operatör</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th>Durum</th>${session.isSuperAdmin ? `<th style="width:36px"></th>` : ''}${canDeleteReport() ? `<th style="width:36px"></th>` : ''}
         </tr></thead><tbody>
-        ${(() => { const completedIdsForModal = computeCompletedRouteIds();
-          /* Detay listesi yeniden eskiye (28.09.2026, kullanici istegi). Sadece BU tablo:
-             rows kronolojik kalmali, Gantt ve gunluk tablo ona bagli. */
-          const detayRows = rows.slice().sort((a,b)=>(b.startTs||0)-(a.startTs||0));
-          return detayRows.length===0 ? `<tr><td colspan="${8 + (canDeleteReport()?2:0) + (session.isSuperAdmin?1:0)}" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : detayRows.map(e=>{
+        ${(() => { const completedIdsForModal = computeCompletedRouteIds(); return detaySayfaSatirlari.length===0 ? `<tr><td colspan="${8 + (canDeleteReport()?2:0) + (session.isSuperAdmin?1:0)}" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : detaySayfaSatirlari.map(e=>{
           if(e._isTadilat){
             const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : fmtElapsed(entryDurationBreakdown(e).netMs)+' (sürüyor)';
             const statusLabel = e.status==='tamamlandi' ? (e._sonOperasyon?'Tadilat Tamamlandı':'Operasyon Bitti (Devamı Var)') : 'Tadilat — Devam Ediyor';
@@ -619,6 +658,7 @@ function renderMachineModal(){
           </tr>`;
         }).join('') })()}
         </tbody></table>
+        ${modalSayfaSeridi(detaySayfa, detayToplamSayfa, 'modalDetaySayfaGit')}
       </div>
     </div>
   </div>`;

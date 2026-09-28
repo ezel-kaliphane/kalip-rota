@@ -601,6 +601,19 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .admin-sidebar.dar .admin-sidebar-uname,.admin-sidebar.dar .admin-sidebar-urole{max-width:0;opacity:0}
 }
 
+/* ===== MAKINE DETAYI — SAYFA SERIDI (28.09.2026) =====
+   Iki tablo da (Gunlere Gore Ozet, Tum Kayitlar) 10'ar satira bolundu. Serit mevcut
+   .sub-tab-btn dilinden turetildi: ayni yuzey, ayni yaricap, aktif durumda ayni aksan. */
+.modal-pager{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin:-8px 0 20px}
+.modal-pager-btn{min-width:30px;height:30px;padding:0 8px;border-radius:8px;border:1px solid var(--border);
+  background:var(--panel);color:var(--text-muted);font-family:inherit;font-size:12.5px;font-weight:600;
+  cursor:pointer;transition:background .14s,color .14s,border-color .14s}
+.modal-pager-btn:hover:not(:disabled){background:var(--panel-alt);color:var(--text)}
+.modal-pager-btn.aktif{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.modal-pager-btn:disabled{opacity:.4;cursor:default}
+.modal-pager-ara{color:var(--text-subtle);padding:0 2px;font-size:12.5px}
+.modal-pager-bilgi{color:var(--text-subtle);font-size:11.5px;font-weight:500;margin-left:6px}
+
 /* ===== KENAR CUBUGU GECIS ANIMASYONU (28.09.2026) =====
    Calismasinin sarti: render() DOM dugumlerini koruyor (morph katmani — ayni .admin-sidebar
    ve ayni .nav-label dugumu geri geliyor). innerHTML ile bastan cizilseydi element yeni
