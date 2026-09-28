@@ -2559,6 +2559,27 @@ function renderAyarlarMenu(){
 /* Üst bardaki ekran başlığı — tahtalarda (Admin-Tadilat, Admin-Matris, Admin-Ayarlar) üst bar
    62px ve solunda "üst etiket / başlık / kısa açıklama" bloğu var. Canlı Panel'in üç sekmesinde
    üst etiket ekranın adı, başlık aktif sekme (Admin-Matris tahtasındaki düzen). */
+/* ===================== KENAR CUBUGU AC/KAPA (28.09.2026) =====================
+   Cubuk 22.09.2026'da 64px ikon seridine cevrilmisti; artik kullanici genisletip
+   daraltabiliyor. VARSAYILAN DAR: bugunku davranis bu, genisletmek bilincli bir secim.
+
+   Tercih localStorage'da (rt_ oneki, intro-hint sayaciyla ayni desen) — kullanici bazinda
+   degil CIHAZ bazinda, cunku bu bir ekran alani tercihi: ayni kisi genis monitorde genis,
+   dizustunde dar isteyebilir. localStorage kapaliysa dar'a dusuyor, hata vermiyor.
+
+   Genislik/etiket gizleme kurallari TAMAMEN CSS'te (.admin-sidebar.dar) — markup her iki
+   durumda da ayni, yalnizca sinif degisiyor. 900px altinda yatay serit duzeni gecerli,
+   orada bu dugme is gormedigi icin gizleniyor (bkz. styles.v2.css). */
+const SIDEBAR_KEY = 'rt_sidebar_genis';
+let sidebarGenis = (function(){
+  try { return localStorage.getItem(SIDEBAR_KEY) === '1'; } catch(_){ return false; }
+})();
+function sidebarDaralt(){
+  sidebarGenis = !sidebarGenis;
+  try { localStorage.setItem(SIDEBAR_KEY, sidebarGenis ? '1' : '0'); } catch(_){}
+  render();
+}
+
 const EKRAN_BASLIKLARI = {
   report:       { baslik:'Rapor' },
   genelBakis:   { ustu:'Canlı Panel', baslik:'Genel Bakış' },
@@ -2878,10 +2899,12 @@ function renderAdmin(){
      2026-09-21'de topbar'a GERİ eklendi — admin artık kendi açık/koyu paletine sahip (bkz.
      ui/styles.css .root-wide.theme-light / .root-wide.theme-dark). */
   const sidebar = `
-    <nav class="admin-sidebar">
+    <nav class="admin-sidebar ${sidebarGenis?'':'dar'}">
       <div class="admin-sidebar-brand">
         <div class="admin-sidebar-mark">B</div>
-        <div><div class="admin-sidebar-name">BOM-ROTA</div><div class="admin-sidebar-sub">Üretim Takip</div></div>
+        <div class="admin-sidebar-brand-yazi"><div class="admin-sidebar-name">BOM-ROTA</div><div class="admin-sidebar-sub">Üretim Takip</div></div>
+        <button class="sidebar-toggle" onclick="sidebarDaralt()" aria-expanded="${sidebarGenis?'true':'false'}"
+          title="${sidebarGenis?'Kenar çubuğunu daralt':'Kenar çubuğunu genişlet'}">${ico('panel',16)}</button>
       </div>
       ${isAdminTabVisible('rapor') ? `<button class="admin-nav-item ${view==='report'?'active':''}" title="Rapor" onclick="setView('report')">${ico('list',14)}<span class="nav-label">Rapor</span></button>` : ''}
       ${canliPanelVisible() ? `<button class="admin-nav-item ${isCanliPanelView(view)?'active':''}" title="Canlı Panel" onclick="setView('${canliPanelDefaultView()}')">${ico('clock',14)}<span class="nav-label">Canlı Panel</span></button>` : ''}

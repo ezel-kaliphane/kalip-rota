@@ -938,6 +938,7 @@ const ICONS = {
   /* Stok modüllerinin simgeleri — eskiden etiketlerde ham emoji vardı (🔧 / ◆ / 📤).
      Emoji her işletim sisteminde başka çiziliyor, currentColor'ı almıyor ve temayla
      uyumsuz kalıyordu; bu dosyanın başındaki "emoji yok" kuralına da aykırıydı. */
+  panel: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>',
   elmas:'<path d="M12 3l9 9-9 9-9-9z"/>',
   katman:'<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/>',
   send:'<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>',

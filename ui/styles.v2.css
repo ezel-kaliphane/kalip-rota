@@ -575,19 +575,34 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
    Erisilebilirlik: her nav ogesinde title (ipucu) var, ikonlar tek basina kalmiyor.
    900px altinda mevcut yatay serit duzeni korunuyor, bu yuzden min-width:901px. */
 @media (min-width:901px){
-  .admin-sidebar{width:64px;align-items:center;padding:18px 0 12px;gap:4px}
-  .admin-sidebar .nav-label{display:none}
-  .admin-sidebar-brand{padding:0 0 14px;justify-content:center}
-  .admin-sidebar-brand > div:last-child{display:none}
-  .admin-sidebar-sec{display:none}
-  .admin-nav-item{width:40px;height:40px;min-height:40px;padding:0;justify-content:center;gap:0}
-  .admin-nav-item.active::before{left:-12px}
+  /* Daralma kurallari .dar durumuna kapsandi (28.09.2026): sinif yoksa temeldeki 236px
+     etiketli cubuk oldugu gibi geri geliyor, ikinci bir genislik tanimi yazilmadi. */
+  .admin-sidebar.dar{width:64px;align-items:center;padding:18px 0 12px;gap:4px}
+  .admin-sidebar.dar .nav-label{display:none}
+  .admin-sidebar.dar .admin-sidebar-brand{flex-direction:column;padding:0 0 14px;gap:8px;justify-content:center}
+  .admin-sidebar.dar .admin-sidebar-brand-yazi{display:none}
+  .admin-sidebar.dar .admin-sidebar-sec{display:none}
+  .admin-sidebar.dar .admin-nav-item{width:40px;height:40px;min-height:40px;padding:0;justify-content:center;gap:0}
+  .admin-sidebar.dar .admin-nav-item.active::before{left:-12px}
   /* Sayac rozeti 40px ikonun icine sigmaz — tahtadaki gibi kucuk bir noktaya iniyor. */
-  .admin-nav-badge{position:absolute;top:3px;right:3px;margin:0;width:8px;height:8px;min-width:0;
+  .admin-sidebar.dar .admin-nav-badge{position:absolute;top:3px;right:3px;margin:0;width:8px;height:8px;min-width:0;
     padding:0;font-size:0;line-height:0;color:transparent;background:var(--accent);border-radius:50%}
-  .admin-sidebar-user{flex-direction:column;gap:8px;padding:0;background:transparent;border:none}
-  .admin-sidebar-uname,.admin-sidebar-urole{display:none}
+  .admin-sidebar.dar .admin-sidebar-user{flex-direction:column;gap:8px;padding:0;background:transparent;border:none}
+  .admin-sidebar.dar .admin-sidebar-uname,.admin-sidebar.dar .admin-sidebar-urole{display:none}
 }
+
+/* ===== KENAR CUBUGU AC/KAPA DUGMESI (28.09.2026) =====
+   Genis durumda marka satirinin sagina yaslaniyor (margin-left:auto), dar durumda marka
+   sutuna donuyor ve dugme isaretin altinda ortalaniyor. Rengi kenar cubugunun kendi
+   gri rampasindan: cubuk iki temada da sabit koyu bir yuzey, jetonlar oraya uymuyor. */
+.sidebar-toggle{flex:none;width:30px;height:30px;margin-left:auto;display:flex;align-items:center;
+  justify-content:center;border-radius:8px;border:1px solid transparent;background:transparent;
+  color:#94A3B8;cursor:pointer;transition:background .14s,color .14s,border-color .14s}
+.sidebar-toggle:hover{background:#171B22;color:#fff;border-color:rgba(255,255,255,.08)}
+.sidebar-toggle:focus-visible{outline:none;box-shadow:var(--focus)}
+.admin-sidebar.dar .sidebar-toggle{margin-left:0}
+/* 900px altinda yatay serit duzeni gecerli, orada daraltmanin karsiligi yok. */
+@media (max-width:900px){ .sidebar-toggle{display:none} }
 /* Yonetici kabugu viewport'a sabitlenir: tahtada da boyle (height:1020px + overflow:hidden).
    Eskiden min-height:100vh idi, icerik buyuyunce SAYFA uzuyordu ve .body-pad'in kendi
    kaydirmasi hic devreye girmiyordu — Tadilat'in "gereksiz asagiya uzamasi"nin koku buydu. */
