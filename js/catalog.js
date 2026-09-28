@@ -787,6 +787,29 @@ function deleteMachine(code){
     render();
   }).catch(err=>{ console.error(err); toast('Silinemedi, tekrar deneyin: '+(err&&err.message||'hata')); });
 }
+/* ===================== GIZLENEN MAKINEYI GERI GETIRME (28.09.2026) =====================
+   deleteMachine() dahili bir makineyi machines_hidden'a yaziyordu ama bu dugumu LISTELEYEN
+   hicbir ekran yoktu: yanlislikla silinen makine uygulamadan geri alinamiyor, Firebase
+   Console gerekiyordu. Artik Ayarlar > Makine Ekle ekraninin altinda listeleniyor.
+
+   Yalnizca DAHILI makineler geri gelir. Ek makineler (machines_extra) silinince dugumden
+   tamamen kaldiriliyor, geri getirilecek bir kayit kalmiyor — o yuzden liste MACHINE_LIST
+   uzerinden kuruluyor.
+
+   machines_hidden canli dinlenmiyor (maliyet optimizasyonu), o yuzden deleteMachine'deki
+   desenin aynisi: yazma BASARILI OLDUKTAN SONRA yerel kopya guncelleniyor; basarisiz olursa
+   ekran hic degismiyor ve kullanici yanlis bilgi gormuyor. */
+function restoreMachine(code){
+  if(!requireSuperAdmin()) return;
+  DB.ref('machines_hidden/'+code).remove().then(()=>{
+    delete hiddenMachines[code];
+    toast(code+' geri getirildi');
+    render();
+  }).catch(err=>{ console.error(err); toast('Geri getirilemedi, tekrar deneyin: '+(err&&err.message||'hata')); });
+}
+function gizlenmisMakineler(){
+  return MACHINE_LIST.filter(m=>hiddenMachines[m.code]);
+}
 function deleteOperator(code){
   if(!requireSuperAdmin()) return;
   if(code===session.username){ toast('Kendi hesabını silemezsin'); return; }

@@ -3150,7 +3150,21 @@ function renderAdmin(){
           <button class="btn-primary" onclick="addMachine()">+ Makineyi Ekle</button>
         </div>
         <div style="margin-top:24px;font-size:13px;font-weight:600;margin-bottom:8px">Mevcut Makineler (${allMachines().length})</div>
-        <div class="machine-grid">${allMachines().map(m=>`<div class="machine-chip" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</span><button class="del-btn" onclick="deleteMachine('${escJs(m.code)}')" title="Sil">${ico('trash',14)}</button></div>`).join('')}</div>`;
+        <div class="machine-grid">${allMachines().map(m=>`<div class="machine-chip" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span><span class="mono" style="color:var(--accent);font-weight:700">${m.code}</span> ${esc(m.name)}</span><button class="del-btn" onclick="deleteMachine('${escJs(m.code)}')" title="Sil">${ico('trash',14)}</button></div>`).join('')}</div>
+        ${(()=>{ /* Gizlenmis makineler burada listeleniyor (28.09.2026): silme bu ekranda
+             yapiliyordu ama geri alma hicbir yerde yoktu, makine ancak Firebase Console'dan
+             kurtariliyordu. Liste bos oldugunda bolum hic cizilmiyor — surekli duran bos bir
+             baslik gurultu olurdu. Yalnizca DAHILI makineler gorunur; ek makineler silinince
+             dugumden tamamen kalkiyor ve geri getirilecek kayit kalmiyor. */
+          const gizli = (typeof gizlenmisMakineler==='function') ? gizlenmisMakineler() : [];
+          if(gizli.length===0) return '';
+          return `<div style="margin-top:24px;font-size:13px;font-weight:600;margin-bottom:4px">Gizlenmiş Makineler (${gizli.length})</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;max-width:520px">Silinen dahili makineler. Geçmiş kayıtları duruyor; geri getirince yeni seçimlerde tekrar çıkarlar.</div>
+            <div class="machine-grid">${gizli.map(m=>`<div class="machine-chip" style="display:flex;align-items:center;justify-content:space-between;gap:8px;opacity:.75">
+              <span><span class="mono" style="color:var(--text-muted);font-weight:700">${m.code}</span> ${esc(m.name)}</span>
+              <button class="btn-ghost" style="width:auto;padding:4px 10px;font-size:12px;font-weight:600" onclick="restoreMachine('${escJs(m.code)}')" title="Geri getir">Geri getir</button>
+            </div>`).join('')}</div>`;
+        })()}`;
     } else if(settingsSubTab==='bolumKurallari'){
       const kurallar = getBolumKurallari();
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Tadilat Bölüm Kuralları</div>
