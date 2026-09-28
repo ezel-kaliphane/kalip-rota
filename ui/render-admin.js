@@ -3993,7 +3993,6 @@ function renderAdmin(){
           </div>
 
           <div class="tad-grup">
-            <div class="tad-grup-baslik"><span class="tad-grup-no">1</span> Ne yapılacak</div>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <div class="field" style="width:200px;flex:none">
                 <label for="tad-ukodu">U kodu<span class="zorunlu">*</span></label>
@@ -4013,7 +4012,6 @@ function renderAdmin(){
             </div>
             ${tadilatOnHazirIstekListesi().length>0 ? `
             <div class="tad-sablon-kutu" style="background:var(--panel-alt);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px">
-              <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:5px">Hazır ifadeler — işaretlediğin, açıklamaya otomatik eklenir</div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 12px">
                 ${tadilatOnHazirIstekListesi().map(p=>{
                   const sel = tadPresetSelections[p.id] || {checked:false, value:''};
@@ -4033,7 +4031,6 @@ function renderAdmin(){
           </div>
 
           <div class="tad-grup">
-            <div class="tad-grup-baslik"><span class="tad-grup-no">2</span> Kim istedi</div>
             <div style="display:flex;gap:10px">
             <div class="field" style="flex:1;min-width:0">
               <label for="tad-bolum">Talep eden bölüm<span class="zorunlu">*</span></label>
@@ -4049,7 +4046,6 @@ function renderAdmin(){
           </div>
 
           <div class="tad-grup">
-            <div class="tad-grup-baslik"><span class="tad-grup-no">3</span> Nerede</div>
             <div style="display:flex;gap:10px;align-items:flex-end">
             <div class="field" style="flex:1;min-width:0">
               <label for="tad-makine">Talep edilen makine<span class="zorunlu">*</span></label>
