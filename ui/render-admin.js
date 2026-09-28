@@ -2901,8 +2901,8 @@ function renderAdmin(){
   const sidebar = `
     <nav class="admin-sidebar ${sidebarGenis?'':'dar'}">
       <div class="admin-sidebar-brand">
-        <div class="admin-sidebar-mark">EZEL</div>
-        <div class="admin-sidebar-brand-yazi"><div class="admin-sidebar-name">Atölye İş Takip</div><div class="admin-sidebar-sub">Üretim Takip</div></div>
+        ${ezelLogoHtml('admin-sidebar-mark')}
+        <div class="admin-sidebar-brand-yazi"><div class="admin-sidebar-name">Atölye İş Takip</div></div>
         <button class="sidebar-toggle" onclick="sidebarDaralt()" aria-expanded="${sidebarGenis?'true':'false'}"
           title="${sidebarGenis?'Kenar çubuğunu daralt':'Kenar çubuğunu genişlet'}">${ico('panel',16)}</button>
       </div>
