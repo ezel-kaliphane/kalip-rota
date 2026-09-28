@@ -5,3 +5,8 @@ functions/node_modules/
 # Tasarım tuvalinin ÜRETİLMİŞ çıktısı (~2.6 MB) — kaynak design/*.dc.html + canvas.json'dan
 # seed-canvas.mjs ile yeniden üretiliyor, depoda tutulmasına gerek yok.
 design/stok-ve-ayarlar-kurgusu.html
+
+# Google Stitch tasarim aracinin URETILMIS ciktisi (25 dosya, 4.4 MB) — ekran basina
+# code.html + screen.png ciftleri, Tailwind CDN'li tek satirlik HTML. Elle yazilmis kaynak
+# degil, arac ciktisi; depoda tutulmuyor (bkz. design/stok-ve-ayarlar-kurgusu.html ayni gerekce).
+stitch_site_i_nceleme_ve_analiz_arac/
