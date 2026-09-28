@@ -2587,9 +2587,26 @@ function renderAyarlarMenu(){
   const makineSay = allMachines().length;
   const bolumKuralSay = Object.keys(getBolumKurallari()||{}).length;
   const yoneticiSay = Object.entries(STATE.operators).filter(([c,v])=>!v.isSuperAdmin && (v.isAdmin||v.isSef||v.isUretimSef)).length;
+  /* 28.09.2026 — tahtadaki (design/AyarlarOneri) bes satir menude yoktu, ayarlarin kendisi
+     alt ekranlarin icinde gomuluydu. Artik menude kendi satirlari ve GUNCEL DEGERLERI var.
+     Sayilar canli kaynaklardan turetiliyor, sabit yazilmis hicbir rakam yok. */
+  const fasonSay   = Object.keys(fasonMachines||{}).filter(k=>fasonMachines[k]).length;
+  const gizliSay   = Object.keys(hiddenMachines||{}).length;
+  const tadilatAtolyeSay = allMachines().filter(m=>machineAtolyeOf(m.code)==='tadilat').length;
+  /* Tadilat yetkisi kosulu, Operatorler ekranindaki kutucugun ifadesiyle BIREBIR ayni
+     (bkz. renderPersonelAyarlari > toggleTadilatYetkisi): acikca verilmisse o, verilmemisse
+     Sef/Uretim Sefi varsayilan acik. SuperAdmin her zaman yetkili oldugu icin sayilmiyor. */
+  const tadilatYetkiliSay = Object.entries(STATE.operators).filter(([c,v])=>
+    !v.isSuperAdmin && (v.isAdmin||v.isSef||v.isUretimSef) &&
+    (v.permTadilatOlustur===true || (v.permTadilatOlustur!==false && (v.isSef||v.isUretimSef)))).length;
 
   const g1 = grup('Genel &amp; Kurulum', [
-    ayarSatiri({ etiket:'Tema', deger: resolvedTheme()==='dark'?'Koyu':'Açık', onclick:'toggleTheme()' }),
+    /* Tema satiri toggleTheme() cagiriyordu ve o yalnizca koyu<->acik ceviriyor: yoneticinin
+       kayitli temasi 'system' ise satira basinca sessizce sabit bir temaya donusuyordu.
+       Operator ayarlarindaki uclu secici (themeOptHtml) burada kullanilamiyor — .set-row bir
+       <button> ve icine buton konmaz — o yuzden satir uc durum arasinda donuyor. */
+    ayarSatiri({ etiket:'Tema', alt:'Koyu · Açık · Sistem arasında geçer',
+      deger: theme==='system' ? 'Sistem' : (resolvedTheme()==='dark'?'Koyu':'Açık'), onclick:'temaDongusu()' }),
     sa && ayarSatiri({ etiket:'Takım &amp; Sarf Stok Modülü', id:'sw-toolstok', toggle:'toggleToolStokEnabled()', ac:toolStokEnabled() }),
     sa && ayarSatiri({ etiket:'Karbür Stok Modülü', id:'sw-karbur', toggle:'toggleKarburEnabled()', ac:karburEnabled() }),
     sa && ayarSatiri({ etiket:'Malzeme Stok Takibi', id:'sw-malzeme', alt:'Kapalıyken operatör stoğu görmez; yönetim ekranı çalışmaya devam eder', toggle:'toggleStockTracking()', ac:stockEnabled() }),
@@ -2599,6 +2616,12 @@ function renderAyarlarMenu(){
   const g2 = grup('Makineler', [
     sa && ayarSatiri({ etiket:'Makine Listesi', alt:'Ad, grup, atölye, fason ve gizleme işaretleri', deger:String(makineSay), hedef:'makineAyarlari' }),
     sa && ayarSatiri({ etiket:'Makine Ekle', hedef:'addMachine' }),
+    sa && ayarSatiri({ etiket:'Fason / Dışarı Gönderim İşaretleri', alt:'Bu makinelerde "makine meşgul" kısıtı uygulanmaz',
+      deger:`${fasonSay} makine`, hedef:'makineAyarlari' }),
+    sa && ayarSatiri({ etiket:'Atölye Ataması', alt:'İmalat / Tadilat — Analiz ekranındaki atölye süzgecini besler',
+      deger:`${tadilatAtolyeSay} tadilat`, hedef:'makineAyarlari' }),
+    sa && gizliSay>0 && ayarSatiri({ etiket:'Gizlenmiş Makineler', alt:'Silinen dahili makineler — yeni seçimlerde çıkmaz',
+      deger:`${gizliSay}`, hedef:'addMachine' }),
     sa && ayarSatiri({ etiket:'Kişi Bazlı Makine Erişimi', alt:'Operatörün "Çalışılan Makine" listesini belirler', hedef:'access' }),
   ]);
 
@@ -2607,8 +2630,9 @@ function renderAyarlarMenu(){
     canManageBildirimAyarlari() && ayarSatiri({ etiket:'Uzun Duruş Uyarı Eşiği', alt:'Bildirim ayarlarının tamamı', deger:`${esikDk} dk`, hedef:'uyarilar' }),
     sa && ayarSatiri({ etiket:'Tadilat Hazır Açıklama Şablonları', hedef:'tadilatSablonlari' }),
     sa && ayarSatiri({ etiket:'Bölüm &rarr; İş Merkezi Eşleştirme', deger:`${bolumKuralSay} kural`, hedef:'bolumKurallari' }),
+    sa && ayarSatiri({ etiket:'Karbür Hurda Eşiği', alt:'Bu boyun altındaki artıklar hiç kaydedilmez',
+      deger:`${typeof karburHurdaEsigi==='function' ? karburHurdaEsigi() : '—'} mm`, hedef:'karbur' }),
     sa && ayarSatiri({ etiket:'Karbür Stok Ayarları', alt:'Hurda eşiği ve katalog', hedef:'karbur' }),
-    sa && ayarSatiri({ etiket:'Takım &amp; Sarf Stok Ayarları', hedef:'takimStok' }),
     (sa||sef) && ayarSatiri({ etiket:'Malzeme Stoğu', hedef:'stok' }),
   ]);
 
@@ -2617,21 +2641,26 @@ function renderAyarlarMenu(){
   const rolNotu = `<div class="notice" style="--nc:var(--warn);margin:10px 0 0;padding:11px 13px">
     <div class="notice-sub"><b style="color:var(--nc)">Rol yükseltme burada yok.</b> Admin / SuperAdmin / Şef atamaları yalnızca Firebase Console'dan yapılır — Rules bunu istemciye kapatıyor.</div></div>`;
 
+  /* Grup tek satirliktan uce cikti (28.09.2026): tahtada "Erisim & Yetkiler" uc satir
+     gosteriyordu ama ikisi baska yerlerdeydi. Takim gorunurluk/sayim izinleri "Uretim
+     Kurallari"ndan buraya TASINDI (icerigi yetki, uretim kurali degil); Tadilat olusturma
+     yetkisi ise A.12'de Operatorler ekranina tasindigi icin oraya yonlendiriyor. */
   const g4 = grup('Erişim &amp; Yetkiler', [
     sa && ayarSatiri({ etiket:'Sekme / Bölüm Erişimi', alt:"Kullanıcı bazlı — Canlı Panel'in üç sekmesi ayrı ayrı", deger:`${yoneticiSay} kişi`, hedef:'tabErisimi' }),
+    sa && ayarSatiri({ etiket:'Takım Stok Görünürlük / Sayım İzinleri', alt:'Kalem Listesi, Konumlar, Sayım — kullanıcı bazlı', hedef:'takimStok' }),
+    sa && ayarSatiri({ etiket:'Tadilat Oluşturma Yetkisi', alt:'Operatörler ekranında, kişi satırlarında',
+      deger:`${tadilatYetkiliSay} kişi`, onclick:'gotoOperatorler()' }),
   ], sa ? rolNotu : '');
 
-  const tasinan = [
-    ayarSatiri({ etiket:'Bildirimlerim', hedef:'bildirimlerim' }),
-    sa && ayarSatiri({ etiket:'Bildirim Gönder', hedef:'bildirimGonder' }),
-  ].filter(Boolean);
-  const serit = tasinan.length ? `<div class="set-card ayar-tasinan">
-    <div class="set-sec" style="margin:0 0 6px">Bildirimler &amp; Veri</div>
-    <div class="sw-sub" style="margin:0 0 10px">Tasarımda bunlar Operatörler / Excel Yükleme / Bildirimler ekranlarına taşınıyor; o ekranlar çizilene kadar buradalar.</div>
-    <div class="ayar-tasinan-satirlar">${tasinan.join('')}</div>
-  </div>` : '';
+  /* 28.09.2026: burasi "tasinacak" seridiydi — tahtada bu iki satir A.10 Bildirimler
+     ekranina gidiyordu. Kullanici Bildirimler'i sol bardan kaldirdigi ve A.10'u dusurdugu
+     icin serit kalkti; satirlar kendi grubuna donustu ve bir yere gitmeyen vaat bitti. */
+  const g5 = grup('Bildirimler', [
+    ayarSatiri({ etiket:'Bildirimlerim', alt:'Sana gelen son bildirimler', hedef:'bildirimlerim' }),
+    sa && ayarSatiri({ etiket:'Bildirim Gönder', alt:'Seçtiğin kişilere anlık bildirim', hedef:'bildirimGonder' }),
+  ]);
 
-  return `<div class="ayar-menu">${g1}${g2}${g3}${g4}${serit}</div>`;
+  return `<div class="ayar-menu">${g1}${g2}${g3}${g4}${g5}</div>`;
 }
 
 /* Üst bardaki ekran başlığı — tahtalarda (Admin-Tadilat, Admin-Matris, Admin-Ayarlar) üst bar

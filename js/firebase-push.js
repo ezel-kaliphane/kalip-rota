@@ -347,6 +347,11 @@ function resolvedTheme(){
 }
 function setTheme(t){ theme=t; document.documentElement.className = 'theme-'+resolvedTheme(); save('rota_theme', t); render(); }
 function toggleTheme(){ setTheme(resolvedTheme()==='dark' ? 'light' : 'dark'); }
+/* Yonetici Ayarlar satiri icin uc durumlu dongu: Koyu -> Acik -> Sistem -> Koyu.
+   toggleTheme yalnizca ikisi arasinda ceviriyor ve 'system' secimini sessizce yok
+   ediyordu; operator ekranindaki uclu secici (themeOptHtml) ise .set-row bir <button>
+   oldugu icin oraya konulamiyor. */
+function temaDongusu(){ setTheme(theme==='dark' ? 'light' : theme==='light' ? 'system' : 'dark'); }
 function themeToggleHtml(){
   const isDark = resolvedTheme()==='dark';
   return `<button class="icon-btn" onclick="toggleTheme()" title="${isDark?'Açık temaya geç':'Koyu temaya geç'}" style="color:var(--accent)">
