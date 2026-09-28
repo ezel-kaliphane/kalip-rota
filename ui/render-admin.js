@@ -2166,11 +2166,11 @@ function renderMakineMatrisi(){
     if(tadilatHere){
       const { tadilat: tt, operasyon: top } = tadilatHere;
       out += `<div class="matrix-sub" style="color:var(--tadilat-info);font-weight:700">${ico('wrench',14)} ${esc(tt.uKodu)}</div>
-        <div class="matrix-sub">${esc(top.operatorUsername)} · ${live(()=> fmtElapsed(tadilatOpDurationBreakdown(top).netMs))}</div>`;
+        <div class="matrix-sub">${esc(operatorGosterimAdi(top))} · ${live(()=> fmtElapsed(tadilatOpDurationBreakdown(top).netMs))}</div>`;
     } else if(running){
       if(runningEntries.length===1){
         const info = runningEntries[0];
-        out += `<div class="matrix-sub">${esc(info.talepNo || info.isEmriNo)} · ${esc(info.operatorUsername)}</div>
+        out += `<div class="matrix-sub">${esc(info.talepNo || info.isEmriNo)} · ${esc(operatorGosterimAdi(info))}</div>
           <div class="matrix-sub">${live(()=> fmtElapsed(entryDurationBreakdown(info).netMs))} çalışıyor</div>`;
       } else {
         out += `<div class="matrix-sub" style="font-weight:700">${runningEntries.length} İş Emri Aktif</div>
@@ -2179,14 +2179,14 @@ function renderMakineMatrisi(){
     } else if(stopped){
       if(stoppedEntries.length===1){
         const info = stoppedEntries[0];
-        out += `<div class="matrix-sub">${esc(info.talepNo || info.isEmriNo)} · ${esc(info.operatorUsername)}</div>
+        out += `<div class="matrix-sub">${esc(info.talepNo || info.isEmriNo)} · ${esc(operatorGosterimAdi(info))}</div>
           <div class="matrix-sub">Duruş: "${esc(info.duruşNedeni)}"</div>`;
       } else {
         out += `<div class="matrix-sub" style="font-weight:700">${stoppedEntries.length} İş Duraklatıldı</div>
           <div class="matrix-sub" style="opacity:.7">Detay için tıkla</div>`;
       }
     } else if(lastFinished){
-      out += `<div class="matrix-sub">Son: ${esc(lastFinished.operatorUsername)} · ${fmtDT(lastFinished.startTs)}</div>
+      out += `<div class="matrix-sub">Son: ${esc(operatorGosterimAdi(lastFinished))} · ${fmtDT(lastFinished.startTs)}</div>
         ${lastFinished._isTadilat && lastFinished.aciklama ? `<div class="matrix-sub" style="opacity:.8">${esc(lastFinished.aciklama)}</div>` : ''}`;
     } else {
       out += `<div class="matrix-sub">Hiç kullanılmadı</div>`;
@@ -2399,7 +2399,7 @@ function renderGenelBakis(){
         <div class="matrix-name">${esc(d.m.name)}</div>
         ${d.sayi>1
           ? `<div class="matrix-sub" style="font-weight:700">${d.sayi} iş duraklatıldı</div><div class="matrix-sub" style="opacity:.7">Detay için tıkla</div>`
-          : `<div class="matrix-sub">${esc((d.info && (d.info.talepNo||d.info.isEmriNo))||'—')} · ${esc((d.info && d.info.operatorUsername)||'—')}</div>
+          : `<div class="matrix-sub">${esc((d.info && (d.info.talepNo||d.info.isEmriNo))||'—')} · ${esc(d.info ? operatorGosterimAdi(d.info) : '—')}</div>
              <div class="matrix-sub">${esc((d.info && d.info.duruşNedeni)||'—')}</div>`}
         ${d.bas ? `<div class="matrix-sub mono" style="color:${renk};font-weight:700">${live(()=> fmtDur(Math.max(0, nowTick - d.bas)))}</div>` : ''}
       </div>`;
@@ -2578,6 +2578,33 @@ function sidebarDaralt(){
   sidebarGenis = !sidebarGenis;
   try { localStorage.setItem(SIDEBAR_KEY, sidebarGenis ? '1' : '0'); } catch(_){}
   render();
+}
+
+/* ===================== MATRIS KARTINDA OPERATOR ADI (28.09.2026) =====================
+   Kartlarda "2609280004 · OPRT7" yaziyordu; kod yerine kisinin adi isteniyor.
+
+   Kaynak sirasi: kaydin kendi operatorName'i -> STATE.operators[kod].displayName -> kod.
+   Eski kayitlarda operatorName bos olabildigi icin ikinci basamak var; hicbiri yoksa kod
+   gosteriliyor (bos birakmaktansa kod bilgi verir).
+
+   Kart dar oldugu icin uzun isimler soyadi bas harfe iniyor: "Ramazan KARAKOC" ->
+   "Ramazan K.", ama "Serkan KOL" zaten sigdigi icin oldugu gibi kaliyor. Esik 13 karakter:
+   .matrix-sub 12px'te ~13 karakter + " · " + sure satira sigiyor. */
+const MATRIS_AD_ESIK = 13;
+function operatorGosterimAdi(kayit){
+  if(!kayit) return '—';
+  const kod = kayit.operatorUsername || '';
+  const kayitli = (typeof STATE!=='undefined' && STATE.operators && STATE.operators[kod]) || null;
+  const tam = String(kayit.operatorName || (kayitli && kayitli.displayName) || '').trim();
+  if(!tam) return kod || '—';
+  if(tam.length <= MATRIS_AD_ESIK) return tam;
+  const parcalar = tam.split(/\s+/).filter(Boolean);
+  if(parcalar.length >= 2){
+    const kisa = parcalar[0] + ' ' + parcalar[parcalar.length-1].charAt(0) + '.';
+    if(kisa.length <= MATRIS_AD_ESIK) return kisa;
+    return parcalar[0].slice(0, MATRIS_AD_ESIK-1) + '…';
+  }
+  return tam.slice(0, MATRIS_AD_ESIK-1) + '…';
 }
 
 const EKRAN_BASLIKLARI = {
