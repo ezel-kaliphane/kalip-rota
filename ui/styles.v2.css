@@ -680,7 +680,13 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
    kendi icinde kayiyor, kabuk viewport'a sabit. Dar ekranda tek kolona dusup normal akisa
    donuyor (o zaman sayfa kaymasi dogru davranis). */
 .body-pad:has(.tad-layout){display:flex;flex-direction:column;overflow:hidden}
-.tad-layout{flex:1;display:grid;grid-template-columns:560px minmax(0,1fr);gap:20px;min-height:0}
+/* 28.09.2026: kolonlar ters cevrildi. Once form SABIT 560px idi ve bekleyen listesi kalan
+   her seyi aliyordu (1856px'te 1004px); satirlar 985px'e yayilip kod ile "… BEKLIYOR"
+   rozeti arasinda kocaman bos bir serit birakiyordu. Artik BEKLEYEN LISTESI tavanli,
+   form kalani aliyor: 1856px'te form 804 / liste 760.
+   minmax(560px,1fr) formun tabanini koruyor — dar ekranda ilk once liste kuculuyor,
+   form iki kolonluk onay kutusu izgarasini tasiyamayacak kadar daralmiyor. */
+.tad-layout{flex:1;display:grid;grid-template-columns:minmax(560px,1fr) minmax(0,760px);gap:20px;min-height:0}
 .tad-layout > *{min-height:0;overflow-y:auto}
 /* Tadilat formu TEK EKRANA sigsin. Tahtada (Admin-Tadilat) form tek bir panel ve bolumler
    yalnizca basliklarla ayriliyor — uc ayri cerceveli kutu yok. Uc kutunun kenarlik+dolgu+
