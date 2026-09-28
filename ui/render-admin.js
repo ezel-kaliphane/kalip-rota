@@ -1295,16 +1295,11 @@ function ensureStokSonHareketlerLoaded(cb){
   }).catch(()=>{ stokSonHareketlerLoading = false; stokSonHareketler = []; });
 }
 let stokGenelTurFiltre = 'tumu';   // 'tumu' | 'Takım' | 'Karbür' | 'Hammadde'
-let stokGenelSiralama = 'artan';   // 'artan' | 'azalan' — stok miktarına göre
-let stokGenelSayfa = 1;
-const STOK_GENEL_SAYFA_BOYUT = 50;
-function stokGenelSiralamaDegistir(){
-  stokGenelSiralama = stokGenelSiralama==='artan' ? 'azalan' : 'artan';
-  stokGenelSayfa = 1;
-  render();
-}
-function stokGenelTurDegistir(v){ stokGenelTurFiltre = v; stokGenelSayfa = 1; render(); }
-function stokGenelSayfaGit(n){ stokGenelSayfa = n; render(); }
+/* Sayfalama ve siralama durumu 28.09.2026'da kaldirildi: Genel Bakis'taki stok kalemleri
+   tablosu ec06e25'te yerini Son Hareketler'e birakinca bunlari okuyan tek yer kalmadi
+   (stokGenelSayfaGit ve stokGenelSiralamaDegistir hic cagrilmiyordu). stokGenelTurFiltre
+   DURUYOR: KPI kartlarinin aktif vurgusunu ve stokGenelHedefModul()'u besliyor. */
+function stokGenelTurDegistir(v){ stokGenelTurFiltre = v; render(); }
 /* Genel Bakış'ın üst başlığındaki "Excel Yükle"/"Stok Girişi" butonları — üç kaynağı birden
    temsil eden TEK bir hedef olmadığı için, o an seçili Tür filtresine (ya da varsayılan olarak
    Hammadde'ye) yönlendiriyor; ilgili modülün zaten var olan Excel/Giriş bölümünü açıyor. */
@@ -1342,10 +1337,6 @@ function renderStokGenelBakis(){
   ensureKarburStokLoaded(()=>safeRender());
   ensureStokSonHareketlerLoaded(()=>safeRender());
   const tumu = stokGenelSatirlar();
-  const q = trNorm(stokGenelArama.trim());
-  let satirlar = q ? tumu.filter(s=>trNorm(`${s.kod} ${s.malzeme}`).includes(q)) : tumu.slice();
-  if(stokGenelTurFiltre!=='tumu') satirlar = satirlar.filter(s=>s.tur===stokGenelTurFiltre);
-  satirlar.sort((a,b)=> stokGenelSiralama==='artan' ? a.stokSayi-b.stokSayi : b.stokSayi-a.stokSayi);
   const kritik = tumu.filter(s=>s.durum!=='normal').sort((a,b)=>a.stokSayi-b.stokSayi).slice(0,8);
   const sayTakim = tumu.filter(s=>s.tur==='Takım').length;
   const sayKarbur = tumu.filter(s=>s.tur==='Karbür').length;
@@ -1353,18 +1344,6 @@ function renderStokGenelBakis(){
   const sayKritik = tumu.filter(s=>s.durum!=='normal').length;
   const sayNegatif = tumu.filter(s=>s.durum==='negatif').length;
   const fireSayisi = karburFireArray().length;
-
-  const toplamSayfa = Math.max(1, Math.ceil(satirlar.length/STOK_GENEL_SAYFA_BOYUT));
-  const sayfa = Math.min(stokGenelSayfa, toplamSayfa);
-  const sayfaSatirlari = satirlar.slice((sayfa-1)*STOK_GENEL_SAYFA_BOYUT, sayfa*STOK_GENEL_SAYFA_BOYUT);
-
-
-  // Sayfa numarası düğmeleri — çok sayfa varsa ilk/son + aktifin etrafındaki birkaç sayfa gösterilir.
-  const sayfaNolari = (()=>{
-    if(toplamSayfa<=7) return Array.from({length:toplamSayfa},(_,i)=>i+1);
-    const set = new Set([1,2,toplamSayfa-1,toplamSayfa,sayfa-1,sayfa,sayfa+1].filter(n=>n>=1&&n<=toplamSayfa));
-    return Array.from(set).sort((a,b)=>a-b);
-  })();
 
   const kpiAktifMi = tur => stokGenelTurFiltre===tur;
   const kpiIkon = (i,aktif) => `<span style="width:24px;height:24px;border-radius:7px;background:${aktif?'color-mix(in srgb,currentColor 15%,transparent)':'var(--panel-alt)'};display:flex;align-items:center;justify-content:center;color:${aktif?'#fff':'var(--text-muted)'};flex:none">${i}</span>`;
@@ -1451,7 +1430,7 @@ function renderStokGenelBakis(){
               <div style="font-size:14px;font-weight:700;color:var(--danger-text);flex:none">${s.stokSayi}</div>
             </div>
           `).join('')}
-          ${kritik.length>0 ? `<button style="width:100%;margin-top:16px;padding:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;justify-content:center;gap:6px" onclick="stokGenelTurDegistir('tumu'); stokGenelSiralama='artan'; render()">Tümünü Gör ${ico('chevronRight',14)}</button>` : ''}
+          ${kritik.length>0 ? `<button style="width:100%;margin-top:16px;padding:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;justify-content:center;gap:6px" onclick="stokGenelTurDegistir('tumu'); render()">Tümünü Gör ${ico('chevronRight',14)}</button>` : ''}
         </div>
       </div>
     </div>
@@ -1477,7 +1456,7 @@ function renderStokScreen(){
     <div style="flex:1;display:flex;justify-content:center;min-width:180px">
       <label class="stok-top-search">
         ${ico('search',14)}
-        <input placeholder="Kod, CANIAS no veya malzeme ara…" value="${esc(stokGenelArama)}" oninput="stokGenelArama=this.value; stokGenelSayfa=1; setStokSubView('genel'); render()">
+        <input placeholder="Kod, CANIAS no veya malzeme ara…" value="${esc(stokGenelArama)}" oninput="stokGenelArama=this.value; setStokSubView('genel'); render()">
         <kbd style="font-size:10px;color:var(--text-subtle);border:1px solid var(--border);padding:1px 5px;border-radius:4px;flex:none">⌘K</kbd>
       </label>
     </div>
