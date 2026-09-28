@@ -579,8 +579,17 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
      etiketli cubuk oldugu gibi geri geliyor, ikinci bir genislik tanimi yazilmadi. */
   .admin-sidebar.dar{width:64px;align-items:center;padding:18px 0 12px;gap:4px}
   .admin-sidebar.dar .nav-label{display:none}
-  .admin-sidebar.dar .admin-sidebar-brand{flex-direction:column;padding:0 0 14px;gap:8px;justify-content:center}
+  /* Dar durumda marka satiri SATIR olarak kaliyor ve icinde yalnizca ac/kapa dugmesi var:
+     isaret de yazi da gizli. Boylece dugme iki durumda da AYNI dikey noktada duruyor,
+     yalnizca yatayda yer degistiriyor — eskiden satir sutuna donup dugme isaretin ALTINA
+     iniyordu ve gecis sirasinda goz takip ettigi noktayi kaybediyordu.
+     min-height, genis durumdaki 36px'lik isaretin satira verdigi yuksekligi birebir taklit
+     ediyor; olmazsa dugme 3px yukari kayardi. box-sizing:border-box oldugu icin (bkz. *{...})
+     min-height ALT DOLGUYU DA icine sayiyor, o yuzden 36 degil 36+14=50px yaziliyor —
+     36 yazilinca icerik alani 22px'e dusup dugmeyi yine 3px yukari itiyordu. */
+  .admin-sidebar.dar .admin-sidebar-brand{padding:0 0 14px;justify-content:center;min-height:50px}
   .admin-sidebar.dar .admin-sidebar-brand-yazi{display:none}
+  .admin-sidebar.dar .admin-sidebar-mark{display:none}
   .admin-sidebar.dar .admin-sidebar-sec{display:none}
   .admin-sidebar.dar .admin-nav-item{width:40px;height:40px;min-height:40px;padding:0;justify-content:center;gap:0}
   .admin-sidebar.dar .admin-nav-item.active::before{left:-12px}
