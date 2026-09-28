@@ -550,7 +550,7 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
 }
 .admin-sidebar{width:236px;flex:none;background:var(--sidebar-bg);display:flex;flex-direction:column;padding:18px 12px 12px;gap:2px;overflow-y:auto;border-right:1px solid rgba(255,255,255,.06)}
 .admin-sidebar-brand{display:flex;align-items:center;gap:12px;padding:0 8px 24px;flex:none}
-.admin-sidebar-mark{width:36px;height:36px;border-radius:var(--r-md);background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--ff-cond);font-weight:700;color:var(--btn-primary-text);font-size:19px;flex:none}
+.admin-sidebar-mark{width:36px;height:36px;border-radius:var(--r-md);background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--ff-cond);font-weight:700;color:var(--btn-primary-text);font-size:12px;letter-spacing:.04em;flex:none}
 .admin-sidebar-name{font-family:var(--ff-cond);font-size:16px;font-weight:700;color:#fff;line-height:1.15;letter-spacing:1.1px}
 .admin-sidebar-sub{font-size:11px;color:#94A3B8;margin-top:1px}
 .admin-nav-item{display:flex;align-items:center;gap:11px;padding:0 12px;min-height:40px;border-radius:var(--r-md);color:rgba(255,255,255,.62);font-size:13.5px;font-weight:500;text-align:left;width:100%;position:relative;background:transparent;border:none;font-family:var(--ff);transition:background .14s,color .14s}
@@ -587,7 +587,7 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
      ediyor; olmazsa dugme 3px yukari kayardi. box-sizing:border-box oldugu icin (bkz. *{...})
      min-height ALT DOLGUYU DA icine sayiyor, o yuzden 36 degil 36+14=50px yaziliyor —
      36 yazilinca icerik alani 22px'e dusup dugmeyi yine 3px yukari itiyordu. */
-  .admin-sidebar.dar .admin-sidebar-brand{padding:0 0 14px;gap:0;min-height:50px}
+  .admin-sidebar.dar .admin-sidebar-brand{padding:0 17px 14px;gap:0;min-height:50px}
   .admin-sidebar.dar .admin-sidebar-brand-yazi{max-width:0;opacity:0}
   .admin-sidebar.dar .admin-sidebar-mark{width:0;min-width:0;opacity:0;overflow:hidden}
   .admin-sidebar.dar .admin-sidebar-sec{max-height:0;margin-top:0;margin-bottom:0;opacity:0}
@@ -621,8 +621,10 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .admin-sidebar .admin-sidebar-brand-yazi,
   .admin-sidebar .admin-sidebar-uname,
   .admin-sidebar .admin-sidebar-urole{max-width:190px;overflow:hidden;white-space:nowrap;opacity:1;
-    transition:max-width .22s cubic-bezier(.4,0,.2,1),opacity .15s ease}
-  .admin-sidebar .admin-sidebar-mark{transition:width .22s cubic-bezier(.4,0,.2,1),opacity .15s ease}
+    transition:max-width .22s cubic-bezier(.4,0,.2,1),opacity .09s ease}
+  .admin-sidebar .admin-sidebar-mark{transition:width .22s cubic-bezier(.4,0,.2,1),opacity .09s ease}
+  .admin-sidebar .admin-sidebar-brand,
+  .admin-sidebar .admin-sidebar-user{width:100%}
   .admin-sidebar .admin-sidebar-brand{transition:gap .22s cubic-bezier(.4,0,.2,1),padding .22s cubic-bezier(.4,0,.2,1)}
   .admin-sidebar .admin-sidebar-sec{max-height:20px;overflow:hidden;
     transition:max-height .22s cubic-bezier(.4,0,.2,1),margin .22s cubic-bezier(.4,0,.2,1),opacity .15s ease}
@@ -641,7 +643,8 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
   color:#94A3B8;cursor:pointer;transition:background .14s,color .14s,border-color .14s}
 .sidebar-toggle:hover{background:#171B22;color:#fff;border-color:rgba(255,255,255,.08)}
 .sidebar-toggle:focus-visible{outline:none;box-shadow:var(--focus)}
-.admin-sidebar.dar .sidebar-toggle{margin-left:auto;margin-right:auto}
+/* .dar'da dugmenin margin'i DEGISMIYOR: temeldeki margin-left:auto sag kenarda tutuyor,
+   ortalamayi satirin simetrik dolgusu sagliyor (bkz. yukarida padding:0 17px). */
 /* 900px altinda yatay serit duzeni gecerli, orada daraltmanin karsiligi yok. */
 @media (max-width:900px){ .sidebar-toggle{display:none} }
 /* Yonetici kabugu viewport'a sabitlenir: tahtada da boyle (height:1020px + overflow:hidden).
