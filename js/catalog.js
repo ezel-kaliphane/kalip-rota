@@ -623,13 +623,28 @@ async function uploadIsEmriListesi(){
       // malzemeye ait olduğu operatöre/şefe otomatik gösterilebilsin (iki alan birbirine bağlı çünkü).
       const malzKoduIdx = header.findIndex(h => h.includes(trNorm('malzeme kod')));
       const malzAdiIdx = header.findIndex(h => h.includes(trNorm('malzeme ad')));
+      /* İ.E. Miktarı (29.09.2026): malzeme bekleyen kaydında "kaç adet üretilecek" bilgisi.
+         Reçete oranı (birim başına hammadde) bu sayı olmadan hesaplanamıyor. Başlık yazımı
+         dosyadan dosyaya değişebildiği için üç kademeli aranıyor; en sonda yalın "miktar"
+         var ama o ancak başka bir miktar sütunu yoksa doğru olur — bulunamazsa alan boş
+         kalır ve şef elle girer, yükleme yine de çalışır. */
+      const ieMiktarIdx = (()=>{
+        for(const aday of ['i.e. miktar','ie miktar','is emri miktar','miktar']){
+          const i = header.findIndex(h => h.includes(trNorm(aday)));
+          if(i !== -1) return i;
+        }
+        return -1;
+      })();
       const codes = {};
       for(let i=1;i<rows.length;i++){
         const s = normalizeTalepCode(rows[i][colIdx]);
         if(!s) continue;
         const malzemeKodu = malzKoduIdx!==-1 ? String(rows[i][malzKoduIdx]||'').trim() : '';
         const malzemeAdi = malzAdiIdx!==-1 ? String(rows[i][malzAdiIdx]||'').trim() : '';
-        codes[s] = (malzemeKodu || malzemeAdi) ? { malzemeKodu, malzemeAdi } : true;
+        const ieMiktar = ieMiktarIdx!==-1 ? (Number(String(rows[i][ieMiktarIdx]||'').replace(',','.')) || 0) : 0;
+        codes[s] = (malzemeKodu || malzemeAdi || ieMiktar)
+          ? (ieMiktar ? { malzemeKodu, malzemeAdi, ieMiktar } : { malzemeKodu, malzemeAdi })
+          : true;
       }
       const codeCount = Object.keys(codes).length;
       if(codeCount===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }

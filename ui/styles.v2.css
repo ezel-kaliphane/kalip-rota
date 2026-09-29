@@ -608,6 +608,36 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .admin-sidebar.dar .admin-sidebar-uname,.admin-sidebar.dar .admin-sidebar-urole{max-width:0;opacity:0}
 }
 
+/* ===== MALZEME BEKLEYENLER (29.09.2026) =====
+   Gruplama hammaddeye gore; satir izgarasi sabit kolonlu cunku sayilar (i.e. miktari,
+   gereken, bekleme) sag hizali okunmali. Dar ekranda kolonlar sikisinca yatay kaydirma
+   yerine izgara sadelesip metin kirpiliyor (.mb-mamul ellipsis). */
+.mb-grup{background:var(--panel);border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden}
+.mb-grup-ust{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--panel-alt);
+  border-bottom:1px solid var(--border);flex-wrap:wrap}
+.mb-kod{font-family:var(--ff-mono);font-size:14px;font-weight:700;color:var(--accent)}
+.mb-olcu{font-size:12px;color:var(--text-muted)}
+.mb-olcu b{color:var(--text)}
+.mb-bas,.mb-satir{display:grid;grid-template-columns:128px minmax(0,1fr) 74px 104px 110px 74px 86px 96px;
+  gap:10px;align-items:center;padding:11px 16px}
+.mb-bas{padding:8px 16px;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--text-subtle);font-weight:700}
+.mb-satir{border-top:1px solid var(--border);font-size:12.5px}
+/* Istek numarasi girilmemis satir mudurun kuyrugu — sari zemin onu one cikariyor. */
+.mb-istek-yok{background:var(--warn-soft)}
+.mb-ie{font-family:var(--ff-mono);font-weight:700;color:var(--text)}
+.mb-talep{font-family:var(--ff-mono);font-size:10.5px;color:var(--text-subtle);display:block;margin-top:2px}
+.mb-mamul{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mb-sag{text-align:right;font-family:var(--ff-mono)}
+.mb-eylem{display:flex;align-items:center;gap:4px;justify-content:flex-end}
+.mb-mini{width:auto;padding:4px 9px;font-size:11px;font-weight:600}
+@media (max-width:1100px){
+  .mb-bas{display:none}
+  .mb-satir{grid-template-columns:1fr 1fr;gap:6px 10px}
+  .mb-sag{text-align:left}
+  .mb-eylem{justify-content:flex-start;grid-column:1/-1}
+}
+
 /* ===== MAKINE DETAYI — SAYFA SERIDI (28.09.2026) =====
    Iki tablo da (Gunlere Gore Ozet, Tum Kayitlar) 10'ar satira bolundu. Serit mevcut
    .sub-tab-btn dilinden turetildi: ayni yuzey, ayni yaricap, aktif durumda ayni aksan. */

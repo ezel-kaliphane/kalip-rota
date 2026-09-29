@@ -86,6 +86,17 @@
       ".write": false,
       "$itemId": { ".write": true }
     },
+    "malzemeBekleyen": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": ["isaretTs"],
+      "$kayitId": { ".write": true }
+    },
+    "hammaddeRecete": {
+      ".read": true,
+      ".write": false,
+      "$mamulKodu": { ".write": true }
+    },
     "stockHareketleri": {
       ".read": true,
       ".write": false,

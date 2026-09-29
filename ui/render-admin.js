@@ -941,7 +941,11 @@ const STOK_BOLUMLERI = [
   { key:'genel',   ikon:'chart',  label:'Genel Bakış',     alt:'üç kaynak bir arada',  gor:()=>true },
   { key:'takim',   ikon:'wrench', label:'Takım & Sarf',    alt:'freze, matkap, sarf',  gor:()=>isAdminTabVisible('takimStok') },
   { key:'karbur',  ikon:'elmas',  label:'Karbür',          alt:'çubuk + tel erozyon',  gor:()=>isAdminTabVisible('karbur') },
-  { key:'malzeme', ikon:'katman', label:'Hammadde', alt:'boy ve adet takibi',   gor:()=>canManageStock() }
+  { key:'malzeme', ikon:'katman', label:'Hammadde', alt:'boy ve adet takibi',   gor:()=>canManageStock() },
+  /* Malzeme Bekleyenler (29.09.2026): sef malzemeligi bulamayinca is emri buraya
+     dusuyor. Yetki Hammadde ile ayni (canManageStock = Sef + SuperAdmin) cunku
+     isaretlemeyi sef yapiyor. */
+  { key:'bekleyen', ikon:'clock',  label:'Malzeme Bekleyenler', alt:'stok yok, is emri parkta', gor:()=>canManageStock() }
 ];
 
 /* ---- Bölümler: her modülde aynı fiiller, aynı sırada ----
@@ -958,6 +962,8 @@ const STOK_BOLUMLERI = [
    ANAHTARLAR BİLEREK DEĞİŞMEDİ — yalnızca etiket, sıra ve stil ortaklaştı. Takım'ın bölüm
    görünürlük izinleri adminTabPermissions/<kullanıcı>/takimStokViews/<anahtar> altında bu
    anahtarlarla saklanıyor; anahtarı değiştirmek kayıtlı izinleri sessizce geçersiz kılardı. */
+/* 'bekleyen' STOK_BOLUM_TANIM'a GIRMIYOR: o ekranin alt bolumu yok, bolum seridi
+   otomatik olarak cizilmiyor (tanim bulunamayinca bolumler bos kaliyor). */
 const STOK_BOLUM_TANIM = {
   takim: {
     oku: () => toolAdminSubView,
@@ -1581,6 +1587,7 @@ function renderStokScreen(){
   else if(stokSubView==='takim')  icerik = renderToolStokManagementScreen();
   else if(stokSubView==='karbur') icerik = renderKarburScreen();
   else if(stokSubView==='malzeme') icerik = `<div class="settings-wrap">${renderMalzemeStokScreen()}</div>`;
+  else if(stokSubView==='bekleyen') icerik = renderMalzemeBekleyen();
   else                             icerik = '';
 
   return `<div class="stok-govde">${topHeader}${ray}<div class="stok-icerik">${bolumSatiri}${icerik}</div></div>`;
