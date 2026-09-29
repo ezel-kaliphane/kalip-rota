@@ -597,6 +597,33 @@ function normalizeTalepCode(v){
   s = s.replace(/^[^0-9A-Za-zÇĞİÖŞÜçğıöşü]+|[^0-9A-Za-zÇĞİÖŞÜçğıöşü]+$/g, ''); // baştaki/sondaki başıboş işaretler ("! 123 ?")
   return s.toUpperCase();
 }
+/* İş emri Excel'inin sütunlarını başlıktan çözer. SAF fonksiyon: dosya/DOM'a dokunmuyor,
+   yalnızca trNorm'lanmış başlık dizisini alıyor — böylece gerçek dosya başlıklarıyla
+   doğrudan sınanabiliyor.
+
+   NEDEN ALTERNATİFLİ: ERP aynı liste için farklı dışa aktarımlar üretiyor. Eskisinde
+   "İş Talep No / Malzeme Kodu / Malzeme Adı", 29.09.2026'da örnek verilen
+   EZLT15_TMPSALHEAD.xls'te "İş Emri Num. / Malzeme / Malzeme Açıklaması" var. Yalnızca
+   eski adları arayan okuyucu yeni dosyada anahtarı bulamıyordu; anahtar kutusu elle
+   değiştirilse bile mamul kod/ad bulunamadığı için yükleme (liste komple değiştiği için)
+   mevcut mamul eşlemesini SESSİZCE SİLECEKTİ. İki dışa aktarım aynı değeri taşıyor:
+   canlıdaki 7 247 ortak iş emrinde mamul kodu 7 236'sında birebir aynı (kalan 11'i
+   canlıda "1234" gibi bozuk değerler). Eski adlar hep önce deneniyor, davranış değişmedi. */
+function isEmriSutunlariBul(header, colName){
+  const ilk = (...adaylar) => {
+    for(const a of adaylar){ const i = header.findIndex(h => h.includes(trNorm(a))); if(i !== -1) return i; }
+    return -1;
+  };
+  let anahtar = header.findIndex(h => h===colName);
+  if(anahtar===-1) anahtar = header.findIndex(h => h.includes(colName));
+  if(anahtar===-1) anahtar = ilk('iş talep no', 'iş emri num');
+  let kod = ilk('malzeme kod');
+  if(kod===-1) kod = header.findIndex(h => h===trNorm('malzeme')); // yeni dışa aktarımda başlık yalnızca "Malzeme"
+  const ad = ilk('malzeme ad', 'malzeme açıklama');
+  const miktar = ilk('i.e. miktar', 'ie miktar', 'is emri miktar', 'miktar');
+  return { anahtar, kod, ad, miktar };
+}
+
 async function uploadIsEmriListesi(){
   if(!canManageIsEmriList()) return;
   const fileInput = document.getElementById('isemri-file-input');
@@ -616,25 +643,19 @@ async function uploadIsEmriListesi(){
       const rows = xlsxSatirlar(ws);
       if(rows.length===0){ if(statusEl) statusEl.textContent='Dosya boş görünüyor.'; return; }
       const header = rows[0].map(h=>trNorm(String(h||'').trim()));
-      let colIdx = header.findIndex(h => h===colName);
-      if(colIdx===-1) colIdx = header.findIndex(h => h.includes(colName));
+      const sut = isEmriSutunlariBul(header, colName);
+      const colIdx = sut.anahtar;
       if(colIdx===-1){ if(statusEl) statusEl.textContent = `"${colName}" başlıklı sütun bulunamadı (sayfa: ${sheetName}). Sütun adını kontrol edin.`; return; }
       // Malzeme kodu / Malzeme adı sütunlarını da yakalayalım ki İş Talep No girildiğinde hangi
       // malzemeye ait olduğu operatöre/şefe otomatik gösterilebilsin (iki alan birbirine bağlı çünkü).
-      const malzKoduIdx = header.findIndex(h => h.includes(trNorm('malzeme kod')));
-      const malzAdiIdx = header.findIndex(h => h.includes(trNorm('malzeme ad')));
+      const malzKoduIdx = sut.kod;
+      const malzAdiIdx = sut.ad;
       /* İ.E. Miktarı (29.09.2026): malzeme bekleyen kaydında "kaç adet üretilecek" bilgisi.
          Reçete oranı (birim başına hammadde) bu sayı olmadan hesaplanamıyor. Başlık yazımı
          dosyadan dosyaya değişebildiği için üç kademeli aranıyor; en sonda yalın "miktar"
          var ama o ancak başka bir miktar sütunu yoksa doğru olur — bulunamazsa alan boş
          kalır ve şef elle girer, yükleme yine de çalışır. */
-      const ieMiktarIdx = (()=>{
-        for(const aday of ['i.e. miktar','ie miktar','is emri miktar','miktar']){
-          const i = header.findIndex(h => h.includes(trNorm(aday)));
-          if(i !== -1) return i;
-        }
-        return -1;
-      })();
+      const ieMiktarIdx = sut.miktar;
       const codes = {};
       for(let i=1;i<rows.length;i++){
         const s = normalizeTalepCode(rows[i][colIdx]);
@@ -648,10 +669,29 @@ async function uploadIsEmriListesi(){
       }
       const codeCount = Object.keys(codes).length;
       if(codeCount===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
+      /* Yükleme listeyi KOMPLE değiştiriyor (set). Yeni dosyada olmayan iş emirleri silinir;
+         eski bir dışa aktarım yüklenirse son haftaların iş emirleri gider ve operatörler o
+         numaralarla iş başlatamaz. Silinecek kayıt varsa sayısı gösterilip onay isteniyor. */
+      const mevcutAnahtarlar = Object.keys(STATE.validIsEmri || {});
+      const dusenler = mevcutAnahtarlar.filter(k => !(k in codes));
+      if(dusenler.length > 0){
+        const ornek = dusenler.slice().sort().slice(-3).join(', ');
+        if(!confirm(`Bu dosyada olmayan ${dusenler.length} iş emri silinecek (en yenileri: ${ornek}).
+
+Dosya güncel bir dışa aktarım değilse operatörler bu numaralarla iş başlatamaz.
+
+Devam edilsin mi?`)){
+          if(statusEl) statusEl.textContent = `Yükleme iptal edildi — ${dusenler.length} kayıt silinecekti, hiçbir şey değişmedi.`;
+          return;
+        }
+      }
+      const bas = idx => idx!==-1 ? `«${String(rows[0][idx]||'').trim()}»` : 'bulunamadı';
+      const miktarDolu = Object.values(codes).filter(v => v && typeof v==='object' && v.ieMiktar > 0).length;
+      const sutunOzeti = ` · sütunlar → anahtar ${bas(colIdx)}, mamul kodu ${bas(malzKoduIdx)}, mamul adı ${bas(malzAdiIdx)}, İ.E. miktarı ${bas(ieMiktarIdx)}${ieMiktarIdx!==-1?` (${miktarDolu} satırda dolu)`:''}`;
       DB.ref('validIsEmri').set(codes).then(()=>{
         STATE.validIsEmri = codes; // artık canlı dinlenmiyor (bkz. firebase-push.js) — yerel kopyayı da güncelle
         bigToastOk(`${codeCount} İş Talep No yüklendi`);
-        if(statusEl) statusEl.textContent = `${codeCount} kayıt başarıyla yüklendi — ${rows.length-1} satır okundu (sayfa: ${sheetName})${malzKoduIdx!==-1?' · malzeme bilgisi de eşleştirildi':''}${xlsxOkumaNotu()}.`;
+        if(statusEl) statusEl.textContent = `${codeCount} kayıt başarıyla yüklendi — ${rows.length-1} satır okundu (sayfa: ${sheetName})${sutunOzeti}${xlsxOkumaNotu()}.`;
         fileInput.value = '';
         render();
       }).catch(err=>{
