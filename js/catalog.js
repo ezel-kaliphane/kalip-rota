@@ -1492,36 +1492,37 @@ function computeCompletedRouteIds(){
 // Sadece Excel dışa aktarımı için — ekrandaki "Rapor" sekmesinin (filteredEntries) davranışını
 // DEĞİŞTİRMİYORUZ (o hâlâ sadece üretim kayıtlarını gösteriyor, bilinçli tercih). Ama Excel'e
 // tadilat kayıtlarını da katıyoruz, yoksa dışa aktarılan raporda tadilat işleri hiç görünmüyordu.
+/* Rapor tablosu ile Excel dışa aktarımının ORTAK süzgeci (30.09.2026). Eskiden iki fonksiyonda
+   aynı koşullar kopyalanmıştı; biri değişip diğeri değişmezse tablo ile indirilen dosya sessizce
+   ayrışırdı. isEmriNo boşa karşı korumalı (dışa aktarımdaki sürüm) — tadilat satırlarında da
+   aynı kural çalışıyor. */
+function raporSuzgecindenGecer(e){
+  if(reportOperatorFilter.size>0 && !reportOperatorFilter.has(e.operatorUsername)) return false;
+  if(reportFilter.isEmriNo){
+    const q = reportFilter.isEmriNo.toLowerCase();
+    const hit = (e.isEmriNo||'').toLowerCase().includes(q) || (e.talepNo||'').toLowerCase().includes(q);
+    if(!hit) return false;
+  }
+  if(reportMakineFilter.size>0 && !reportMakineFilter.has(e.makine)) return false;
+  if(reportFilter.tarihFrom && dateKey(e.startTs) < reportFilter.tarihFrom) return false;
+  if(reportFilter.tarihTo && dateKey(e.startTs) > reportFilter.tarihTo) return false;
+  return true;
+}
+/* "Excel'e Aktar (N)" sayacı: dosya, tablodaki üretim kayıtlarına EK OLARAK tabloda görünmeyen
+   tadilat operasyonlarını da içeriyor. Sayaç eskiden yalnızca tabloyu sayıyordu (4 106 derken
+   dosya 6 625 satır çıkıyordu). Tam dışa aktarım listesini her çizimde kurmak ~14 ms
+   (seqMap + sıralama); sayım için yalnızca süzgeçten geçen tadilat satırlarını saymak yetiyor. */
+function raporTadilatDisaAktarimSayisi(){
+  return buildTadilatSynthetic().filter(raporSuzgecindenGecer).length;
+}
 function filteredEntriesForExport(){
   const sm = seqMap();
   const combined = [...entriesArray(), ...buildTadilatSynthetic()];
-  return combined.filter(e=>{
-    if(reportOperatorFilter.size>0 && !reportOperatorFilter.has(e.operatorUsername)) return false;
-    if(reportFilter.isEmriNo){
-      const q = reportFilter.isEmriNo.toLowerCase();
-      const hit = (e.isEmriNo||'').toLowerCase().includes(q) || (e.talepNo||'').toLowerCase().includes(q);
-      if(!hit) return false;
-    }
-    if(reportMakineFilter.size>0 && !reportMakineFilter.has(e.makine)) return false;
-    if(reportFilter.tarihFrom && dateKey(e.startTs) < reportFilter.tarihFrom) return false;
-    if(reportFilter.tarihTo && dateKey(e.startTs) > reportFilter.tarihTo) return false;
-    return true;
-  }).map(e=>({...e, _seq: e.id ? (sm[e.id]||'') : ''})).sort((a,b)=>b.startTs-a.startTs);
+  return combined.filter(raporSuzgecindenGecer).map(e=>({...e, _seq: e.id ? (sm[e.id]||'') : ''})).sort((a,b)=>b.startTs-a.startTs);
 }
 function filteredEntries(){
   const sm = seqMap();
-  return entriesArray().filter(e=>{
-    if(reportOperatorFilter.size>0 && !reportOperatorFilter.has(e.operatorUsername)) return false;
-    if(reportFilter.isEmriNo){
-      const q = reportFilter.isEmriNo.toLowerCase();
-      const hit = e.isEmriNo.toLowerCase().includes(q) || (e.talepNo||'').toLowerCase().includes(q);
-      if(!hit) return false;
-    }
-    if(reportMakineFilter.size>0 && !reportMakineFilter.has(e.makine)) return false;
-    if(reportFilter.tarihFrom && dateKey(e.startTs) < reportFilter.tarihFrom) return false;
-    if(reportFilter.tarihTo && dateKey(e.startTs) > reportFilter.tarihTo) return false;
-    return true;
-  }).map(e=>({...e, _seq: sm[e.id]||''})).sort((a,b)=>b.startTs-a.startTs);
+  return entriesArray().filter(raporSuzgecindenGecer).map(e=>({...e, _seq: sm[e.id]||''})).sort((a,b)=>b.startTs-a.startTs);
 }
 async function exportExcel(){
   if(!(await ensureXLSX())) return; // Excel kütüphanesi ilk kullanımda yüklenir — bkz. js/lazy.js

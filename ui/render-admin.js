@@ -4109,6 +4109,7 @@ function renderAdmin(){
         </div>`
       : '<div class="rapor-tablo-bas"></div>';
     reportVisibleIds = feSayfa.map(e=>e.id);
+    const raporTadilatSay = raporTadilatDisaAktarimSayisi(); // Excel sayacı: dosyaya giren tadilat satırları
     const completedRoutes = computeCompletedRouteIds();
     // A1 düzeltmesi: aynı groupId'ye sahip kayıtlar (Çoklu İş Emri) mükerrer sayılmasın.
     const seenGroupsRapor = new Set();
@@ -4163,7 +4164,7 @@ function renderAdmin(){
         <button class="chip" onclick="setReportDatePreset(90)">Son 3 Ay</button>
         ${(reportOperatorFilter.size>0||reportFilter.isEmriNo||reportMakineFilter.size>0||reportFilter.tarihFrom||reportFilter.tarihTo) ? `<button class="btn-ghost" onclick="clearReportFilter()">${ico('x',14)} Temizle</button>` : ''}
         ${canDeleteReport() && reportSelectedIds.size>0 ? `<button class="btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="deleteReportSelected()">${ico('trash',14)} Seçilenleri Sil (${reportSelectedIds.size})</button>` : ''}
-        <button class="btn-primary" style="width:auto;margin-left:auto;padding:8px 16px" onclick="exportExcel()">⬇ Excel'e Aktar (${fe.length})</button>
+        <button class="btn-primary" style="width:auto;margin-left:auto;padding:8px 16px" onclick="exportExcel()" title="${raporTadilatSay>0 ? `Tablodaki ${fe.length} kayıt + ${raporTadilatSay} tadilat operasyonu` : `Tablodaki ${fe.length} kayıt`}">⬇ Excel'e Aktar (${fe.length + raporTadilatSay})</button>
       </div>
       ${raporAralik}
       <div class="table-wrap"><table><thead><tr>
