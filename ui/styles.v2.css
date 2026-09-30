@@ -633,6 +633,11 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .tad-ust-satir > .field{width:100% !important;flex:1 1 100% !important}
 }
 
+/* Rapor sayfa seritleri: tablo govdesi dolgusuz .admin-shell-body'nin dogrudan cocugu;
+   kardesleri (.filter-bar, .table-wrap) kendi ic boslugunu tasiyor, seritler de ayni hizaya. */
+.rapor-tablo-bas,.rapor-alt-serit{padding-left:24px;padding-right:24px}
+@media (max-width:768px){ .rapor-tablo-bas,.rapor-alt-serit{padding-left:18px;padding-right:18px} }
+
 /* ===== MOBIL TABLO KAYDIRMA (30.09.2026) =====
    Karbur ekranindaki tablolar (.tbl) kaydirilabilir bir kapsayici icinde degildi; kabuk
    (.admin-shell-body) overflow:hidden oldugu icin 375px'te 838px'lik tablonun sag sutunlari

@@ -4092,7 +4092,23 @@ function renderAdmin(){
     const statOperator = new Set(entries.map(e=>e.operatorUsername)).size;
     const statMakine = new Set(entries.map(e=>e.makine)).size;
     const fe = filteredEntries();
-    reportVisibleIds = fe.map(e=>e.id);
+    /* Sayfalama: tablo yalnizca bu sayfanin kayitlarini ciziyor. Istatistikler, "Excel'e Aktar
+       (N)" sayaci ve disa aktarim (filteredEntriesForExport) yine SUZULEN TUM kayitlar uzerinden
+       — sayfalama yalnizca gorunum. "Tumunu sec" artik SAYFADAKI kayitlari kapsiyor: 30 satir
+       gorunurken binlerce kaydi secip toplu silmek tehlikeli bir surpriz olurdu (makine
+       detayindaki kararla ayni). Durum ve gerekce: js/tadilat.js RAPOR_SAYFA_BOYUT. */
+    const raporImza = JSON.stringify([reportFilter, [...reportOperatorFilter].sort(), [...reportMakineFilter].sort()]);
+    if(raporImza !== raporSonImza){ raporSonImza = raporImza; raporSayfa = 1; }
+    const raporToplamSayfa = Math.max(1, Math.ceil(fe.length / RAPOR_SAYFA_BOYUT));
+    raporSayfa = Math.min(Math.max(1, raporSayfa), raporToplamSayfa);
+    const feSayfa = fe.slice((raporSayfa-1)*RAPOR_SAYFA_BOYUT, raporSayfa*RAPOR_SAYFA_BOYUT);
+    const raporAralik = fe.length > RAPOR_SAYFA_BOYUT
+      ? `<div class="rapor-tablo-bas" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:4px 0 10px">
+          <span class="modal-pager-bilgi" style="margin-left:0">${(raporSayfa-1)*RAPOR_SAYFA_BOYUT+1}–${Math.min(raporSayfa*RAPOR_SAYFA_BOYUT, fe.length)} / ${fe.length} kayıt</span>
+          <div style="margin-top:8px">${modalSayfaSeridi(raporSayfa, raporToplamSayfa, 'raporSayfaGit')}</div>
+        </div>`
+      : '<div class="rapor-tablo-bas"></div>';
+    reportVisibleIds = feSayfa.map(e=>e.id);
     const completedRoutes = computeCompletedRouteIds();
     // A1 düzeltmesi: aynı groupId'ye sahip kayıtlar (Çoklu İş Emri) mükerrer sayılmasın.
     const seenGroupsRapor = new Set();
@@ -4149,8 +4165,9 @@ function renderAdmin(){
         ${canDeleteReport() && reportSelectedIds.size>0 ? `<button class="btn-ghost" style="border-color:var(--danger);color:var(--danger)" onclick="deleteReportSelected()">${ico('trash',14)} Seçilenleri Sil (${reportSelectedIds.size})</button>` : ''}
         <button class="btn-primary" style="width:auto;margin-left:auto;padding:8px 16px" onclick="exportExcel()">⬇ Excel'e Aktar (${fe.length})</button>
       </div>
+      ${raporAralik}
       <div class="table-wrap"><table><thead><tr>
-        ${canDeleteReport() ? `<th style="width:26px"><input type="checkbox" ${reportVisibleIds.length>0 && reportVisibleIds.every(id=>reportSelectedIds.has(id))?'checked':''} onchange="toggleReportSelectAll()"></th>` : ''}
+        ${canDeleteReport() ? `<th style="width:26px"><input type="checkbox" title="Bu sayfadaki kayıtları seç" ${reportVisibleIds.length>0 && reportVisibleIds.every(id=>reportSelectedIds.has(id))?'checked':''} onchange="toggleReportSelectAll()"></th>` : ''}
         ${["İş Emri No (U kodu)","İş Talep No","Operasyon No","Malzeme Adı","Malzeme Cinsi","Çap ve Boy","Adet","Makine","Operatör","Başlangıç","Bitiş","Süre","Durum","Not"].map(h=>`<th>${h}</th>`).join('')}
         ${canEditReport() ? `<th style="width:36px"></th>` : ''}
         ${canDeleteReport() ? `<th style="width:36px"></th>` : ''}
@@ -4159,7 +4176,7 @@ function renderAdmin(){
     // sütunu), burada bir kez sayılıyordu — "kayıt yok" satırı bir sütun eksik kalıyordu.
     const reportColCount = 14 + (canDeleteReport()?2:0) + (canEditReport()?1:0);
     if(fe.length===0){ body += `<tr><td colspan="${reportColCount}" style="text-align:center;color:var(--text-muted);padding:30px">Filtreyle eşleşen kayıt yok.</td></tr>`; }
-    fe.forEach(e=>{
+    feSayfa.forEach(e=>{
       const isDone = completedRoutes.has(e.id);
       const statusColor = isDone ? 'var(--success-text)' : e.status==='devam'?'var(--accent)':e.status==='duruş'?'var(--warn-text)':'var(--success-text)';
       const statusLabel = e.status==='devam'?'Devam Ediyor':e.status==='duruş'?'Duruşta':'Tamamlandı';
@@ -4185,7 +4202,7 @@ function renderAdmin(){
         ${canDeleteReport() ? `<td><button class="del-btn" onclick="deleteReportRecord('${e.id}')" title="Sil">${ico('trash',14)}</button></td>` : ''}
       </tr>`;
     });
-    body += `</tbody></table></div>${entryDetailId ? renderEntryDetailModal() : ''}`;
+    body += `</tbody></table></div><div class="rapor-alt-serit">${modalSayfaSeridi(raporSayfa, raporToplamSayfa, 'raporSayfaGit').replace('class="modal-pager"','class="modal-pager" style="margin:12px 0 8px"')}</div>${entryDetailId ? renderEntryDetailModal() : ''}`;
   }
 
   /* Canlı Panel'in üç sekmesi tek ekranın içinde: gövdenin başına sekme şeridi ve (varsa) tek

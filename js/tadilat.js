@@ -738,6 +738,17 @@ let modalSelectedIds = new Set();
 let modalVisibleIds = [];
 let reportSelectedIds = new Set();
 let reportVisibleIds = [];
+/* Rapor sayfalama (30.09.2026, kullanici istegi: 30 kayit, telefonda ve masaustunde ayni).
+   Rapor suzulen kayitlarin HEPSINI tek seferde ciziyordu: 4 106 kayit = 124 bin sayfa ogesi,
+   masaustu islemcide 1,2 sn; ekran acikken her 15 sn'de bir yeniden cizildigi icin telefon
+   duzenli olarak donuyordu. Sayfa numarasi suzgec IMZASINA bagli: imza degisince 1'e donuyor,
+   boylece her suzgec ayarlayicisina ayri ayri sifirlama eklemek gerekmiyor. */
+const RAPOR_SAYFA_BOYUT = 30;
+let raporSayfa = 1, raporSonImza = null;
+function raporSayfaGit(n){
+  raporSayfa = n; render();
+  requestAnimationFrame(()=>{ const t=document.querySelector('.rapor-tablo-bas'); if(t) t.scrollIntoView({block:'start'}); });
+}
 let completedSearch = '';
 let completedViewMode = 'tumu'; // 'tumu' | 'birlesik'
 function setCompletedViewMode(v){ completedViewMode = v; render(); }
