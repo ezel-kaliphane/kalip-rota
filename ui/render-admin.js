@@ -1413,7 +1413,7 @@ function renderStokGenelBakis(){
           <!-- Buradaki "pushLog" dugmesi 28.09.2026'da kaldirildi: etiketi ham bir kod adiydi ve
                stok hareketleriyle alakasiz sekilde kullanicinin BILDIRIM GECMISINI aciyordu.
                Yerine, panelin kendi isine bakan Tumu dugmesi geldi. -->
-          <button style="background:transparent;font-size:12px;font-weight:600;color:var(--accent);margin-left:auto;display:flex;align-items:center;gap:3px;padding:2px 4px"
+          <button style="background:transparent;font-size:12px;font-weight:600;color:var(--accent);margin-left:auto;display:flex;align-items:center;gap:3px;padding:6px 8px;min-height:32px"
             title="Seçili türün tüm hareketlerini aç" onclick="stokGenelHareketlerAc()">Tümü ${ico('chevronRight',13)}</button>
         </div>
         <div style="overflow-y:auto">
@@ -2089,7 +2089,7 @@ function iyPanoHtml(v, tamEkran){
         <span class="mono" style="font-size:${S.kpi-4}px;font-weight:700">${fmtDT(Date.now()).split(' ').pop()}</span>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:0 40px;padding:${S.dis}">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(430px,100%),1fr));gap:0 40px;padding:${S.dis}">
       <div>${kolon(rows.slice(0,yari))}</div>
       <div>${kolon(rows.slice(yari))}</div>
     </div>
@@ -3064,7 +3064,7 @@ function renderAdmin(){
           <div class="admin-sidebar-avatar" title="${connOK?'Buluta bağlı (senkron)':'Bağlantı yok — internet kontrol edin'}">${esc((session.displayName||session.username||'').slice(0,2).toUpperCase())}<span style="position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:${connOK?'var(--success)':'var(--danger)'};border:2px solid var(--sidebar-bg);border-radius:50%"></span></div>
           <div><div class="admin-sidebar-uname">${esc(session.displayName||session.username)}</div><div class="admin-sidebar-urole"><span style="width:6px;height:6px;border-radius:50%;background:${connOK?'var(--success)':'var(--danger)'};display:inline-block"></span>${session.isSuperAdmin?'SuperAdmin':session.isSef?'Şef':session.isUretimSef?'Üretim Şef':'Yönetici'}</div></div>
         </div>
-        <button class="admin-nav-item" style="width:auto;padding:6px" onclick="doLogout()" title="Çıkış Yap">${ico('logout',15)}</button>
+        <button class="admin-nav-item" style="width:auto;min-width:40px;padding:6px;justify-content:center" onclick="doLogout()" title="Çıkış Yap">${ico('logout',15)}</button>
       </div>
     </nav>`;
   const header = `

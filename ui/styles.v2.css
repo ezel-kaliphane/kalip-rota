@@ -608,6 +608,15 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .admin-sidebar.dar .admin-sidebar-uname,.admin-sidebar.dar .admin-sidebar-urole{max-width:0;opacity:0}
 }
 
+/* ===== MOBIL TABLO KAYDIRMA (30.09.2026) =====
+   Karbur ekranindaki tablolar (.tbl) kaydirilabilir bir kapsayici icinde degildi; kabuk
+   (.admin-shell-body) overflow:hidden oldugu icin 375px'te 838px'lik tablonun sag sutunlari
+   KESILIYOR ve hic ulasilamiyordu. Tablo blok yapilip kendi icinde yatay kaydiriliyor.
+   Yalnizca dar ekranda: masaustunde tablo davranisi (tam genislik) degismesin diye. */
+@media (max-width:900px){
+  table.tbl{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
+
 /* ===== MALZEME BEKLEYENLER (29.09.2026) =====
    Gruplama hammaddeye gore; satir izgarasi sabit kolonlu cunku sayilar (i.e. miktari,
    gereken, bekleme) sag hizali okunmali. Dar ekranda kolonlar sikisinca yatay kaydirma
