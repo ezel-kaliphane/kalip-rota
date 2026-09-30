@@ -3087,7 +3087,7 @@ function renderAdmin(){
         ${unreadPushCount()>0 ? `<span style="position:absolute;top:-4px;left:-4px;background:var(--accent);color:var(--btn-primary-text);font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.3">${unreadPushCount()}</span>` : ''}
       </button>
       ${themeToggleHtml()}
-      <button class="icon-btn-labeled" onclick="doLogout()">${ico('logout',14)} Çıkış</button>
+      <button class="icon-btn-labeled" onclick="doLogout()" title="Çıkış">${ico('logout',14)}<span class="topbar-etiket"> Çıkış</span></button>
     </div>
     ${uzunDurusModalOpen ? renderUzunDurusModal() : ''}
     ${uzunDevamEdenModalOpen ? renderUzunDevamEdenModal() : ''}
@@ -4000,7 +4000,7 @@ function renderAdmin(){
           </div>
 
           <div class="tad-grup">
-            <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <div class="tad-ust-satir" style="display:flex;gap:10px;flex-wrap:wrap">
               <div class="field" style="width:200px;flex:none">
                 <label for="tad-ukodu">U kodu<span class="zorunlu">*</span></label>
                 <div style="display:flex;gap:8px">

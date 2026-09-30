@@ -608,6 +608,31 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .admin-sidebar.dar .admin-sidebar-uname,.admin-sidebar.dar .admin-sidebar-urole{max-width:0;opacity:0}
 }
 
+/* ===== YONETICI KABUGU — TELEFON (30.09.2026) =====
+   SuperAdmin'in telefondan girdigi test sonucu. Masaustu taramasi bunlari gostermiyordu.
+
+   1) Gezinme seridi 3 608px genisligindeydi ve ayni anda YALNIZCA BIR menu ogesi
+      gorunuyordu: 900px alti kural flex:0 0 auto diyor ama temel kuraldaki width:100%
+      her ogeyi seridin tamami kadar genisletiyordu. width:auto sart.
+   2) Ust bar: bes dugme (~300px) basliga ~45px birakiyordu, baslik 2-4 satira kiriliyordu
+      ("STOK / GENEL / BAKIS / Stok Takibi"). Telefonda baslik kendi satirina geciyor ve
+      tek satirda kaliyor; Cikis dugmesinin yazisi gizleniyor (simge + title kaliyor).
+   3) Genel Bakis / Is Yogunlugu KPI kartlari minmax(190px) yuzunden tek kolona dusuyordu.
+   4) Tadilat formunun ust satiri satir ici sabit genislikliydi (U kodu 200px) ve Kisa
+      aciklama kutusu birkac harf gosteriyordu. */
+@media (max-width:900px){
+  .admin-sidebar .admin-nav-item{width:auto}
+}
+@media (max-width:600px){
+  .admin-sidebar-brand-yazi{display:none}
+  .admin-topbar{flex-wrap:wrap;row-gap:8px}
+  .admin-topbar .topbar-baslik{flex:1 1 100%;margin-right:0}
+  .topbar-ustu,.topbar-ad{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .admin-topbar .topbar-etiket{display:none}
+  .iy-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .tad-ust-satir > .field{width:100% !important;flex:1 1 100% !important}
+}
+
 /* ===== MOBIL TABLO KAYDIRMA (30.09.2026) =====
    Karbur ekranindaki tablolar (.tbl) kaydirilabilir bir kapsayici icinde degildi; kabuk
    (.admin-shell-body) overflow:hidden oldugu icin 375px'te 838px'lik tablonun sag sutunlari
