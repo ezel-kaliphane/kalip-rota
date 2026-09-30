@@ -117,6 +117,13 @@ function renderMalzemeBekleyen(){
       satirlar: satirlar.sort((a,b)=>(Number(a.isaretTs)||0)-(Number(b.isaretTs)||0)) };
   }).sort((a,b)=> a.kullanilabilir - b.kullanilabilir);
 
+  /* "Eksik Kalem" (29.09.2026): eskiden burada "Rezerveli Kalem" vardı ve yalnızca grup
+     sayısını (kaç farklı hammadde bekleniyor) gösteriyordu; adı da stoktan ayrılmış bir
+     şeyi çağrıştırıyordu. Şimdi asıl soruyu cevaplıyor: stoğu bekleyenleri KARŞILAMAYAN
+     kaç kalem var. Miktar TOPLANMIYOR — kalemler farklı birimde (mm ve adet), toplam
+     anlamsız olurdu; bu yüzden kalem sayılıyor. Kalemi silinmiş grup sayılmıyor. */
+  const eksikKalem = grupListesi.filter(g => g.it && g.kullanilabilir < 0).length;
+
   const kpi = (ikon, sayi, etiket, alt, uyari) => `
     <div class="sgk-card ${uyari?'uyari':''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -175,7 +182,7 @@ function renderMalzemeBekleyen(){
   return `<div class="settings-wrap" style="max-width:none">
     <div class="stok-genel-kpi" style="padding:0 0 16px;grid-template-columns:repeat(4,1fr)">
       ${kpi('clock', aktif.length, 'Bekleyen İş Emri', grupListesi.length+' farklı hammadde')}
-      ${kpi('lock', grupListesi.length, 'Rezerveli Kalem', 'stoktan düşülmüş sayılıyor')}
+      ${kpi('box', eksikKalem, 'Eksik Kalem', eksikKalem>0 ? 'stoğu bekleyenleri karşılamıyor' : aktif.length===0 ? 'bekleyen iş emri yok' : 'bekleyenlerin hepsi stoktan karşılanır')}
       ${kpi('alert', istekYok, 'İstek No Girilmemiş', 'şef işaretledi, CANIAS isteği bekliyor', istekYok>0)}
       ${kpi('check', haftaKarsilanan.length, 'Bu Hafta Karşılanan', 'son 7 gün')}
     </div>
