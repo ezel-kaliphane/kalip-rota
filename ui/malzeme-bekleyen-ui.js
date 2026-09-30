@@ -40,6 +40,24 @@ function mbKodAra(){
   }
   render();
 }
+/* QR (30.09.2026): iş kağıdındaki QR iş emri alanına, malzeme etiketindeki QR hammadde
+   seçimine gidiyor. Kalem eşleşmesi stockOptionByScanCode ile aynı kural (CANİAS kodu, yoksa
+   kod) ama çubuk (lot) değil KALEM seçiliyor — bekleyen kayıt kaleme bağlı. Birden fazla kalem
+   eşleşirse (aynı kodun farklı çapları) tahmin edilmiyor, şef listeden seçiyor. */
+function mbIsEmriQr(){
+  openQrScanner(function(v){ mbForm.girilen = String(v||'').trim(); mbKodAra(); });
+}
+function mbHammaddeQr(){
+  openQrScanner(function(kod){
+    kod = String(kod||'').trim().toUpperCase();
+    const eslesen = Object.entries(stockItems||{}).filter(([id,it])=>{
+      const canias = malzemeCaniasFromIsim(it && it.isim);
+      return canias ? canias===kod : String((it && it.kod)||'').trim().toUpperCase()===kod;
+    });
+    if(eslesen.length===1){ toast('Seçildi: '+hammaddeEtiket(eslesen[0][1])); mbFormYaz('hammaddeId', eslesen[0][0]); }
+    else { toast(eslesen.length>1 ? `"${kod}" için ${eslesen.length} kalem eşleşti — listeden elle seçin` : `"${kod}" ile eşleşen hammadde bulunamadı`); render(); }
+  });
+}
 function mbFormYaz(alan, deger){
   mbForm[alan] = deger;
   /* İ.E. miktarı değişince reçeteden gelen oranla gereken yeniden hesaplanıyor —
@@ -235,7 +253,8 @@ function renderMbYeniModal(){
         <div style="display:flex;gap:8px">
           <input id="mb-kod" style="flex:1" placeholder="ör. U0007150 veya 2607300022" value="${esc(mbForm.girilen)}"
             oninput="mbForm.girilen=this.value" onchange="mbKodAra()">
-          <button class="btn-ghost" style="width:auto;padding:0 14px" onclick="mbKodAra()">${ico('search',14)}</button>
+          <button class="btn-ghost" style="width:auto;padding:0 14px" title="QR Kod Okut" onclick="mbIsEmriQr()">${ico('camera',14)}</button>
+          <button class="btn-ghost" style="width:auto;padding:0 14px" title="Ara" onclick="mbKodAra()">${ico('search',14)}</button>
         </div>
       </div>
       ${mbForm.bulundu===false ? `<div class="notice" style="--nc:var(--warn);margin:-4px 0 12px;padding:9px 12px">
@@ -255,10 +274,13 @@ function renderMbYeniModal(){
 
       <div class="field">
         <label for="mb-ham">Beklenen Hammadde</label>
-        <select id="mb-ham" onchange="mbFormYaz('hammaddeId',this.value)">
+        <div style="display:flex;gap:8px">
+        <select id="mb-ham" style="flex:1;min-width:0" onchange="mbFormYaz('hammaddeId',this.value)">
           <option value="">— seç —</option>
           ${items.map(it=>`<option value="${escJs(it.id)}" ${mbForm.hammaddeId===it.id?'selected':''}>${esc(hammaddeEtiket(it))}${it.isim?' — '+esc(String(it.isim).slice(0,34)):''}</option>`).join('')}
         </select>
+        <button class="btn-ghost" style="width:auto;padding:0 14px;flex:none" title="Malzeme etiketindeki QR'ı okut" onclick="mbHammaddeQr()">${ico('camera',14)}</button>
+        </div>
       </div>
       ${secili ? `<div style="font-size:12px;color:var(--text-muted);margin:-6px 0 12px">
         Stok <b style="color:${stok<=0?'var(--danger)':'var(--text)'}">${stok} ${esc(secili.birim||'')}</b> ·
