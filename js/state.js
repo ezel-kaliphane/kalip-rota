@@ -588,6 +588,82 @@ function malzemeKamaIsimOlustur(r){
   if(r.canias) isim += ` (${r.canias})`;
   return isim.trim();
 }
+/* ---------- CANİAS hammadde listesi (01.10.2026) ----------
+   CANİAS'tan alınan BAST03_SELMATERIAL dışa aktarımı yalnızca iki sütun taşıyor: "Canias Kodu"
+   ve "Açıklama" (KOD/STOK yok). Bu dosya Excel Yükleme → Hammadde'ye verilince yukarıdaki kama
+   akışı yerine bu "liste modu" çalışıyor: sistemde OLMAYAN CANİAS kodları sıfır stoklu kalem
+   olarak açılıyor, var olanlara hiç dokunulmuyor (isim, kod, stok aynen kalıyor). Liste büyüdükçe
+   (CANİAS'ta yeni KLPHM kodu açıldıkça) aynı dosya yeniden yüklenip yalnızca yeniler ekleniyor.
+   Kalem türü açıklamadan çıkarılıyor:
+     "Ø" geçen → yuvarlak çubuk, boy takipli (kod = kalite, ör. "4140 ISLAHLI"; cap = "Ø25")
+     KAMA / DÖKÜM PARMAK → adet (açıklamada B kodu varsa kod o)
+     diğerleri (lama, blok: "130X20X400") → adet, kod = açıklamanın kendisi
+   CANİAS kodu, kama akışındaki gibi isim'in sonuna "(KOD)" olarak yazılıyor — QR ve yeniden
+   yüklemede eşleştirme bu parçadan (malzemeCaniasFromIsim). Sıfır stok + alt limit 0 olduğu
+   için yeni kalemler Kritik Stok'a düşmüyor. Stok hareketi YAZILMIYOR: ortada sayım yok,
+   yüzlerce "0 adet" satırı Son Hareketler'i doldururdu. */
+function caniasMalzemeCoz(canias, aciklama){
+  const ac = String(aciklama||'').replace(/\s+/g,' ').trim();
+  const isim = `${ac} (${canias})`;
+  const capM = ac.match(/Ø\s*([\d]+(?:[.,]\d+)?)/);
+  if(capM){
+    const kalite = ac.slice(0, capM.index).trim() || ac;
+    return { tur:'boy', sinif:'yuvarlak', kod: kalite, cap: 'Ø'+capM[1], birim:'mm', isim };
+  }
+  if(/^(KAMA|D[OÖ]K[UÜ]M PARMAK)\b/i.test(ac)){
+    const bKod = ac.match(/\bB\d+\b/i);
+    const kod = bKod ? bKod[0].toUpperCase() : ac;
+    return { tur:'adet', sinif:'kama', kod, isim, birim:'adet' };
+  }
+  return { tur:'adet', sinif:'prizmatik', kod: ac.replace(/\s+[CÇ]EL[İI]K$/i,''), isim, birim:'adet' };
+}
+/* rows: [[caniasKodu, aciklama], ...] (başlık satırı hariç). Dosya okuyucu ile doğrudan
+   çağrı aynı yoldan geçsin diye ayrı tutuldu. */
+function caniasListesiOnizlemeKur(rows){
+  const mevcut = {};
+  Object.entries(stockItems||{}).forEach(([id,v])=>{ const c = malzemeCaniasFromIsim(v && v.isim); if(c) mevcut[c] = id; });
+  const gorulen = new Set(), yeni = [];
+  let zatenVar = 0, bos = 0, dosyadaTekrar = 0;
+  const sinifSay = { yuvarlak:0, kama:0, prizmatik:0 };
+  const aciklamaKodlari = {};
+  rows.forEach(r=>{
+    const canias = String((r && r[0])||'').trim().toUpperCase();
+    const aciklama = String((r && r[1])||'').replace(/\s+/g,' ').trim();
+    if(!canias || !aciklama){ bos++; return; }
+    if(gorulen.has(canias)){ dosyadaTekrar++; return; }
+    gorulen.add(canias);
+    const anahtar = aciklama.replace(/\s*[CÇ]EL[İI]K\s*$/i,'').replace(/\s*Ø\s*/g,'Ø').toUpperCase();
+    (aciklamaKodlari[anahtar] = aciklamaKodlari[anahtar] || []).push(canias);
+    if(mevcut[canias]){ zatenVar++; return; }
+    const c = caniasMalzemeCoz(canias, aciklama);
+    sinifSay[c.sinif]++;
+    yeni.push({ canias, aciklama, ...c });
+  });
+  /* CANİAS'ta aynı açıklamayla iki ayrı kod açılmış olabiliyor (ör. 2767 Ø75). İkisi de ayrı
+     kalem olarak açılıyor — hangisinin geçerli olduğuna CANİAS tarafı karar verir — ama
+     önizlemede gösteriliyor ki fark edilsin. */
+  const ayniAciklama = Object.entries(aciklamaKodlari).filter(([,k])=>k.length>1).map(([a,k])=>({ aciklama:a, kodlar:k }));
+  return { katalog:true, toplam: gorulen.size, yeni, zatenVar, bos, dosyadaTekrar, sinifSay, ayniAciklama };
+}
+function caniasListesiYukle(){
+  if(!canManageStock() || !malzemeExcelPreview || !malzemeExcelPreview.katalog) return;
+  const yeni = malzemeExcelPreview.yeni;
+  if(yeni.length===0){ toast('Eklenecek yeni kalem yok — listedeki tüm kodlar zaten sistemde'); return; }
+  const updates = {};
+  yeni.forEach(r=>{
+    const id = uid();
+    updates['stockItems/'+id] = r.tur==='boy'
+      ? { kod: r.kod, tur:'boy', cap: r.cap, birim:'mm', altLimit:0, isim: r.isim }
+      : { kod: r.kod, tur:'adet', isim: r.isim, birim:'adet', miktar:0, mode:'manuel', altLimit:0 };
+  });
+  DB.ref().update(updates).then(()=>{
+    toast(`${yeni.length} yeni hammadde kalemi eklendi`);
+    malzemeExcelPreview = null;
+    render();
+  }).catch(err=>{
+    toast('Yükleme başarısız: '+(err.message||'bilinmeyen hata'));
+  });
+}
 let malzemeExcelPreview = null;
 let malzemeExcelUpdateStock = false;
 async function handleMalzemeExcelPreview(){
@@ -616,6 +692,13 @@ async function handleMalzemeExcelPreview(){
         aciklama: malzemeFindColIdx(header, MALZEME_EXCEL_COLS.aciklama),
       };
       if(col.kod===-1 || col.stok===-1){
+        /* KOD/STOK yok ama CANİAS + Açıklama var → CANİAS hammadde listesi (bkz. caniasMalzemeCoz). */
+        if(col.canias!==-1 && col.aciklama!==-1){
+          malzemeExcelPreview = caniasListesiOnizlemeKur(rows.slice(1).map(r=>[r[col.canias], r[col.aciklama]]));
+          if(statusEl) statusEl.textContent = `CANİAS hammadde listesi tanındı — ${malzemeExcelPreview.toplam} kod okundu, önizleme aşağıda.`;
+          render();
+          return;
+        }
         if(statusEl) statusEl.textContent = 'KOD/STOK sütunu bulunamadı.';
         return;
       }
@@ -653,6 +736,7 @@ async function handleMalzemeExcelPreview(){
 }
 function confirmMalzemeExcelUpload(){
   if(!canManageStock() || !malzemeExcelPreview) return;
+  if(malzemeExcelPreview.katalog){ caniasListesiYukle(); return; }
   const rows = malzemeExcelPreview.rows;
   if(rows.length===0){ toast('Yüklenecek satır yok'); return; }
   // Mevcut kalemleri isim'in sonundaki (CANİAS) parçasından eşleştir — kod biricik değil.

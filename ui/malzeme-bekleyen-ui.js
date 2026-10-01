@@ -9,10 +9,11 @@ let mbYeniAcik = false;
 let mbForm = { girilen:'', talepNo:'', mamulKodu:'', mamulAdi:'', ieMiktar:'', hammaddeId:'', gerekenMiktar:'', busy:false, bulundu:null };
 let mbIstekDuzenId = null, mbIstekDeger = '';
 let mbGecmisAcik = false;
+let mbHamAra = '';
 
 function mbYeniAc(){
   if(!canManageStock()){ toast('Bu işlem için Şef ya da SuperAdmin yetkisi gerekli'); return; }
-  mbYeniAcik = true;
+  mbYeniAcik = true; mbHamAra = '';
   mbForm = { girilen:'', talepNo:'', mamulKodu:'', mamulAdi:'', ieMiktar:'', hammaddeId:'', gerekenMiktar:'', busy:false, bulundu:null };
   render();
 }
@@ -57,6 +58,18 @@ function mbHammaddeQr(){
     if(eslesen.length===1){ toast('Seçildi: '+hammaddeEtiket(eslesen[0][1])); mbFormYaz('hammaddeId', eslesen[0][0]); }
     else { toast(eslesen.length>1 ? `"${kod}" için ${eslesen.length} kalem eşleşti — listeden elle seçin` : `"${kod}" ile eşleşen hammadde bulunamadı`); render(); }
   });
+}
+/* Açılır listedeki satır metni. CANİAS listesinden gelen kalemlerde isim zaten etiketin
+   kendisiyle başlıyor ("4140 ISLAHLI Ø25 CELIK (KLPHM000451)") — etiket + isim yan yana
+   aynı şeyi iki kez yazıyor ve CANİAS kodunu kesiyordu. Öyleyse yalnızca açıklama; değilse
+   (kama: "B7 — 13X8X65 BB NORMAL PARMAKLAR") etiket + açıklama. CANİAS kodu her zaman sonda. */
+function mbSecenekMetni(it){
+  const et = hammaddeEtiket(it);
+  const can = malzemeCaniasFromIsim(it.isim);
+  const ac = can ? String(it.isim||'').replace(/\s*\([^()]*\)\s*$/,'').trim() : String(it.isim||'').trim();
+  const sik = s => trNorm(s).replace(/[\sø]/g,'');
+  const metin = ac && sik(ac).startsWith(sik(et)) ? ac : et + (ac ? ' — '+ac.slice(0,40) : '');
+  return metin + (can ? ' · '+can : '');
 }
 function mbFormYaz(alan, deger){
   mbForm[alan] = deger;
@@ -237,8 +250,16 @@ function renderMalzemeBekleyen(){
 
 function renderMbYeniModal(){
   if(!mbYeniAcik) return '';
+  /* CANİAS listesi yüklendikten sonra (01.10.2026) burada ~370 kalem var; açılır liste
+     aramasız kullanılamaz. Arama kelime kelime (hepsi geçmeli) kod, çap, açıklama ve CANİAS kodunda; seçili kalem
+     aramaya uymasa da listede kalıyor ki seçim görünmez olmasın. */
+  const ara = trNorm(mbHamAra.trim());
+  const araParca = ara ? ara.split(/\s+/) : [];
   const items = Object.entries(stockItems||{}).map(([id,v])=>({id,...v}))
-    .sort((a,b)=>String(a.kod||'').localeCompare(String(b.kod||'')));
+    .filter(it => { if(!araParca.length || it.id===mbForm.hammaddeId) return true;
+      const metin = trNorm(hammaddeEtiket(it)+' '+(it.isim||''));
+      return araParca.every(t=>metin.includes(t)); })
+    .sort((a,b)=>String(a.kod||'').localeCompare(String(b.kod||''), 'tr', {numeric:true}) || String(a.cap||'').localeCompare(String(b.cap||''), 'tr', {numeric:true}));
   const secili = mbForm.hammaddeId ? (stockItems||{})[mbForm.hammaddeId] : null;
   const stok = secili ? hammaddeStokSayi(secili) : null;
   const rezerve = mbForm.hammaddeId ? malzemeRezerve(mbForm.hammaddeId) : 0;
@@ -274,10 +295,12 @@ function renderMbYeniModal(){
 
       <div class="field">
         <label for="mb-ham">Beklenen Hammadde</label>
+        <input id="mb-ham-ara" placeholder="Ara: ör. 4140 ıslahlı 25, 2344 Ø40, KLPHM000290" value="${esc(mbHamAra)}" style="margin-bottom:6px"
+          oninput="mbHamAra=this.value; render()">
         <div style="display:flex;gap:8px">
         <select id="mb-ham" style="flex:1;min-width:0" onchange="mbFormYaz('hammaddeId',this.value)">
-          <option value="">— seç —</option>
-          ${items.map(it=>`<option value="${escJs(it.id)}" ${mbForm.hammaddeId===it.id?'selected':''}>${esc(hammaddeEtiket(it))}${it.isim?' — '+esc(String(it.isim).slice(0,34)):''}</option>`).join('')}
+          <option value="">${ara ? `— ${items.length} eşleşme —` : '— seç —'}</option>
+          ${items.map(it=>`<option value="${escJs(it.id)}" ${mbForm.hammaddeId===it.id?'selected':''}>${esc(mbSecenekMetni(it))}</option>`).join('')}
         </select>
         <button class="btn-ghost" style="width:auto;padding:0 14px;flex:none" title="Malzeme etiketindeki QR'ı okut" onclick="mbHammaddeQr()">${ico('camera',14)}</button>
         </div>

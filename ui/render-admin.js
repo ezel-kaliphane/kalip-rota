@@ -742,6 +742,33 @@ function renderMalzemeStokAyarlar(){
         <div style="font-size:12px;color:var(--text-muted);max-width:640px">Stok kalemi yönetimi ve tüketim geçmişi için üst menüdeki <b>Stok → Hammadde</b> bölümüne bak.</div>`;
 }
 
+/* CANİAS hammadde listesi önizlemesi (bkz. js/state.js caniasListesiOnizlemeKur). Kama
+   önizlemesinden ayrı: burada stok sütunu yok, soru "kaç yeni kalem açılacak ve hangi türde". */
+function caniasListesiOnizlemeHtml(p){
+  const turAdi = { yuvarlak:'Yuvarlak çubuk (boy takipli)', kama:'Kama / parmak (adet)', prizmatik:'Lama / blok (adet)' };
+  const ornek = p.yeni.slice(0,12);
+  return `<div style="background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:16px;margin-top:14px;max-width:960px">
+    <div style="font-size:13.5px;font-weight:600;margin-bottom:4px">CANİAS hammadde listesi — ${p.toplam} kod</div>
+    <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px"><b style="color:var(--text)">${p.yeni.length}</b> yeni kalem açılacak · ${p.zatenVar} kod zaten sistemde (dokunulmayacak)${p.bos?` · ${p.bos} boş satır atlandı`:''}${p.dosyadaTekrar?` · ${p.dosyadaTekrar} tekrarlanan kod atlandı`:''}</div>
+    ${p.yeni.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      ${Object.entries(p.sinifSay).filter(([,n])=>n>0).map(([s,n])=>`<span class="matrix-tag" style="--sb:var(--accent)">${esc(turAdi[s])}: ${n}</span>`).join('')}
+    </div>
+    <div style="overflow-x:auto;margin-bottom:12px">
+      <table style="font-size:11.5px"><thead><tr><th>CANİAS</th><th>Açıklama</th><th>Kod</th><th>Çap</th><th>Tür</th></tr></thead><tbody>
+        ${ornek.map(r=>`<tr><td class="mono">${esc(r.canias)}</td><td>${esc(r.aciklama)}</td><td class="mono">${esc(r.kod)}</td><td class="mono">${esc(r.cap||'—')}</td><td>${r.tur==='boy'?'Boy':'Adet'}</td></tr>`).join('')}
+      </tbody></table>
+      ${p.yeni.length>ornek.length ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">…ve ${p.yeni.length-ornek.length} kalem daha.</div>` : ''}
+    </div>` : ''}
+    ${p.ayniAciklama.length ? `<div class="notice" style="--nc:var(--warn);margin-bottom:12px;padding:9px 12px">
+      <div class="notice-title">CANİAS'ta aynı açıklamayla birden fazla kod var</div>
+      <div class="notice-sub">${p.ayniAciklama.map(a=>`${esc(a.aciklama)} → <span class="mono">${a.kodlar.map(esc).join(', ')}</span>`).join('<br>')}<br>Her kod ayrı kalem olarak açılır; hangisinin geçerli olduğu CANIAS tarafında netleşmeli.</div></div>` : ''}
+    <div style="display:flex;gap:10px">
+      <button class="btn-primary" style="width:auto;padding:10px 18px" ${p.yeni.length?'':'disabled'} onclick="confirmMalzemeExcelUpload()">✓ ${p.yeni.length} Kalemi Ekle</button>
+      <button class="btn-ghost" onclick="malzemeExcelPreview=null; render()">Vazgeç</button>
+    </div>
+  </div>`;
+}
+
 let malzemeAramaMetni = '';
 function renderMalzemeStokScreen(){
       const aramaMetni = trNorm(malzemeAramaMetni.trim());
@@ -898,13 +925,15 @@ function renderMalzemeStokScreen(){
       })();
 
       const excelBolumu = `<div class="sec-h" style="margin-top:0">Excel ile Toplu Yükleme</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;max-width:680px">Beklenen sütunlar: <span class="mono">KOD</span> ve <span class="mono">STOK</span> (zorunlu), ayrıca varsa ÖLÇÜ (WXDXL), TİP, CANİAS KODU, AÇIKLAMA (opsiyonel — bunlar isim alanına birleştirilerek yazılır). Yükleme <b>birleştirmedir</b> — Excel'de olmayan mevcut kalemler silinmez/değişmez. CANİAS kodu zaten varsa kalem güncellenir; stok adedi yalnızca aşağıdaki kutu işaretlenirse ezilir. Yeni kalemler "Manuel" tüketim modunda eklenir — kama:parmak oranı 1:1 değilse operatör miktarı elle girer; 1:1 olduğu bilinen kalemlerde Durum listesinden "Otomatik"e çevirebilirsin.</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px;max-width:680px"><b>CANİAS hammadde listesi</b> (BAST03_SELMATERIAL — yalnızca <span class="mono">Canias Kodu</span> ve <span class="mono">Açıklama</span> sütunları) de buradan yüklenir: sistemde olmayan kodlar sıfır stoklu kalem olarak eklenir, var olanlara dokunulmaz.</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;max-width:680px">Kama listesi için beklenen sütunlar: <span class="mono">KOD</span> ve <span class="mono">STOK</span> (zorunlu), ayrıca varsa ÖLÇÜ (WXDXL), TİP, CANİAS KODU, AÇIKLAMA (opsiyonel — bunlar isim alanına birleştirilerek yazılır). Yükleme <b>birleştirmedir</b> — Excel'de olmayan mevcut kalemler silinmez/değişmez. CANİAS kodu zaten varsa kalem güncellenir; stok adedi yalnızca aşağıdaki kutu işaretlenirse ezilir. Yeni kalemler "Manuel" tüketim modunda eklenir — kama:parmak oranı 1:1 değilse operatör miktarı elle girer; 1:1 olduğu bilinen kalemlerde Durum listesinden "Otomatik"e çevirebilirsin.</div>
         <input type="file" id="malzeme-excel-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
         <div><button class="btn-primary" style="width:auto;padding:10px 18px" onclick="handleMalzemeExcelPreview()">⬆ Oku ve Önizle</button></div>
         <div id="malzeme-excel-status" style="font-size:12px;color:var(--text-muted);margin-top:10px"></div>
         ${(() => {
           const p = malzemeExcelPreview;
           if(!p) return '';
+          if(p.katalog) return caniasListesiOnizlemeHtml(p);
           const first8 = p.rows.slice(0,8);
           return `<div style="background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:16px;margin-top:14px;max-width:960px">
             <div style="font-size:13.5px;font-weight:600;margin-bottom:6px">Önizleme — ${p.rows.length} geçerli satır${p.blankCount?`, ${p.blankCount} satır atlandı (kod boş)`:''}${p.dupCount?`, ${p.dupCount} tekrarlanan CANİAS kodu`:''}</div>
