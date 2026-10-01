@@ -234,7 +234,7 @@ exports.manuelBildirimGonder = onValueCreated(
 
     const req = event.data.val();
     if(!req || !req.toUsername) return;
-    const result = await sendToOperator(req.toUsername, req.title || 'Rota Takip', req.body || '', 'manuel-bildirim', { kaynak: 'Manuel', gonderen: req.requestedByName || req.requestedBy });
+    const result = await sendToOperator(req.toUsername, req.title || 'Atölye İş Takip', req.body || '', 'manuel-bildirim', { kaynak: 'Manuel', gonderen: req.requestedByName || req.requestedBy });
     await event.data.ref.update({
       sent: result.ok,
       sentAt: Date.now(),
