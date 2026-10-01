@@ -770,9 +770,23 @@ function caniasListesiOnizlemeHtml(p){
 }
 
 let malzemeAramaMetni = '';
+let malzemeStoksuzGoster = false;
+/* Stoğu olmayan kalem: boy takipte hiç çubuk yok, adette miktar 0. CANİAS listesi yüklenince
+   (01.10.2026) kalemlerin ~%85'i böyle — fiziksel stokta olmayan, sadece tanımı açılmış
+   malzeme. Liste aramasızken bunlar gizleniyor (369 kartı her tuşta yeniden çizmek telefonda
+   ~1 sn); aramada her zaman çıkıyorlar, ki çubuk girmek için bulunabilsinler. */
+function malzemeStoksuzMu(it){
+  return it.tur==='boy' ? lotsArray(it).length===0 : (Number(it.miktar)||0)===0;
+}
 function renderMalzemeStokScreen(){
       const aramaMetni = trNorm(malzemeAramaMetni.trim());
-      const items = stockItemsArray().filter(it=>!aramaMetni || trNorm(`${it.kod||''} ${it.isim||''}`).includes(aramaMetni));
+      const aramaParca = aramaMetni ? aramaMetni.split(/\s+/) : [];
+      const tumKalemler = stockItemsArray();
+      const stoksuzSay = tumKalemler.filter(malzemeStoksuzMu).length;
+      const items = tumKalemler.filter(it=>{
+        if(aramaParca.length){ const m = trNorm(`${it.kod||''} ${it.cap||''} ${it.isim||''}`); return aramaParca.every(t=>m.includes(t)); }
+        return malzemeStoksuzGoster || !malzemeStoksuzMu(it);
+      });
       const recentMoves = Object.entries(stockHareketleri).map(([id,v])=>({id,...v})).sort((a,b)=>b.ts-a.ts).slice(0,20);
       if(!stockEnabled()) return `<div style="font-size:12.5px;color:var(--text-muted)">Modül kapalı — <b>Ayarlar → Malzeme Stoğu</b>'ndan açtığında stok kalemi yönetimi ve tüketim geçmişi burada görünür.</div>`;
 
@@ -810,10 +824,13 @@ function renderMalzemeStokScreen(){
         </div>`;
 
       const durumBolumu = `
-        <div class="sec-h" style="margin-top:0">Stok Kalemleri (${items.length})</div>
-        <input placeholder="Kod veya isimde ara…" value="${esc(malzemeAramaMetni)}" oninput="malzemeAramaMetni=this.value; render()" style="max-width:320px;margin-bottom:12px">
+        <div class="sec-h" style="margin-top:0">Stok Kalemleri (${aramaParca.length || malzemeStoksuzGoster ? items.length : items.length+' / '+tumKalemler.length})</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+          <input placeholder="Ara: kod, çap, açıklama, CANİAS (ör. 4140 ıslahlı 25)" value="${esc(malzemeAramaMetni)}" oninput="malzemeAramaMetni=this.value; render()" style="max-width:360px;margin-bottom:0">
+          ${!aramaParca.length && stoksuzSay>0 ? `<button class="btn-ghost" style="width:auto;padding:8px 12px;font-size:12.5px" onclick="malzemeStoksuzGoster=!malzemeStoksuzGoster; render()">${malzemeStoksuzGoster ? 'Stoksuzları gizle' : `Stoksuz ${stoksuzSay} kalemi de göster`}</button>` : ''}
+        </div>
         <div class="op-settings-table" style="margin-bottom:26px">
-          ${items.length===0 ? `<div style="font-size:12.5px;color:var(--text-muted);padding:12px 4px">${malzemeAramaMetni.trim() ? 'Aramayla eşleşen kalem yok.' : 'Henüz stok kalemi eklenmedi.'}</div>` : items.map(it=>{
+          ${items.length===0 ? `<div style="font-size:12.5px;color:var(--text-muted);padding:12px 4px">${malzemeAramaMetni.trim() ? 'Aramayla eşleşen kalem yok.' : stoksuzSay>0 ? 'Stoğu olan kalem yok — stoksuz kalemler gizli.' : 'Henüz stok kalemi eklenmedi.'}</div>` : items.map(it=>{
             if(it.tur==='boy'){
               const lots = lotsArray(it);
               return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px">
