@@ -208,6 +208,7 @@ function renderOperator(){
             const isManualInput = selOpt && (selOpt.tur==='boy' || selOpt.mode==='manuel');
             return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:6px">
               <div style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${ico('box',14)} İlk Operasyon — Hammadde (opsiyonel)</div>
+              ${opHammaddeAramaHtml(it.stokAra, opts, 'nf-coklu-stok-ara-'+i, `newForm.cokluItems[${i}].stokAra=this.value; render()`, v=>`newForm.cokluItems[${i}].stockItemId='${escJs(v)}'; newForm.cokluItems[${i}].stokAra=''; render()`)}
               <div style="display:flex;gap:6px;margin-bottom:${isManualInput?'6px':'0'}">
                 <select id="nf-coklu-stok-${i}" onchange="newForm.cokluItems[${i}].stockItemId=this.value; render()" style="flex:1;margin-bottom:0">
                   <option value="">Hammadde tüketilmiyor</option>
@@ -265,6 +266,7 @@ function renderOperator(){
           const isManualInput = selOpt && (selOpt.tur==='boy' || selOpt.mode==='manuel');
           return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
             <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${ico('box',14)} İlk Operasyon — Kullanılan Hammadde (opsiyonel)</div>
+            ${opHammaddeAramaHtml(newForm.stokAra, opts, 'nf-stok-ara', "newForm.stokAra=this.value; render()", v=>`newForm.stockItemId='${escJs(v)}'; newForm.stokAra=''; render()`)}
             <div style="display:flex;gap:6px;margin-bottom:${isManualInput?'8px':'0'}">
               <select id="nf-stok-item" onchange="newForm.stockItemId=this.value; render()" style="flex:1;margin-bottom:0">
                 <option value="">Hammadde tüketilmiyor</option>
@@ -488,3 +490,18 @@ function renderOperator(){
   return `<div class="root-mobile theme-${resolvedTheme()}">${header}${body}${bottomNavHtml()}${messagesModalOpen ? renderMessagesModal() : ''}${sendMsgOpen ? renderSendMessageModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}</div>`;
 }
 
+/* İlk Operasyon hammadde araması (01.10.2026). CANİAS listesi yüklenince bu açılır liste 118
+   seçeneğe çıktı (adet kalemleri + her çubuk ayrı satır). Şef keserken sistemin her yerdeki
+   gibi yazıyor ("4140 25", "b13 kalın", %joker%) ve altta çıkan satıra dokunuyor; açılır liste
+   olduğu gibi duruyor. Puanlama kalem üzerinden (hammaddeAra, js/catalog.js), satır metni
+   seçeneğin kendi etiketi — boy kalemde hangi çubuk ve kaç mm kaldığı görünsün. */
+function opHammaddeAramaHtml(deger, opts, inputId, yazJs, secJs){
+  const q = String(deger||'');
+  let liste = '';
+  if(q.trim()){
+    const adaylar = opts.map(o=>({ ...((stockItems||{})[o.itemId]||{}), id:o.value, _o:o }));
+    const s = hammaddeAra(adaylar, q);
+    liste = hammaddeSonucListesiHtml(s.slice(0,6).map(x=>({ metin: x._o.label, alt:'', onclick: secJs(x._o.value) })), s.length);
+  }
+  return `<input id="${inputId}" placeholder="Yaz: 4140 25 · b13 kalın" value="${esc(q)}" oninput="${yazJs}" style="margin-bottom:6px">${liste}`;
+}

@@ -1072,3 +1072,16 @@ function bottomNavHtml(){
   </nav>`;
 }
 
+/* Hammadde arama sonuçları (01.10.2026) — Kod ile Giriş'teki sonuç listesinin küçük hâli:
+   yazınca altında en iyi birkaç eşleşme satır olarak çıkıyor, dokununca seçiliyor. 367
+   kalemlik açılır listede gezinmek yerine. satirlar: [{ metin, alt, onclick }]. */
+function hammaddeSonucListesiHtml(satirlar, toplam){
+  if(!satirlar.length) return `<div style="font-size:12px;color:var(--text-muted);padding:6px 2px 2px">Eşleşen hammadde yok.</div>`;
+  return `<div style="display:flex;flex-direction:column;gap:4px;margin:2px 0 8px">
+    ${satirlar.map(s=>`<button type="button" class="btn-ghost" style="width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;padding:9px 11px;min-height:40px" onclick="${s.onclick}">
+      <span style="min-width:0"><span class="mono" style="font-weight:600;color:var(--text)">${esc(s.metin)}</span>${s.alt?`<span style="display:block;font-size:11px;color:var(--text-muted);margin-top:1px">${esc(s.alt)}</span>`:''}</span>
+      <span style="font-size:11.5px;color:var(--accent);flex-shrink:0">Seç</span>
+    </button>`).join('')}
+    ${toplam>satirlar.length ? `<div style="font-size:11px;color:var(--text-muted);padding:2px">${toplam} eşleşmeden ilk ${satirlar.length} — daha fazla yaz.</div>` : ''}
+  </div>`;
+}

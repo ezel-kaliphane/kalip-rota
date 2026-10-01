@@ -399,7 +399,7 @@ function stockConsumableOptions(){
     } else {
       opts.push({
         value: it.id, itemId: it.id, lotId: null, tur:'adet',
-        label: `${it.kod}${it.isim?' — '+it.isim:''} (mevcut: ${it.miktar} ${it.birim||'adet'})`,
+        label: `${hammaddeGosterimAdi(it)} (mevcut: ${it.miktar} ${it.birim||'adet'})`,
         remaining: it.miktar, birim: it.birim||'adet', mode: it.mode
       });
     }
@@ -480,7 +480,9 @@ let stokGirisCubukBoyu = '';
 function stockGirisAramaSonuclar(){
   const q = stokGirisArama.trim();
   if(!q) return [];
-  return stockItemsArray().filter(it=>malzemeLikeMatch(it.kod,q) || malzemeLikeMatch(it.isim,q)).slice(0,50);
+  /* 01.10.2026: malzemeLikeMatch yerine hammaddeAra — aynı kelime/%joker% kuralı, artı Ø'süz
+     yazım ("4140 25"), Türkçe ı/İ ve en iyi eşleşme başta (bkz. js/catalog.js). */
+  return hammaddeAra(stockItemsArray(), q).slice(0,50);
 }
 function stockGirisSecKalem(itemId){
   const it = stockItems[itemId]; if(!it) return;

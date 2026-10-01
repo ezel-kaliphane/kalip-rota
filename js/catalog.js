@@ -73,6 +73,75 @@ function malzemeLikeMatch(text, pattern){
   const lower = t.toLowerCase();
   return words.every(w => lower.includes(w.toLowerCase()));
 }
+/* ===================== HAMMADDE ARAMA (01.10.2026) =====================
+   malzemeLikeMatch'in stok kalemleri için hâli — aynı iki mod (sırasız kelimeler ya da
+   %joker%), üç farkla:
+     1) "Ø" yok sayılıyor: "4140 25" ile "4140 Ø25" aynı sonucu veriyor (şef Ø yazmaz).
+     2) Türkçe büyük/küçük harf (trNorm): "ıslahlı" → "ISLAHLI" bulunuyor; toLowerCase
+        "I"yı "i" yapıp "ı" ile eşleştirmiyordu.
+     3) Sonuçlar SIRALI: kelime ayrı bir parça olarak geçiyorsa (25 → Ø25) alt dize olarak
+        geçmesinden (25 → Ø25,2 / Ø125 / 25X170X335) önde; çap ya da kod birebir tutuyorsa
+        ek puan; stoğu olan kalem eşitlikte önde. CANİAS listesiyle 367 kalem olunca "25"
+        yazan şefe ilk satırda Ø25'i göstermenin yolu bu.
+   Metin kod + çap + isim (isim CANİAS kodunu da taşıyor, bkz. caniasMalzemeCoz). */
+function hammaddeNorm(s){
+  return trNorm(s).replace(/ø/g,' ').replace(/(\d)x(\d)/g,'$1 $2').replace(/(\d)x(\d)/g,'$1 $2').replace(/\s+/g,' ').trim();
+}
+/* Kalemin listelerde görünen adı. CANİAS listesinden gelen kalemlerde isim zaten etiketin
+   kendisiyle başlıyor ("4140 ISLAHLI Ø25 CELIK (KLPHM000451)") — "etiket — isim" aynı şeyi
+   iki kez yazıyordu. Öyleyse yalnızca açıklama; değilse (kama: "B7 — 13X8X65 BB NORMAL
+   PARMAKLAR") etiket + açıklama. CANİAS kodu varsa sonda. */
+function hammaddeGosterimAdi(it){
+  const et = (it.kod||'') + (it.tur==='boy' && it.cap ? ' '+it.cap : '');
+  const can = malzemeCaniasFromIsim(it.isim);
+  const ac = can ? String(it.isim||'').replace(/\s*\([^()]*\)\s*$/,'').trim() : String(it.isim||'').trim();
+  const sik = s => trNorm(s).replace(/[\sø]/g,'');
+  const metin = ac && sik(ac).startsWith(sik(et)) ? ac : et + (ac ? ' — '+ac : '');
+  return metin + (can ? ' · '+can : '');
+}
+function hammaddeStoguVar(it){
+  return it.tur==='boy' ? Object.keys(it.lots||{}).length>0 : (Number(it.miktar)||0)!==0;
+}
+function hammaddeAramaSkoru(it, sorgu){
+  const q = String(sorgu||'').trim();
+  if(!q) return 0;
+  /* Elle açılmış eski kama kalemlerinin isminde "KAMA" kelimesi yok ("12X12X57 BB — B13
+     PARMAKLAR"); CANİAS'tan gelenlerde var. "kama 12x12" ikisini de bulsun diye ölçü+BB/AB
+     kalıbındaki kalemlere görünmez bir "kama" ekleniyor. */
+  const kamaMi = /\d+\s*X\s*\d+\s*X\s*\d+\s*(BB|AB)\b/i.test(it.isim||'') && !/\bKAMA\b/i.test(it.isim||'');
+  const metin = hammaddeNorm(`${it.kod||''} ${it.cap||''} ${it.isim||''}${kamaMi?' kama':''}`);
+  if(q.includes('%')) return malzemeLikeMatch(metin, trNorm(q).replace(/ø/g,'')) ? 1 : -1;
+  const kelimeler = hammaddeNorm(q).split(' ').filter(Boolean);
+  if(!kelimeler.every(k=>metin.includes(k))) return -1;
+  /* Virgül ayırıcı DEĞİL: "Ø25,2" tek parça kalsın ki "25" araması onu Ø25 ile eşit saymasın. */
+  const parcalar = new Set(metin.split(/[\s()·—\/-]+/).filter(Boolean));
+  const cap = hammaddeNorm(it.cap||''), kod = hammaddeNorm(it.kod||'');
+  let skor = 0;
+  kelimeler.forEach(k=>{
+    if(parcalar.has(k)) skor += 10;
+    if(k===cap) skor += 5;
+    if(kod.split(' ').includes(k)) skor += 3;
+  });
+  /* Ölçü bütün olarak eşleşiyorsa ("12x12" → "12X12X57") ek puan — yoksa "12" ve "12" ayrı
+     ayrı sayılıyor ve kodunda tesadüfen 12 geçen kalem (B8-12-24) öne geçiyordu. */
+  q.split(/\s+/).forEach(w=>{ const n = hammaddeNorm(w); if(n.includes(' ') && (' '+metin+' ').includes(' '+n+' ')) skor += 15; });
+  /* "Ø" yazan çubuk arıyor: çapı olmayan kalemler (blok/lama: 105X285X25) listede kalsın
+     ama çubukların altına insin. */
+  if(/ø/i.test(q) && !cap) skor -= 15;
+  if(hammaddeStoguVar(it)) skor += 1;
+  return skor;
+}
+/* items: [{id, kod, cap, isim, ...}] → eşleşenler, en iyi eşleşme başta. Sorgu boşsa liste
+   olduğu gibi döner (çağıran kendi sırasını kullanır). */
+function hammaddeAra(items, sorgu){
+  if(!String(sorgu||'').trim()) return items.slice();
+  return items.map(it=>({ it, s: hammaddeAramaSkoru(it, sorgu) }))
+    .filter(x=>x.s>=0)
+    .sort((a,b)=> b.s-a.s
+      || String(a.it.kod||'').localeCompare(String(b.it.kod||''), 'tr', {numeric:true})
+      || String(a.it.cap||'').localeCompare(String(b.it.cap||''), 'tr', {numeric:true}))
+    .map(x=>x.it);
+}
 function canManageMalzemeListesi(){
   if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return false; }
   return true;
