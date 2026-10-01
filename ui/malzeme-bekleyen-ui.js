@@ -61,6 +61,18 @@ function mbHammaddeQr(){
 }
 /* Açılır liste ve sonuç satırı metni — operatör formuyla ortak (hammaddeGosterimAdi, js/catalog.js). */
 function mbSecenekMetni(it){ return hammaddeGosterimAdi(it); }
+function mbHamSec(id){ mbHamAra = ''; mbFormYaz('hammaddeId', id); }
+function mbFormYaz(alan, deger){
+  mbForm[alan] = deger;
+  /* İ.E. miktarı değişince reçeteden gelen oranla gereken yeniden hesaplanıyor —
+     şef adet düzeltince miktarı elle çarpmasın. */
+  if(alan==='ieMiktar' && mbForm.mamulKodu){
+    const r = receteOku(mbForm.mamulKodu);
+    const adet = Number(deger)||0;
+    if(r && r.birimBasina>0 && adet>0) mbForm.gerekenMiktar = String(Math.round(r.birimBasina*adet*100)/100);
+  }
+  render();
+}
 function mbKaydet(){
   if(mbForm.busy) return;
   const kod = String(mbForm.girilen||'').trim().toUpperCase();
@@ -276,7 +288,7 @@ function renderMbYeniModal(){
             oninput="mbHamAra=this.value; render()">
           <button class="btn-ghost" style="width:auto;padding:0 14px;flex:none" title="Malzeme etiketindeki QR'ı okut" onclick="mbHammaddeQr()">${ico('camera',14)}</button>
         </div>
-        ${sonuclar ? hammaddeSonucListesiHtml(sonuclar.slice(0,6).map(it=>({ metin: mbSecenekMetni(it), alt: 'Stok '+hammaddeStokSayi(it)+' '+(it.birim||''), onclick: `mbHamSec('${escJs(it.id)}')` })), sonuclar.length) : ''}
+        ${sonuclar ? hammaddeSonucListesiHtml(sonuclar.slice(0,6).map(it=>({ metin: mbSecenekMetni(it), alt: 'Stok '+hammaddeStokSayi(it)+' '+(it.birim||''), onclick: `mbHamSec('${escJs(it.id)}')` })), sonuclar.length, { metin: mbHamAra, hedef:'mb' }) : ''}
         <select id="mb-ham" onchange="mbFormYaz('hammaddeId',this.value)">
           <option value="">— ya da listeden seç —</option>
           ${items.map(it=>`<option value="${escJs(it.id)}" ${mbForm.hammaddeId===it.id?'selected':''}>${esc(mbSecenekMetni(it))}</option>`).join('')}

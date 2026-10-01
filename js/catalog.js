@@ -97,7 +97,7 @@ function hammaddeGosterimAdi(it){
   const ac = can ? String(it.isim||'').replace(/\s*\([^()]*\)\s*$/,'').trim() : String(it.isim||'').trim();
   const sik = s => trNorm(s).replace(/[\sø]/g,'');
   const metin = ac && sik(ac).startsWith(sik(et)) ? ac : et + (ac ? ' — '+ac : '');
-  return metin + (can ? ' · '+can : '');
+  return metin + (can ? ' · '+can : (it.caniasBekliyor ? ' · KOD YOK' : ''));
 }
 function hammaddeStoguVar(it){
   return it.tur==='boy' ? Object.keys(it.lots||{}).length>0 : (Number(it.miktar)||0)!==0;

@@ -1075,13 +1075,51 @@ function bottomNavHtml(){
 /* Hammadde arama sonuçları (01.10.2026) — Kod ile Giriş'teki sonuç listesinin küçük hâli:
    yazınca altında en iyi birkaç eşleşme satır olarak çıkıyor, dokununca seçiliyor. 367
    kalemlik açılır listede gezinmek yerine. satirlar: [{ metin, alt, onclick }]. */
-function hammaddeSonucListesiHtml(satirlar, toplam){
-  if(!satirlar.length) return `<div style="font-size:12px;color:var(--text-muted);padding:6px 2px 2px">Eşleşen hammadde yok.</div>`;
+/* yeni: { metin, hedef } verilirse ve kullanıcı Şef/SuperAdmin ise listenin altına "Aradığın yok
+   mu? + Yeni hammadde aç" düğmesi gelir (bkz. js/state.js yeniHammaddeAc). Düğme bilerek
+   sonuçların ALTINDA: önce benzerini görsün, aynı malzemeyi ikinci kez açmasın. */
+function hammaddeYeniDugmeHtml(yeni){
+  if(!yeni || !canManageStock() || !String(yeni.metin||'').trim()) return '';
+  return `<button type="button" class="btn-ghost" style="width:100%;text-align:left;padding:9px 11px;min-height:40px;border-style:dashed;color:var(--accent);margin-bottom:8px"
+    onclick="yeniHammaddeAc('${escJs(yeni.metin)}','${escJs(yeni.hedef||'')}')">Aradığın yok mu? <b>+ Yeni hammadde aç</b> <span style="color:var(--text-muted);font-size:11.5px">— CANİAS kodu sonra bağlanır</span></button>`;
+}
+function hammaddeSonucListesiHtml(satirlar, toplam, yeni){
+  if(!satirlar.length) return `<div style="font-size:12px;color:var(--text-muted);padding:6px 2px 6px">Eşleşen hammadde yok.</div>${hammaddeYeniDugmeHtml(yeni)}`;
   return `<div style="display:flex;flex-direction:column;gap:4px;margin:2px 0 8px">
     ${satirlar.map(s=>`<button type="button" class="btn-ghost" style="width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;padding:9px 11px;min-height:40px" onclick="${s.onclick}">
       <span style="min-width:0"><span class="mono" style="font-weight:600;color:var(--text)">${esc(s.metin)}</span>${s.alt?`<span style="display:block;font-size:11px;color:var(--text-muted);margin-top:1px">${esc(s.alt)}</span>`:''}</span>
       <span style="font-size:11.5px;color:var(--accent);flex-shrink:0">Seç</span>
     </button>`).join('')}
     ${toplam>satirlar.length ? `<div style="font-size:11px;color:var(--text-muted);padding:2px">${toplam} eşleşmeden ilk ${satirlar.length} — daha fazla yaz.</div>` : ''}
-  </div>`;
+  </div>${hammaddeYeniDugmeHtml(yeni)}`;
+}
+/* "Yeni hammadde aç" penceresi — yönetici ve operatör ekranlarının ikisinde de çiziliyor
+   (şef kesimi operatör formundan giriyor). Alanlar aramaya yazılandan dolu gelir. */
+function yeniHammaddeModalHtml(){
+  if(!yhModal) return '';
+  const m = yhModal, boy = m.tur==='boy';
+  return `<div class="modal-overlay" onclick="if(event.target===this)yeniHammaddeKapat()">
+    <div class="modal-box" style="max-width:480px;padding:20px">
+      <div class="sec-h" style="margin-top:0">Yeni hammadde aç</div>
+      <div class="notice" style="--nc:var(--warn);margin:-4px 0 14px;padding:9px 12px">
+        <div class="notice-sub">CANİAS kodu henüz yok — kalem <b>KOD YOK</b> olarak açılır ve hemen kullanılabilir. SuperAdmin'in bildirimlerine düşer; kod CANİAS'ta açılınca bağlanır.</div></div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button type="button" class="sub-tab-btn ${boy?'active':''}" onclick="yeniHammaddeYaz('tur','boy')">Yuvarlak çubuk (boy takip)</button>
+        <button type="button" class="sub-tab-btn ${!boy?'active':''}" onclick="yeniHammaddeYaz('tur','adet')">Lama / blok / kama (adet)</button>
+      </div>
+      <div style="display:grid;grid-template-columns:${boy?'1fr 120px':'1fr'};gap:10px">
+        <div class="field"><label for="yh-kod">${boy?'Kalite':'Kod / ölçü'}</label>
+          <input id="yh-kod" placeholder="${boy?'ör. 4140 ISLAHLI':'ör. 1040 LAMA 90X40X400'}" value="${esc(m.kod)}" oninput="yeniHammaddeYaz('kod',this.value,false)" onchange="render()"></div>
+        ${boy?`<div class="field"><label for="yh-cap">Çap</label>
+          <input id="yh-cap" class="mono" placeholder="Ø27" value="${esc(m.cap)}" oninput="yeniHammaddeYaz('cap',this.value,false)" onchange="render()"></div>`:''}
+      </div>
+      <div class="field"><label for="yh-ac">Açıklama</label>
+        <input id="yh-ac" placeholder="CANİAS'taki gibi, ör. 4140 ISLAHLI Ø27 CELIK" value="${esc(m.aciklama)}" oninput="yeniHammaddeYaz('aciklama',this.value,false)"></div>
+      <div class="field"><label for="yh-mik">${boy?'Elimdeki çubuğun boyu (mm) — opsiyonel':'Mevcut adet — opsiyonel'}</label>
+        <input id="yh-mik" type="number" inputmode="numeric" placeholder="${boy?'ör. 3000':'0'}" value="${esc(boy?m.boy:m.adet)}" oninput="yhModal.${boy?'boy':'adet'}=this.value"></div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn-primary" style="flex:1" ${m.busy?'disabled':''} onclick="yeniHammaddeKaydet()">${m.busy?'Açılıyor…':'Hammaddeyi Aç'}</button>
+        <button class="btn-ghost" onclick="yeniHammaddeKapat()">Vazgeç</button>
+      </div>
+    </div></div>`;
 }

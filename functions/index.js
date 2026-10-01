@@ -437,3 +437,35 @@ exports.mesaiSonuHatirlatici = onSchedule({ schedule: 'every 1 minutes', region:
     tag: 'mesai-sonu-hatirlatici'
   });
 });
+
+/* ===================== YENİ HAMMADDE — CANİAS KODU BEKLİYOR (01.10.2026) =====================
+ * Şef hammadde aramasında bulamadığı malzemeyi "+ Yeni hammadde aç" ile açınca kalem
+ * stockItems altına caniasBekliyor:true ile yazılıyor (bkz. js/state.js yeniHammaddeKaydet).
+ * Bu fonksiyon o anda SuperAdmin'lerin Bildirimlerim listesine (pushLog) birer satır yazar —
+ * TELEFONA PUSH GÖNDERMEZ (kullanıcı kararı: "bildirim sekmesine düşsün, telefona gerek yok").
+ * pushLog istemciye yazma kapalı olduğu için (database.rules.json) bu iş sunucuda.
+ * CANİAS listesi Excel'den yüklenince açılan yüzlerce kalem de bu tetikleyiciden geçer ama
+ * caniasBekliyor taşımadıkları için ilk satırda çıkar. Kalemi açan SuperAdmin'in kendisine yazılmaz.
+ */
+exports.yeniHammaddeBildirimi = onValueCreated(
+  { ref: 'stockItems/{itemId}', region: 'europe-west1', instance: 'ezel-kaliphane-default-rtdb' },
+  async (event) => {
+    const it = event.data.val();
+    if(!it || !it.caniasBekliyor) return;
+    // "En az bir kez" teslim: aynı kalem için iki kez yazmasın (manuelBildirimGonder'deki gibi).
+    const claim = await db.ref('pushNotified/yeniHammadde/'+event.params.itemId).transaction(cur => cur ? undefined : true);
+    if(!claim.committed) return;
+    const ops = (await db.ref('operators').get()).val() || {};
+    const alicilar = Object.entries(ops).filter(([u,v]) => v && v.isSuperAdmin && u !== it.acanUsername).map(([u]) => u);
+    const ad = it.isim || [it.kod, it.cap].filter(Boolean).join(' ');
+    const acan = it.acanName || it.acanUsername || 'Şef';
+    const now = Date.now();
+    await Promise.all(alicilar.map(u => db.ref('pushLog').push({
+      toUsername: u,
+      title: 'Yeni hammadde — CANİAS kodu bekliyor',
+      body: `${acan}, "${ad}" malzemesini açtı. CANİAS'ta kodunu açınca hammadde listesini Excel Yükleme → Hammadde'ye yükle (kendiliğinden bağlanır) ya da Stok Genel Bakış'tan kodu gir.`,
+      tag: 'hammadde-kod-bekliyor', kaynak: 'Yeni Hammadde', gonderen: acan,
+      sentAt: now, sent: true, reason: 'yalnizca-bildirim-listesi'
+    })));
+  }
+);

@@ -392,7 +392,7 @@ function stockConsumableOptions(){
       lotsArray(it).forEach(lot=>{
         opts.push({
           value: it.id+'::'+lot.id, itemId: it.id, lotId: lot.id, tur:'boy',
-          label: `${it.kod}${it.cap?' '+it.cap:''} · ${lot.boy}${it.birim||'mm'} kaldı`,
+          label: `${it.kod}${it.cap?' '+it.cap:''} · ${lot.boy}${it.birim||'mm'} kaldı${it.caniasBekliyor && !malzemeCaniasFromIsim(it.isim) ? ' · KOD YOK' : ''}`,
           remaining: lot.boy, birim: it.birim||'mm'
         });
       });
@@ -619,11 +619,127 @@ function caniasMalzemeCoz(canias, aciklama){
   }
   return { tur:'adet', sinif:'prizmatik', kod: ac.replace(/\s+[CÇ]EL[İI]K$/i,''), isim, birim:'adet' };
 }
+/* ---------- CANİAS'ta henüz açılmamış hammadde (01.10.2026) ----------
+   Bazen ürün CANİAS'ta kodu olmayan bir malzemeyle yapılıyor: usta malzemeyi belirliyor, kodu
+   SuperAdmin sonra CANİAS'ta açıyor. Şef beklemesin diye hammadde aramasında "+ Yeni hammadde
+   aç" var: kalem hemen açılıyor, caniasBekliyor:true taşıyor ve her yerde "KOD YOK" görünüyor.
+   Kod iki yoldan bağlanıyor: CANİAS listesi yeniden yüklenince açıklamadan kendiliğinden
+   (caniasListesiOnizlemeKur), ya da Stok Genel Bakış'taki karttan elle (hammaddeKodBagla).
+   SuperAdmin'e haber Cloud Function'dan (yeniHammaddeBildirimi) Bildirimlerim'e düşüyor —
+   telefona push YOK (kullanıcı kararı); pushLog istemciye yazma kapalı olduğu için oradan.
+   Yetki: Şef + SuperAdmin (canManageStock). */
+function hammaddeEslesmeAnahtari(s){
+  return hammaddeNorm(String(s||'').replace(/\s*\([^()]*\)\s*$/,'')).replace(/\b[cç]el[iı]k\b/g,'').replace(/\s+/g,' ').trim();
+}
+/* Aramaya yazılan metinden form taslağı: "4140 ıslahlı 27" / "4140 Ø27" → çubuk (kalite +
+   çap); ölçü ("90x40x400") → adet. Şef formda düzeltebilir. */
+function yeniHammaddeTaslak(metin){
+  const ust = String(metin||'').replace(/%/g,' ').replace(/\s+/g,' ').trim().toLocaleUpperCase('tr-TR');
+  if(/\d\s*X\s*\d/.test(ust)) return { tur:'adet', kod: ust, cap:'', aciklama: ust };
+  const ortada = ust.match(/^(.*?)\s*Ø\s*(\d+(?:[.,]\d+)?)\s*(.*)$/);
+  if(ortada && ortada[1].trim()){
+    const cap = 'Ø'+ortada[2].replace('.',',');
+    return { tur:'boy', kod: ortada[1].trim(), cap, aciklama: [ortada[1].trim(), cap, ortada[3].trim()].filter(Boolean).join(' ') };
+  }
+  const sonda = ust.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)$/);
+  if(sonda && sonda[1].trim()){
+    const cap = 'Ø'+sonda[2].replace('.',',');
+    return { tur:'boy', kod: sonda[1].trim(), cap, aciklama: `${sonda[1].trim()} ${cap}` };
+  }
+  return { tur:'adet', kod: ust, cap:'', aciklama: ust };
+}
+let yhModal = null; // { hedef, tur, kod, cap, aciklama, boy, adet, busy, aciklamaElle }
+function yeniHammaddeAc(metin, hedef){
+  if(!canManageStock()){ toast('Yeni hammaddeyi yalnızca Şef ya da SuperAdmin açabilir'); return; }
+  yhModal = { hedef: hedef||'', ...yeniHammaddeTaslak(metin), boy:'', adet:'', busy:false, aciklamaElle:false };
+  render();
+}
+function yeniHammaddeKapat(){ yhModal = null; render(); }
+function yeniHammaddeYaz(alan, deger, cizme){
+  if(!yhModal) return;
+  yhModal[alan] = deger;
+  /* Kalite/çap/tür değişince açıklama da (şef elle değiştirmediyse) birlikte güncellensin. */
+  if(alan==='aciklama') yhModal.aciklamaElle = true;
+  else if((alan==='kod' || alan==='cap' || alan==='tur') && !yhModal.aciklamaElle){
+    yhModal.aciklama = yhModal.tur==='boy' ? [yhModal.kod, yhModal.cap].filter(Boolean).join(' ') : yhModal.kod;
+  }
+  if(cizme!==false) render();
+}
+/* Kaydedilen kalemi açıldığı yerde seçili hâle getir. */
+function yeniHammaddeHedefeSec(hedef, id, lotId){
+  const it = stockItems[id]; if(!it){ render(); return; }
+  if(hedef==='mb'){ mbHamSec(id); return; }
+  if(hedef==='giris'){ stokGirisArama = ''; stockGirisSecKalem(id); return; }
+  if(String(hedef).startsWith('op')){
+    const deger = it.tur==='boy' ? (lotId ? id+'::'+lotId : '') : id;
+    if(!deger){ toast('Çubuk boyu girilmediği için seçilemedi — boyu Stok Girişi\'nden ekle'); render(); return; }
+    const i = hedef.startsWith('op:') ? Number(hedef.slice(3)) : -1;
+    const hedefForm = i>=0 ? (newForm.cokluItems||[])[i] : newForm;
+    if(hedefForm){ hedefForm.stockItemId = deger; hedefForm.stokAra = ''; }
+  }
+  render();
+}
+function yeniHammaddeKaydet(){
+  if(!canManageStock() || !yhModal || yhModal.busy) return;
+  const m = yhModal;
+  const kod = String(m.kod||'').replace(/\s+/g,' ').trim().toLocaleUpperCase('tr-TR');
+  let cap = String(m.cap||'').replace(/\s+/g,'').toLocaleUpperCase('tr-TR').replace(/^Ø?/,'Ø').replace('.',',');
+  if(m.tur!=='boy') cap = '';
+  const aciklama = String(m.aciklama||'').replace(/\s+/g,' ').trim().toLocaleUpperCase('tr-TR') || [kod, cap].filter(Boolean).join(' ');
+  if(!kod){ toast(m.tur==='boy' ? 'Kaliteyi yazın (ör. 4140 ISLAHLI)' : 'Kodu ya da ölçüyü yazın'); return; }
+  if(m.tur==='boy' && !/^Ø\d/.test(cap)){ toast('Çapı yazın (ör. Ø27)'); return; }
+  /* Aynısı zaten varsa yeni kalem açma, onu seç. */
+  const ayni = stockItemsArray().find(it=> m.tur==='boy'
+    ? (it.tur==='boy' && hammaddeEslesmeAnahtari(it.isim || `${it.kod||''} ${it.cap||''}`)===hammaddeEslesmeAnahtari(aciklama))
+    : (it.tur!=='boy' && hammaddeEslesmeAnahtari(it.isim||it.kod||'')===hammaddeEslesmeAnahtari(aciklama)));
+  if(ayni){ toast('Bu malzeme zaten var: '+hammaddeGosterimAdi(ayni)+' — o seçildi'); const h=m.hedef; yhModal=null; yeniHammaddeHedefeSec(h, ayni.id, null); return; }
+  const id = uid(), now = Date.now();
+  const iz = { caniasBekliyor:true, acanUsername: session.username, acanName: session.displayName||session.username, acilisTs: now, altLimit:0 };
+  let lotId = null, data;
+  if(m.tur==='boy'){
+    const boy = Number(m.boy)||0;
+    data = { kod, tur:'boy', cap, birim:'mm', isim: aciklama, ...iz };
+    if(boy>0){ lotId = uid(); data.lots = { [lotId]: { boy } }; }
+  } else {
+    data = { kod, tur:'adet', isim: aciklama, birim:'adet', miktar: Number(m.adet)||0, mode:'manuel', ...iz };
+  }
+  m.busy = true; render();
+  DB.ref('stockItems/'+id).set(data).then(()=>{
+    stockItems[id] = data;
+    toast('Hammadde açıldı — CANİAS kodu bekleniyor');
+    const h = m.hedef; yhModal = null;
+    yeniHammaddeHedefeSec(h, id, lotId);
+  }).catch(err=>{ m.busy = false; toast('Açılamadı: '+(err.message||'bilinmeyen hata')); render(); });
+}
+function caniasKoduBekleyenler(){
+  return stockItemsArray().filter(it=>it.caniasBekliyor && !malzemeCaniasFromIsim(it.isim))
+    .sort((a,b)=>(Number(b.acilisTs)||0)-(Number(a.acilisTs)||0));
+}
+let hkGirdi = {}; // { itemId: SuperAdmin'in yazdığı CANİAS kodu }
+function hammaddeKodBagla(id){
+  if(!session || !session.isSuperAdmin){ toast('CANİAS kodunu yalnızca SuperAdmin bağlayabilir'); return; }
+  const it = stockItems[id]; if(!it) return;
+  const kod = String(hkGirdi[id]||'').replace(/\s+/g,'').toUpperCase();
+  if(!kod){ toast('CANİAS kodunu yazın (ör. KLPHM000566)'); return; }
+  const baska = stockItemsArray().find(x=>x.id!==id && malzemeCaniasFromIsim(x.isim)===kod);
+  if(baska){ toast('Bu kod zaten başka kalemde: '+hammaddeGosterimAdi(baska)); return; }
+  const isim = `${String(it.isim || [it.kod, it.cap].filter(Boolean).join(' ')).trim()} (${kod})`;
+  DB.ref('stockItems/'+id).update({ isim, caniasBekliyor:null, kodBaglamaTs: Date.now(), kodBaglayan: session.displayName||session.username }).then(()=>{
+    delete hkGirdi[id]; toast('CANİAS kodu bağlandı: '+kod); render();
+  }).catch(err=>toast('Kaydedilemedi: '+(err.message||'bilinmeyen hata')));
+}
 /* rows: [[caniasKodu, aciklama], ...] (başlık satırı hariç). Dosya okuyucu ile doğrudan
    çağrı aynı yoldan geçsin diye ayrı tutuldu. */
 function caniasListesiOnizlemeKur(rows){
   const mevcut = {};
   Object.entries(stockItems||{}).forEach(([id,v])=>{ const c = malzemeCaniasFromIsim(v && v.isim); if(c) mevcut[c] = id; });
+  /* Şefin açtığı, CANİAS kodu bekleyen kalemler (bkz. yeniHammaddeKaydet). Listede yeni bir
+     kod bunlardan birine uyuyorsa YENİ KALEM AÇILMIYOR — kod o kaleme yazılıyor ki çubuğu ve
+     geçmişi kaybolmasın, aynı malzemeden iki kalem olmasın. Uyma: açıklama ("ÇELİK" hariç,
+     Ø'süz) aynı, ya da çubukta kalite + çap aynı. Her bekleyen kalem en fazla bir koda. */
+  const bekleyen = Object.entries(stockItems||{}).filter(([,v])=>v && v.caniasBekliyor && !malzemeCaniasFromIsim(v.isim))
+    .map(([id,v])=>({ id, v, anahtar: hammaddeEslesmeAnahtari(v.isim || `${v.kod||''} ${v.cap||''}`), kodCap: v.tur==='boy' ? hammaddeNorm(`${v.kod||''} ${v.cap||''}`) : null }));
+  const eslesen = [];
   const gorulen = new Set(), yeni = [];
   let zatenVar = 0, bos = 0, dosyadaTekrar = 0;
   const sinifSay = { yuvarlak:0, kama:0, prizmatik:0 };
@@ -638,6 +754,14 @@ function caniasListesiOnizlemeKur(rows){
     (aciklamaKodlari[anahtar] = aciklamaKodlari[anahtar] || []).push(canias);
     if(mevcut[canias]){ zatenVar++; return; }
     const c = caniasMalzemeCoz(canias, aciklama);
+    const aAnahtar = hammaddeEslesmeAnahtari(aciklama);
+    const kodCap = c.tur==='boy' ? hammaddeNorm(`${c.kod} ${c.cap}`) : null;
+    const bi = bekleyen.findIndex(x=> x.anahtar===aAnahtar || (kodCap && x.kodCap===kodCap));
+    if(bi!==-1){
+      const x = bekleyen.splice(bi,1)[0];
+      eslesen.push({ canias, aciklama, isim: c.isim, itemId: x.id, eskiAd: x.v.isim || `${x.v.kod||''} ${x.v.cap||''}`.trim() });
+      return;
+    }
     sinifSay[c.sinif]++;
     yeni.push({ canias, aciklama, ...c });
   });
@@ -645,13 +769,20 @@ function caniasListesiOnizlemeKur(rows){
      kalem olarak açılıyor — hangisinin geçerli olduğuna CANİAS tarafı karar verir — ama
      önizlemede gösteriliyor ki fark edilsin. */
   const ayniAciklama = Object.entries(aciklamaKodlari).filter(([,k])=>k.length>1).map(([a,k])=>({ aciklama:a, kodlar:k }));
-  return { katalog:true, toplam: gorulen.size, yeni, zatenVar, bos, dosyadaTekrar, sinifSay, ayniAciklama };
+  return { katalog:true, toplam: gorulen.size, yeni, eslesen, zatenVar, bos, dosyadaTekrar, sinifSay, ayniAciklama };
 }
 function caniasListesiYukle(){
   if(!canManageStock() || !malzemeExcelPreview || !malzemeExcelPreview.katalog) return;
-  const yeni = malzemeExcelPreview.yeni;
-  if(yeni.length===0){ toast('Eklenecek yeni kalem yok — listedeki tüm kodlar zaten sistemde'); return; }
+  const yeni = malzemeExcelPreview.yeni, eslesen = malzemeExcelPreview.eslesen || [];
+  if(yeni.length===0 && eslesen.length===0){ toast('Eklenecek yeni kalem yok — listedeki tüm kodlar zaten sistemde'); return; }
   const updates = {};
+  const now = Date.now();
+  eslesen.forEach(e=>{
+    updates['stockItems/'+e.itemId+'/isim'] = e.isim;
+    updates['stockItems/'+e.itemId+'/caniasBekliyor'] = null;
+    updates['stockItems/'+e.itemId+'/kodBaglamaTs'] = now;
+    updates['stockItems/'+e.itemId+'/kodBaglayan'] = 'CANİAS listesi';
+  });
   yeni.forEach(r=>{
     const id = uid();
     updates['stockItems/'+id] = r.tur==='boy'
@@ -659,7 +790,7 @@ function caniasListesiYukle(){
       : { kod: r.kod, tur:'adet', isim: r.isim, birim:'adet', miktar:0, mode:'manuel', altLimit:0 };
   });
   DB.ref().update(updates).then(()=>{
-    toast(`${yeni.length} yeni hammadde kalemi eklendi`);
+    toast(`${yeni.length} yeni hammadde kalemi eklendi`+(eslesen.length?`, ${eslesen.length} bekleyen kaleme kod bağlandı`:''));
     malzemeExcelPreview = null;
     render();
   }).catch(err=>{

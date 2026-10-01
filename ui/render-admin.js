@@ -749,7 +749,7 @@ function caniasListesiOnizlemeHtml(p){
   const ornek = p.yeni.slice(0,12);
   return `<div style="background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:16px;margin-top:14px;max-width:960px">
     <div style="font-size:13.5px;font-weight:600;margin-bottom:4px">CANİAS hammadde listesi — ${p.toplam} kod</div>
-    <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px"><b style="color:var(--text)">${p.yeni.length}</b> yeni kalem açılacak · ${p.zatenVar} kod zaten sistemde (dokunulmayacak)${p.bos?` · ${p.bos} boş satır atlandı`:''}${p.dosyadaTekrar?` · ${p.dosyadaTekrar} tekrarlanan kod atlandı`:''}</div>
+    <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px"><b style="color:var(--text)">${p.yeni.length}</b> yeni kalem açılacak${(p.eslesen||[]).length?` · <b style="color:var(--success)">${p.eslesen.length}</b> bekleyen kaleme kod bağlanacak`:''} · ${p.zatenVar} kod zaten sistemde (dokunulmayacak)${p.bos?` · ${p.bos} boş satır atlandı`:''}${p.dosyadaTekrar?` · ${p.dosyadaTekrar} tekrarlanan kod atlandı`:''}</div>
     ${p.yeni.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
       ${Object.entries(p.sinifSay).filter(([,n])=>n>0).map(([s,n])=>`<span class="matrix-tag" style="--sb:var(--accent)">${esc(turAdi[s])}: ${n}</span>`).join('')}
     </div>
@@ -759,11 +759,14 @@ function caniasListesiOnizlemeHtml(p){
       </tbody></table>
       ${p.yeni.length>ornek.length ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">…ve ${p.yeni.length-ornek.length} kalem daha.</div>` : ''}
     </div>` : ''}
+    ${(p.eslesen||[]).length ? `<div class="notice" style="--nc:var(--success);margin-bottom:12px;padding:9px 12px">
+      <div class="notice-title">${p.eslesen.length} bekleyen hammadde CANİAS koduyla eşleşti</div>
+      <div class="notice-sub">${p.eslesen.map(e=>`${esc(e.eskiAd)} → <span class="mono">${esc(e.canias)}</span> (${esc(e.aciklama)})`).join('<br>')}<br>Yeni kalem açılmaz; kod mevcut kaleme yazılır, çubukları ve geçmişi korunur.</div></div>` : ''}
     ${p.ayniAciklama.length ? `<div class="notice" style="--nc:var(--warn);margin-bottom:12px;padding:9px 12px">
       <div class="notice-title">CANİAS'ta aynı açıklamayla birden fazla kod var</div>
       <div class="notice-sub">${p.ayniAciklama.map(a=>`${esc(a.aciklama)} → <span class="mono">${a.kodlar.map(esc).join(', ')}</span>`).join('<br>')}<br>Her kod ayrı kalem olarak açılır; hangisinin geçerli olduğu CANIAS tarafında netleşmeli.</div></div>` : ''}
     <div style="display:flex;gap:10px">
-      <button class="btn-primary" style="width:auto;padding:10px 18px" ${p.yeni.length?'':'disabled'} onclick="confirmMalzemeExcelUpload()">✓ ${p.yeni.length} Kalemi Ekle</button>
+      <button class="btn-primary" style="width:auto;padding:10px 18px" ${p.yeni.length||(p.eslesen||[]).length?'':'disabled'} onclick="confirmMalzemeExcelUpload()">✓ ${[p.yeni.length?p.yeni.length+' Kalemi Ekle':'', (p.eslesen||[]).length?(p.eslesen.length+' Kodu Bağla'):''].filter(Boolean).join(', ') || 'Eklenecek yok'}</button>
       <button class="btn-ghost" onclick="malzemeExcelPreview=null; render()">Vazgeç</button>
     </div>
   </div>`;
@@ -834,7 +837,7 @@ function renderMalzemeStokScreen(){
               const lots = lotsArray(it);
               return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
-                  <div><span class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)}</span> <span style="color:var(--text-muted);font-size:12.5px">${esc(it.cap||'')} · Boy Takip · ${lots.length} çubuk</span></div>
+                  <div><span class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)}</span> ${it.caniasBekliyor?`<span class="matrix-tag" style="--sb:var(--warn)">KOD YOK</span>`:''} <span style="color:var(--text-muted);font-size:12.5px">${esc(it.cap||'')} · Boy Takip · ${lots.length} çubuk</span></div>
                   <div style="display:flex;align-items:center;gap:8px">
                     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted)">Alt limit <input type="number" value="${it.altLimit||0}" style="width:90px" onchange="updateStockItemField('${it.id}','altLimit',this.value)"></label>
                     <button class="del-btn" onclick="deleteStockItem('${it.id}')" title="Kalemi tamamen sil">${ico('trash',14)}</button>
@@ -852,7 +855,7 @@ function renderMalzemeStokScreen(){
               </div>`;
             }
             return `<div class="op-settings-row" style="flex-wrap:wrap;gap:10px">
-              <div style="min-width:140px"><div class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)}</div><div style="font-size:11.5px;color:var(--text-muted)">${esc(it.isim||'')}</div></div>
+              <div style="min-width:140px"><div class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)} ${it.caniasBekliyor?`<span class="matrix-tag" style="--sb:var(--warn)">KOD YOK</span>`:''}</div><div style="font-size:11.5px;color:var(--text-muted)">${esc(it.isim||'')}</div></div>
               <input type="number" value="${it.miktar}" style="width:110px" onchange="updateStockItemField('${it.id}','miktar',this.value)" title="Mevcut miktar">
               <span style="font-size:12px;color:var(--text-muted)">${esc(it.birim||'adet')}</span>
               <select onchange="updateStockItemField('${it.id}','mode',this.value)" style="width:170px">
@@ -889,19 +892,19 @@ function renderMalzemeStokScreen(){
               <button class="btn-ghost" title="QR Okut" onclick="stokGirisScanQr()">${ico('camera',16)}</button>
             </div>
             ${!stokGirisArama.trim() ? `<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:16px 0">Aramaya başlamak için yukarı yaz.</div>`
-              : sonuclar.length===0 ? `<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:16px 0">Eşleşme bulunamadı.</div>`
+              : sonuclar.length===0 ? `<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:16px 0">Eşleşme bulunamadı.</div>${hammaddeYeniDugmeHtml({ metin: stokGirisArama, hedef:'giris' })}`
               : `<div style="max-height:340px;overflow-y:auto">
                 ${sonuclar.map(r=>{
                   const ozet = r.tur==='boy'
                     ? `${esc(r.cap||'')} · Boy Takip · ${lotsArray(r).length} çubuk`
                     : `${esc(r.isim||'')} · mevcut: ${r.miktar} ${esc(r.birim||'adet')}`;
                   return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer" onclick="stockGirisSecKalem('${escJs(r.id)}')">
-                    <div><span class="mono" style="color:var(--accent);font-weight:700">${esc(r.kod)}</span><div style="font-size:11.5px;color:var(--text-muted)">${ozet}</div></div>
+                    <div><span class="mono" style="color:var(--accent);font-weight:700">${esc(r.kod)}</span>${r.caniasBekliyor?` <span class="matrix-tag" style="--sb:var(--warn)">KOD YOK</span>`:''}<div style="font-size:11.5px;color:var(--text-muted)">${ozet}</div></div>
                     <span style="font-size:11.5px;color:var(--success);flex-shrink:0">Seç →</span>
                   </div>`;
                 }).join('')}
                 ${sonuclar.length===50 ? `<div style="font-size:11px;color:var(--text-muted);text-align:center;padding-top:6px">İlk 50 sonuç gösteriliyor — daha spesifik yaz.</div>` : ''}
-              </div>`}
+              </div>${hammaddeYeniDugmeHtml({ metin: stokGirisArama, hedef:'giris' })}`}
           ` : it.tur==='boy' ? `
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:14px">
               <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;flex:1">
@@ -1392,6 +1395,28 @@ function stokGenelZamanKisa(ts){
   if(sa<24) return sa+' sa';
   return Math.floor(sa/24)+' gün';
 }
+/* Şefin açtığı, CANİAS kodu bekleyen hammaddeler (01.10.2026, bkz. js/state.js yeniHammaddeAc).
+   Stok Genel Bakış'ın en üstünde, yalnızca bekleyen varsa. Kodu yalnızca SuperAdmin bağlar;
+   Şef listeyi görür ama kod alanı yerine "SuperAdmin bekleniyor" görür. Kod çoğunlukla
+   CANİAS listesi yeniden yüklenince kendiliğinden bağlanıyor — bu kart eşleşmeyenler için. */
+function caniasKoduBekleyenKartiHtml(){
+  const liste = caniasKoduBekleyenler();
+  if(!liste.length) return '';
+  const sa = !!(session && session.isSuperAdmin);
+  return `<div class="notice" style="--nc:var(--warn);margin:0 24px 14px">
+    <div class="notice-title">CANİAS kodu bekleyen ${liste.length} hammadde</div>
+    <div class="notice-sub" style="margin-bottom:8px">Şef CANİAS'ta henüz olmayan malzemeyi açtı. Kodu CANİAS'ta açınca hammadde listesini Excel Yükleme → Hammadde'ye yüklemen yeter, kendiliğinden bağlanır; eşleşmeyen olursa kodu buradan gir.</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${liste.map(it=>`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+        <div style="flex:1;min-width:180px"><span class="mono" style="font-weight:600">${esc(it.isim || [it.kod,it.cap].filter(Boolean).join(' '))}</span>
+          <div style="font-size:11.5px;color:var(--text-muted)">${esc(it.acanName||it.acanUsername||'—')} · ${it.acilisTs?fmtDT(it.acilisTs):'—'} · ${it.tur==='boy'?lotsArray(it).length+' çubuk':(Number(it.miktar)||0)+' adet'}</div></div>
+        ${sa ? `<input class="mono" style="width:150px;margin:0" placeholder="KLPHM000…" value="${esc(hkGirdi[it.id]||'')}" oninput="hkGirdi['${escJs(it.id)}']=this.value">
+          <button class="btn-primary" style="width:auto;padding:8px 14px" onclick="hammaddeKodBagla('${escJs(it.id)}')">Kodu Bağla</button>`
+          : `<span style="font-size:11.5px;color:var(--warn)">SuperAdmin bekleniyor</span>`}
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
 function renderStokGenelBakis(){
   ensureToolCatalogLoaded(()=>safeRender());
   ensureToolStockLoaded(()=>safeRender());
@@ -1414,7 +1439,7 @@ function renderStokGenelBakis(){
      Tür filtresi kaybolmadı — tablonun üstündeki "Tür:" açılır menüsü aynı işi yapıyor ve
      kartın "aktif" vurgusu hala o filtreyi yansıtıyor. */
   const kpiTikla = tur => `onclick="stokListeAc('${tur}')" style="cursor:pointer" title="${esc(tur==='tumu'?'Tüm kalemleri':tur+' kalemlerini')} pencerede aç"`;
-  return `
+  return `${caniasKoduBekleyenKartiHtml()}
     <div class="stok-genel-kpi">
       <div class="sgk-card ${stokGenelTurFiltre==='tumu'?'aktif':''}" ${kpiTikla('tumu')}>
         <div style="display:flex;justify-content:space-between;align-items:flex-start">${kpiIkon(ico('list',16),stokGenelTurFiltre==='tumu')}${kpiOk(stokGenelTurFiltre==='tumu')}</div>
@@ -3137,7 +3162,8 @@ function renderAdmin(){
     ${uzunDurusModalOpen ? renderUzunDurusModal() : ''}
     ${uzunDevamEdenModalOpen ? renderUzunDevamEdenModal() : ''}
     ${messagesModalOpen ? renderMessagesModal() : ''}
-    ${myPushHistoryModalOpen ? renderMyPushHistoryModal() : ''}`;
+    ${myPushHistoryModalOpen ? renderMyPushHistoryModal() : ''}
+    ${yeniHammaddeModalHtml()}`;
 
   let body = '';
   if(view==='adminSettings' && !session.isAdmin){ view = 'report'; }
