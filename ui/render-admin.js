@@ -2796,7 +2796,7 @@ function renderVeriListeleri(){
 
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;margin-bottom:22px">
           <div style="font-size:14px;font-weight:600;margin-bottom:6px">İş Merkezi Listesi (Tadilat "Talep Edilen Makine" Kaynağı) <span style="font-size:10.5px;color:var(--text-muted);font-weight:400">(SuperAdmin)</span></div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">ERP'den (BAST08) aldığınız iş merkezi kodları (V01, B10, N3 gibi — açıklama alınmaz). Rota Takip'in kendi makine listesinden ayrı; Tadilat'ta "Talep Edilen Makine" alanında kullanılır. Hangi bölümün hangi kodlara erişebileceği "Tadilat Bölüm Kuralları"ndan ayarlanır.</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">ERP'den (BAST08) aldığınız iş merkezi kodları (V01, B10, N3 gibi — açıklama alınmaz). Atölye İş Takip'in kendi makine listesinden ayrı; Tadilat'ta "Talep Edilen Makine" alanında kullanılır. Hangi bölümün hangi kodlara erişebileceği "Tadilat Bölüm Kuralları"ndan ayarlanır.</div>
           <div style="font-size:13px;margin-bottom:10px">Şu an listede <b style="color:var(--accent)">${iCount}</b> kayıt.</div>
           <div class="field"><label>Sütun Başlığı (varsayılan: İş Merkezi)</label><input id="ismerkezi-kod-col" value="İş Merkezi" placeholder="İş Merkezi"></div>
           <input type="file" id="ismerkezi-file-input" accept=".xlsx,.xls" style="margin-bottom:12px;font-size:12.5px">
@@ -3389,7 +3389,7 @@ function renderAdmin(){
               }).join('')}
             </select>
           </div>
-          <div class="field"><label>Başlık (opsiyonel)</label><input id="mpush-title" placeholder="Rota Takip"></div>
+          <div class="field"><label>Başlık (opsiyonel)</label><input id="mpush-title" placeholder="Atölye İş Takip"></div>
           <div class="field"><label>Mesaj</label><textarea id="mpush-body" style="min-height:80px" maxlength="500" placeholder="Mesajını yaz..."></textarea></div>
           <button class="btn-primary" onclick="sendManualPush()">📤 Gönder</button>
         </div>

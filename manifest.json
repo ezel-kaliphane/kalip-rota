@@ -1,7 +1,7 @@
 {
-  "name": "Rota Takip",
-  "short_name": "Rota Takip",
-  "description": "Ezel Cıvata Kalıphane - Atölye İş Emri ve Rota Takip Sistemi",
+  "name": "Atölye İş Takip",
+  "short_name": "Atölye İş Takip",
+  "description": "Ezel Cıvata Kalıphane - Atölye İş Takip Sistemi",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

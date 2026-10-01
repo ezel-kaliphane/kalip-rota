@@ -1,4 +1,4 @@
-/* Rota Takip — Arka Plan Bildirim Servisi (Service Worker)
+/* Atölye İş Takip — Arka Plan Bildirim Servisi (Service Worker)
    Bu dosya, telefon/tarayıcı kapalıyken (uygulama açık olmasa bile) push bildirimlerinin
    gösterilmesini sağlar. rota_takip.html ile AYNI KLASÖRE konulmalı (aynı origin/kök dizin) —
    yoksa tarayıcı service worker'ı kaydedemez.
@@ -25,7 +25,7 @@ const messaging = firebase.messaging();
 // İkisi birlikte gönderilirse tarayıcı otomatik bir bildirim gösteriyor VE biz de burada elle
 // bir tane daha gösteriyorduk, bu da aynı bildirimin 2 kez çıkmasına sebep oluyordu.
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.data?.title || 'Rota Takip';
+  const title = payload.data?.title || 'Atölye İş Takip';
   const options = {
     body: payload.data?.body || '',
     icon: './icon-192.png',

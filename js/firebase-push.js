@@ -14,7 +14,7 @@ let pushPermissionState = (typeof Notification!=='undefined') ? Notification.per
 function pushBlockedInstructions(){
   const ua = navigator.userAgent || '';
   if(/iPad|iPhone|iPod/.test(ua)){
-    return 'Telefonun Uygulama Ayarları\'ndaki genel izin bundan AYRI — Safari\'nin kendi site izni hâlâ kapalı. Düzeltmek için: telefonun Ayarlar uygulamasını aç → aşağı kaydırıp bu uygulamayı ("Rota Takip") bul → Bildirimler → aç. (Ana ekranda uygulama yoksa önce Safari\'de Paylaş → "Ana Ekrana Ekle" ile yüklemen gerekir.)';
+    return 'Telefonun Uygulama Ayarları\'ndaki genel izin bundan AYRI — Safari\'nin kendi site izni hâlâ kapalı. Düzeltmek için: telefonun Ayarlar uygulamasını aç → aşağı kaydırıp bu uygulamayı ("Atölye İş Takip") bul → Bildirimler → aç. (Ana ekranda uygulama yoksa önce Safari\'de Paylaş → "Ana Ekrana Ekle" ile yüklemen gerekir.)';
   }
   if(/Android/.test(ua)){
     return 'Telefonun Uygulama Ayarları\'nda "İzin Verildi" görünse bile bu YETMEZ — Chrome\'un kendi site izni ayrı ve hâlâ engelli. Düzeltmek için: Chrome\'u aç (yüklü uygulama simgesinden değil) → bu siteye git → adres çubuğunun solundaki 🔒 simgesine dokun → İzinler → Bildirimler\'i "İzin Ver" yap → sonra bu uygulamayı kapatıp yeniden aç.';
@@ -45,7 +45,7 @@ function setupForegroundPushListener(){
   try{
     const messaging = firebase.messaging();
     messaging.onMessage((payload) => {
-      const title = payload.data?.title || 'Rota Takip';
+      const title = payload.data?.title || 'Atölye İş Takip';
       const body = payload.data?.body || '';
       const tag = payload.data?.tag || 'rota-takip-uyari';
       if('serviceWorker' in navigator){
@@ -97,7 +97,7 @@ async function enablePushNotifications(){
 function sendManualPush(){
   if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
   const toUsername = document.getElementById('mpush-to')?.value || '';
-  const title = (document.getElementById('mpush-title')?.value || '').trim() || 'Rota Takip';
+  const title = (document.getElementById('mpush-title')?.value || '').trim() || 'Atölye İş Takip';
   const bodyText = (document.getElementById('mpush-body')?.value || '').trim();
   if(!toUsername){ toast('Alıcı seç'); return; }
   if(!bodyText){ toast('Mesaj boş olamaz'); return; }

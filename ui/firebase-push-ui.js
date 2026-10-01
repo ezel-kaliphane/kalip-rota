@@ -20,7 +20,7 @@ function renderMyPushHistoryList(){
     <div style="display:flex;flex-direction:column;gap:6px;max-width:520px">
       ${list.map(h=>`<div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
         <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:2px">
-          <span style="font-size:12.5px;font-weight:600">${esc(h.title||'Rota Takip')}</span>
+          <span style="font-size:12.5px;font-weight:600">${esc(h.title||'Atölye İş Takip')}</span>
           <span style="font-size:10.5px;color:var(--text-muted);white-space:nowrap">${fmtDT(h.sentAt)}</span>
         </div>
         <div style="font-size:12px;color:var(--text-muted)">${esc(h.body||'')}</div>
