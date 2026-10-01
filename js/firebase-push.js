@@ -345,7 +345,17 @@ function resolvedTheme(){
   if(theme!=='system') return theme==='light' ? 'light' : 'dark';
   try{ return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }catch(e){ return 'dark'; }
 }
-function setTheme(t){ theme=t; document.documentElement.className = 'theme-'+resolvedTheme(); save('rota_theme', t); render(); }
+/* Tema sınıfı + tarayıcı/uygulama penceresinin başlık çubuğu rengi (01.10.2026). Masaüstüne
+   kurulu uygulamada başlık çubuğu <meta name="theme-color">'dan boyanıyor; eskiden sabit
+   turuncu #ff8a3d'ydi (eski marka rengi) ve Tezgâh'ın koyu/açık zeminiyle kopuk duruyordu.
+   Artık sayfa zeminiyle aynı renk — tema değişince çubuk da değişiyor. */
+function temaSinifiUygula(){
+  const t = resolvedTheme();
+  document.documentElement.className = 'theme-'+t;
+  const m = document.querySelector('meta[name="theme-color"]');
+  if(m) m.setAttribute('content', t==='light' ? '#F4F5F7' : '#0B0D10');
+}
+function setTheme(t){ theme=t; temaSinifiUygula(); save('rota_theme', t); render(); }
 function toggleTheme(){ setTheme(resolvedTheme()==='dark' ? 'light' : 'dark'); }
 /* Yonetici Ayarlar satiri icin uc durumlu dongu: Koyu -> Acik -> Sistem -> Koyu.
    toggleTheme yalnizca ikisi arasinda ceviriyor ve 'system' secimini sessizce yok

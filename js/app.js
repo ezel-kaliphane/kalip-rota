@@ -237,8 +237,8 @@ function renderLiveBits(){
 
 /* ===================== BAŞLAT ===================== */
 window.addEventListener('DOMContentLoaded', ()=>{
-  document.documentElement.className = 'theme-'+resolvedTheme();
-  try{ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()=>{ if(theme==='system'){ document.documentElement.className='theme-'+resolvedTheme(); render(); } }); }catch(e){}
+  temaSinifiUygula();
+  try{ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()=>{ if(theme==='system'){ temaSinifiUygula(); render(); } }); }catch(e){}
   if(!fbConfigured()){
     document.getElementById('app').innerHTML = `<div class="root-mobile theme-${resolvedTheme()}"><div class="auth-wrap"><div class="error-text" style="max-width:400px;margin:0 auto">Firebase databaseURL henüz girilmemiş. Lütfen KURULUM_BULUT.md dosyasındaki adımları izleyip bu HTML dosyasının başındaki FIREBASE_CONFIG içine databaseURL'i yapıştırın.</div></div></div>`;
     return;
