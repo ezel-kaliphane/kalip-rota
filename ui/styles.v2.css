@@ -228,7 +228,9 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .iy-detay-row{display:grid;grid-template-columns:116px minmax(150px,1fr) 96px 132px 118px;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px}
 .iy-detay-row .sag{text-align:right}
 .iy-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:14px}
-.iy-kpi{border-left:4px solid var(--nc);min-width:0}
+/* .analiz-chart-box'un min-width:280px'ini eziyor — telefonda iki sütunluk KPI ızgarasında
+   her kart 280px'e zorlanıp sağdan kesiliyordu (02.10.2026). */
+.iy-kpi,.analiz-chart-box.iy-kpi{border-left:4px solid var(--nc);min-width:0}
 .iy-kpi-vurgu{background:color-mix(in srgb,var(--nc) 7%,transparent)}
 .iy-kpi-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
 .iy-kpi-value{font-size:30px;font-weight:700;margin-top:8px;color:var(--nc)}
@@ -365,7 +367,9 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .stok-top-search{display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 13px;color:var(--text-subtle);font-size:13px;width:100%;max-width:520px}
 .stok-top-search input{border:none;background:none;padding:0;width:100%;color:var(--text);font-size:13px}
 .stok-top-search input::placeholder{color:var(--text-subtle)}
-.stok-tab-row{display:flex;align-items:center;gap:8px;padding:20px 24px 0;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex:none}
+/* 02.10.2026: eskiden flex-wrap:nowrap + gizli kaydırma — 1084px'ten dar her ekranda (küçük
+   dizüstü, tablet, telefon) sağdaki sekmeler görünmüyordu. Artık alt satıra iniyor. */
+.stok-tab-row{display:flex;align-items:center;gap:8px;row-gap:8px;padding:20px 24px 0;flex-wrap:wrap;flex:none}
 .stok-tab-row::-webkit-scrollbar{display:none}
 .stok-tab-btn{display:flex;align-items:center;gap:8px;flex:0 0 auto;white-space:nowrap;padding:9px 14px;min-height:40px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--panel);color:var(--text-muted);font-size:12.5px;font-weight:500;box-shadow:var(--e1)}
 .stok-tab-btn:hover{background:var(--panel-alt)}
@@ -796,14 +800,33 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .tad-layout > *{overflow-y:visible}
 }
 
+/* TELEFON gezinmesi (02.10.2026, bkz. ui/render-admin.js adminAltBarHtml): üstteki yatay şerit
+   kalktı — iPhone'da saatin/çentiğin altına giriyordu. Kenar çubuğu gizli; altta sabit sekme
+   çubuğu + "Menü" sayfası. Güvenli alan: üstte başlık (artık ekranın ilk öğesi), altta çubuk. */
+.admin-alt-bar,.admin-menu-perde{display:none}
 @media (max-width:900px){
   .root-wide{flex-direction:column}
-  .admin-sidebar{width:auto;flex-direction:row;align-items:center;padding:10px 14px;gap:6px;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch}
-  .admin-sidebar-brand{padding:0 10px 0 0}
-  .admin-nav-item{flex:0 0 auto;white-space:nowrap;padding:9px 12px}
-  .admin-nav-item.active::before{left:6px;right:6px;top:auto;bottom:-8px;height:2px;width:auto}
-  .admin-sidebar-user{margin-top:0;margin-left:auto;border-top:none;padding:0 0 0 6px}
+  .admin-sidebar{display:none}
   .admin-topbar{padding:calc(12px + env(safe-area-inset-top)) 16px 0}
+  .admin-shell-body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+  .admin-alt-bar{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;position:fixed;left:0;right:0;bottom:0;z-index:420;background:var(--panel);border-top:1px solid var(--border);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+  .admin-alt-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:52px;min-width:0;padding:4px 2px;background:none;border:none;border-radius:10px;color:var(--text-muted);font-family:inherit;font-weight:600;font-size:11px;line-height:1.15;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .admin-alt-item span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .admin-alt-item.active{color:var(--accent)}
+  .admin-alt-item:active{background:var(--panel-alt)}
+  .admin-menu-perde{display:block;position:fixed;inset:0;z-index:410;background:#00000073}
+  .admin-menu-sheet{position:absolute;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));max-height:calc(100dvh - 64px - env(safe-area-inset-bottom) - env(safe-area-inset-top) - 16px);overflow-y:auto;background:var(--panel);border:1px solid var(--border);border-bottom:none;border-radius:18px 18px 0 0;padding:16px 16px 14px;box-shadow:var(--e2)}
+  .admin-menu-kisi{padding:2px 2px 12px;border-bottom:1px solid var(--border)}
+  .admin-menu-izgara{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}
+  .admin-menu-oge{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:78px;padding:12px 6px;background:var(--panel-alt);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:inherit;font-weight:600;font-size:12.5px;line-height:1.2;text-align:center;cursor:pointer}
+  .admin-menu-oge.active{border-color:var(--accent);color:var(--accent)}
+  .admin-menu-cikis{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;color:var(--danger)}
+  body:has(.admin-alt-bar) .toast{bottom:calc(84px + env(safe-area-inset-bottom))}
+  /* Alt sekmeler sığmayınca alt satıra insin (gizli yatay kaydırma yok). */
+  .sub-tabs{flex-wrap:wrap;row-gap:8px}
+  /* Operatörler / Personel satırları: bir satırda 10+ onay kutusu (≈1010px). Markup'ta satır içi
+     flex-wrap:nowrap var (masaüstünde tek satır kalsın diye) — burada !important ile eziliyor. */
+  .op-settings-row{flex-wrap:wrap!important;row-gap:8px}
 }
 
 .auth-wrap{padding:40px 24px;display:flex;flex-direction:column;gap:24px}
@@ -871,16 +894,20 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .tab-btn{flex:0 0 auto;white-space:nowrap;padding:12px 16px;font-size:13px;min-height:44px}
 
   /* Ayarlar alt sekmeleri (Veri Listeleri / Bildirimlerim / vs.) — aynı sıkışma sorunu. */
-  .sub-tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-  .sub-tabs::-webkit-scrollbar{display:none}
+  /* 02.10.2026: sekmeler eskiden burada yana kaydırılabilir + kaydırma çubuğu GİZLİ idi —
+     ekrana sığmayan sekme görünmüyor, orada olduğu da anlaşılmıyordu (Karbür'de 5 bölümden
+     "İş Emri Tüketimi" hiç görünmüyordu). Artık alt satıra iniyorlar: hepsi görünür. */
+  .sub-tabs{flex-wrap:wrap;row-gap:8px}
   .sub-tab-btn{flex:0 0 auto;white-space:nowrap;padding:10px 16px;min-height:40px}
 
-  /* Stok modül sekmeleri zaten yatay (bkz. .stok-tab-row) — dar ekranda sadece kenar boşluğu
-     daraltılıyor, dokunma hedefi büyütülüyor. */
+  /* Stok modül sekmeleri de aynı sebeple ızgara (2 sütun) — eskiden tek satırda 1072px'lik
+     şeritti, telefonda ilk ikisi görünüyordu. Yanındaki "RTDB canlı" teknik notu telefonda yok. */
   .stok-top-header{padding:14px 18px 0}
   .stok-top-search{width:100%}
-  .stok-tab-row{padding:14px 18px 0}
-  .stok-tab-btn{min-height:40px}
+  .stok-tab-row{padding:14px 18px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;overflow-x:visible}
+  .stok-tab-durum{display:none!important}
+  .stok-tab-btn{min-height:40px;justify-content:center}
+
   .stok-icerik{overflow-y:visible}
   .stok-bolumler{padding:14px 18px 0}
   .stok-genel-kpi{padding:14px 18px 0;grid-template-columns:repeat(2,1fr)}

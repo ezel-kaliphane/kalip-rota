@@ -1625,7 +1625,7 @@ function renderStokScreen(){
         ${ico(b.ikon,15)} ${esc(b.label)}${sayi!=null ? `<span class="stb-ct">${sayi}</span>` : ''}
       </button>`;
     }).join('')}
-    <div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);white-space:nowrap;padding:0 4px">
+    <div class="stok-tab-durum" style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);white-space:nowrap;padding:0 4px">
       <span style="width:6px;height:6px;border-radius:50%;background:var(--success);flex:none"></span>RTDB canlı: stockItems · toolStock · karburStok
     </div>
   </div>`;
@@ -2431,7 +2431,7 @@ function introHintHtml(){
     <span class="intro-hint-ico">${ico('clock',16)}</span>
     <div class="intro-hint-body">
       <div class="intro-hint-title">Makine Matrisi ve Tamamlanan Kodlar buraya taşındı</div>
-      <div class="intro-hint-sub">Üç ekran tek <b>Canlı Panel</b> oldu; üstteki sekmelerden ulaşırsın. <b>Rapor</b> değişmedi, sol menüde kendi yerinde duruyor.</div>
+      <div class="intro-hint-sub">Üç ekran tek <b>Canlı Panel</b> oldu; üstteki sekmelerden ulaşırsın. <b>Rapor</b> değişmedi, menüde kendi yerinde duruyor.</div>
     </div>
     <button class="btn-primary intro-hint-btn" onclick="dismissIntroHint()">Anladım</button>
   </div>`;
@@ -3086,6 +3086,57 @@ function renderExcelYukleme(){
   return `<div class="settings-wrap">${serit}${govde}</div>`;
 }
 
+/* Yönetici gezinme öğeleri (02.10.2026) — TEK liste. Masaüstündeki sol kenar çubuğu ve
+   telefondaki alt çubuk/menü aynı listeden çiziliyor, ki bir sekmenin yetki koşulu iki yerde
+   ayrı ayrı tutulup ayrışmasın. Koşullar eski kenar çubuğu markup'ındakilerin BİREBİR aynısı. */
+function adminNavOgeleri(){
+  const o = [];
+  if(isAdminTabVisible('rapor')) o.push({ key:'rapor', label:'Rapor', ikon:'list', aktif: view==='report', tikla:"setView('report')" });
+  if(canliPanelVisible()) o.push({ key:'canli', label:'Canlı Panel', ikon:'clock', aktif: isCanliPanelView(view), tikla:`setView('${canliPanelDefaultView()}')` });
+  if(isAdminTabVisible('isYogunlugu')) o.push({ key:'isYogunlugu', label:'İş Yoğunluğu', ikon:'box', aktif: view==='isYogunlugu', tikla:"setView('isYogunlugu')" });
+  if(!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz')) o.push({ key:'analiz', label:'Analiz', ikon:'chart', aktif: view==='analiz', tikla:"setView('analiz')" });
+  if(canCreateTadilat() && isAdminTabVisible('tadilat')) o.push({ key:'tadilat', label:'Tadilat', ikon:'wrench', aktif: view==='tadilatYonetim', tikla:"setView('tadilatYonetim')" });
+  if(stokErisimVar()) o.push({ key:'stok', label:'Stok', ikon:'box', aktif: view==='stokYonetim', tikla:"setView('stokYonetim')" });
+  if(session.isAdmin){
+    o.push({ key:'excel', label:'Excel Yükleme', ikon:'upload', aktif: view==='excelYukleme', tikla:'gotoExcelYukleme()', yonetim:true });
+    if(session.isSuperAdmin) o.push({ key:'operatorler', label:'Operatörler', ikon:'users', aktif: view==='operatorler', tikla:'gotoOperatorler()', yonetim:true });
+    o.push({ key:'ayarlar', label:'Ayarlar', ikon:'gear', aktif: view==='adminSettings', tikla:'gotoAyarlar()', yonetim:true });
+  }
+  return o;
+}
+/* TELEFON (≤900px, 02.10.2026). Eskiden kenar çubuğu ekranın EN ÜSTÜNDE yatay bir şeride
+   dönüşüyordu: 10 sekme 1335px genişliğinde, ekranda 2,5'i görünüyor; üstelik iPhone'da ana
+   ekrandan açılınca (black-translucent durum çubuğu + viewport-fit=cover) şerit saatin/çentiğin
+   ALTINA giriyordu ve dokunulamıyordu — güvenli alan boşluğu şeride değil altındaki başlığa
+   verilmişti. Artık telefonda şerit yok: altta 4 ana sekme + "Menü" (iOS sekme çubuğu deseni,
+   operatör ekranındaki .bottom-nav ile aynı fikir). Menü tüm bölümleri, kullanıcıyı ve
+   Çıkış'ı açıyor. Ana sekmeler sırayla: Rapor, Canlı Panel, Tadilat, Stok — kullanıcının
+   yetkisi olmayan düşüyor, boşluğu listedeki sıradaki dolduruyor. */
+let adminMenuAcik = false;
+const ADMIN_MOBIL_BIRINCIL = ['rapor','canli','tadilat','stok'];
+function adminAltBarHtml(ogeler){
+  let birincil = ADMIN_MOBIL_BIRINCIL.map(k=>ogeler.find(n=>n.key===k)).filter(Boolean);
+  for(const n of ogeler){ if(birincil.length>=4) break; if(!birincil.includes(n)) birincil.push(n); }
+  birincil = birincil.slice(0,4).sort((a,b)=>ogeler.indexOf(a)-ogeler.indexOf(b));
+  const menuAktif = adminMenuAcik || ogeler.some(n=>n.aktif && !birincil.includes(n));
+  return `<nav class="admin-alt-bar" aria-label="Ana gezinme">
+    ${birincil.map(n=>`<button class="admin-alt-item ${n.aktif&&!adminMenuAcik?'active':''}" onclick="adminMenuAcik=false; ${n.tikla}">${ico(n.ikon,20)}<span>${n.label}</span></button>`).join('')}
+    <button class="admin-alt-item ${menuAktif?'active':''}" aria-expanded="${adminMenuAcik?'true':'false'}" onclick="adminMenuAcik=!adminMenuAcik; render()">${ico('menu',20)}<span>Menü</span></button>
+  </nav>`;
+}
+function adminMenuHtml(ogeler, kisiHtml){
+  if(!adminMenuAcik) return '';
+  const kutu = n => `<button class="admin-menu-oge ${n.aktif?'active':''}" onclick="adminMenuAcik=false; ${n.tikla}">${ico(n.ikon,20)}<span>${n.label}</span></button>`;
+  const ana = ogeler.filter(n=>!n.yonetim), yon = ogeler.filter(n=>n.yonetim);
+  return `<div class="admin-menu-perde" onclick="if(event.target===this){adminMenuAcik=false; render();}">
+    <div class="admin-menu-sheet" role="dialog" aria-label="Menü">
+      <div class="admin-menu-kisi">${kisiHtml}</div>
+      <div class="admin-menu-izgara">${ana.map(kutu).join('')}</div>
+      ${yon.length ? `<div class="admin-sidebar-sec" style="padding:4px 2px 0">Yönetim</div><div class="admin-menu-izgara">${yon.map(kutu).join('')}</div>` : ''}
+      <button class="btn-ghost admin-menu-cikis" onclick="adminMenuAcik=false; doLogout()">${ico('logout',16)} Çıkış Yap</button>
+    </div>
+  </div>`;
+}
 function renderAdmin(){
   /* Stok sekmesi uc bolumlu (takim / karbur / malzeme), asagida `stokYonetim` olarak ayrica ele
      aliniyor — bu yuzden burada karsiligi yok. */
@@ -3109,6 +3160,12 @@ function renderAdmin(){
      Ayarlar butonu artık sidebar'da bir nav item. Tema değiştir butonu (themeToggleHtml())
      2026-09-21'de topbar'a GERİ eklendi — admin artık kendi açık/koyu paletine sahip (bkz.
      ui/styles.css .root-wide.theme-light / .root-wide.theme-dark). */
+  const navOgeleri = adminNavOgeleri();
+  const navBtn = n => `<button class="admin-nav-item ${n.aktif?'active':''}" title="${n.label}" onclick="${n.tikla}">${ico(n.ikon,14)}<span class="nav-label">${n.label}</span></button>`;
+  const kisiHtml = `<div style="display:flex;align-items:center;gap:10px">
+          <div class="admin-sidebar-avatar" title="${connOK?'Buluta bağlı (senkron)':'Bağlantı yok — internet kontrol edin'}">${esc((session.displayName||session.username||'').slice(0,2).toUpperCase())}<span style="position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:${connOK?'var(--success)':'var(--danger)'};border:2px solid var(--sidebar-bg);border-radius:50%"></span></div>
+          <div><div class="admin-sidebar-uname">${esc(session.displayName||session.username)}</div><div class="admin-sidebar-urole"><span style="width:6px;height:6px;border-radius:50%;background:${connOK?'var(--success)':'var(--danger)'};display:inline-block"></span>${session.isSuperAdmin?'SuperAdmin':session.isSef?'Şef':session.isUretimSef?'Üretim Şef':'Yönetici'}</div></div>
+        </div>`;
   const sidebar = `
     <nav class="admin-sidebar ${sidebarGenis?'':'dar'}">
       <div class="admin-sidebar-brand">
@@ -3117,23 +3174,10 @@ function renderAdmin(){
         <button class="sidebar-toggle" onclick="sidebarDaralt()" aria-expanded="${sidebarGenis?'true':'false'}"
           title="${sidebarGenis?'Kenar çubuğunu daralt':'Kenar çubuğunu genişlet'}">${ico('panel',16)}</button>
       </div>
-      ${isAdminTabVisible('rapor') ? `<button class="admin-nav-item ${view==='report'?'active':''}" title="Rapor" onclick="setView('report')">${ico('list',14)}<span class="nav-label">Rapor</span></button>` : ''}
-      ${canliPanelVisible() ? `<button class="admin-nav-item ${isCanliPanelView(view)?'active':''}" title="Canlı Panel" onclick="setView('${canliPanelDefaultView()}')">${ico('clock',14)}<span class="nav-label">Canlı Panel</span></button>` : ''}
-      ${isAdminTabVisible('isYogunlugu') ? `<button class="admin-nav-item ${view==='isYogunlugu'?'active':''}" title="İş Yoğunluğu" onclick="setView('isYogunlugu')">${ico('box',14)}<span class="nav-label">İş Yoğunluğu</span></button>` : ''}
-      ${!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz') ? `<button class="admin-nav-item ${view==='analiz'?'active':''}" title="Analiz" onclick="setView('analiz')">${ico('chart',14)}<span class="nav-label">Analiz</span></button>` : ''}
-      ${canCreateTadilat() && isAdminTabVisible('tadilat') ? `<button class="admin-nav-item ${view==='tadilatYonetim'?'active':''}" title="Tadilat" onclick="setView('tadilatYonetim')">${ico('wrench',14)}<span class="nav-label">Tadilat</span></button>` : ''}
-      ${stokErisimVar() ? `<button class="admin-nav-item ${view==='stokYonetim'?'active':''}" title="Stok" onclick="setView('stokYonetim')">${ico('box',14)}<span class="nav-label">Stok</span></button>` : ''}
-      ${session.isAdmin ? `
-      <div class="admin-sidebar-sec">Yönetim</div>
-      <button class="admin-nav-item ${view==='excelYukleme'?'active':''}" title="Excel Yükleme" onclick="gotoExcelYukleme()">${ico('upload',14)}<span class="nav-label">Excel Yükleme</span></button>
-      ${session.isSuperAdmin ? `<button class="admin-nav-item ${view==='operatorler'?'active':''}" title="Operatörler" onclick="gotoOperatorler()">${ico('users',14)}<span class="nav-label">Operatörler</span></button>` : ''}
-      <button class="admin-nav-item ${view==='adminSettings'?'active':''}" title="Ayarlar" onclick="gotoAyarlar()">${ico('gear',14)}<span class="nav-label">Ayarlar</span></button>
-      ` : ''}
+      ${navOgeleri.filter(n=>!n.yonetim).map(navBtn).join('')}
+      ${navOgeleri.some(n=>n.yonetim) ? `<div class="admin-sidebar-sec">Yönetim</div>${navOgeleri.filter(n=>n.yonetim).map(navBtn).join('')}` : ''}
       <div class="admin-sidebar-user">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div class="admin-sidebar-avatar" title="${connOK?'Buluta bağlı (senkron)':'Bağlantı yok — internet kontrol edin'}">${esc((session.displayName||session.username||'').slice(0,2).toUpperCase())}<span style="position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:${connOK?'var(--success)':'var(--danger)'};border:2px solid var(--sidebar-bg);border-radius:50%"></span></div>
-          <div><div class="admin-sidebar-uname">${esc(session.displayName||session.username)}</div><div class="admin-sidebar-urole"><span style="width:6px;height:6px;border-radius:50%;background:${connOK?'var(--success)':'var(--danger)'};display:inline-block"></span>${session.isSuperAdmin?'SuperAdmin':session.isSef?'Şef':session.isUretimSef?'Üretim Şef':'Yönetici'}</div></div>
-        </div>
+        ${kisiHtml}
         <button class="admin-nav-item" style="width:auto;min-width:40px;padding:6px;justify-content:center" onclick="doLogout()" title="Çıkış Yap">${ico('logout',15)}</button>
       </div>
     </nav>`;
@@ -3278,7 +3322,7 @@ function renderAdmin(){
     } else if(settingsSubTab==='tabErisimi'){
       const adminAccounts = Object.entries(STATE.operators).filter(([code,v])=>!v.isSuperAdmin && (v.isAdmin || v.isSef || v.isUretimSef));
       body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Sekme Erişimi (Yönetici)</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Her yönetici/şef hesabı için, sol menüdeki ana öğelerden hangilerini görebileceğini AYRI AYRI belirle (ör. "LV sadece Rapor ve Canlı Panel · Makine Matrisi'ni görsün" gibi). Canlı Panel'in üç sekmesinin (Genel Bakış / Makine Matrisi / Tamamlanan Kodlar) ayrı ayrı kutusu var: üçünü de kapatırsan Canlı Panel sol menüde hiç görünmez, birini açık bırakırsan kullanıcı ekrana girer ve yalnızca o sekmeyi görür. Ayrıca "${ico('alert',13)} Uzun Duruş Uyarısı" kutusuyla, üst bardaki uzun süredir duruşta olan işleri gösteren uyarı ikonunu kimin görebileceğini de ayrı ayrı kapatıp açabilirsin. SuperAdmin bu ayardan hiç etkilenmez, her zaman hepsini görür. Bir kullanıcı için hiçbir kutuyu kapatmazsan, o kullanıcı varsayılan olarak tüm sekmeleri/uyarıları görür.</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Her yönetici/şef hesabı için, menüdeki ana öğelerden hangilerini görebileceğini AYRI AYRI belirle (ör. "LV sadece Rapor ve Canlı Panel · Makine Matrisi'ni görsün" gibi). Canlı Panel'in üç sekmesinin (Genel Bakış / Makine Matrisi / Tamamlanan Kodlar) ayrı ayrı kutusu var: üçünü de kapatırsan Canlı Panel sol menüde hiç görünmez, birini açık bırakırsan kullanıcı ekrana girer ve yalnızca o sekmeyi görür. Ayrıca "${ico('alert',13)} Uzun Duruş Uyarısı" kutusuyla, üst bardaki uzun süredir duruşta olan işleri gösteren uyarı ikonunu kimin görebileceğini de ayrı ayrı kapatıp açabilirsin. SuperAdmin bu ayardan hiç etkilenmez, her zaman hepsini görür. Bir kullanıcı için hiçbir kutuyu kapatmazsan, o kullanıcı varsayılan olarak tüm sekmeleri/uyarıları görür.</div>
         ${adminAccounts.length===0 ? `<div style="color:var(--text-muted);font-size:13px">Henüz yönetici/şef hesabı yok.</div>` : `
         <div class="op-settings-table">
           ${adminAccounts.map(([code,v])=>`
@@ -4282,7 +4326,7 @@ function renderAdmin(){
      gerekiyor; bu yüzden #bubble-root gibi morph'a rağmen yaşayan bir kök kullanılmıyor. */
   if(isCanliPanelView(view)) body = introHintHtml() + canliPanelTabsHtml() + body;
 
-  return `<div class="root-wide theme-${resolvedTheme()}">${sidebar}<div class="admin-shell-body"><div class="print-brand">ROTA TAKİP · YÖNETİCİ RAPORU</div>${header}${body}</div>${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}${tadilatAkisModalId ? renderTadilatAkisModal() : ''}${karburPickerFor ? renderKarburPicker() : ''}${renderStokListeModal()}${stokDuzeltRowId ? renderStokDuzeltModal() : ''}</div>`;
+  return `<div class="root-wide theme-${resolvedTheme()}">${sidebar}<div class="admin-shell-body"><div class="print-brand">ROTA TAKİP · YÖNETİCİ RAPORU</div>${header}${body}</div>${adminAltBarHtml(navOgeleri)}${adminMenuHtml(navOgeleri, kisiHtml)}${machineModal ? renderMachineModal() : ''}${tadilatEditId ? renderTadilatEditModal() : ''}${malzemeAramaOpen ? renderMalzemeAramaModal() : ''}${reportEditId ? renderReportEditModal() : ''}${tadilatRowEditId ? renderTadilatRowEditModal() : ''}${machineAccessModalCode ? renderMachineAccessModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}${tadilatAkisModalId ? renderTadilatAkisModal() : ''}${karburPickerFor ? renderKarburPicker() : ''}${renderStokListeModal()}${stokDuzeltRowId ? renderStokDuzeltModal() : ''}</div>`;
 }
 function setReportFilterFieldLight(field, val){ reportFilter[field]=val; renderTableOnly(); }
 function renderTableOnly(){ render(); } // basit yaklaşım: filtre değişince tam yeniden çizim yeterli hızda çalışır
