@@ -227,7 +227,7 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .iy-detay{background:var(--bg);padding:4px 14px 12px;overflow-x:auto}
 .iy-detay-row{display:grid;grid-template-columns:116px minmax(150px,1fr) 96px 132px 118px;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px}
 .iy-detay-row .sag{text-align:right}
-.iy-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:14px}
+.iy-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:14px;margin-bottom:14px}
 /* .analiz-chart-box'un min-width:280px'ini eziyor — telefonda iki sütunluk KPI ızgarasında
    her kart 280px'e zorlanıp sağdan kesiliyordu (02.10.2026). */
 .iy-kpi,.analiz-chart-box.iy-kpi{border-left:4px solid var(--nc);min-width:0}
@@ -1428,3 +1428,16 @@ html{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
 .ag-ikili-hucre{width:28%;min-width:100px}
 .ag-ayrim-tablo tr.secili td{background:color-mix(in srgb, var(--accent) 10%, transparent)}
 .ag-etiket{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:9px;background:color-mix(in srgb, var(--tadilat-info) 16%, transparent);color:var(--tadilat-info);margin-left:4px;vertical-align:1px}
+/* Malzeme bekleyen sipariş rengi (05.10.2026): istek no var = sarı, yok = kırmızı */
+.mb-satir.mb-istek-yok{background:color-mix(in srgb, var(--danger) 13%, transparent);box-shadow:inset 4px 0 0 var(--danger)}
+.mb-satir.mb-istek-var{background:color-mix(in srgb, var(--warn) 15%, transparent);box-shadow:inset 4px 0 0 var(--warn)}
+.mb-istek-no{color:var(--warn-text);font-family:var(--ff-mono);font-weight:700}
+button.mb-istek-no{border-color:var(--warn-border)}
+.mb-istek-gir{color:var(--danger-text);border-color:var(--danger)}
+.mb-istek-gir-yazi{color:var(--danger-text);font-size:11px;font-weight:600}
+.iy-mb-satir{border-left:4px solid;padding-left:10px;border-radius:4px;margin-top:4px}
+.iy-mb-satir.yok{border-left-color:var(--danger);background:color-mix(in srgb, var(--danger) 12%, transparent)}
+.iy-mb-satir.var{border-left-color:var(--warn);background:color-mix(in srgb, var(--warn) 14%, transparent)}
+.iy-mb-satir.yok .iy-mb-istek{color:var(--danger-text);font-weight:700}
+.iy-mb-satir.var .iy-mb-istek{color:var(--warn-text);font-weight:700;font-family:var(--ff-mono)}
+.iy-mb-etiket{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:9px;margin-left:4px;color:var(--warn-text);background:color-mix(in srgb, var(--warn) 18%, transparent)}

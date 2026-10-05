@@ -177,7 +177,7 @@ function renderMalzemeBekleyen(){
       ${g.satirlar.map(s=>{
         const bek = mbBeklemeMetni(s.isaretTs);
         const istek = String(s.caniasIstekNo||'').trim();
-        return `<div class="mb-satir${istek?'':' mb-istek-yok'}">
+        return `<div class="mb-satir ${istek?'mb-istek-var':'mb-istek-yok'}" title="${istek?'İstek no girildi — sipariş açıldı, malzeme bekleniyor':'İstek no girilmedi — CANIAS isteği henüz açılmadı'}">
           <span><span class="mb-ie">${esc(s.isEmriNo||'—')}</span><span class="mb-talep">${esc(s.talepNo||'')}</span></span>
           <span class="mb-mamul" title="${esc(s.mamulAdi||'')}">${esc(s.mamulAdi||'—')}</span>
           <span class="mb-sag">${s.ieMiktar||'—'}</span>
@@ -185,10 +185,12 @@ function renderMalzemeBekleyen(){
           <span style="color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(operatorGosterimAdi({operatorName:s.isaretleyenName, operatorUsername:s.isaretleyenUsername}))}</span>
           <span class="mb-sag" style="color:${bek.renk}">${bek.metin}</span>
           <span class="mb-sag">${istek
-            ? `<button class="btn-ghost mb-mini" style="color:var(--success);border-color:transparent" onclick="mbIstekAc('${escJs(s.id)}','${escJs(istek)}')">${esc(istek)}</button>`
+            ? (malzemeIstekNoYetkisi()
+                ? `<button class="btn-ghost mb-mini mb-istek-no" onclick="mbIstekAc('${escJs(s.id)}','${escJs(istek)}')">${esc(istek)}</button>`
+                : `<span class="mb-istek-no">${esc(istek)}</span>`)
             : (malzemeIstekNoYetkisi()
-                ? `<button class="btn-ghost mb-mini" style="color:var(--warn);border-color:var(--warn)" onclick="mbIstekAc('${escJs(s.id)}','')">no gir</button>`
-                : `<span style="color:var(--warn);font-size:11px">bekliyor</span>`)}</span>
+                ? `<button class="btn-ghost mb-mini mb-istek-gir" onclick="mbIstekAc('${escJs(s.id)}','')">no gir</button>`
+                : `<span class="mb-istek-gir-yazi">istek yok</span>`)}</span>
           <span class="mb-eylem">
             ${canManageStock()?`<button class="btn-ghost mb-mini" title="Malzemesi geldi, bekleme bitti" onclick="malzemeBekleyenKarsila('${escJs(s.id)}')">Karşılandı</button>
             <button class="del-btn" title="Kaydı sil" onclick="malzemeBekleyenSil('${escJs(s.id)}')">${ico('trash',13)}</button>`:''}

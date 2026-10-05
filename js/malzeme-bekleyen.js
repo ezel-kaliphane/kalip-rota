@@ -27,11 +27,13 @@
    yerel kopya elle güncelleniyor ki kullanıcı kendi işlemini yenilemeden görsün. */
 
 let malzemeBekleyen = {}, malzemeBekleyenReady = false, malzemeBekleyenLoading = false, malzemeBekleyenError = null;
+let malzemeBekleyenDenemeTs = 0; // son okuma denemesi — İş Yoğunluğu bununla dakikada bir tazeliyor
 let hammaddeRecete = {}, hammaddeReceteReady = false, hammaddeReceteLoading = false;
 
 function ensureMalzemeBekleyenLoaded(cb, force){
   if((malzemeBekleyenReady && !force) || malzemeBekleyenLoading) return;
   malzemeBekleyenLoading = true;
+  malzemeBekleyenDenemeTs = Date.now();
   DB.ref('malzemeBekleyen').once('value').then(snap => {
     malzemeBekleyenLoading = false;
     malzemeBekleyen = snap.val() || {};
@@ -60,6 +62,11 @@ function malzemeBekleyenArray(){
 function malzemeBekleyenAktif(){
   return malzemeBekleyenArray().filter(x=>x.durum!=='karsilandi');
 }
+/* Siparişin rengi (05.10.2026, kullanıcı isteği): CANIAS istek no girildiyse SARI (sipariş açıldı,
+   malzeme yolda), girilmediyse KIRMIZI (müdürün kuyruğu, henüz sipariş yok). Malzeme Bekleyenler ve
+   İş Yoğunluğu aynı kuralı buradan okuyor. */
+function malzemeIstekVar(x){ return !!String((x && x.caniasIstekNo)||'').trim(); }
+function malzemeIstekRenk(x){ return malzemeIstekVar(x) ? 'var(--warn)' : 'var(--danger)'; }
 /* Bir hammadde kaleminin rezervesi = o kalemi bekleyen aktif kayıtların toplamı. */
 function malzemeRezerve(hammaddeId){
   return malzemeBekleyenAktif()

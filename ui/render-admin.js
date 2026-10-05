@@ -1833,6 +1833,18 @@ function stokBolumSayisi(key){
 // Başla'ya bastığı an (Press'te birleştirme/Tek Parça, FKK'da aynı isEmriNo ile devam), o kayıt
 // artık "en son" kayıt olur ve bekleyen listesinden kendiliğinden düşer — elle işaretlemeye gerek yok.
 /* --- VERİ — dört görünümün tamamı bu tek hesaptan besleniyor ------------- */
+/* MALZEME BEKLEYENLER İŞ YOĞUNLUĞUNDA (05.10.2026, kullanıcı isteği): "malzeme bekleyenlerin amacı
+   onun da iş yoğunluğunda görünmesiydi". Malzeme bekleyen iş emrinin çoğu zaman HİÇ kaydı yok
+   (testereye bile geçemedi), bu yüzden "sıradaki makine" kuyruğunda görünmüyordu. Ayrı bir satır
+   olarak en üstte duruyor; satır rengi siparişin durumuna göre: istek no yoksa kırmızı, varsa sarı
+   (malzemeIstekRenk). malzemeBekleyen canlı dinlenmiyor (maliyet, bkz. js/malzeme-bekleyen.js) —
+   bu ekran açıkken dakikada bir yeniden okunuyor. */
+function iyMalzemeBekleyenler(){
+  if(typeof malzemeBekleyenAktif!=='function') return [];
+  if(Date.now() - (malzemeBekleyenDenemeTs||0) > 60000) ensureMalzemeBekleyenLoaded(()=>safeRender(), true);
+  if(!malzemeBekleyenReady) return [];
+  return malzemeBekleyenAktif().slice().sort((a,b)=>(malzemeIstekVar(a)-malzemeIstekVar(b)) || (Number(a.isaretTs)||0)-(Number(b.isaretTs)||0));
+}
 function iyVeri(){
   const bekleyenler = bekleyenSonrakiOperasyonlar();
   // Sadece _ZARF/_ELMAS + Press kombinasyonu özel çift-eşleştirme görünümüne taşınıyor — bileşensiz
@@ -1860,15 +1872,22 @@ function iyVeri(){
     ? { label:'P01 · Pres (Zarf/Elmas Birleşimi)', isPres:true, isEmriSayisi: presCiftleri.length, toplamAdet:0, ciftler: presCiftleri }
     : null;
   const rows = [...digerRows, ...(presRow?[presRow]:[])].sort((a,b)=> b.isEmriSayisi - a.isEmriSayisi);
+  const mb = iyMalzemeBekleyenler();
+  const mbIstekYok = mb.filter(x=>!malzemeIstekVar(x)).length;
+  const malzemeRow = mb.length>0 ? { label:'Malzeme Bekliyor', isMalzeme:true, isEmriSayisi: mb.length, istekYok: mbIstekYok,
+    toplamAdet: mb.reduce((s,x)=>s+(Number(x.ieMiktar)||0), 0), kayitlar: mb } : null;
+  const makineRows = rows;
 
   return {
-    rows,
+    rows: malzemeRow ? [malzemeRow, ...makineRows] : makineRows,
+    malzemeSayi: mb.length, malzemeIstekYok: mbIstekYok,
+    malzemeTalepSet: new Set(mb.map(x=>String(x.talepNo||'').trim().toUpperCase()).filter(Boolean)),
     toplamIsEmri: digerBekleyenler.length + presCiftleri.length,
     toplamAdet: digerBekleyenler.reduce((s,e)=>s+(Number(e.adet)||0), 0),
     belirsizSayi: (byMakine['Belirsiz']?.isEmriler.length) || 0,
     hazirCiftSayisi: presCiftleri.filter(c=>c.ikisiDeHazir).length,
-    doluMakine: rows.filter(r=>r.label!=='Belirsiz').length,
-    enYuksek: Math.max(1, ...rows.map(r=>r.isEmriSayisi))
+    doluMakine: makineRows.filter(r=>r.label!=='Belirsiz').length,
+    enYuksek: Math.max(1, ...makineRows.map(r=>r.isEmriSayisi), mb.length)
   };
 }
 const iyKod = l => String(l||'').split(' · ')[0];
@@ -1882,6 +1901,8 @@ const iyAd  = l => String(l||'').split(' · ').slice(1).join(' · ');
 // verisi gerekiyor ve o veri modelde yok. Kısıt bazlı planlama/optimizasyon aşamasında
 // zaten çözülecek; o zamana kadar bilinçli olarak mutlak sayıda kalıyor.
 const iyRenk = n => n>=5 ? 'var(--danger)' : n>=3 ? 'var(--accent)' : 'var(--success)';
+/* Malzeme satırı: içinde istek no'su girilmemiş tek bir kayıt bile varsa kırmızı, hepsinin varsa sarı. */
+const iySatirRenk = r => r.isMalzeme ? (r.istekYok>0 ? 'var(--danger)' : 'var(--warn)') : r.label==='Belirsiz' ? 'var(--danger)' : iyRenk(r.isEmriSayisi);
 
 /* --- ORTAK PARÇALAR ----------------------------------------------------- */
 function iyKpiHtml(v){
@@ -1897,6 +1918,7 @@ function iyKpiHtml(v){
     ${kpi('Toplam Adet', v.toplamAdet, 'var(--success)', 'Press hariç — çift eşleşmesi adet toplamaz')}
     ${kpi('Dolu Makine Sayısı', v.doluMakine, 'var(--warn)', 'en az bir iş bekleyen makine')}
     ${kpi('Belirsiz', v.belirsizSayi, 'var(--danger)', 'sıradaki makinesi işaretlenmemiş', v.belirsizSayi>0)}
+    ${v.malzemeSayi>0 ? kpi('Malzeme Bekliyor', v.malzemeSayi, v.malzemeIstekYok>0?'var(--danger)':'var(--warn)', v.malzemeIstekYok>0 ? `${v.malzemeIstekYok} tanesinde istek no yok` : 'hepsinin istek no’su girildi', v.malzemeIstekYok>0) : ''}
   </div>`;
 }
 // Bir kaydın son durumuna göre kısa özet + renk — arama sonucu kartlarında kullanılıyor.
@@ -2013,13 +2035,14 @@ function iyListeHtml(v){
     ${v.rows.map(r=>{
       const acik = isYogunluguAcikMakine===r.label;
       const belirsiz = r.label==='Belirsiz';
-      const renk = belirsiz ? 'var(--danger)' : iyRenk(r.isEmriSayisi);
+      const renk = iySatirRenk(r);
       return `<div class="iy-row${acik?' open':''}" style="--nc:${renk}">
         <button class="iy-head" onclick="toggleIsYogunluguDetay('${escJs(r.label)}')">
           <span style="display:flex;align-items:center;justify-content:space-between;gap:10px">
             <span style="display:flex;align-items:baseline;gap:9px;min-width:0;flex-wrap:wrap">
-              <span class="mono" style="font-size:13px;font-weight:700;color:${belirsiz?'var(--danger)':'var(--accent)'};white-space:nowrap">${esc(iyKod(r.label))}</span>
-              <span style="font-size:11.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(iyAd(r.label) || (belirsiz?'sıradaki makinesi işaretlenmemiş':''))}</span>
+              <span class="mono" style="font-size:13px;font-weight:700;color:${belirsiz||r.isMalzeme?renk:'var(--accent)'};white-space:nowrap">${esc(iyKod(r.label))}</span>
+              <span style="font-size:11.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(iyAd(r.label) || (belirsiz?'sıradaki makinesi işaretlenmemiş':r.isMalzeme?'stok yok, iş emri parkta':''))}</span>
+              ${r.isMalzeme ? `<span class="matrix-tag" style="--sb:${r.istekYok>0?'var(--danger)':'var(--warn)'}">${r.istekYok>0 ? `${r.istekYok} istek no yok` : 'istek no’lar girildi'}</span>` : ''}
               ${r.isPres ? `<span class="matrix-tag" style="--sb:var(--tadilat-info)">Çift eşleşme</span>` : ''}
             </span>
             <span style="display:flex;align-items:baseline;gap:7px;white-space:nowrap;flex:none">
@@ -2028,11 +2051,11 @@ function iyListeHtml(v){
               <span style="color:var(--text-muted)">${acik?ico('chevronUp',14):ico('chevronDown',14)}</span>
             </span>
           </span>
-          <span class="iy-bar"><span style="width:${Math.round(r.isEmriSayisi/v.enYuksek*100)}%"></span></span>
+          <span class="iy-bar"><span style="width:${Math.round(r.isEmriSayisi/v.enYuksek*100)}%${r.isMalzeme?';background:'+renk:''}"></span></span>
         </button>
         ${acik ? `<div class="iy-detay">
-          ${r.isPres ? iyPresDetayHtml(r) : r.isEmriler.map(e=>`<div class="iy-detay-row">
-            <span class="mono" style="color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline dotted" onclick="openIyGecmisModal('${escJs(e.isEmriNo)}')">${esc(e.talepNo||e.isEmriNo)}</span>
+          ${r.isPres ? iyPresDetayHtml(r) : r.isMalzeme ? iyMalzemeDetayHtml(r) : r.isEmriler.map(e=>`<div class="iy-detay-row">
+            <span><span class="mono" style="color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline dotted" onclick="openIyGecmisModal('${escJs(e.isEmriNo)}')">${esc(e.talepNo||e.isEmriNo)}</span>${v.malzemeTalepSet.has(String(e.talepNo||'').trim().toUpperCase()) ? ` <span class="iy-mb-etiket" title="Bu iş emri Malzeme Bekleyenler'de">malzeme bekliyor</span>` : ''}</span>
             <span style="color:var(--text-muted)">${esc(e.makine||'—')}</span>
             <span class="mono sag">${esc(e.adet||'—')}</span>
             <span style="color:var(--text-muted)">${esc(e.operatorName||e.operatorUsername||'')}</span>
@@ -2044,10 +2067,23 @@ function iyListeHtml(v){
   </div>`;
 }
 
+/* Malzeme Bekliyor satırının açılan detayı — her kayıt kendi renginde (istek no yoksa kırmızı, varsa sarı). */
+function iyMalzemeDetayHtml(r){
+  return `${r.kayitlar.map(x=>{ const istek = String(x.caniasIstekNo||'').trim(); const bek = mbBeklemeMetni(x.isaretTs);
+    return `<div class="iy-detay-row iy-mb-satir ${istek?'var':'yok'}">
+      <span><span class="mono" style="font-weight:700">${esc(x.talepNo||x.isEmriNo||'—')}</span>${x.isEmriNo && x.isEmriNo!==x.talepNo ? `<span class="mono" style="display:block;font-size:10.5px;color:var(--text-subtle)">${esc(x.isEmriNo)}</span>` : ''}</span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.mamulAdi||'')}">${esc(x.mamulAdi||'—')}</span>
+      <span class="mono">${esc(x.hammaddeKod||'—')} <span style="color:var(--text-muted)">· ${esc(String(x.gerekenMiktar||''))} ${esc(x.birim||'')}</span></span>
+      <span class="iy-mb-istek">${istek ? `İstek ${esc(istek)}` : 'İstek no yok'}</span>
+      <span class="mono sag" style="color:${bek.renk}">${bek.metin} bekliyor</span>
+    </div>`; }).join('')}
+  ${canManageStock() ? `<div style="padding-top:10px"><button class="btn-ghost" style="width:auto;padding:7px 12px" onclick="stokSubView='bekleyen'; setView('stokYonetim')">Malzeme Bekleyenler'de aç</button></div>` : ''}`;
+}
+
 /* --- GÖRÜNÜM: ÖZET — atölye ustası, az bilgi ----------------------- */
 function iyOzetHtml(v){
-  const top = v.rows.filter(r=>r.label!=='Belirsiz').slice(0,5);
-  const enCokAdet = v.rows.filter(r=>!r.isPres && r.label!=='Belirsiz').slice().sort((a,b)=>b.toplamAdet-a.toplamAdet)[0];
+  const top = v.rows.filter(r=>r.label!=='Belirsiz' && !r.isMalzeme).slice(0,5);
+  const enCokAdet = v.rows.filter(r=>!r.isPres && !r.isMalzeme && r.label!=='Belirsiz').slice().sort((a,b)=>b.toplamAdet-a.toplamAdet)[0];
   const bosMakine = (typeof allMachines==='function')
     ? allMachines().filter(m=>!v.rows.some(r=>iyKod(r.label)===m.code)).length
     : null;
@@ -2067,6 +2103,8 @@ function iyOzetHtml(v){
     </div>
     <div style="height:1px;background:var(--border);margin:12px 0"></div>
     ${satir(v.belirsizSayi, 'var(--danger)', 'color-mix(in srgb, var(--danger) 14%, transparent)', 'Belirsiz', 'sıradaki makinesi girilmemiş iş emri')}
+    ${v.malzemeSayi>0 ? (()=>{ const c = v.malzemeIstekYok>0 ? 'var(--danger)' : 'var(--warn)';
+      return satir(v.malzemeSayi, c, `color-mix(in srgb, ${c} 16%, transparent)`, 'Malzeme bekliyor', v.malzemeIstekYok>0 ? `${v.malzemeIstekYok} tanesinde istek no girilmedi` : 'hepsinin istek no’su girildi, malzeme yolda'); })() : ''}
     ${enCokAdet ? satir(enCokAdet.toplamAdet, 'var(--accent)', 'var(--accent-dim)', esc(enCokAdet.label), 'en çok adet bekleyen makine') : ''}
     ${bosMakine!=null ? satir(bosMakine, 'var(--text-muted)', 'var(--panel-alt)', 'Boşta makine', 'hiç bekleyen işi yok') : ''}
   </div>`;
@@ -2084,7 +2122,7 @@ function iyHaftaHtml(v){
   const gunler = Array.from({length:6}, (_,i)=>{ const d = new Date(pzt); d.setDate(d.getDate()+i); return d; });
   const sinir = gunler.map(d=>d.getTime());
 
-  const satirlar = v.rows.filter(r=>!r.isPres).map(r=>{
+  const satirlar = v.rows.filter(r=>!r.isPres && !r.isMalzeme).map(r=>{
     const cells = sinir.map(gs=>r.isEmriler.filter(e=>e.endTs>=gs && e.endTs<gs+86400000).length);
     return { label:r.label, cells, toplam:r.isEmriSayisi };
   });
@@ -2135,10 +2173,10 @@ function iyPanoHtml(v, tamEkran){
   const kolon = (liste) => liste.map(r=>`
     <div style="display:grid;grid-template-columns:${S.kol};align-items:center;gap:16px;padding:${S.pad};border-top:1px solid var(--panel-alt)">
       <div style="display:flex;align-items:baseline;gap:9px;min-width:0">
-        <span class="mono" style="flex:0 0 auto;font-size:${S.kod}px;font-weight:700;color:${r.label==='Belirsiz'?'var(--danger)':'var(--accent)'};white-space:nowrap">${esc(iyKod(r.label))}</span>
-        <span style="flex:1;min-width:0;font-size:${S.ad}px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(iyAd(r.label))}</span>
+        <span class="mono" style="flex:0 0 auto;font-size:${S.kod}px;font-weight:700;color:${r.label==='Belirsiz'||r.isMalzeme?iySatirRenk(r):'var(--accent)'};white-space:nowrap">${esc(iyKod(r.label))}</span>
+        <span style="flex:1;min-width:0;font-size:${S.ad}px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.isMalzeme ? (r.istekYok>0 ? `${r.istekYok} istek no yok` : 'istek no girildi') : iyAd(r.label))}</span>
       </div>
-      <div style="height:${S.bar}px;border-radius:4px;background:var(--panel);overflow:hidden"><div style="height:100%;width:${Math.round(r.isEmriSayisi/v.enYuksek*100)}%;background:${r.label==='Belirsiz'?'var(--danger)':iyRenk(r.isEmriSayisi)};border-radius:4px"></div></div>
+      <div style="height:${S.bar}px;border-radius:4px;background:var(--panel);overflow:hidden"><div style="height:100%;width:${Math.round(r.isEmriSayisi/v.enYuksek*100)}%;background:${iySatirRenk(r)};border-radius:4px"></div></div>
       <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:6px;white-space:nowrap">
         <span class="mono" style="font-size:${S.sayi}px;font-weight:700">${r.isEmriSayisi}</span>
         <span class="mono" style="font-size:${S.bolu}px;color:var(--text-muted)">/${r.isPres ? v.hazirCiftSayisi : r.toplamAdet}</span>
