@@ -1403,19 +1403,71 @@ function caniasKoduBekleyenKartiHtml(){
   const liste = caniasKoduBekleyenler();
   if(!liste.length) return '';
   const sa = !!(session && session.isSuperAdmin);
+  /* Hangi iş emri istedi (05.10.2026): bekleyen kayıtlar ve reçeteler canlı/bir kez okunuyor. */
+  if(typeof ensureMalzemeBekleyenLoaded==='function') ensureMalzemeBekleyenLoaded();
+  if(typeof ensureHammaddeReceteLoaded==='function') ensureHammaddeReceteLoaded(()=>safeRender());
+  const isler = it => { const b = hammaddeBagliKayitlar(it.id);
+    if(!b.mb.length) return `<span style="color:var(--text-subtle)">bağlı iş emri yok</span>`;
+    return 'İsteyen: ' + b.mb.map(x=>`<span class="hk-is ${x.durum==='karsilandi'?'kapali':''}" title="${esc(x.mamulAdi||'')}${x.durum==='karsilandi'?' · karşılandı':''}">${esc(x.talepNo||x.isEmriNo||'—')}${x.mamulAdi?` <small>${esc(String(x.mamulAdi).slice(0,32))}</small>`:''}</span>`).join(' '); };
   return `<div class="notice" style="--nc:var(--warn);margin:0 24px 14px">
     <div class="notice-title">CANİAS kodu bekleyen ${liste.length} hammadde</div>
     <div class="notice-sub" style="margin-bottom:8px">Şef CANİAS'ta henüz olmayan malzemeyi açtı. Kodu CANİAS'ta açınca hammadde listesini Excel Yükleme → Hammadde'ye yüklemen yeter, kendiliğinden bağlanır; eşleşmeyen olursa kodu buradan gir.</div>
     <div style="display:flex;flex-direction:column;gap:6px">
       ${liste.map(it=>`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 10px">
         <div style="flex:1;min-width:180px"><span class="mono" style="font-weight:600">${esc(it.isim || [it.kod,it.cap].filter(Boolean).join(' '))}</span>
-          <div style="font-size:11.5px;color:var(--text-muted)">${esc(it.acanName||it.acanUsername||'—')} · ${it.acilisTs?fmtDT(it.acilisTs):'—'} · ${it.tur==='boy'?lotsArray(it).length+' çubuk':(Number(it.miktar)||0)+' adet'}</div></div>
+          <div style="font-size:11.5px;color:var(--text-muted)">${esc(it.acanName||it.acanUsername||'—')} · ${it.acilisTs?fmtDT(it.acilisTs):'—'} · ${it.tur==='boy'?lotsArray(it).length+' çubuk':(Number(it.miktar)||0)+' adet'}</div>
+          <div class="hk-isler">${isler(it)}</div></div>
         ${sa ? `<input class="mono" style="width:150px;margin:0" placeholder="KLPHM000…" value="${esc(hkGirdi[it.id]||'')}" oninput="hkGirdi['${escJs(it.id)}']=this.value">
-          <button class="btn-primary" style="width:auto;padding:8px 14px" onclick="hammaddeKodBagla('${escJs(it.id)}')">Kodu Bağla</button>`
+          <button class="btn-primary" style="width:auto;padding:8px 14px" onclick="hammaddeKodBagla('${escJs(it.id)}')">Kodu Bağla</button>
+          <button class="btn-ghost" style="width:auto;padding:8px 12px" onclick="hammaddeDuzeltAc('${escJs(it.id)}')">Düzelt</button>
+          <button class="del-btn" title="Kalemi sil" onclick="hammaddeBekleyenKalemSil('${escJs(it.id)}')">${ico('trash',14)}</button>`
           : `<span style="font-size:11.5px;color:var(--warn)">SuperAdmin bekleniyor</span>`}
       </div>`).join('')}
     </div>
   </div>`;
+}
+/* CANİAS kodu bekleyen kalemi düzelt / mevcut malzemeyle değiştir (mantık: js/state.js). */
+function hammaddeDuzeltModalHtml(){
+  if(!hdModal) return '';
+  const m = hdModal, it = stockItems[m.id];
+  if(!it){ hdModal = null; return ''; }
+  const boy = it.tur==='boy', b = hammaddeBagliKayitlar(m.id), stok = hammaddeStokSayi(it);
+  const bagli = `${b.mb.length ? `${b.mb.length} bekleyen kayıt (${b.mb.map(x=>esc(x.talepNo||x.isEmriNo||'—')).join(', ')})` : 'bağlı bekleyen kayıt yok'}${b.recete.length ? ` · ${b.recete.length} reçete` : ''} · stok ${stok} ${esc(it.birim||'')}`;
+  let govde;
+  if(m.sekme==='bilgi'){
+    govde = `<div style="display:grid;grid-template-columns:${boy?'1fr 120px':'1fr'};gap:10px">
+        <div class="field"><label for="hd-kod">${boy?'Kalite':'Kod / ölçü'}</label>
+          <input id="hd-kod" value="${esc(m.kod)}" oninput="hammaddeDuzeltYaz('kod',this.value,false)"></div>
+        ${boy?`<div class="field"><label for="hd-cap">Çap</label><input id="hd-cap" class="mono" value="${esc(m.cap)}" oninput="hammaddeDuzeltYaz('cap',this.value,false)"></div>`:''}
+      </div>
+      <div class="field"><label for="hd-isim">Açıklama</label><input id="hd-isim" value="${esc(m.isim)}" oninput="hammaddeDuzeltYaz('isim',this.value,false)"></div>
+      <div style="font-size:11.5px;color:var(--text-muted);margin:-4px 0 12px">Bekleyen kayıtlardaki ve reçetelerdeki malzeme adı da güncellenir.</div>
+      <div style="display:flex;gap:8px"><button class="btn-primary" style="flex:1" ${m.busy?'disabled':''} onclick="hammaddeDuzeltKaydet()">${m.busy?'Kaydediliyor…':'Kaydet'}</button>
+        <button class="btn-ghost" onclick="hammaddeDuzeltKapat()">Vazgeç</button></div>`;
+  } else {
+    const adaylar = stockItemsArray().filter(x=>x.id!==m.id);
+    const sonuc = String(m.ara||'').trim() ? hammaddeAra(adaylar, m.ara).slice(0,8) : [];
+    const hedef = m.hedefId ? stockItems[m.hedefId] : null;
+    govde = `<div class="field"><label for="hd-ara">Doğru malzemeyi ara</label>
+        <input id="hd-ara" placeholder="Yaz: 4140 25 · 2344 Ø80 · b13 kalın" value="${esc(m.ara)}" oninput="hammaddeDuzeltYaz('ara',this.value)"></div>
+      ${sonuc.length ? `<div style="display:flex;flex-direction:column;gap:4px;margin:-4px 0 10px">${sonuc.map(x=>`<button type="button" class="btn-ghost" style="width:100%;display:flex;justify-content:space-between;gap:10px;text-align:left;padding:8px 11px;${m.hedefId===x.id?'border-color:var(--accent);color:var(--accent)':''}" onclick="hammaddeDuzeltYaz('hedefId','${escJs(x.id)}')"><span>${esc(hammaddeGosterimAdi(x))}</span><span style="color:var(--text-muted);font-size:11.5px">stok ${hammaddeStokSayi(x)} ${esc(x.birim||'')}</span></button>`).join('')}</div>`
+        : (String(m.ara||'').trim() ? `<div style="font-size:12px;color:var(--text-muted);margin:-4px 0 10px">Eşleşen malzeme yok.</div>` : '')}
+      ${hedef ? `<div class="notice" style="--nc:var(--accent);padding:9px 12px;margin-bottom:12px"><div class="notice-sub">
+          <b>${esc(hammaddeGosterimAdi(it))}</b> → <b>${esc(hammaddeGosterimAdi(hedef))}</b><br>
+          ${b.mb.length} bekleyen kayıt ve ${b.recete.length} reçete buna geçer${stok>0?`, bu kalemdeki stok (${stok} ${esc(it.birim||'')}) ona aktarılır`:''}; bu kalem silinir.</div></div>` : ''}
+      <div style="display:flex;gap:8px"><button class="btn-primary" style="flex:1" ${(!hedef||m.busy)?'disabled':''} onclick="hammaddeDegistirKaydet()">${m.busy?'Kaydediliyor…':'Değiştir ve bu kalemi sil'}</button>
+        <button class="btn-ghost" onclick="hammaddeDuzeltKapat()">Vazgeç</button></div>`;
+  }
+  return `<div class="modal-overlay" onclick="if(event.target===this)hammaddeDuzeltKapat()">
+    <div class="modal-box" style="max-width:520px;padding:20px">
+      <div class="sec-h" style="margin-top:0">Hammaddeyi düzelt — ${esc(hammaddeGosterimAdi(it))}</div>
+      <div style="font-size:12px;color:var(--text-muted);margin:-6px 0 12px">${bagli}</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button type="button" class="sub-tab-btn ${m.sekme==='bilgi'?'active':''}" onclick="hammaddeDuzeltYaz('sekme','bilgi')">Bilgileri düzelt</button>
+        <button type="button" class="sub-tab-btn ${m.sekme==='degistir'?'active':''}" onclick="hammaddeDuzeltYaz('sekme','degistir')">Mevcut malzemeyle değiştir</button>
+      </div>
+      ${govde}
+    </div></div>`;
 }
 function renderStokGenelBakis(){
   ensureToolCatalogLoaded(()=>safeRender());
@@ -3269,7 +3321,7 @@ function renderAdmin(){
     ${uzunDevamEdenModalOpen ? renderUzunDevamEdenModal() : ''}
     ${messagesModalOpen ? renderMessagesModal() : ''}
     ${myPushHistoryModalOpen ? renderMyPushHistoryModal() : ''}
-    ${yeniHammaddeModalHtml()}`;
+    ${yeniHammaddeModalHtml()}${hammaddeDuzeltModalHtml()}`;
 
   let body = '';
   if(view==='adminSettings' && !session.isAdmin){ view = 'report'; }

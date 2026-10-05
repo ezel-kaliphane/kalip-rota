@@ -1443,3 +1443,7 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .iy-mb-etiket{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:9px;margin-left:4px;color:var(--warn-text);background:color-mix(in srgb, var(--warn) 18%, transparent)}
 .iy-mb-kart{border-left:4px solid var(--danger);background:color-mix(in srgb, var(--danger) 10%, var(--panel))}
 .iy-mb-kart.var{border-left-color:var(--warn);background:color-mix(in srgb, var(--warn) 12%, var(--panel))}
+.hk-isler{font-size:11.5px;color:var(--text-muted);margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.hk-is{font-family:var(--ff-mono);font-size:11px;padding:1px 7px;border-radius:9px;background:color-mix(in srgb, var(--warn) 16%, transparent);color:var(--text)}
+.hk-is small{font-family:var(--ff-sans, inherit);color:var(--text-muted)}
+.hk-is.kapali{background:var(--panel-alt);color:var(--text-muted);text-decoration:line-through}

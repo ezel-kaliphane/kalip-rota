@@ -729,6 +729,104 @@ function hammaddeKodBagla(id){
     delete hkGirdi[id]; toast('CANİAS kodu bağlandı: '+kod); render();
   }).catch(err=>toast('Kaydedilemedi: '+(err.message||'bilinmeyen hata')));
 }
+/* ---------- CANİAS KODU BEKLEYEN KALEMİ DÜZELT / DEĞİŞTİR / SİL (05.10.2026, kullanıcı isteği) ----------
+   "Şef bazen yanlış açabilir veya doğru malzemeyi yazmamış olabilir; hangi iş emrine istedi
+   görünsün, düzelt ve sil olsun." Yalnızca SuperAdmin.
+   - Düzelt (bilgi): kalite/kod, çap, açıklama. Bekleyen kayıtlarda ve reçetelerde saklanan
+     hammaddeKod metni de yeni ada güncellenir (o ekranlar adı oradan okuyor).
+   - Değiştir: doğru malzeme sistemde zaten varsa, bu kalemi gösteren bütün bekleyen kayıtlar
+     (karşılananlar dahil) ve çelik reçeteleri ona taşınır; bu kalemdeki stok (çubuklar ya da
+     adet) ona aktarılır; bu kalem silinir. Tek çok-yollu yazma — yarım kalmaz.
+   - Sil: kalemi bekleyen AKTİF iş emri varsa izin yok (iş emri hammaddesiz kalırdı) — önce
+     Değiştir. Reçetelerdeki çelik alanları temizlenir, karbür reçetesine dokunulmaz. */
+let hdModal = null; // { id, sekme:'bilgi'|'degistir', kod, cap, isim, ara, hedefId, busy }
+function hammaddeBagliKayitlar(id){
+  const mb = (typeof malzemeBekleyenArray==='function' ? malzemeBekleyenArray() : []).filter(x=>x.hammaddeId===id);
+  const recete = Object.entries((typeof hammaddeRecete!=='undefined' && hammaddeRecete) || {}).filter(([,r])=>r && r.hammaddeId===id).map(([m])=>m);
+  return { mb, aktif: mb.filter(x=>x.durum!=='karsilandi'), recete };
+}
+function hammaddeDuzeltAc(id){
+  if(!session || !session.isSuperAdmin){ toast('Yalnızca SuperAdmin düzeltebilir'); return; }
+  const it = stockItems[id]; if(!it) return;
+  if(typeof ensureMalzemeBekleyenLoaded==='function') ensureMalzemeBekleyenLoaded();
+  if(typeof ensureHammaddeReceteLoaded==='function') ensureHammaddeReceteLoaded(()=>safeRender());
+  hdModal = { id, sekme:'bilgi', kod: it.kod||'', cap: it.cap||'', isim: it.isim||'', ara:'', hedefId:'', busy:false };
+  render();
+}
+function hammaddeDuzeltKapat(){ hdModal = null; render(); }
+function hammaddeDuzeltYaz(alan, deger, cizme){ if(!hdModal) return; hdModal[alan] = deger; if(cizme!==false) render(); }
+function hammaddeDuzeltKaydet(){
+  if(!session || !session.isSuperAdmin || !hdModal || hdModal.busy) return;
+  const m = hdModal, it = stockItems[m.id]; if(!it){ hammaddeDuzeltKapat(); return; }
+  const boy = it.tur==='boy';
+  const kod = String(m.kod||'').replace(/\s+/g,' ').trim().toLocaleUpperCase('tr-TR');
+  let cap = boy ? String(m.cap||'').replace(/\s+/g,'').toLocaleUpperCase('tr-TR').replace(/^Ø?/,'Ø').replace('.',',') : '';
+  const isim = String(m.isim||'').replace(/\s+/g,' ').trim().toLocaleUpperCase('tr-TR') || [kod, cap].filter(Boolean).join(' ');
+  if(!kod){ toast(boy ? 'Kaliteyi yazın' : 'Kodu ya da ölçüyü yazın'); return; }
+  if(boy && !/^Ø\d/.test(cap)){ toast('Çapı yazın (ör. Ø27)'); return; }
+  const ayni = stockItemsArray().find(x=>x.id!==m.id && (x.tur==='boy')===boy && hammaddeEslesmeAnahtari(x.isim || `${x.kod||''} ${x.cap||''}`)===hammaddeEslesmeAnahtari(isim));
+  if(ayni){ toast('Bu malzeme zaten var: '+hammaddeGosterimAdi(ayni)+' — "Mevcut malzemeyle değiştir"i kullanın'); hdModal.sekme='degistir'; hdModal.hedefId=ayni.id; render(); return; }
+  const yeni = { ...it, kod, isim, ...(boy ? { cap } : {}) };
+  const etiket = hammaddeEtiket(yeni);
+  const b = hammaddeBagliKayitlar(m.id), updates = {};
+  updates['stockItems/'+m.id+'/kod'] = kod; updates['stockItems/'+m.id+'/isim'] = isim;
+  if(boy) updates['stockItems/'+m.id+'/cap'] = cap;
+  b.mb.forEach(x=>{ updates['malzemeBekleyen/'+x.id+'/hammaddeKod'] = etiket; });
+  b.recete.forEach(mm=>{ updates['hammaddeRecete/'+mm+'/hammaddeKod'] = etiket; });
+  m.busy = true; render();
+  DB.ref().update(updates).then(()=>{
+    stockItems[m.id] = yeni;
+    b.recete.forEach(mm=>{ hammaddeRecete[mm] = { ...hammaddeRecete[mm], hammaddeKod: etiket }; });
+    toast('Düzeltildi: '+etiket); hdModal = null; render();
+  }).catch(err=>{ m.busy = false; toast('Kaydedilemedi: '+(err.message||'hata')); render(); });
+}
+function hammaddeDegistirKaydet(){
+  if(!session || !session.isSuperAdmin || !hdModal || hdModal.busy) return;
+  const m = hdModal, src = stockItems[m.id], dst = stockItems[m.hedefId];
+  if(!src){ hammaddeDuzeltKapat(); return; }
+  if(!dst || m.hedefId===m.id){ toast('Doğru malzemeyi listeden seçin'); return; }
+  const stok = hammaddeStokSayi(src);
+  if(stok>0 && (src.tur==='boy')!==(dst.tur==='boy')){ toast('Bu kalemde stok var ve seçilen malzemenin türü farklı (çubuk / adet) — önce stoğu düzeltin'); return; }
+  const b = hammaddeBagliKayitlar(m.id), etiket = hammaddeEtiket(dst), updates = {};
+  b.mb.forEach(x=>{ updates['malzemeBekleyen/'+x.id+'/hammaddeId'] = m.hedefId; updates['malzemeBekleyen/'+x.id+'/hammaddeKod'] = etiket; });
+  b.recete.forEach(mm=>{ updates['hammaddeRecete/'+mm+'/hammaddeId'] = m.hedefId; updates['hammaddeRecete/'+mm+'/hammaddeKod'] = etiket; });
+  const yeniLotlar = {};
+  if(stok>0){
+    if(src.tur==='boy') lotsArray(src).forEach(l=>{ const lid = uid(); const { id, ...lot } = l; yeniLotlar[lid] = lot; updates['stockItems/'+m.hedefId+'/lots/'+lid] = lot; });
+    else updates['stockItems/'+m.hedefId+'/miktar'] = (Number(dst.miktar)||0) + (Number(src.miktar)||0);
+  }
+  updates['stockItems/'+m.id] = null;
+  const ozet = `${hammaddeGosterimAdi(src)} → ${hammaddeGosterimAdi(dst)}\n\n`
+    + `${b.mb.length} bekleyen kayıt ve ${b.recete.length} reçete yeni malzemeye geçecek`
+    + (stok>0 ? `, bu kalemdeki stok (${stok} ${src.birim||''}) ona aktarılacak` : '')
+    + `, bu kalem silinecek. Devam edilsin mi?`;
+  if(!confirm(ozet)) return;
+  m.busy = true; render();
+  DB.ref().update(updates).then(()=>{
+    if(stok>0){
+      if(src.tur==='boy') stockItems[m.hedefId] = { ...dst, lots: { ...(dst.lots||{}), ...yeniLotlar } };
+      else stockItems[m.hedefId] = { ...dst, miktar: (Number(dst.miktar)||0) + (Number(src.miktar)||0) };
+    }
+    delete stockItems[m.id];
+    b.recete.forEach(mm=>{ hammaddeRecete[mm] = { ...hammaddeRecete[mm], hammaddeId: m.hedefId, hammaddeKod: etiket }; });
+    toast('Değiştirildi: '+etiket); hdModal = null; render();
+  }).catch(err=>{ m.busy = false; toast('Kaydedilemedi: '+(err.message||'hata')); render(); });
+}
+function hammaddeBekleyenKalemSil(id){
+  if(!session || !session.isSuperAdmin){ toast('Yalnızca SuperAdmin silebilir'); return; }
+  const it = stockItems[id]; if(!it) return;
+  const b = hammaddeBagliKayitlar(id);
+  if(b.aktif.length){ toast(`Bu malzemeyi bekleyen ${b.aktif.length} iş emri var (${b.aktif.map(x=>x.talepNo||x.isEmriNo).join(', ')}). Önce Düzelt → "Mevcut malzemeyle değiştir" ile doğru malzemeye taşıyın ya da bekleyen kaydı silin.`); return; }
+  const stok = hammaddeStokSayi(it);
+  if(!confirm(`${hammaddeGosterimAdi(it)} silinsin mi?` + (stok>0 ? `\n\nDİKKAT: bu kalemde stok var (${stok} ${it.birim||''}), o da silinir.` : '') + (b.recete.length ? `\n${b.recete.length} mamulün çelik reçetesinden çıkarılır.` : ''))) return;
+  const updates = { ['stockItems/'+id]: null };
+  b.recete.forEach(mm=>{ ['hammaddeId','hammaddeKod','birimBasina','birim'].forEach(k=>{ updates['hammaddeRecete/'+mm+'/'+k] = null; }); });
+  DB.ref().update(updates).then(()=>{
+    delete stockItems[id];
+    b.recete.forEach(mm=>{ const r = { ...hammaddeRecete[mm] }; ['hammaddeId','hammaddeKod','birimBasina','birim'].forEach(k=>delete r[k]); hammaddeRecete[mm] = r; });
+    toast('Silindi'); render();
+  }).catch(err=>toast('Silinemedi: '+(err.message||'hata')));
+}
 /* rows: [[caniasKodu, aciklama], ...] (başlık satırı hariç). Dosya okuyucu ile doğrudan
    çağrı aynı yoldan geçsin diye ayrı tutuldu. */
 function caniasListesiOnizlemeKur(rows){
