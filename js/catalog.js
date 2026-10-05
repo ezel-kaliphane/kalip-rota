@@ -1170,12 +1170,16 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
   let anyPhysicalAnomaly = false; // en az bir makinede fiziksel imkansızlık tespit edildiyse genel bir not göstermek için
   const perMachine = Object.entries(byMachine).map(([label, data])=>{
     let workMs = 0, durusMs = 0, overtimeMs = 0;
+    // İŞ TÜRÜ AYRIMI (05.10.2026): aynı makinede hem imalat (iş emri) hem araya alınan tadilat
+    // çalışabiliyor. workMs ikisinin toplamı; tadMs bunun tadilat operasyonlarından gelen kısmı.
+    let tadMs = 0; const gunluk = {};
     let hasPhysicalAnomaly = false;
     Object.entries(data.byDay).forEach(([dk, dayList])=>{
       const dStartMs = new Date(dk+'T00:00:00').getTime();
       const cutoffMs = dStartMs + WORKDAY_END_MINUTE*60000;
       let dayOvertimeMs = 0;
       let dayWorkMs = 0, dayDurusMs = 0; // FİZİKSEL TAVAN düzeltmesi için bu güne ait alt toplamlar
+      let dayTadMs = 0;
       // A1 düzeltmesi: "Çoklu İş Emri" ile aynı makinede aynı anda açılan kayıtlar (aynı
       // groupId) HER ZAMAN birlikte duraklatılıp/bitiriliyor (bkz. duraklatGrup/devamGrup/
       // bitirGrup) — yani fiziksel olarak makine TEK bir süre kadar meşgul olmuş, sadece
@@ -1209,7 +1213,9 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
           if(e.duruşNedeni===GUN_SONU_REASON) eExcludedMs += liveExtra;
           else eDurusMs += liveExtra;
         }
-        dayWorkMs += Math.max(0, wallMs - eDurusMs - eExcludedMs);
+        const eWorkMs = Math.max(0, wallMs - eDurusMs - eExcludedMs);
+        dayWorkMs += eWorkMs;
+        if(e._isTadilat) dayTadMs += eWorkMs;
         // NOT: eDurusMs (duruş) BİLEREK güne kelepçelenmiyor — bir işin gerçekten kaç saattir
         // duruşta olduğunu (ör. 116 saat, unutulmuş bir kayıt) olduğu gibi göstermek istiyoruz,
         // bu doğru ve önemli bir uyarı sinyali. Aşağıdaki fiziksel tavan sadece "Çalışma"
@@ -1246,11 +1252,14 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
       // işaretliyoruz — "Çalışma" değeri gerçek dışıysa bunu görebilmen lazım.
       const dayElapsedCapMs = Math.max(0, Math.min(nowTick, dStartMs+86400000, rangeEndMs) - dStartMs);
       if(dayWorkMs > dayElapsedCapMs){
+        dayTadMs = dayTadMs * dayElapsedCapMs / dayWorkMs; // tavana çekilen gün: tadilat payı orantılı küçülür
         dayWorkMs = dayElapsedCapMs;
         hasPhysicalAnomaly = true;
         anyPhysicalAnomaly = true;
       }
       workMs += dayWorkMs;
+      tadMs += dayTadMs;
+      gunluk[dk] = { workMin: dayWorkMs/60000, tadMin: dayTadMs/60000 };
       durusMs += dayDurusMs;
       overtimeMs += dayOvertimeMs;
     });
@@ -1265,12 +1274,14 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
     // işaretleyebiliyor — hatayı gizlemek yerine göstermek için.
     const verimlilikRaw = availMin>0 ? Math.round((workMin/availMin)*100) : 0;
     const verimlilik = Math.min(100, verimlilikRaw);
-    return { label, code: label.split(' · ')[0], name: label.split(' · ')[1]||'', operators: [...data.operators], entries: data.entries, workMin, durusMin, overtimeMin, availMin, verimlilik, verimlilikRaw, verimlilikAnomali: verimlilikRaw>100, hasPhysicalAnomaly, daysUsed: Object.keys(data.byDay).length };
+    const workTadilatMin = Math.min(workMin, Math.round(tadMs/60000));
+    return { label, code: label.split(' · ')[0], name: label.split(' · ')[1]||'', operators: [...data.operators], entries: data.entries, workMin, workTadilatMin, workImalatMin: workMin - workTadilatMin, gunluk, durusMin, overtimeMin, availMin, verimlilik, verimlilikRaw, verimlilikAnomali: verimlilikRaw>100, hasPhysicalAnomaly, daysUsed: Object.keys(data.byDay).length };
   }).sort((a,b)=>b.workMin-a.workMin);
 
   const totals = perMachine.reduce((t,m)=>({
-    workMin: t.workMin+m.workMin, durusMin: t.durusMin+m.durusMin, overtimeMin: t.overtimeMin+m.overtimeMin, availMin: t.availMin+m.availMin
-  }), {workMin:0, durusMin:0, overtimeMin:0, availMin:0});
+    workMin: t.workMin+m.workMin, workTadilatMin: t.workTadilatMin+m.workTadilatMin, durusMin: t.durusMin+m.durusMin, overtimeMin: t.overtimeMin+m.overtimeMin, availMin: t.availMin+m.availMin
+  }), {workMin:0, workTadilatMin:0, durusMin:0, overtimeMin:0, availMin:0});
+  totals.workImalatMin = totals.workMin - totals.workTadilatMin;
   const totalsVerimlilikRaw = totals.availMin>0 ? Math.round((totals.workMin/totals.availMin)*100) : 0;
   totals.verimlilik = Math.min(100, totalsVerimlilikRaw);
   totals.verimlilikRaw = totalsVerimlilikRaw;
@@ -1292,12 +1303,12 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
   });
 
   const perOperator = Object.values(byOperator).map(op=>{
-    let totalWorkMs=0, totalDurusMs=0, totalOvertimeMs=0;
+    let totalWorkMs=0, totalDurusMs=0, totalOvertimeMs=0, totalTadMs=0;
     const machineSet = new Set();
     const days = Object.entries(op.byDay).map(([dk, dayData])=>{
       const dStartMs = new Date(dk+'T00:00:00').getTime();
       const cutoffMs = dStartMs + WORKDAY_END_MINUTE*60000;
-      let dayWorkMs=0, dayDurusMs=0, dayOvertimeMs=0;
+      let dayWorkMs=0, dayDurusMs=0, dayOvertimeMs=0, dayTadMs=0;
       // A1 düzeltmesi (kişi bazlı tarafta da aynı mantık): "Çoklu İş Emri" grubundaki kayıtlar
       // hep birlikte duraklatılıp bitiriliyor, o yüzden aynı operatör+gün+groupId için sadece
       // bir temsilci kayıt sayılıyor — yoksa aynı hata burada da süreyi katlıyordu.
@@ -1339,6 +1350,7 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
         dayData.byMachine[mCode].durusMs += eDurusMs;
         machineSet.add(mCode);
         dayWorkMs += eWorkMs; dayDurusMs += eDurusMs;
+        if(e._isTadilat) dayTadMs += eWorkMs;
         const otStart = Math.max(cutoffMs, effStartMs);
         const otEnd = Math.min(endClip, dayEndMs);
         if(otEnd > otStart){
@@ -1353,17 +1365,17 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
       // bu sınırı aşabiliyordu, artık tavana çekilip anomali olarak işaretleniyor.
       const dayElapsedCapMs = Math.max(0, Math.min(nowTick, dStartMs+86400000, rangeEndMs) - dStartMs);
       const dayHasAnomaly = dayWorkMs > dayElapsedCapMs;
-      if(dayHasAnomaly) dayWorkMs = dayElapsedCapMs;
-      totalWorkMs += dayWorkMs; totalDurusMs += dayDurusMs; totalOvertimeMs += dayOvertimeMs;
+      if(dayHasAnomaly){ dayTadMs = dayTadMs * dayElapsedCapMs / dayWorkMs; dayWorkMs = dayElapsedCapMs; }
+      totalWorkMs += dayWorkMs; totalDurusMs += dayDurusMs; totalOvertimeMs += dayOvertimeMs; totalTadMs += dayTadMs;
       const machines = Object.entries(dayData.byMachine).map(([code,md])=>({ code, label: md.label, workMin: Math.round(md.workMs/60000), durusMin: Math.round(md.durusMs/60000) })).sort((a,b)=>b.workMin-a.workMin);
       // "entries" burada AYRICA taşınıyor — Kişi Bazlı Analiz'deki günlük Gantt çizelgesi (bkz.
       // render-admin.js) bu kişinin o gün üzerinde çalıştığı ham kayıtları (saat bazlı segment
       // çizebilmek için) kullanıyor, machines/workMin gibi özetlenmiş sayılar yetmiyor.
-      return { tarih: dk, workMin: Math.round(dayWorkMs/60000), durusMin: Math.round(dayDurusMs/60000), overtimeMin: Math.round(dayOvertimeMs/60000), kalanMin: Math.max(0, WORKDAY_MINUTES - Math.round(dayWorkMs/60000)), machines, entries: dayData.entries, hasPhysicalAnomaly: dayHasAnomaly };
+      return { tarih: dk, workMin: Math.round(dayWorkMs/60000), workTadilatMin: Math.round(dayTadMs/60000), durusMin: Math.round(dayDurusMs/60000), overtimeMin: Math.round(dayOvertimeMs/60000), kalanMin: Math.max(0, WORKDAY_MINUTES - Math.round(dayWorkMs/60000)), machines, entries: dayData.entries, hasPhysicalAnomaly: dayHasAnomaly };
     }).sort((a,b)=>b.tarih.localeCompare(a.tarih));
     return {
       operatorUsername: op.operatorUsername, operatorName: op.operatorName,
-      workMin: Math.round(totalWorkMs/60000), durusMin: Math.round(totalDurusMs/60000), overtimeMin: Math.round(totalOvertimeMs/60000),
+      workMin: Math.round(totalWorkMs/60000), workTadilatMin: Math.round(totalTadMs/60000), durusMin: Math.round(totalDurusMs/60000), overtimeMin: Math.round(totalOvertimeMs/60000),
       machineCount: machineSet.size, daysUsed: days.length, days,
       hasPhysicalAnomaly: days.some(d=>d.hasPhysicalAnomaly)
     };

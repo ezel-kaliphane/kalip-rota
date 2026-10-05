@@ -264,7 +264,7 @@ function rtZamanSerisi(liste, a, tsFn, seriler){
    Ağustos: 281" diye yazılı, yüzdelerde puan; her bölümde 3 ana kutu, gerisi "Ayrıntılar"da;
    birden fazla ay kapsayan dönemde sunumdaki aylık tablo. */
 
-let agDetay = { uretim:false, tadilat:false };
+let agDetay = { uretim:false, tadilat:false, ayrim:false };
 function agDetayAc(k){ agDetay[k] = !agDetay[k]; render(); }
 
 /* Önceki dönemin okunur adı — fark satırında "Ağustos: 281" gibi. */
@@ -399,7 +399,7 @@ function analizOzetHtml(t){
   const rtL = rtKayitlar(a.bas, a.son);
   const rt = rtOzet(rtL), rtOn = rtOzet(rtKayitlar(on.bas, on.son));
   let tOn = null;
-  try{ tOn = computeAnalizData(dateKey(on.bas), dateKey(Math.max(on.bas, on.son-1)), analizAtolyeFilter).totals; }catch(e){ tOn = null; }
+  try{ tOn = agVeri(dateKey(on.bas), dateKey(Math.max(on.bas, on.son-1)), analizAtolyeFilter).totals; }catch(e){ tOn = null; }
   const yon = (s,o)=> (o>0 && s!==o) ? `; önceki döneme göre iş emri %${Math.round(Math.abs(s-o)/o*100)} ${s>o?'fazla':'az'}` : '';
   const cumleler = [
     us.isEmri ? `Bu dönemde <b>${rtFmt(us.isEmri)} iş emri</b> bitti ve <b>${rtFmt(us.parca)} parça</b> üretildi${yon(us.isEmri, usOn.isEmri)}.` : 'Bu dönemde biten iş emri yok.',
@@ -694,6 +694,12 @@ function analizVerimlilikYorum(t, pareto, makineSira){
     /* Hiç çalışmamış (%0) makine "en düşük" sayılmaz — kullanılmamış demek, verimsiz değil. */
     (()=>{ const k = (makineSira||[]).filter(m=>m.verimlilik>0); return k.length>1 ? `En verimli makine <b>${esc(k[0].code)}</b> (%${k[0].verimlilik}), en düşük <b>${esc(k[k.length-1].code)}</b> (%${k[k.length-1].verimlilik}).` : ''; })(),
   ];
+  /* "Tadilat" nedenli duruş üretim açısından duruş ama atölye açısından kayıp değil: operatör o
+     sürede tadilat işindeydi (o iş çalışma süresine ayrıca giriyor). Bunu söylemezsek pareto
+     "Tadilat"ı kayıp gibi gösteriyor. */
+  /* Rakam bilerek yok: pareto kaydın tüm duruşlarını sayıyor (dönem dışı ve tadilat içi dahil),
+     İmalat ve tadilat bölümü yalnız dönemde başlayan üretim duruşlarını — iki farklı rakam çıkmasın. */
+  if((pareto||[]).some(p=>isTadilatReason(p.neden))) c.push(`Listedeki "Tadilat" duruşu kayıp değil: o sürede operatör araya alınan tadilat işindeydi ve o iş çalışma süresinde sayılıyor; ayrıntısı İmalat ve tadilat bölümünde.`);
   return agYorum(c);
 }
 
@@ -713,7 +719,7 @@ function analizOzetTadilatHtml(t){
   const oz = rtOzet(liste), ozOn = rtOzet(onceki);
   const kapali = liste.filter(x=>tadilatTamamlandiMi(x)).length, kapaliOn = onceki.filter(x=>tadilatTamamlandiMi(x)).length;
   let tOn = null;
-  try{ tOn = computeAnalizData(dateKey(on.bas), dateKey(Math.max(on.bas, on.son-1)), 'tadilat').totals; }catch(e){ tOn = null; }
+  try{ tOn = agVeri(dateKey(on.bas), dateKey(Math.max(on.bas, on.son-1)), 'tadilat').totals; }catch(e){ tOn = null; }
   const cumleler = [
     oz.talep ? `Tadilat atölyesine bu dönemde <b>${rtFmt(oz.talep)} talep</b> ile <b>${rtFmt(oz.parca)} parça</b> geldi; tamamlanan talep <b>${rtFmt(kapali)}</b>.` : 'Bu dönemde tadilat atölyesine talep gelmedi.',
     (t && t.availMin>0) ? `Tadilat makinelerinin verimliliği <b>%${t.verimlilik}</b>${tOn && tOn.availMin>0 ? ` (${esc(onAd)}: %${tOn.verimlilik})` : ''}.` : '',
@@ -871,4 +877,147 @@ function analizTadilatPersonelHtml(){
   ${ozet}
   ${detay}
   ${gunTablo}`;
+}
+
+/* ---------- ÖNBELLEK: dönem × atölye analiz verisi ----------
+   computeAnalizData tek slotlu önbellek tutuyor; Genel sayfa aynı render'da hem seçili dönemi hem
+   önceki dönemi (hem de İmalat/Tadilat bölümü için "tüm atölyeler"i) istediği için slot her
+   render'da takla atıp hesabı baştan yaptırıyordu. Burada birkaç sonucu dakika kovasıyla tutuyoruz
+   (computeAnalizData'nın kendi anahtarıyla aynı mantık; veri referansı değişince düşer). */
+let _agVeriOnbellek = [];
+function agVeri(bas, son, atolye){
+  const k = bas+'|'+son+'|'+(atolye||'tumu')+'|'+Math.floor(nowTick/60000);
+  const c = _agVeriOnbellek.find(x=>x.k===k && x.e===STATE.entries && x.t===tadilatlar);
+  if(c) return c.d;
+  const d = computeAnalizData(bas, son, atolye);
+  _agVeriOnbellek = [{ k, e:STATE.entries, t:tadilatlar, d }, ..._agVeriOnbellek].slice(0, 6);
+  return d;
+}
+
+/* ---------- İMALAT VE TADİLAT (05.10.2026, kullanıcı isteği) ----------
+   "Atölyede imal edilen ürünler var (birden fazla prosese girip ürün çıkaranlar), ayrıca gün içinde
+   aciliyetten oluşan tadilat işleri var; imalat atölyede bunlar da araya alınıp yapılıyor —
+   analiz ekranında imalat ve tadilat AYRILMALI." Atölye filtresi MAKİNENİN atölyesine bakıyor;
+   iş türü ise ayrı bir eksen: imalat atölyesindeki bir makine gün içinde hem iş emri hem tadilat
+   işler. Bu bölüm ikisini her iki atölye için yan yana koyar; bu yüzden atölye filtresinden
+   bağımsız olarak her iki atölyeyi de gösterir, seçili atölyenin satırı vurgulanır.
+   Süreler Verimlilik bölümüyle aynı hesaptan (computeAnalizData) gelir: net çalışma, duruş ve
+   Gün Sonu hariç; "Tadilat için durdurma" = üretim kaydının "Tadilat" nedenli duruşları,
+   "Dönüş ayarı" = tadilattan dönünce otomatik başlayan "Tadilat Sonrası Ayar" duruşları. */
+let agAyrimSecim = null; // ayrıntılarda seçili makine kodu (yalnız vurgu için)
+function agAyrimTopla(d){
+  const at = { imalat:{ ima:0, tad:0 }, tadilat:{ ima:0, tad:0 } };
+  const mak = {};
+  d.perMachine.forEach(m=>{
+    const a = machineAtolyeOf(m.code);
+    at[a].ima += m.workImalatMin||0; at[a].tad += m.workTadilatMin||0;
+    mak[m.code] = { code:m.code, name:m.name, atolye:a, ima:m.workImalatMin||0, tad:m.workTadilatMin||0, durN:0, durMs:0, ayarN:0, ayarMs:0 };
+  });
+  const bas = new Date(d.fromDate+'T00:00:00').getTime(), son = new Date(d.toDate+'T00:00:00').getTime()+86400000;
+  const ev = collectDurusEvents(d.perMachine.flatMap(m=>m.entries).filter(e=>!e._isTadilat))
+    .filter(x=>Number.isFinite(x.sureMs) && x.sureMs>0 && x.ts>=bas && x.ts<son);
+  const kisiDur = {};
+  let durN=0, durMs=0, ayarN=0, ayarMs=0;
+  ev.forEach(x=>{
+    const durdurma = isTadilatReason(x.neden), ayar = x.neden===TADILAT_SONRASI_REASON;
+    if(!durdurma && !ayar) return;
+    const m = mak[String(x.entry.makine||'').split(' · ')[0]];
+    if(durdurma){ durN++; durMs+=x.sureMs; if(m){ m.durN++; m.durMs+=x.sureMs; } const u=x.entry.operatorUsername; if(u) kisiDur[u]=(kisiDur[u]||0)+1; }
+    else { ayarN++; ayarMs+=x.sureMs; if(m){ m.ayarN++; m.ayarMs+=x.sureMs; } }
+  });
+  const ima = at.imalat.ima + at.tadilat.ima, tad = at.imalat.tad + at.tadilat.tad;
+  return { at, ima, tad, toplam: ima+tad, durN, durMs, ayarN, ayarMs, mak: Object.values(mak), kisiDur };
+}
+function agSaatKisa(dk){ if(dk>0 && dk<1) return '<1 dk'; return dk>=600 ? rtFmt(dk/60)+' sa' : dk>=60 ? (dk/60).toFixed(1).replace('.',',')+' sa' : rtFmt(dk)+' dk'; }
+function agIkiliCubuk(ima, tad){
+  const t = ima+tad; if(!t) return '<span class="rt-silik">—</span>';
+  return `<span class="ag-ikili" title="imalat ${agSaatKisa(ima)} · tadilat ${agSaatKisa(tad)}"><span class="ima" style="width:${(ima/t*100).toFixed(1)}%"></span><span class="tad" style="width:${(tad/t*100).toFixed(1)}%"></span></span>`;
+}
+function analizAyrimHtml(){
+  const a = rtAralik(), on = rtOncekiAralik(a), onAd = rtOncekiAd(a,on);
+  let d, dOn = null;
+  try{ d = agVeri(analizFrom, analizTo, 'tumu'); }catch(e){ return ''; }
+  try{ dOn = agVeri(dateKey(on.bas), dateKey(Math.max(on.bas, on.son-1)), 'tumu'); }catch(e){ dOn = null; }
+  const x = agAyrimTopla(d), xOn = dOn ? agAyrimTopla(dOn) : null;
+  const fAt = analizAtolyeFilter;
+  const sa = dk => dk/60; // KPI ve farklar saat cinsinden
+  const saYaz = v => rtFmt(v)+' sa';
+  const tadPay = x.toplam ? x.tad/x.toplam*100 : 0;
+  const arayaPay = x.tad ? x.at.imalat.tad/x.tad*100 : 0;
+  const imaAtToplam = x.at.imalat.ima + x.at.imalat.tad;
+  const enCok = x.mak.filter(m=>m.atolye==='imalat' && m.tad>0).sort((p,q)=>q.tad-p.tad)[0];
+  const cumleler = x.toplam ? [
+    `Bu dönemde makinelerde <b>${agSaat(x.toplam)}</b> iş yapıldı: imalat (iş emri) <b>${agSaat(x.ima)}</b>, tadilat <b>${agSaat(x.tad)}</b>; tadilat payı <b>${agYuzde(tadPay)}</b>.`,
+    x.at.imalat.tad>0 ? `Tadilat işinin <b>${agSaat(x.at.imalat.tad)}</b> kadarı imalat atölyesinde, üretimin arasına alınarak yapıldı (tadilatın ${agYuzde(arayaPay)} kadarı); imalat atölyesinin zamanında tadilat payı <b>${agYuzde(imaAtToplam ? x.at.imalat.tad/imaAtToplam*100 : 0)}</b>.` : 'İmalat atölyesinde bu dönemde araya tadilat alınmadı.',
+    x.durN>0 ? `Üretim <b>${rtFmt(x.durN)} kez</b> tadilat için durduruldu, bu duruşlar toplam <b>${agSaat(x.durMs/60000)}</b> sürdü${x.ayarN>0 ? `; tadilattan dönünce ${rtFmt(x.ayarN)} kez yeniden ayar yapıldı, toplam <b>${agSaat(x.ayarMs/60000)}</b>` : ''}.` : '',
+    enCok ? `En çok araya tadilat alınan makine <b>${esc(enCok.code)}</b>: ${agSaat(enCok.tad)} tadilat${enCok.durN ? `, üretim ${rtFmt(enCok.durN)} kez durdu` : ''}.` : '',
+  ] : ['Bu dönemde makine çalışma kaydı yok.'];
+
+  /* Gün gün (uzun dönemde hafta/ay) imalat ve tadilat saati, yığılmış. */
+  const gun = {};
+  d.perMachine.forEach(m=>Object.entries(m.gunluk||{}).forEach(([dk,g])=>{ const o = gun[dk] || (gun[dk]={ ima:0, tad:0 }); o.ima += g.workMin-g.tadMin; o.tad += g.tadMin; }));
+  const seriListe = Object.entries(gun).map(([dk,g])=>({ ts: rtTarihOku(dk), ...g }));
+  const seri = rtZamanSerisi(seriListe, a, z=>z.ts, [
+    { ad:'imalat (saat)', sinif:'ag-s-ima', fn:z=>z.ima/60 },
+    { ad:'tadilat (saat)', sinif:'ag-s-tad', fn:z=>z.tad/60 }]);
+
+  const atSatir = (k, ad) => { const r = x.at[k], t = r.ima+r.tad;
+    return `<tr class="rt-tablo-sabit ${fAt===k?'secili':''}"><td><b>${ad}</b></td><td class="r mono">${r.ima?agSaatKisa(r.ima):'—'}</td><td class="r mono">${r.tad?agSaatKisa(r.tad):'—'}</td><td class="r mono">${t?agYuzde(r.tad/t*100):'—'}</td><td class="ag-ikili-hucre">${agIkiliCubuk(r.ima, r.tad)}</td></tr>`; };
+
+  const makL = x.mak.filter(m=>m.ima+m.tad>0 || m.durN || m.ayarN).sort((p,q)=>(p.atolye===q.atolye?0:p.atolye==='imalat'?-1:1) || q.tad-p.tad || q.ima-p.ima);
+  const kisiL = (d.perOperator||[]).filter(o=>o.workMin>0 && o.operatorUsername).map(o=>({ u:o.operatorUsername, ad:o.operatorName||o.operatorUsername, tad:Math.min(o.workMin, o.workTadilatMin||0), ima:o.workMin-Math.min(o.workMin, o.workTadilatMin||0), dur:x.kisiDur[o.operatorUsername]||0 }))
+    .sort((p,q)=>(q.ima+q.tad)-(p.ima+p.tad));
+  const ikiIs = kisiL.filter(k=>k.ima>0 && k.tad>0).length;
+
+  return `${agBolumBas('ag-ayrim','İmalat ve tadilat','makine zamanı iş türüne göre · her iki atölye')}
+  ${agYorum(cumleler)}
+  <div class="rt-kpiler">
+    ${rtKpi('İmalat işi', saYaz(sa(x.ima)), xOn ? rtFark(sa(x.ima), sa(xOn.ima), { iyi:'artis', onAd, bicim:saYaz }) : '', 'iş emri, net çalışma')}
+    ${rtKpi('Tadilat işi', saYaz(sa(x.tad)), xOn ? rtFark(sa(x.tad), sa(xOn.tad), { onAd, bicim:saYaz }) : '', x.tad ? `${agSaatKisa(x.at.imalat.tad)} imalat atölyesinde` : '')}
+    ${rtKpi('Tadilat için durdurma', rtFmt(x.durN)+' kez', xOn ? rtFark(x.durN, xOn.durN, { iyi:'azalis', onAd }) : '', x.durN ? `toplam ${agSaatKisa(x.durMs/60000)}${x.ayarN?` · dönüş ayarı ${agSaatKisa(x.ayarMs/60000)}`:''}` : 'üretim tadilat için durmadı')}
+  </div>
+  <div class="rt-izgara">
+    <div class="rt-kutu rt-genis">
+      <div class="rt-kutu-bas"><h4>İmalat ve tadilat saati</h4><span>${seri.kip==='gun'?'gün gün · hafta sonu soluk':seri.kip==='hafta'?'hafta hafta':'ay ay'} · net çalışma</span></div>
+      ${seriListe.length && seri.kovalar.length>1 ? rtSeriSvg(seri, 'Dönem içinde imalat ve tadilat çalışma saati', 'saat') : `<div class="rt-bos">${seriListe.length ? 'Tek günlük dönemde grafik yok; tabloya bak.' : 'Bu dönemde çalışma kaydı yok.'}</div>`}
+      <div class="rt-lejant"><span><i class="ag-s-ima-i"></i>İmalat (iş emri)</span><span><i class="ag-s-tad-i"></i>Tadilat</span></div>
+    </div>
+    <div class="rt-kutu rt-genis">
+      <div class="rt-kutu-bas"><h4>Atölyeye göre</h4><span>atölye = makinenin atölyesi · iş türü = yapılan iş</span></div>
+      <div class="table-wrap"><table class="rt-tablo ag-ayrim-tablo"><thead><tr><th>Atölye</th><th class="r">İmalat işi</th><th class="r">Tadilat işi</th><th class="r">Tadilat payı</th><th class="rt-dar-gizle"></th></tr></thead><tbody>
+        ${atSatir('imalat','İmalat atölyesi')}${atSatir('tadilat','Tadilat atölyesi')}
+        <tr class="rt-tablo-sabit ag-toplam"><td>Toplam</td><td class="r mono">${agSaatKisa(x.ima)}</td><td class="r mono">${agSaatKisa(x.tad)}</td><td class="r mono">${x.toplam?agYuzde(tadPay):'—'}</td><td class="ag-ikili-hucre">${agIkiliCubuk(x.ima, x.tad)}</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+  ${agDetayDugme('ayrim', 'Ayrıntılar: makine makine ve kişi kişi imalat / tadilat, tadilat için durdurmalar')}
+  ${agDetay.ayrim ? `
+  <div class="rt-izgara" style="margin-top:12px">
+    <div class="rt-kutu rt-genis">
+      <div class="rt-kutu-bas"><h4>Makine makine</h4><span>önce imalat atölyesi · tadilat süresine göre</span></div>
+      <div class="table-wrap"><table class="rt-tablo ag-ayrim-tablo"><thead><tr><th>Makine</th><th class="r">İmalat işi</th><th class="r">Tadilat işi</th><th class="r">Tadilat payı</th><th class="r">Tadilat için durdurma</th><th class="r rt-dar-gizle">Dönüş ayarı</th><th class="rt-dar-gizle"></th></tr></thead><tbody>
+        ${makL.map(m=>{ const t=m.ima+m.tad; return `<tr class="rt-tablo-sabit">
+          <td><b class="mono">${esc(m.code)}</b>${m.name?` <span class="rt-silik">${esc(m.name)}</span>`:''}${m.atolye==='tadilat'?` <span class="ag-etiket">tadilat atölyesi</span>`:''}</td>
+          <td class="r mono">${m.ima?agSaatKisa(m.ima):'—'}</td>
+          <td class="r mono">${m.tad?agSaatKisa(m.tad):'—'}</td>
+          <td class="r mono">${t?agYuzde(m.tad/t*100):'—'}</td>
+          <td class="r mono">${m.durN?`${rtFmt(m.durN)} kez <span class="rt-silik">· ${agSaatKisa(m.durMs/60000)}</span>`:'—'}</td>
+          <td class="r mono rt-dar-gizle">${m.ayarN?`${rtFmt(m.ayarN)} kez <span class="rt-silik">· ${agSaatKisa(m.ayarMs/60000)}</span>`:'—'}</td>
+          <td class="ag-ikili-hucre rt-dar-gizle">${agIkiliCubuk(m.ima, m.tad)}</td></tr>`; }).join('')}
+      </tbody></table></div>
+      <div class="rt-dip">"Tadilat için durdurma": dönem içinde üretim kaydının "Tadilat" nedeniyle duraklatıldığı kez ve süre. "Dönüş ayarı": tadilat bitince üretime dönerken geçen "Tadilat Sonrası Ayar" duruşu.</div>
+    </div>
+    <div class="rt-kutu rt-genis">
+      <div class="rt-kutu-bas"><h4>Kişi kişi</h4><span>${ikiIs ? `${ikiIs} kişi iki işte de çalıştı` : 'çalışma süresine göre'}</span></div>
+      ${kisiL.length ? `<div class="table-wrap"><table class="rt-tablo ag-ayrim-tablo"><thead><tr><th>Personel</th><th class="r">İmalat işi</th><th class="r">Tadilat işi</th><th class="r">Tadilat payı</th><th class="r rt-dar-gizle">Üretimi tadilata durdurdu</th><th class="rt-dar-gizle"></th></tr></thead><tbody>
+        ${kisiL.map(k=>{ const t=k.ima+k.tad; return `<tr class="rt-tablo-sabit">
+          <td><b>${esc(k.ad)}</b></td>
+          <td class="r mono">${k.ima?agSaatKisa(k.ima):'—'}</td>
+          <td class="r mono">${k.tad?agSaatKisa(k.tad):'—'}</td>
+          <td class="r mono">${t?agYuzde(k.tad/t*100):'—'}</td>
+          <td class="r mono rt-dar-gizle">${k.dur?rtFmt(k.dur)+' kez':'—'}</td>
+          <td class="ag-ikili-hucre rt-dar-gizle">${agIkiliCubuk(k.ima, k.tad)}</td></tr>`; }).join('')}
+      </tbody></table></div>` : `<div class="rt-bos">Bu dönemde kayıt yok.</div>`}
+    </div>
+  </div>` : ''}`;
 }

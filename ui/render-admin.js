@@ -3742,6 +3742,7 @@ function renderAdmin(){
       ${analizRoleBar}
       ${analizGenelUstHtml()}
       ${analizOzetHtml(t)}
+      ${analizAyrimHtml()}
       ${analizBolumlerHtml()}
       ${agBolumBas('ag-verimlilik','Verimlilik & Duruş','makinelerin çalışma, duruş ve fazla mesaisi')}
       ${analizVerimlilikYorum(t, pareto, machineRank)}

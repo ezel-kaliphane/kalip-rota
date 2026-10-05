@@ -1419,3 +1419,12 @@ html{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
 .ag-kisi-gunler{max-height:340px;overflow-y:auto}
 .ag-gun-tablo td.ag-suphe{outline:2px dashed var(--danger);outline-offset:-3px;color:var(--danger-text)}
 .ag-uyari-metin{display:block;margin-top:6px;color:var(--warn-text);font-size:14px}
+/* İmalat ve tadilat ayrımı (05.10.2026) */
+.rt-svg .ag-s-ima{fill:var(--accent)}
+.rt-svg .ag-s-tad{fill:var(--tadilat-info)}
+.ag-s-ima-i{background:var(--accent)} .ag-s-tad-i{background:var(--tadilat-info)}
+.ag-ikili{display:flex;height:10px;min-width:90px;border-radius:3px;overflow:hidden;background:var(--panel-alt)}
+.ag-ikili .ima{background:var(--accent)} .ag-ikili .tad{background:var(--tadilat-info)}
+.ag-ikili-hucre{width:28%;min-width:100px}
+.ag-ayrim-tablo tr.secili td{background:color-mix(in srgb, var(--accent) 10%, transparent)}
+.ag-etiket{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:9px;background:color-mix(in srgb, var(--tadilat-info) 16%, transparent);color:var(--tadilat-info);margin-left:4px;vertical-align:1px}
