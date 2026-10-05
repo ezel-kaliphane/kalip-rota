@@ -2793,13 +2793,13 @@ function operatorGosterimAdi(kayit){
 
 const EKRAN_BASLIKLARI = {
   report:       { baslik:'Kayıtlar', alt:'tamamlanan operasyonların listesi' },
-  raporlar:     { ustu:'Raporlar', baslik:'Tadilat Raporu' },
   genelBakis:   { ustu:'Canlı Panel', baslik:'Genel Bakış' },
   matrix:       { ustu:'Canlı Panel', baslik:'Makine Matrisi' },
   completed:    { ustu:'Canlı Panel', baslik:'Tamamlanan Kodlar' },
   isYogunlugu:  { baslik:'İş Yoğunluğu' },
   /* Tahtada başlığın altında seçili aralık ve canlı göstergesi var ("21 Eylül 2026 · canlı"). */
   analiz:       { baslik:'Analiz', alt:()=>{
+                    if(analizRole==='yonetici') return rtAralik().etiket;
                     const bugun = dateKey(Date.now());
                     if(analizFrom===bugun && analizTo===bugun) return 'bugün · canlı';
                     return analizFrom===analizTo ? analizFrom : (analizFrom+' → '+analizTo);
@@ -3092,7 +3092,6 @@ function renderExcelYukleme(){
    ayrı ayrı tutulup ayrışmasın. Koşullar eski kenar çubuğu markup'ındakilerin BİREBİR aynısı. */
 function adminNavOgeleri(){
   const o = [];
-  if(raporlarGorunur()) o.push({ key:'raporlar', label:'Raporlar', ikon:'file', aktif: view==='raporlar', tikla:"setView('raporlar')" });
   if(isAdminTabVisible('rapor')) o.push({ key:'rapor', label:'Kayıtlar', ikon:'list', aktif: view==='report', tikla:"setView('report')" });
   if(canliPanelVisible()) o.push({ key:'canli', label:'Canlı Panel', ikon:'clock', aktif: isCanliPanelView(view), tikla:`setView('${canliPanelDefaultView()}')` });
   if(isAdminTabVisible('isYogunlugu')) o.push({ key:'isYogunlugu', label:'İş Yoğunluğu', ikon:'box', aktif: view==='isYogunlugu', tikla:"setView('isYogunlugu')" });
@@ -3115,8 +3114,8 @@ function adminNavOgeleri(){
    Çıkış'ı açıyor. Ana sekmeler sırayla: Rapor, Canlı Panel, Tadilat, Stok — kullanıcının
    yetkisi olmayan düşüyor, boşluğu listedeki sıradaki dolduruyor. */
 let adminMenuAcik = false;
-/* Raporlar admine açık; Şef/Üretim Şef'te yok → boşluğu sıradaki (Kayıtlar) doldurur. */
-const ADMIN_MOBIL_BIRINCIL = ['raporlar','canli','tadilat','stok'];
+/* Analiz (raporlar dahil) admine açık; Şef/Üretim Şef'te yok → boşluğu sıradaki (Kayıtlar) doldurur. */
+const ADMIN_MOBIL_BIRINCIL = ['analiz','canli','tadilat','stok'];
 function adminAltBarHtml(ogeler){
   let birincil = ADMIN_MOBIL_BIRINCIL.map(k=>ogeler.find(n=>n.key===k)).filter(Boolean);
   for(const n of ogeler){ if(birincil.length>=4) break; if(!birincil.includes(n)) birincil.push(n); }
@@ -3143,10 +3142,11 @@ function adminMenuHtml(ogeler, kisiHtml){
 function renderAdmin(){
   /* Stok sekmesi uc bolumlu (takim / karbur / malzeme), asagida `stokYonetim` olarak ayrica ele
      aliniyor — bu yuzden burada karsiligi yok. */
-  const viewToTabKey = { raporlar:'raporlar', report:'rapor', genelBakis:'genelBakis', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilatYonetim:'tadilat' };
+  if(view==='raporlar') view = 'analiz'; // 05.10.2026'da ayrı Raporlar sekmesi Analiz → Genel'e katıldı
+  const viewToTabKey = { report:'rapor', genelBakis:'genelBakis', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilatYonetim:'tadilat' };
   if(viewToTabKey[view] && !isAdminTabVisible(viewToTabKey[view])){
-    const tabKeyToView = { raporlar:'raporlar', rapor:'report', genelBakis:'genelBakis', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilat:'tadilatYonetim', takimStok:'stokYonetim', karbur:'stokYonetim' };
-    const fallbackKey = ADMIN_TAB_DEFS.map(t=>t.key).find(k=>isAdminTabVisible(k) && (k!=='raporlar' || raporlarGorunur()) && (k!=='tadilat' || canCreateTadilat()) && (k!=='analiz' || !(session.isSef || session.isUretimSef)));
+    const tabKeyToView = { rapor:'report', genelBakis:'genelBakis', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilat:'tadilatYonetim', takimStok:'stokYonetim', karbur:'stokYonetim' };
+    const fallbackKey = ADMIN_TAB_DEFS.map(t=>t.key).find(k=>isAdminTabVisible(k) && (k!=='tadilat' || canCreateTadilat()) && (k!=='analiz' || !(session.isSef || session.isUretimSef)));
     view = fallbackKey ? tabKeyToView[fallbackKey] : 'report';
   }
   /* Stok sekmesi üç bölümden (takım / karbür / malzeme) oluşuyor; hiçbirine erişimi olmayan
@@ -3571,8 +3571,6 @@ function renderAdmin(){
       body += renderMalzemeStokAyarlar();
     }
     body += `</div>`;
-  } else if(view==='raporlar'){
-    body = renderRaporlar();
   } else if(view==='operatorler'){
     body = renderOperatorler();
   } else if(view==='excelYukleme'){
@@ -3680,6 +3678,7 @@ function renderAdmin(){
     } else if(analizRole==='saha'){
       body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizSaha()}</div>`;
     } else {
+    analizDonemiEsitle(); // Genel görünüm: dönem ortak seçiciden (bkz. ui/analiz-genel.js)
     const data = computeAnalizData(analizFrom, analizTo, analizAtolyeFilter);
     lastAnalizData = data; // initAnalizCharts (app.js) bunu kullanır — bkz. catalog.js'teki not
     const t = data.totals;
@@ -3741,21 +3740,11 @@ function renderAdmin(){
 
     body = `<div class="analiz-wrap">
       ${analizRoleBar}
-      <div class="filter-bar" style="border-bottom:none;padding-left:0;padding-right:0;flex-wrap:wrap;align-items:center">
-        <label style="font-size:11.5px;color:var(--text-muted)">Başlangıç</label>
-        <input type="date" class="filter-input" value="${esc(analizFrom)}" onchange="setAnalizFrom(this.value)">
-        <label style="font-size:11.5px;color:var(--text-muted)">Bitiş</label>
-        <input type="date" class="filter-input" value="${esc(analizTo)}" onchange="setAnalizTo(this.value)">
-        <button class="chip ${analizFrom===analizTo&&analizTo===dateKey(Date.now())?'active':''}" onclick="setAnalizPreset(1)">Bugün</button>
-        <button class="chip" onclick="setAnalizPreset(7)">Son 7 Gün</button>
-        <button class="chip" onclick="setAnalizPreset(30)">Son 30 Gün</button>
-        <button class="chip" onclick="setAnalizPreset(90)">Son 3 Ay</button>
-        <div style="display:flex;gap:24px;margin-left:auto">
-          <button class="chip ${analizAtolyeFilter==='tumu'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setAnalizAtolyeFilter('tumu')">Tüm Makineler</button>
-          <button class="chip ${analizAtolyeFilter==='imalat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setAnalizAtolyeFilter('imalat')">${ico('factory',14)} İmalat Atölye</button>
-          <button class="chip ${analizAtolyeFilter==='tadilat'?'active':''}" style="font-size:16px;border-width:2px;padding:11px 20px;border-radius:10px" onclick="setAnalizAtolyeFilter('tadilat')">${ico('wrench',14)} Tadilat Atölye</button>
-        </div>
-      </div>
+      ${analizGenelUstHtml()}
+      ${analizOzetHtml(t)}
+      ${analizUretimHtml()}
+      ${analizTadilatHtml()}
+      ${agBolumBas('ag-verimlilik','Verimlilik & Duruş','makinelerin çalışma, duruş ve fazla mesaisi')}
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Standart mesai: kullanılan her gün için ${WORKDAY_MINUTES} dk (08:00~${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}) · ${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}'dan sonrası fazla mesai sayılır</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:14px">
         <div class="analiz-chart-box" style="border-left:3px solid ${t.verimlilik>=70?'var(--success)':t.verimlilik>=40?'var(--warn)':'var(--danger)'}">
@@ -3831,6 +3820,7 @@ function renderAdmin(){
           </div>
         </div>
       </div>
+      ${agBolumBas('ag-acik','Açık işler','şu an · dönemden bağımsız')}
       <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:20px">
         <div class="analiz-chart-box">
           <div style="font-size:14.5px;font-weight:700">Şu An Açık İşler</div>

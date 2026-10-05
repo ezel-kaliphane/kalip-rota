@@ -400,7 +400,6 @@ let adminTabPermissions = {}; // { "LV": {rapor:true, matrix:false, ...}, "SEF":
    Rapor BİRLEŞMEDİ, kendi nav öğesi olarak ayrı duruyor. */
 const ADMIN_TAB_DEFS = [
   { key:'rapor', label:'Kayıtlar' },
-  { key:'raporlar', label:'Raporlar' },
   { key:'genelBakis', label:'Canlı Panel · Genel Bakış' },
   { key:'matrix', label:'Canlı Panel · Makine Matrisi' },
   { key:'completed', label:'Canlı Panel · Tamamlanan Kodlar' },
@@ -429,11 +428,10 @@ function setAdminTabPermission(username, key, val){
    hiçbiri görünmez (üst izin önce kontrol edilir). SuperAdmin her zaman hepsini görür.
 */
 const ANALIZ_VIEW_DEFS = [
-  { key:'yonetici', label:'Yönetim' },
+  { key:'yonetici', label:'Genel' },
   { key:'sef', label:'Atölye Şefi' },
   { key:'kisi', label:'Kişi Bazlı' },
   { key:'operator', label:'Operatör Analizi' },
-  { key:'tadilat', label:'Tadilat' },
   { key:'saha', label:'Saha Ekranı' },
 ];
 function isAnalizViewVisible(key){
