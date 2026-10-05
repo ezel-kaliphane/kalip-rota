@@ -209,17 +209,48 @@ function usGruplar(){
   _usGruplarKaynak = kaynak; _usGruplarSonuc = g;
   return g;
 }
+/* BİTEN İŞ EMRİ (05.10.2026 düzeltmesi) — eskiden "son operasyon" işaretli HER kayıt bir iş emri
+   sayılıyordu. Kullanıcı Eylül'ü CANIAS'la kıyasladı: CANIAS 204 iş emri / 1.683 parça, biz 599 /
+   2.451. Nedenler: (1) _ZARF ve _ELMAS yarı mamulleri ayrı ayrı "son operasyon"la bitiriliyor, sonra
+   preste birleşip fırın/taşlama ile devam ediyor — tek iş emri 2-3 kez sayılıyordu; (2) parti parti
+   biten işte her parti ayrı sayılıyordu; (3) aynı iş emrinde birden fazla makinede "son operasyon"
+   işaretleniyordu (ör. PT02 sonra FKK). Artık iş emri CANIAS iş emri numarasıyla (talepNo; yoksa U
+   kodu) TEK kez sayılıyor: açık operasyonu kalmamış VE en son biten kaydı "son operasyon" işaretli
+   ise biter, bitiş = o kaydın bitişi. Parça = o son kaydın yarı mamulünde ve makinesinde "son
+   operasyon"la biten kayıtların adet toplamı (partiler toplanır, zarf+elmas ikiye katlanmaz).
+   Eylül'de CANIAS'la ortak 159 iş emrinin 146'sında adet birebir aynı çıktı. Kalan fark CANIAS'ın
+   kapanış tarihinden: CANIAS iş emrini toplu kapatıyor (09.09, 19.09, 30.09), atölyede bitiş
+   tarihi farklı aya düşebiliyor. */
+function usYariMamul(k){ const m = /_(ZARF|ELMAS)$/.exec(String(k||'').toUpperCase()); return m ? m[1] : ''; }
+let _usIsEmriKaynak = null, _usIsEmriSonuc = null;
+function usIsEmirleri(){
+  const kaynak = entriesArray();
+  if(kaynak === _usIsEmriKaynak) return _usIsEmriSonuc;
+  const g = {};
+  kaynak.forEach(e=>{ const k = String(e.talepNo||'').trim() || ('U:'+usTabanKod(e.isEmriNo)); (g[k] = g[k] || []).push(e); });
+  const sonuc = [];
+  Object.values(g).forEach(ops=>{
+    if(ops.some(o=>o.status!=='tamamlandi')) return;
+    const son = ops.reduce((x,o)=>(o.endTs||0)>(x.endTs||0) ? o : x, ops[0]);
+    if(!son.sonOperasyon || !son.endTs) return;
+    const ym = usYariMamul(son.isEmriNo);
+    const parca = ops.filter(o=>o.sonOperasyon && o.makine===son.makine && usYariMamul(o.isEmriNo)===ym).reduce((s,o)=>s+rtSayi(o.adet),0);
+    sonuc.push({ ...son, adet: parca, _ops: ops, _ilk: Math.min(...ops.map(o=>o.startTs||son.startTs)) });
+  });
+  _usIsEmriKaynak = kaynak; _usIsEmriSonuc = sonuc;
+  return sonuc;
+}
+function usOps(e){ return e._ops || [e]; }
+function usIlk(e){ return e._ilk || e.startTs; }
 function usBitenler(bas, son){
-  return entriesArray().filter(e=>e.status==='tamamlandi' && e.sonOperasyon && e.endTs>=bas && e.endTs<son && usAtolyeUyar(e));
+  return usIsEmirleri().filter(e=>e.endTs>=bas && e.endTs<son && usAtolyeUyar(e));
 }
 function usOzet(liste, gruplar){
   const sureGun = [], opSay = [];
   let parca = 0;
   liste.forEach(e=>{
     parca += rtSayi(e.adet);
-    const ops = gruplar[usTabanKod(e.isEmriNo)] || [e];
-    const ilk = Math.min(...ops.map(o=>o.startTs||e.startTs));
-    sureGun.push((e.endTs-ilk)/86400000); opSay.push(ops.length);
+    sureGun.push((e.endTs-usIlk(e))/86400000); opSay.push(usOps(e).length);
   });
   return { isEmri: liste.length, parca, sureGun: rtMedyan(sureGun), opSay: rtMedyan(opSay) };
 }
@@ -506,17 +537,17 @@ function analizUretimHtml(){
   </div>
   <div class="rt-kutu rt-liste" id="us-liste">
     <div class="rt-liste-bas">
-      <div><h4>Biten iş emirleri</h4><span>${usSecim ? `<b>${esc(usSecim.etiket)}</b> · ` : ''}${rtFmt(suzulmus.length)} iş emri · ${rtFmt(suzParca)} parça</span></div>
+      <div><h4>Biten iş emirleri</h4><span title="İş emri CANIAS numarasıyla bir kez sayılır: açık operasyonu kalmamış ve en son kaydı 'son operasyon' ise biter. Zarf ve elmas ayrı sayılmaz.">${usSecim ? `<b>${esc(usSecim.etiket)}</b> · ` : ''}${rtFmt(suzulmus.length)} iş emri · ${rtFmt(suzParca)} parça</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${usSecim ? `<button type="button" class="btn-ghost" style="width:auto;padding:7px 12px" onclick="usSecimKaldir()">${ico('x',13)} Süzmeyi kaldır</button>` : ''}
         ${suzulmus.length ? `<button type="button" class="btn-primary" style="width:auto;padding:7px 14px" onclick="usExcelAktar()">Excel'e aktar (${rtFmt(suzulmus.length)})</button>` : ''}
       </div>
     </div>
     ${sayfa.length ? `<div class="table-wrap"><table class="rt-tablo rt-tablo-liste"><thead><tr><th>Bitiş</th><th>İş emri</th><th>Mamul</th><th>Bölüm</th><th>Son makine</th><th class="r">Parça</th><th class="r">Süre</th><th class="r">Operasyon</th></tr></thead><tbody>
-      ${sayfa.map(e=>{ const ops = gr[usTabanKod(e.isEmriNo)]||[e]; const ilk = Math.min(...ops.map(o=>o.startTs||e.startTs));
+      ${sayfa.map(e=>{ const ops = usOps(e), ilk = usIlk(e);
         return `<tr class="rt-tablo-sabit">
           <td class="mono" style="white-space:nowrap">${fmtDT(e.endTs)}</td>
-          <td><div class="mono">${esc(e.talepNo||'—')}</div><div class="mono rt-silik">${esc(e.isEmriNo||'')}</div></td>
+          <td><div class="mono">${esc(e.talepNo||'—')}</div><div class="mono rt-silik">${esc(usTabanKod(e.isEmriNo))}</div></td>
           <td class="rt-kes" style="max-width:260px" title="${esc(usMamulAdi(e))}">${esc(usMamulAdi(e)||'—')}</td>
           <td>${esc(usBolum(e))}</td>
           <td class="mono">${esc(usMakine(e)||'—')}</td>
@@ -531,7 +562,7 @@ function analizUretimHtml(){
 async function usExcelAktar(){
   if(!(await ensureXLSX())) return;
   const gr = usGruplar();
-  const satirlar = usSonListe.map(e=>{ const ops = gr[usTabanKod(e.isEmriNo)]||[e]; const ilk = Math.min(...ops.map(o=>o.startTs||e.startTs));
+  const satirlar = usSonListe.map(e=>{ const ops = usOps(e), ilk = usIlk(e);
     return { 'Bitiş': new Date(e.endTs), 'İş Talep No': e.talepNo||'', 'İş Emri (U kodu)': e.isEmriNo||'', 'Mamul': usMamulAdi(e), 'Bölüm': usBolum(e),
       'Son Makine': e.makine||'', 'Parça': rtSayi(e.adet), 'İlk Başlangıç': new Date(ilk), 'Süre (gün)': Math.round((e.endTs-ilk)/86400000*10)/10, 'Operasyon Sayısı': ops.length }; });
   const ws = XLSX.utils.json_to_sheet(satirlar, { cellDates:true });
