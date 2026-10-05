@@ -1346,3 +1346,53 @@ html{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
 .analiz-wrap .rt-liste{margin-bottom:6px}
 .rt-tablo tbody tr.rt-tablo-sabit{cursor:default}
 @media (max-width:900px){ .ag-bolum-bas{scroll-margin-top:10px} .ag-bolum-bas h3{font-size:19px} }
+
+/* ===================== ANALİZ → GENEL, OKUNAKLILIK (05.10.2026, ikinci tur) =====================
+   Kullanıcı: "anlaşılır değil, okunaklı gelmiyor". Etiketler artık küçük/büyük harf mono değil,
+   normal yazı; fark satırı kelimeyle ve renkle (iyi/kötü); her bölüm bir açıklama cümlesiyle açılıyor;
+   ikincil metin en az 12px. */
+.ag-ust{padding-bottom:10px}
+.ag-atolye{margin-left:auto}
+@media (max-width:900px){ .ag-atolye{margin-left:0} }
+.rt-donem-bilgi{font-size:12.5px}
+.rt-donem-bilgi b{color:var(--text);font-weight:600}
+.ag-bolum-bas{margin:34px 0 6px;padding-top:10px;border-top:1px solid var(--border)}
+#ag-ozet{border-top:none;margin-top:14px;padding-top:0}
+.ag-bolum-bas h3{font-size:23px}
+.ag-yorum{max-width:75ch;font-size:15px;line-height:1.6;color:var(--text-muted);margin:0 0 14px}
+.ag-yorum b{color:var(--text);font-weight:600}
+.rt-kpi{padding:14px 16px}
+.rt-kpi-k{font-family:var(--ff);font-size:13px;letter-spacing:0;text-transform:none;color:var(--text-muted);font-weight:600}
+.rt-kpi-v{font-size:28px;margin-top:2px}
+.ag-kpi-buyuk .rt-kpi-v{font-size:34px}
+.ag-kpi-buyuk{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.rt-kpi-s{font-size:12.5px;margin-top:6px}
+.rt-fark-satir{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-top:6px}
+.rt-fark{font-family:var(--ff);font-size:13px;font-weight:700;padding:2px 8px;border-radius:999px}
+.rt-fark small{font-weight:500;font-size:12px}
+.rt-fark.iyi{color:var(--success);background:var(--success-bg)}
+.rt-fark.kotu{color:var(--danger);background:var(--danger-bg)}
+.rt-fark.notr{color:var(--text-muted);background:var(--panel-alt)}
+.rt-onceki{font-size:12.5px;color:var(--text-muted)}
+.rt-kutu-bas h4,.rt-liste-bas h4{font-size:16px}
+.rt-kutu-bas span,.rt-liste-bas span{font-size:12.5px}
+.rt-cubuk{font-size:13.5px;min-height:40px}
+.rt-cubuk-d{font-size:13.5px}
+.rt-cubuk-d b{font-weight:700}
+.rt-cubuk-d small{font-size:11.5px;color:var(--text-muted)}
+.rt-dip{font-size:12px}
+.rt-svg .rt-eks{font-size:11.5px}
+.rt-svg .rt-deger{font-size:12px}
+.rt-svg .rt-hs{opacity:.45}
+.rt-svg .rt-hs-et{opacity:.6}
+.rt-svg .rt-ort{stroke:var(--warn);stroke-width:1.5;stroke-dasharray:5 4}
+.rt-svg .rt-ort-et{fill:var(--warn-text);font-family:var(--ff);font-size:12px;font-weight:700;paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round}
+.ag-detay-dugme{display:inline-flex;align-items:center;gap:8px;margin-top:12px;padding:9px 14px;min-height:40px;border:1px dashed var(--border-strong);border-radius:var(--r-md);background:none;color:var(--accent);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;text-align:left}
+.ag-detay-dugme:hover{background:var(--accent-dim);border-style:solid}
+.ag-ay-tablo{margin-top:12px}
+.ag-ay-tablo td{font-size:14px}
+.ag-ay-tablo td small{display:inline-block;margin-left:6px;font-size:11.5px;font-weight:600}
+.ag-ay-tablo td small.iyi{color:var(--success)} .ag-ay-tablo td small.kotu{color:var(--danger)} .ag-ay-tablo td small.notr{color:var(--text-muted)} .ag-ay-tablo td small.rt-silik{margin-left:4px;font-weight:400}
+.ag-ay-tablo tr.ag-toplam td{font-weight:700;border-top:2px solid var(--border)}
+/* Eski Verimlilik kartları beşi yan yana sığmayınca 280px min-width sayfayı yana kaydırıyordu. */
+.analiz-wrap .analiz-chart-box{min-width:0}

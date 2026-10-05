@@ -3745,6 +3745,7 @@ function renderAdmin(){
       ${analizUretimHtml()}
       ${analizTadilatHtml()}
       ${agBolumBas('ag-verimlilik','Verimlilik & Duruş','makinelerin çalışma, duruş ve fazla mesaisi')}
+      ${analizVerimlilikYorum(t, pareto, machineRank)}
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Standart mesai: kullanılan her gün için ${WORKDAY_MINUTES} dk (08:00~${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}) · ${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}'dan sonrası fazla mesai sayılır</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:14px">
         <div class="analiz-chart-box" style="border-left:3px solid ${t.verimlilik>=70?'var(--success)':t.verimlilik>=40?'var(--warn)':'var(--danger)'}">
@@ -3755,7 +3756,6 @@ function renderAdmin(){
         </div>
         <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">Toplam Çalışma</div><div class="mono" style="font-size:22px;font-weight:700;margin-top:10px;color:var(--success)">${fmtDur(t.workMin*60000)}</div></div>
         <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">Toplam Duruş</div><div class="mono" style="font-size:22px;font-weight:700;margin-top:10px;color:var(--warn)">${fmtDur(t.durusMin*60000)}</div></div>
-        <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">Toplam Adet${hasFilter?' (Seçili)':''}</div><div class="mono" style="font-size:22px;font-weight:700;margin-top:10px;color:var(--accent)">${adetTotal}</div></div>
         <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">Fazla Mesai</div><div class="mono" style="font-size:22px;font-weight:700;margin-top:10px;color:${t.overtimeMin>0?'var(--danger)':'var(--text-muted)'}">${t.overtimeMin>0?t.overtimeMin+' dk':'—'}</div></div>
       </div>
       ${dailyTrend.length>1 ? `
