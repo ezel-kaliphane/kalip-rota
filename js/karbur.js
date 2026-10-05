@@ -603,6 +603,7 @@ function karburPlanKaydet(){
 
   karburBusy = true; karburEksikUyari = null; render();
   const now = Date.now();
+  const receteGozlem = karburReceteGozlemleri(); // satırlar kayıt sonrası temizleniyor — önce al
 
   /* 2. katman — TAZE stokla doğrula. Plan burada YENİDEN KURULMUYOR: ekrandakinden farklı bir
      planı sessizce kaydetmek, yazdırılan kâğıt ile kaydı birbirinden ayırırdı. Bunun yerine
@@ -754,6 +755,7 @@ function karburPlanKaydet(){
          "kayıt yok" olarak duruyor olabilir — önbellek kalıcı, süresi dolmuyor. Temizlenmezse
          kaydı yapan cihazda şerit sayfa yenilenene kadar görünmüyordu. */
       Object.keys(ozetEk).forEach(base => { delete karburOzetCache[base]; });
+      karburReceteYaz(receteGozlem);
       /* Yazan cihaz kendi yazdığını görsün — yerel kopyalar tazelenir */
       ensureKarburStokLoaded(() => safeRender(), true);
       ensureKarburFireLoaded(() => safeRender(), true);
@@ -1406,3 +1408,98 @@ function karburSetSubView(v){
   render();
 }
 /* ==================== KARBÜR MODÜLÜ — SON ==================== */
+/* ==================== REÇETE (05.10.2026, kullanıcı isteği) ====================
+   "Karbür çıkışlarından reçete kendiliğinden biriksin" — çelikteki hammaddeRecete gibi. Kesim
+   planı kaydedilince, plandaki her iş emrinin MAMULÜ (U kodu, validIsEmri'den) için o iş emrine
+   verilen karbür satırları saklanır; aynı mamul tekrar geldiğinde iş emri no yazılıp alandan
+   çıkılınca satırlar hazır dolar (karburReceteUygula).
+
+   YER: hammaddeRecete/{mamulKodu}/karbur — ayrı bir düğüm değil. Neden: (1) bir mamulün çelik
+   ve karbür ihtiyacı aynı kayıtta = ürün ağacının (BOM) tohumu tek yerde; (2) RTDB kuralı zaten
+   hammaddeRecete/$mamulKodu yazmaya açık, kural değişikliği gerekmiyor. Çelik tarafı bu yüzden
+   alan alan yazıyor (js/malzeme-bekleyen.js), karbur alt düğümünü ezmesin diye.
+
+   İÇERİK: { satirlar:[ {tip:'kesim', disCap, delik, kalite, boy, adet, birimBasina}
+                      | {tip:'adet', katalogId, kod, adet, birimBasina} ],
+             ieMiktar, sonIsEmri, gozlemSayisi, sonTs, sonKullanan }
+   Satırlar her kayıtta SON gözlemle değişir (son verilen = en güncel doğru); gözlem sayısı artar.
+   birimBasina = adet / iş emri miktarı. Yeni iş emrinin miktarı biliniyorsa adet buna göre
+   ölçeklenir, bilinmiyorsa son verilen adet gelir. Şef her alanı yine elle değiştirebilir.
+   Reçete yazımı stok kaydından AYRI ve sonra yapılır: yazılamazsa stok kaydı etkilenmez. */
+function karburReceteMamul(isEmriNo){
+  const base = karburBaseIsEmri(isEmriNo);
+  if(!base || typeof isEmriBilgisiBul !== 'function') return null;
+  const b = isEmriBilgisiBul(base);
+  const m = b && String(b.mamulKodu || '').trim().toUpperCase();
+  if(!m || /[.#$\[\]\/]/.test(m)) return null;
+  return { base, mamul: m, ieMiktar: Number(b.ieMiktar) || 0 };
+}
+function karburReceteOku(mamul){
+  const r = (typeof hammaddeRecete !== 'undefined' && hammaddeRecete && hammaddeRecete[mamul]) || null;
+  return (r && r.karbur && Array.isArray(r.karbur.satirlar) && r.karbur.satirlar.length) ? r.karbur : null;
+}
+function karburReceteGozlemleri(){
+  const g = {};
+  const ekle = (isEmri, key, satir) => {
+    const im = karburReceteMamul(isEmri); if(!im) return;
+    const o = g[im.mamul] || (g[im.mamul] = { isEmri: im.base, ieMiktar: im.ieMiktar, satirlar: {} });
+    if(o.isEmri !== im.base) return;   // aynı mamul bu planda ikinci bir iş emrinde: ilkini al
+    const s = o.satirlar[key] || (o.satirlar[key] = Object.assign({}, satir, { adet: 0 }));
+    s.adet += satir.adet;
+  };
+  karburRows.forEach(r => {
+    const f = karburResolveRow(r), boy = karburNum(r.boy), adet = parseInt(r.adet, 10) || 0;
+    if(f.hata || f.secimBekliyor || !(boy > 0) || !(adet > 0)) return;
+    ekle(r.isEmri, 'k|' + karburFamKey(f) + '|' + boy, { tip: 'kesim', disCap: f.disCap, delik: f.delik, kalite: f.kalite, boy, adet });
+  });
+  karburAdetRows.forEach(r => {
+    const adet = parseInt(r.adet, 10) || 0;
+    if(!r.katalogId || !(adet > 0)) return;
+    const it = karburKatalog[r.katalogId];
+    ekle(r.isEmri, 'a|' + r.katalogId, { tip: 'adet', katalogId: r.katalogId, kod: it ? it.kod : '', adet });
+  });
+  return g;
+}
+function karburReceteYaz(g){
+  const updates = {}, now = Date.now();
+  Object.entries(g || {}).forEach(([m, o]) => {
+    const satirlar = Object.values(o.satirlar).map(s => Object.assign({}, s, {
+      birimBasina: o.ieMiktar > 0 ? Math.round(s.adet / o.ieMiktar * 10000) / 10000 : 0 }));
+    if(!satirlar.length) return;
+    const eski = ((typeof hammaddeRecete !== 'undefined' && hammaddeRecete[m]) || {}).karbur || {};
+    const k = { satirlar, ieMiktar: o.ieMiktar, sonIsEmri: o.isEmri,
+      gozlemSayisi: (Number(eski.gozlemSayisi) || 0) + 1, sonTs: now, sonKullanan: session.username };
+    updates['hammaddeRecete/' + m + '/karbur'] = k;
+    hammaddeRecete[m] = Object.assign({}, hammaddeRecete[m] || {}, { karbur: k });
+  });
+  if(!Object.keys(updates).length) return;
+  DB.ref().update(updates).catch(err => console.warn('Karbür reçetesi yazılamadı:', err));
+}
+/* İş emri alanından çıkılınca: o satır (iş emri dışında) boşsa ve mamulün reçetesi varsa
+   satırları doldur. Dolu satıra dokunulmaz; aynı iş emri reçeteden bir kez doldurulur. */
+function karburReceteUygula(tur, i){
+  const satir = tur === 'adet' ? karburAdetRows[i] : karburRows[i];
+  const bos = satir && (tur === 'adet' ? (!satir.katalogId && !satir.adet) : (!satir.disCap && !satir.boy && !satir.adet));
+  const im = bos ? karburReceteMamul(satir.isEmri) : null;
+  const rec = im ? karburReceteOku(im.mamul) : null;
+  const ayniIs = x => karburBaseIsEmri(x.isEmri) === im.base && x._recete;
+  if(!rec || karburRows.some(ayniIs) || karburAdetRows.some(ayniIs)){ render(); return; }
+  const adetHesap = s => (Number(s.birimBasina) > 0 && im.ieMiktar > 0) ? Math.max(1, Math.round(s.birimBasina * im.ieMiktar)) : (Number(s.adet) || '');
+  const etiket = { gozlem: rec.gozlemSayisi || 1, mamul: im.mamul };
+  let kesimHedef = tur === 'adet' ? -1 : i, adetHedef = tur === 'adet' ? i : -1, ek = 0, dolan = 0;
+  rec.satirlar.forEach(s => {
+    if(s.tip === 'adet'){
+      if(!karburKatalog[s.katalogId]) return;   // kalem katalogdan kalkmış
+      const yeni = { isEmri: satir.isEmri, katalogId: s.katalogId, adet: String(adetHesap(s)), _recete: etiket };
+      if(adetHedef >= 0){ Object.assign(karburAdetRows[adetHedef], yeni); adetHedef = -1; } else karburAdetRows.push(yeni);
+    } else {
+      const yeni = { isEmri: satir.isEmri, disCap: String(s.disCap), delik: s.delik || '', kalite: s.kalite || '',
+        boy: karburFmt(s.boy), adet: String(adetHesap(s)), _recete: etiket };
+      if(kesimHedef >= 0){ Object.assign(karburRows[kesimHedef], yeni); kesimHedef = -1; }
+      else { karburRows.splice(tur === 'adet' ? karburRows.length : i + 1 + ek, 0, yeni); ek++; }
+    }
+    dolan++;
+  });
+  if(dolan){ karburResetPlan(); toast(im.mamul + ' reçetesinden ' + dolan + ' satır dolduruldu — kontrol et'); }
+  render();
+}

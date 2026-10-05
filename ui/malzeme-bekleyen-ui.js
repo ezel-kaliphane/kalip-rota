@@ -243,7 +243,7 @@ function renderMalzemeBekleyen(){
     <div class="notice" style="--nc:var(--accent);margin-top:16px">
       <div class="notice-title">Reçete kendiliğinden birikiyor</div>
       <div class="notice-sub">Şef bir mamul için hangi hammaddeyi seçtiyse kaydediliyor. Aynı mamul ikinci kez geldiğinde
-      hammadde ve miktar hazır geliyor — ayrı bir reçete ekranı yok. Şu an <b>${Object.keys(hammaddeRecete||{}).length}</b> mamulün reçetesi var.</div>
+      hammadde ve miktar hazır geliyor — ayrı bir reçete ekranı yok. Şu an <b>${Object.values(hammaddeRecete||{}).filter(r=>r && r.hammaddeId).length}</b> mamulün reçetesi var.</div>
     </div>
   </div>${renderMbYeniModal()}${renderMbIstekModal()}`;
 }

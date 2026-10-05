@@ -67,13 +67,14 @@ function renderKarburScreen(){
   else if(karburSubView === 'giris')  html += renderKarburGiris();
   else if(karburSubView === 'excel')  html += renderKarburExcel();
   else if(karburSubView === 'gecmis') html += renderKarburGecmis();
-  else if(karburSubView === 'isemri') html += renderKarburIsEmriRapor();
+  else if(karburSubView === 'isemri') html += renderKarburIsEmriRapor() + renderKarburReceteListesi();
   html += `</div>`;
   return html;
 }
 
 /* ==================== KESİM PLANI ==================== */
 function renderKarburPlan(){
+  if(typeof ensureHammaddeReceteLoaded === 'function') ensureHammaddeReceteLoaded(() => safeRender());
   const plan = karburComputePlan();
   const showPlan = !!karburBasePlan;
   const t = karburPlanTotals(plan);
@@ -168,7 +169,7 @@ function renderKarburRowsTable(){
     const boy = karburNum(r.boy);
     const hazir = (!f.hata && !f.secimBekliyor && boy > 0) ? karburFamHazir(f, boy) : null;
     html += `<tr>
-      <td><input value="${esc(r.isEmri)}" oninput="karburSetRow(${i},'isEmri',this.value)" onblur="render()" placeholder="2609010024"></td>
+      <td><input value="${esc(r.isEmri)}" oninput="karburSetRow(${i},'isEmri',this.value)" onblur="karburReceteUygula('kesim',${i})" placeholder="2609010024"></td>
       <td><select onchange="karburSetRowSel(${i},'disCap',this.value)">
         <option value="" ${!r.disCap?'selected':''}>—</option>
         ${caps.map(c=>`<option value="${c}" ${String(r.disCap)===String(c)?'selected':''}>Ø${karburFmt(c)}</option>`).join('')}
@@ -205,6 +206,7 @@ function renderKarburRowsTable(){
       not = `<span style="font-size:11px;color:var(--text-muted)">→ Ø${karburFmt(f.disCap)} · delik ${esc(f.delik)} · ${esc(f.kalite)}</span>`;
       if(hazir) not += ` <span class="chip" style="pointer-events:none;border-color:var(--success);color:var(--success)">kesimsiz: ${esc(hazir.kod)} (stok ${karburStokAdet(hazir.id)})</span>`;
     }
+    if(r._recete) not += ` <span class="chip" style="pointer-events:none;border-color:var(--accent);color:var(--accent)" title="Bu mamulün önceki karbür çıkışlarından">reçeteden · ${r._recete.gozlem}. kayıt</span>`;
     html += `<tr><td colspan="7" style="padding-top:0;font-size:11px">${not}</td></tr>`;
   });
   return html + `</tbody></table>`;
@@ -226,7 +228,7 @@ function renderKarburAdetTable(){
       const adet = parseInt(r.adet, 10) || 0;
       const stok = it ? karburStokAdet(it.id) : null;
       html += `<tr>
-        <td><input value="${esc(r.isEmri)}" oninput="karburSetAdetRow(${i},'isEmri',this.value)" onblur="render()" placeholder="2609010024"></td>
+        <td><input value="${esc(r.isEmri)}" oninput="karburSetAdetRow(${i},'isEmri',this.value)" onblur="karburReceteUygula('adet',${i})" placeholder="2609010024">${r._recete ? `<div style="font-size:10.5px;color:var(--accent);margin-top:2px">reçeteden · ${r._recete.gozlem}. kayıt</div>` : ''}</td>
         <td><select onchange="karburSetAdetRowSel(${i},'katalogId',this.value)">
           <option value="" ${!r.katalogId ? 'selected' : ''}>— kalem seç —</option>
           ${kalemler.map(k => `<option value="${esc(k.id)}" ${r.katalogId === k.id ? 'selected' : ''}>${esc(k.kod)} · ${esc(k.kalite)} (stok ${karburStokAdet(k.id)})</option>`).join('')}
@@ -1031,3 +1033,29 @@ function karburYazdir(){
   setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 250);
 }
 /* ==================== UI: KARBÜR — SON ==================== */
+/* Biriken karbür reçeteleri — mamul başına son gözlem (bkz. js/karbur.js REÇETE). */
+function renderKarburReceteListesi(){
+  if(typeof ensureHammaddeReceteLoaded === 'function') ensureHammaddeReceteLoaded(() => safeRender());
+  const liste = Object.entries((typeof hammaddeRecete !== 'undefined' && hammaddeRecete) || {})
+    .filter(([, r]) => r && r.karbur && Array.isArray(r.karbur.satirlar) && r.karbur.satirlar.length)
+    .map(([m, r]) => ({ m, k: r.karbur, celik: r.hammaddeKod || '' }))
+    .sort((a, b) => (b.k.sonTs || 0) - (a.k.sonTs || 0));
+  const satirMetni = s => s.tip === 'adet'
+    ? `${esc(s.kod || '—')} × ${karburFmt(s.adet)}`
+    : `Ø${karburFmt(s.disCap)} · ${esc(s.delik || '')} · ${esc(s.kalite || '')} · ${karburFmt(s.boy)} mm × ${karburFmt(s.adet)}`;
+  let html = `<div class="card" style="margin-top:14px">
+    <div style="font-size:13px;font-weight:600;margin-bottom:4px">Karbür reçeteleri <span style="font-weight:400;color:var(--text-muted)">· ${liste.length} mamul</span></div>
+    <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px;line-height:1.55">Kesim planı kaydedildikçe kendiliğinden birikiyor: her mamul için son verilen karbür. Aynı mamulün iş emri tekrar gelince Kesim Planı'nda iş emri no yazılıp alandan çıkılınca satırlar hazır dolar. Adet: iş emri listesinde İ.E. miktarı varsa ona göre ölçeklenir, yoksa son verilen adet gelir.</div>`;
+  if(!liste.length) return html + `<div style="font-size:12.5px;color:var(--text-muted)">Henüz reçete yok — ilk kesim planı kaydında oluşur.</div></div>`;
+  html += `<table class="tbl"><thead><tr><th>Mamul</th><th>Karbür (son verilen)</th><th style="text-align:right">İ.E. miktarı</th><th style="text-align:right">Kayıt</th><th>Çelik reçetesi</th><th>Son</th></tr></thead><tbody>
+    ${liste.map(x => `<tr>
+      <td class="mono">${esc(x.m)}<div style="font-size:10.5px;color:var(--text-muted)">${esc((typeof malzemeListesi !== 'undefined' && malzemeListesi && malzemeListesi[x.m]) || '')}</div></td>
+      <td style="font-size:12px">${x.k.satirlar.map(satirMetni).join('<br>')}</td>
+      <td style="text-align:right">${x.k.ieMiktar || '—'}</td>
+      <td style="text-align:right">${x.k.gozlemSayisi || 1}</td>
+      <td class="mono" style="font-size:11.5px;color:var(--text-muted)">${esc(x.celik || '—')}</td>
+      <td style="font-size:11px;color:var(--text-muted);white-space:nowrap">${karburTarih(x.k.sonTs)} · ${esc(x.k.sonIsEmri || '')}</td>
+    </tr>`).join('')}
+  </tbody></table></div>`;
+  return html;
+}

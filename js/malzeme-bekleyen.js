@@ -153,8 +153,10 @@ function malzemeBekleyenEkle(veri, bitti){
       gozlemSayisi: (Number(eski.gozlemSayisi)||0) + 1,
       sonTs: now, sonKullanan: session.username
     };
-    updates['hammaddeRecete/'+mamul] = yeniRecete;
-    hammaddeRecete[mamul] = yeniRecete;
+    /* Alan alan yazılıyor, kaydın tamamı değil: aynı mamul kaydının altında karbür reçetesi
+       (hammaddeRecete/{mamul}/karbur, bkz. js/karbur.js REÇETE) duruyor ve silinmemeli. */
+    Object.entries(yeniRecete).forEach(([k,v])=>{ updates['hammaddeRecete/'+mamul+'/'+k] = v; });
+    hammaddeRecete[mamul] = { ...eski, ...yeniRecete };
   }
   DB.ref().update(updates).then(()=>{
     malzemeBekleyen[id] = kayit;
