@@ -726,44 +726,149 @@ function analizOzetTadilatHtml(t){
     ${rtKpi('Tamamlanan talep', rtFmt(kapali), rtFark(kapali, kapaliOn, { iyi:'artis', onAd }), oz.talep ? `gelenlerin ${agYuzde(kapali/oz.talep*100)} kadarı` : '')}
   </div>`;
 }
-/* Tadilat personeli: dönemde açılan taleplerin operasyonlarını kim yaptı. Parça, kişinin
-   operasyon yaptığı taleplerin adedi (bir talepte iki kişi çalıştıysa ikisine de sayılır). */
-function analizTadilatPersonelHtml(){
-  const a = rtAralik();
-  const liste = rtKayitlar(a.bas, a.son);
-  const kisi = {};
-  liste.forEach(t=>{
-    const goruldu = new Set();
+/* Tadilat personeli (05.10.2026, kullanıcı isteği): "hangi personel kaç adet tadilat yapmış, hangi
+   makinede çalışmış, günlük kaç dakika çalışmış". Burada OPERASYONUN YAPILDIĞI GÜN esas (talebin
+   açıldığı gün değil) — günlük çalışma süresi ancak böyle doğru çıkar. Süre = net (duruş ve Gün
+   Sonu hariç); devam eden operasyon şu ana kadar sayılır; birden fazla güne yayılan operasyon
+   başladığı güne yazılır. Yalnızca tadilat operasyonları — aynı kişinin üretim işleri burada yok. */
+let agKisi = null; // seçili personel (operatorUsername)
+function agKisiSec(u){
+  agKisi = (agKisi===u) ? null : u;
+  render();
+  if(agKisi) rtKaydir('ag-kisi-detay');
+}
+function agPersonelOperasyonlari(a){
+  const L = [];
+  tadilatArray().forEach(t=>{
+    if(t.testKaydi) return;
+    if(analizAtolyeFilter!=='tumu' && (t.atolye||'imalat')!==analizAtolyeFilter) return;
     tadilatOperasyonlarArray(t).forEach(o=>{
-      const u = o.operatorUsername; if(!u) return;
-      const g = kisi[u] || (kisi[u] = { u, ad: o.operatorName||u, op:0, parca:0, talep:0, netMs:0, sureler:[], makine:{} });
-      g.op += 1;
-      if(o.baslamaTs && o.bitisTs){ const n = tadilatOpDurationBreakdown(o).netMs||0; g.netMs += n; g.sureler.push(n/60000); }
-      const m = String(o.makine||'').split(' · ')[0]; if(m) g.makine[m] = (g.makine[m]||0)+1;
-      if(!goruldu.has(u)){ goruldu.add(u); g.talep += 1; g.parca += rtSayi(t.adet); }
+      if(!o.operatorUsername || !o.baslamaTs || o.baslamaTs<a.bas || o.baslamaTs>=a.son) return;
+      const mk = String(o.makine||'').split(' · ');
+      L.push({ t, o, u:o.operatorUsername, ad:o.operatorName||o.operatorUsername, gun: dateKey(o.baslamaTs),
+        makine: mk[0]||'—', makineAd: mk[1]||'', dk: (tadilatOpDurationBreakdown(o).netMs||0)/60000, devam: !o.bitisTs });
     });
   });
-  const L = Object.values(kisi).sort((x,y)=>y.op-x.op);
-  const toplamOp = L.reduce((s,g)=>s+g.op,0) || 1;
+  return L;
+}
+function agKisiOzetleri(ops){
+  const m = {};
+  ops.forEach(x=>{
+    const g = m[x.u] || (m[x.u] = { u:x.u, ad:x.ad, op:0, dk:0, talepler:new Set(), parca:0, gunler:{}, makine:{} });
+    g.op += 1; g.dk += x.dk;
+    if(!g.talepler.has(x.t.id)){ g.talepler.add(x.t.id); g.parca += rtSayi(x.t.adet); }
+    const gn = g.gunler[x.gun] || (g.gunler[x.gun] = { dk:0, op:0, talepler:new Set(), parca:0, makine:{} });
+    gn.dk += x.dk; gn.op += 1;
+    if(!gn.talepler.has(x.t.id)){ gn.talepler.add(x.t.id); gn.parca += rtSayi(x.t.adet); }
+    gn.makine[x.makine] = (gn.makine[x.makine]||0) + x.dk;
+    const mk = g.makine[x.makine] || (g.makine[x.makine] = { kod:x.makine, ad:x.makineAd, op:0, dk:0, talepler:new Set(), parca:0 });
+    mk.op += 1; mk.dk += x.dk;
+    if(!mk.talepler.has(x.t.id)){ mk.talepler.add(x.t.id); mk.parca += rtSayi(x.t.adet); }
+  });
+  return Object.values(m).map(g=>({ ...g, talep:g.talepler.size, gunSay:Object.keys(g.gunler).length,
+    makineL: Object.values(g.makine).sort((x,y)=>y.dk-x.dk) })).sort((x,y)=>y.talep-x.talep || y.dk-x.dk);
+}
+function agDkYaz(dk){ return dk>=600 ? rtFmt(dk/60)+' sa' : rtFmt(dk)+' dk'; }
+
+function analizTadilatPersonelHtml(){
+  const a = rtAralik();
+  const ops = agPersonelOperasyonlari(a);
+  const L = agKisiOzetleri(ops);
+  const mesai = (typeof WORKDAY_MINUTES!=='undefined' ? WORKDAY_MINUTES : 540);
+  if(agKisi && !L.some(g=>g.u===agKisi)) agKisi = null;
+  if(!L.length) return `${agBolumBas('ag-personel','Tadilat personeli','')}${agYorum(['Bu dönemde tadilat operasyonu yok.'])}`;
+
+  const toplamTalep = new Set(ops.map(x=>x.t.id)).size;
+  const toplamDk = L.reduce((s,g)=>s+g.dk,0);
+  const kisiGun = L.reduce((s,g)=>s+g.gunSay,0) || 1;
   const ilk = L[0];
   const cumleler = [
-    L.length ? `Bu dönemde <b>${L.length} kişi</b> tadilat operasyonu yaptı; toplam <b>${rtFmt(toplamOp)} operasyon</b>.` : 'Bu dönemde tadilat operasyonu yok.',
-    ilk ? `En çok operasyonu <b>${esc(ilk.ad)}</b> yaptı: ${rtFmt(ilk.op)} operasyon, operasyonların ${agYuzde(ilk.op/toplamOp*100)} kadarı.` : '',
+    `Bu dönemde <b>${L.length} kişi</b> tadilat operasyonu yaptı: <b>${rtFmt(toplamTalep)} tadilat</b>, <b>${rtFmt(ops.length)} operasyon</b>, toplam <b>${agDkYaz(toplamDk)}</b> net çalışma.`,
+    `Çalışılan günlerde kişi başına günlük ortalama <b>${rtFmt(toplamDk/kisiGun)} dk</b> (mesai ${mesai} dk).`,
+    ilk ? `En çok tadilatı <b>${esc(ilk.ad)}</b> yaptı: ${rtFmt(ilk.talep)} tadilat, ${rtFmt(ilk.parca)} parça.` : '',
+    (()=>{ const n = L.reduce((s,g)=>s+Object.values(g.gunler).filter(gn=>gn.dk>660).length,0);
+      return n ? `<span class="ag-uyari-metin">Dikkat: ${n} kişi-günde süre 11 saati aşıyor (tabloda kırmızı çerçeveli) — operasyon akşam kapatılmamış olabilir, o günlerin süresi şişkin.</span>` : ''; })(),
   ];
-  return `${agBolumBas('ag-personel','Tadilat personeli','talebin açıldığı döneme göre · satıra dokun, talepler süzülsün')}
-  ${agYorum(cumleler)}
-  ${L.length ? `<div class="rt-kutu"><div class="table-wrap"><table class="rt-tablo ag-personel-tablo"><thead><tr>
-      <th>Personel</th><th class="r">Operasyon</th><th class="r">Talep</th><th class="r">Parça</th><th class="r">Net saat</th><th class="r rt-dar-gizle">Operasyon başına</th><th class="rt-dar-gizle">En çok kullandığı makine</th></tr></thead><tbody>
-    ${L.map(g=>{ const secili = rtSecim && rtSecim.tur==='personel' && rtSecim.anahtar===g.u;
-      const mk = Object.entries(g.makine).sort((x,y)=>y[1]-x[1])[0];
-      return `<tr class="${secili?'secili':''}" onclick="rtSec('personel','${escJs(g.u)}','${escJs(g.ad)}')">
+
+  /* 1) Kişi özeti */
+  const ozet = `<div class="rt-kutu">
+    <div class="rt-kutu-bas"><h4>Kim ne kadar tadilat yaptı</h4><span>satıra dokun: makine ve gün dökümü</span></div>
+    <div class="table-wrap"><table class="rt-tablo ag-personel-tablo"><thead><tr>
+      <th>Personel</th><th class="r">Tadilat</th><th class="r">Parça</th><th class="r">Operasyon</th><th class="r">Toplam süre</th><th class="r">Çalıştığı gün</th><th class="r">Günlük ort.</th><th>Çalıştığı makineler</th></tr></thead><tbody>
+    ${L.map(g=>{ const secili = agKisi===g.u;
+      return `<tr class="${secili?'secili':''}" onclick="agKisiSec('${escJs(g.u)}')" title="${esc(g.ad)} · makine ve gün dökümü">
         <td><b>${esc(g.ad)}</b></td>
-        <td class="r"><span class="ag-oran" style="--p:${(g.op/L[0].op*100).toFixed(1)}%"></span><span class="mono">${rtFmt(g.op)}</span></td>
-        <td class="r mono">${rtFmt(g.talep)}</td>
+        <td class="r"><span class="ag-oran" style="--p:${(g.talep/L[0].talep*100).toFixed(1)}%"></span><span class="mono">${rtFmt(g.talep)}</span></td>
         <td class="r mono">${rtFmt(g.parca)}</td>
-        <td class="r mono">${(g.netMs/3.6e6).toFixed(1).replace('.',',')}</td>
-        <td class="r mono rt-dar-gizle">${rtDk(rtMedyan(g.sureler))}</td>
-        <td class="mono rt-dar-gizle">${mk ? esc(mk[0])+` <span class="rt-silik">(${mk[1]})</span>` : '—'}</td>
+        <td class="r mono">${rtFmt(g.op)}</td>
+        <td class="r mono">${agDkYaz(g.dk)}</td>
+        <td class="r mono">${g.gunSay}</td>
+        <td class="r mono">${rtFmt(g.dk/Math.max(1,g.gunSay))} dk</td>
+        <td><div class="ag-makine-cipler">${g.makineL.slice(0,4).map(m=>`<span class="ag-mcip"><b class="mono">${esc(m.kod)}</b> ${agDkYaz(m.dk)}</span>`).join('')}${g.makineL.length>4?`<span class="rt-silik">+${g.makineL.length-4}</span>`:''}</div></td>
       </tr>`; }).join('')}
-  </tbody></table></div><div class="rt-dip">"Operasyon başına": ortanca net süre. Parça: kişinin çalıştığı taleplerin adedi; aynı talepte iki kişi çalıştıysa ikisine de sayılır.</div></div>` : ''}`;
+    </tbody></table></div>
+    <div class="rt-dip">Tadilat: kişinin çalıştığı farklı talep sayısı. Bir talepte iki kişi çalıştıysa ikisine de sayılır. Süreler net (duruş ve Gün Sonu hariç).</div>
+  </div>`;
+
+  /* 2) Günlük çalışma tablosu — ≤62 gün günlük, daha uzunu haftalık. */
+  const bitis = Math.min(a.son, Date.now()+1);
+  /* Tablo dönemin başından değil ilk kayıttan başlar — "Bu yıl"da Ocak–Temmuz boş sütun olmasın. */
+  const ilkTs = Math.max(a.bas, rtGun(Math.min(...ops.map(x=>x.o.baslamaTs))));
+  const gunSay = Math.ceil((bitis - ilkTs)/86400000);
+  const haftalik = gunSay > 62;
+  const sutunlar = [];
+  if(haftalik){
+    let k = rtGun(ilkTs); k -= ((new Date(k).getDay()+6)%7)*86400000;
+    for(; k<bitis; k = rtGun(k+7*86400000+3600000)) sutunlar.push({ bas:k, son:rtGun(k+7*86400000+3600000), et:`${new Date(k).getDate()} ${RT_AY_KISA[new Date(k).getMonth()]}`, hs:false });
+  } else {
+    for(let k=rtGun(ilkTs); k<bitis; k=rtGun(k+36*3600000)){ const d=new Date(k); sutunlar.push({ bas:k, son:rtGun(k+36*3600000), et:String(d.getDate()), alt:['Pz','Pt','Sa','Ça','Pe','Cu','Ct'][d.getDay()], hs:[0,6].includes(d.getDay()), anahtar:dateKey(k) }); }
+  }
+  const hucreDeger = (g, s)=>{
+    if(!haftalik){ const gn = g.gunler[s.anahtar]; return gn ? { dk:gn.dk, op:gn.op, talep:gn.talepler.size, makine:gn.makine } : null; }
+    let dk=0, op=0, talep=0; const makine={};
+    Object.entries(g.gunler).forEach(([gk,gn])=>{ const ts = rtTarihOku(gk); if(ts>=s.bas && ts<s.son){ dk+=gn.dk; op+=gn.op; talep+=gn.talepler.size; Object.entries(gn.makine).forEach(([mk,v])=>makine[mk]=(makine[mk]||0)+v); } });
+    return op ? { dk, op, talep, makine } : null;
+  };
+  const kapasite = haftalik ? mesai*5 : mesai;
+  const gunTablo = `<div class="rt-kutu">
+    <div class="rt-kutu-bas"><h4>${haftalik?'Haftalık':'Günlük'} çalışma (dakika)</h4><span>net tadilat süresi · renk koyulaştıkça mesaiye (${kapasite} dk${haftalik?'/hafta':''}) yaklaşıyor · hücreye gel: ayrıntı</span></div>
+    <div class="table-wrap"><table class="rt-tablo ag-gun-tablo"><thead><tr><th class="ag-gun-ad">Personel</th>${sutunlar.map(s=>`<th class="r ${s.hs?'ag-hs':''}">${s.et}${s.alt?`<small>${s.alt}</small>`:''}</th>`).join('')}<th class="r">Toplam</th></tr></thead><tbody>
+    ${L.map(g=>`<tr class="${agKisi===g.u?'secili':''}" onclick="agKisiSec('${escJs(g.u)}')"><td class="ag-gun-ad"><b>${esc(g.ad)}</b></td>${sutunlar.map(s=>{
+        const h = hucreDeger(g, s);
+        if(!h) return `<td class="r ag-bos-h ${s.hs?'ag-hs':''}">·</td>`;
+        const oran = Math.min(1, h.dk/kapasite);
+        /* Mesainin çok üstü (günde 11 saatten uzun): büyük ihtimalle akşam kapatılmayıp ertesi güne
+           açık kalmış operasyon — başladığı güne yazılıyor. İşaretli ki rakama güvenilmesin. */
+        const suphe = !haftalik && h.dk > 660;
+        const mk = Object.entries(h.makine).sort((x,y)=>y[1]-x[1]).map(([k,v])=>`${k} ${rtFmt(v)} dk`).join(', ');
+        return `<td class="r mono ag-h ${s.hs?'ag-hs':''} ${suphe?'ag-suphe':''}" style="--o:${(8+oran*62).toFixed(0)}%" title="${esc(g.ad)} · ${haftalik?'hafta '+s.et:s.et+' '+RT_AY[new Date(s.bas).getMonth()]} · ${rtFmt(h.dk)} dk · ${h.op} operasyon, ${h.talep} tadilat · ${esc(mk)}${suphe?' · MESAİDEN ÇOK UZUN: operasyon gece açık kalmış olabilir':''}">${rtFmt(h.dk)}</td>`;
+      }).join('')}<td class="r mono"><b>${rtFmt(g.dk)}</b></td></tr>`).join('')}
+    <tr class="ag-toplam rt-tablo-sabit"><td class="ag-gun-ad">Toplam</td>${sutunlar.map(s=>{ const t = L.reduce((x,g)=>x+((hucreDeger(g,s)||{}).dk||0),0); return `<td class="r mono ${s.hs?'ag-hs':''}">${t?rtFmt(t):''}</td>`; }).join('')}<td class="r mono">${rtFmt(toplamDk)}</td></tr>
+    </tbody></table></div>
+  </div>`;
+
+  /* 3) Seçili kişinin dökümü: makine makine ve gün gün. */
+  const g = agKisi ? L.find(x=>x.u===agKisi) : null;
+  const detay = g ? `<div class="rt-kutu ag-kisi-detay" id="ag-kisi-detay">
+    <div class="rt-liste-bas"><div><h4>${esc(g.ad)}</h4><span>${rtFmt(g.talep)} tadilat · ${rtFmt(g.parca)} parça · ${rtFmt(g.op)} operasyon · ${agDkYaz(g.dk)} · ${g.gunSay} gün</span></div>
+      <button type="button" class="btn-ghost" style="width:auto;padding:7px 12px" onclick="agKisiSec('${escJs(g.u)}')">${ico('x',13)} Kapat</button></div>
+    <div class="rt-izgara">
+      <div><div class="ag-alt-baslik">Makine makine</div>
+        <table class="rt-tablo"><thead><tr><th>Makine</th><th class="r">Tadilat</th><th class="r">Parça</th><th class="r">Operasyon</th><th class="r">Süre</th><th class="r">Pay</th></tr></thead><tbody>
+        ${g.makineL.map(m=>`<tr class="rt-tablo-sabit"><td><span class="mono">${esc(m.kod)}</span>${m.ad?` <span class="rt-silik">${esc(m.ad)}</span>`:''}</td><td class="r mono">${m.talepler.size}</td><td class="r mono">${rtFmt(m.parca)}</td><td class="r mono">${m.op}</td><td class="r mono">${agDkYaz(m.dk)}</td><td class="r mono">${agYuzde(m.dk/Math.max(1,g.dk)*100)}</td></tr>`).join('')}
+        </tbody></table></div>
+      <div><div class="ag-alt-baslik">Gün gün</div>
+        <div class="ag-kisi-gunler"><table class="rt-tablo"><thead><tr><th>Gün</th><th class="r">Tadilat</th><th class="r">Parça</th><th class="r">Süre</th><th>Makineler</th></tr></thead><tbody>
+        ${Object.entries(g.gunler).sort((x,y)=>y[0].localeCompare(x[0])).map(([gk,gn])=>{ const d = new Date(rtTarihOku(gk));
+          return `<tr class="rt-tablo-sabit"><td class="mono" style="white-space:nowrap">${rtTarihYaz(rtTarihOku(gk))} <span class="rt-silik">${['Paz','Pzt','Sal','Çar','Per','Cum','Cmt'][d.getDay()]}</span></td><td class="r mono">${gn.talepler.size}</td><td class="r mono">${rtFmt(gn.parca)}</td><td class="r mono">${rtFmt(gn.dk)} dk</td><td class="mono rt-silik">${Object.entries(gn.makine).sort((x,y)=>y[1]-x[1]).map(([k,v])=>`${esc(k)} ${rtFmt(v)}`).join(' · ')}</td></tr>`; }).join('')}
+        </tbody></table></div></div>
+    </div>
+    <div style="margin-top:10px"><button type="button" class="btn-ghost" style="width:auto;padding:7px 12px" onclick="rtSec('personel','${escJs(g.u)}','${escJs(g.ad)}')">Bu kişinin tadilat taleplerini listele →</button></div>
+  </div>` : '';
+
+  return `${agBolumBas('ag-personel','Tadilat personeli','operasyonun yapıldığı güne göre')}
+  ${agYorum(cumleler)}
+  ${ozet}
+  ${detay}
+  ${gunTablo}`;
 }
