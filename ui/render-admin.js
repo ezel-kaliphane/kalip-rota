@@ -3742,8 +3742,7 @@ function renderAdmin(){
       ${analizRoleBar}
       ${analizGenelUstHtml()}
       ${analizOzetHtml(t)}
-      ${analizUretimHtml()}
-      ${analizTadilatHtml()}
+      ${analizBolumlerHtml()}
       ${agBolumBas('ag-verimlilik','Verimlilik & Duruş','makinelerin çalışma, duruş ve fazla mesaisi')}
       ${analizVerimlilikYorum(t, pareto, machineRank)}
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Standart mesai: kullanılan her gün için ${WORKDAY_MINUTES} dk (08:00~${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}) · ${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}'dan sonrası fazla mesai sayılır</div>

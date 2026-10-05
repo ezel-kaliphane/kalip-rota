@@ -1396,3 +1396,8 @@ html{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
 .ag-ay-tablo tr.ag-toplam td{font-weight:700;border-top:2px solid var(--border)}
 /* Eski Verimlilik kartları beşi yan yana sığmayınca 280px min-width sayfayı yana kaydırıyordu. */
 .analiz-wrap .analiz-chart-box{min-width:0}
+/* Tadilat personeli tablosu: operasyon sütununda satır içi oran çubuğu (en çok yapana göre). */
+.ag-personel-tablo td{font-size:14px;padding:9px 8px}
+.ag-personel-tablo td b{font-weight:600}
+.ag-oran{display:inline-block;width:70px;height:8px;margin-right:10px;border-radius:4px;background:linear-gradient(90deg,var(--accent) var(--p),var(--panel-alt) var(--p));vertical-align:middle}
+@media (max-width:600px){ .ag-oran{display:none} }

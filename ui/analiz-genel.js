@@ -126,7 +126,7 @@ function rtTalepOlcu(t){
   return { ops, beklemeDk, netDk: netVar ? netMs/60000 : null, kapali: tadilatTamamlandiMi(t), parca: rtSayi(t.adet) };
 }
 function rtMedyan(a){ if(!a.length) return null; const s=[...a].sort((x,y)=>x-y); const i=Math.floor(s.length/2); return s.length%2 ? s[i] : (s[i-1]+s[i])/2; }
-function rtDk(dk){ if(dk==null) return '—'; if(dk<60) return Math.round(dk)+' dk'; if(dk<1440) return (dk/60).toFixed(dk<600?1:0).replace('.',',')+' sa'; return (dk/1440).toFixed(1).replace('.',',')+' gün'; }
+function rtDk(dk){ if(dk==null) return '—'; if(dk<1) return '<1 dk'; if(dk<60) return Math.round(dk)+' dk'; if(dk<1440) return (dk/60).toFixed(dk<600?1:0).replace('.',',')+' sa'; return (dk/1440).toFixed(1).replace('.',',')+' gün'; }
 function rtFmt(n){ return Math.round(n).toLocaleString('tr-TR'); }
 
 /* ---------- TADİLAT verisi ---------- */
@@ -167,6 +167,7 @@ const RT_KIRILIM = {
   tur:     t => rtIslemTurleri(t).map(k=>[k, k==='belirsiz' ? 'Belirsiz' : RT_ISLEM_TURLERI.find(x=>x[0]===k)[1]]),
   bekleme: t => { const o=rtTalepOlcu(t); if(o.beklemeDk==null) return [['__baslamadi','Başlamadı']]; const k=RT_BEKLEME_KOVA.find(([a,b])=>o.beklemeDk>=a && o.beklemeDk<b); return [[k[2],k[2]]]; },
   isleyen: t => [...new Set(tadilatOperasyonlarArray(t).map(o=>String(o.makine||'').split(' · ')[0]).filter(Boolean))].map(m=>[m,m]),
+  personel: t => [...new Set(tadilatOperasyonlarArray(t).map(o=>o.operatorUsername).filter(Boolean))].map(u=>[u,u]),
 };
 function rtSecimeUyar(t){
   if(!rtSecim) return true;
@@ -391,6 +392,7 @@ function analizGenelUstHtml(){
    Üç ana sayı + sayfanın geri kalanını özetleyen cümleler. Verimlilik/duruş Özet'te kart değil,
    cümlede: kartı Verimlilik bölümünde (sayı sayfada bir kez). */
 function analizOzetHtml(t){
+  if(analizAtolyeFilter==='tadilat') return analizOzetTadilatHtml(t);
   const a = rtAralik(), on = rtOncekiAralik(a), onAd = rtOncekiAd(a,on);
   const gr = usGruplar();
   const us = usOzet(usBitenler(a.bas, a.son), gr), usOn = usOzet(usBitenler(on.bas, on.son), gr);
@@ -583,7 +585,8 @@ function analizTadilatHtml(){
   const suzParca = suzulmus.reduce((s,t)=>s+rtSayi(t.adet),0);
 
   const cumleler = [
-    oz.talep ? `<b>${rtFmt(oz.talep)} talep</b>, <b>${rtFmt(oz.parca)} parça</b>${fAt==='tumu' && payTad!=null ? `; tadilat atölyesinin payı <b>${agYuzde(payTad)}</b>` : ''}.` : 'Bu dönemde tadilat talebi yok.',
+    /* Tadilat kipinde talep/parça Özet'te — burada tekrar edilmiyor. */
+    fAt==='tadilat' ? '' : (oz.talep ? `<b>${rtFmt(oz.talep)} talep</b>, <b>${rtFmt(oz.parca)} parça</b>${fAt==='tumu' && payTad!=null ? `; tadilat atölyesinin payı <b>${agYuzde(payTad)}</b>` : ''}.` : 'Bu dönemde tadilat talebi yok.'),
     tekBuyuk ? `Dikkat: tek bir talep (${esc(enBuyuk.uKodu||'')}, ${rtFmt(rtSayi(enBuyuk.adet))} adet) dönemin parçasında ${agYuzde(rtSayi(enBuyuk.adet)/oz.parca*100)} pay tutuyor; oranlar bu talepten etkileniyor.` : '',
     bek!=null ? `Talepler genelde açıldıktan <b>${rtDk(bek)}</b> sonra işleme giriyor${gunuGecen ? `; bir günden fazla bekleyen talep: <b>${gunuGecen}</b>` : ''}.` : '',
     makineG[0] && makineG[0].anahtar!=='—' ? `En çok tadilat isteyen makine <b>${esc(makineG[0].etiket)}</b>: ${makineG[0].talep} talep, ${rtFmt(makineG[0].parca)} parça.` : '',
@@ -593,7 +596,7 @@ function analizTadilatHtml(){
   return `${agBolumBas('ag-tadilat','Tadilat','talebin açıldığı güne göre')}
   ${agYorum(cumleler)}
   <div class="rt-kpiler">
-    ${rtKpi('Talep', rtFmt(oz.talep), rtFark(oz.talep, ozOn.talep, { onAd }), `talep başına ${oz.talep? (oz.parca/oz.talep).toFixed(1).replace('.',','):'—'} parça`)}
+    ${fAt==='tadilat' ? '' : rtKpi('Talep', rtFmt(oz.talep), rtFark(oz.talep, ozOn.talep, { onAd }), `talep başına ${oz.talep? (oz.parca/oz.talep).toFixed(1).replace('.',','):'—'} parça`)}
     ${rtKpi('Başlama bekleme', rtDk(bek), rtFark(bek, bekOn, { iyi:'azalis', onAd, bicim:rtDk }), fAt==='tumu' ? `ortanca · tadilat ${rtDk(oz.beklemeTad)}, imalat ${rtDk(oz.beklemeIma)}` : 'ortanca')}
     ${rtKpi('İşlem süresi', rtDk(net), '', fAt==='tumu' ? `ortanca net · tadilat ${rtDk(oz.netTad)}, imalat ${rtDk(oz.netIma)}` : 'ortanca net')}
   </div>
@@ -692,4 +695,75 @@ function analizVerimlilikYorum(t, pareto, makineSira){
     (()=>{ const k = (makineSira||[]).filter(m=>m.verimlilik>0); return k.length>1 ? `En verimli makine <b>${esc(k[0].code)}</b> (%${k[0].verimlilik}), en düşük <b>${esc(k[k.length-1].code)}</b> (%${k[k.length-1].verimlilik}).` : ''; })(),
   ];
   return agYorum(c);
+}
+
+/* ---------- TADİLAT ATÖLYESİ GÖRÜNÜMÜ (05.10.2026) ----------
+   Atölye filtresi "Tadilat" iken Üretim bölümü boş kalıyordu (tadilat atölyesinde iş emri
+   bitmiyor) ve Özet "biten iş emri yok" diye açılıyordu — kullanıcı: "saçma durmuyor mu, sadece
+   tadilat seçilince farklı bir analiz gelsin". Bu kipte sıra: Özet (tadilat) → Tadilat →
+   Tadilat personeli → Verimlilik & Duruş (yalnız tadilat makineleri) → Açık işler. */
+function analizBolumlerHtml(){
+  return analizAtolyeFilter==='tadilat'
+    ? analizTadilatHtml() + analizTadilatPersonelHtml()
+    : analizUretimHtml() + analizTadilatHtml();
+}
+function analizOzetTadilatHtml(t){
+  const a = rtAralik(), on = rtOncekiAralik(a), onAd = rtOncekiAd(a,on);
+  const liste = rtKayitlar(a.bas, a.son), onceki = rtKayitlar(on.bas, on.son);
+  const oz = rtOzet(liste), ozOn = rtOzet(onceki);
+  const kapali = liste.filter(x=>tadilatTamamlandiMi(x)).length, kapaliOn = onceki.filter(x=>tadilatTamamlandiMi(x)).length;
+  let tOn = null;
+  try{ tOn = computeAnalizData(dateKey(on.bas), dateKey(Math.max(on.bas, on.son-1)), 'tadilat').totals; }catch(e){ tOn = null; }
+  const cumleler = [
+    oz.talep ? `Tadilat atölyesine bu dönemde <b>${rtFmt(oz.talep)} talep</b> ile <b>${rtFmt(oz.parca)} parça</b> geldi; tamamlanan talep <b>${rtFmt(kapali)}</b>.` : 'Bu dönemde tadilat atölyesine talep gelmedi.',
+    (t && t.availMin>0) ? `Tadilat makinelerinin verimliliği <b>%${t.verimlilik}</b>${tOn && tOn.availMin>0 ? ` (${esc(onAd)}: %${tOn.verimlilik})` : ''}.` : '',
+  ];
+  return `${agBolumBas('ag-ozet','Özet', esc(a.etiket)+' · tadilat atölyesi')}
+  ${agYorum(cumleler)}
+  <div class="rt-kpiler ag-kpi-buyuk">
+    ${rtKpi('Gelen talep', rtFmt(oz.talep), rtFark(oz.talep, ozOn.talep, { onAd }))}
+    ${rtKpi('Tadilat parça', rtFmt(oz.parca), rtFark(oz.parca, ozOn.parca, { onAd }))}
+    ${rtKpi('Tamamlanan talep', rtFmt(kapali), rtFark(kapali, kapaliOn, { iyi:'artis', onAd }), oz.talep ? `gelenlerin ${agYuzde(kapali/oz.talep*100)} kadarı` : '')}
+  </div>`;
+}
+/* Tadilat personeli: dönemde açılan taleplerin operasyonlarını kim yaptı. Parça, kişinin
+   operasyon yaptığı taleplerin adedi (bir talepte iki kişi çalıştıysa ikisine de sayılır). */
+function analizTadilatPersonelHtml(){
+  const a = rtAralik();
+  const liste = rtKayitlar(a.bas, a.son);
+  const kisi = {};
+  liste.forEach(t=>{
+    const goruldu = new Set();
+    tadilatOperasyonlarArray(t).forEach(o=>{
+      const u = o.operatorUsername; if(!u) return;
+      const g = kisi[u] || (kisi[u] = { u, ad: o.operatorName||u, op:0, parca:0, talep:0, netMs:0, sureler:[], makine:{} });
+      g.op += 1;
+      if(o.baslamaTs && o.bitisTs){ const n = tadilatOpDurationBreakdown(o).netMs||0; g.netMs += n; g.sureler.push(n/60000); }
+      const m = String(o.makine||'').split(' · ')[0]; if(m) g.makine[m] = (g.makine[m]||0)+1;
+      if(!goruldu.has(u)){ goruldu.add(u); g.talep += 1; g.parca += rtSayi(t.adet); }
+    });
+  });
+  const L = Object.values(kisi).sort((x,y)=>y.op-x.op);
+  const toplamOp = L.reduce((s,g)=>s+g.op,0) || 1;
+  const ilk = L[0];
+  const cumleler = [
+    L.length ? `Bu dönemde <b>${L.length} kişi</b> tadilat operasyonu yaptı; toplam <b>${rtFmt(toplamOp)} operasyon</b>.` : 'Bu dönemde tadilat operasyonu yok.',
+    ilk ? `En çok operasyonu <b>${esc(ilk.ad)}</b> yaptı: ${rtFmt(ilk.op)} operasyon, operasyonların ${agYuzde(ilk.op/toplamOp*100)} kadarı.` : '',
+  ];
+  return `${agBolumBas('ag-personel','Tadilat personeli','talebin açıldığı döneme göre · satıra dokun, talepler süzülsün')}
+  ${agYorum(cumleler)}
+  ${L.length ? `<div class="rt-kutu"><div class="table-wrap"><table class="rt-tablo ag-personel-tablo"><thead><tr>
+      <th>Personel</th><th class="r">Operasyon</th><th class="r">Talep</th><th class="r">Parça</th><th class="r">Net saat</th><th class="r rt-dar-gizle">Operasyon başına</th><th class="rt-dar-gizle">En çok kullandığı makine</th></tr></thead><tbody>
+    ${L.map(g=>{ const secili = rtSecim && rtSecim.tur==='personel' && rtSecim.anahtar===g.u;
+      const mk = Object.entries(g.makine).sort((x,y)=>y[1]-x[1])[0];
+      return `<tr class="${secili?'secili':''}" onclick="rtSec('personel','${escJs(g.u)}','${escJs(g.ad)}')">
+        <td><b>${esc(g.ad)}</b></td>
+        <td class="r"><span class="ag-oran" style="--p:${(g.op/L[0].op*100).toFixed(1)}%"></span><span class="mono">${rtFmt(g.op)}</span></td>
+        <td class="r mono">${rtFmt(g.talep)}</td>
+        <td class="r mono">${rtFmt(g.parca)}</td>
+        <td class="r mono">${(g.netMs/3.6e6).toFixed(1).replace('.',',')}</td>
+        <td class="r mono rt-dar-gizle">${rtDk(rtMedyan(g.sureler))}</td>
+        <td class="mono rt-dar-gizle">${mk ? esc(mk[0])+` <span class="rt-silik">(${mk[1]})</span>` : '—'}</td>
+      </tr>`; }).join('')}
+  </tbody></table></div><div class="rt-dip">"Operasyon başına": ortanca net süre. Parça: kişinin çalıştığı taleplerin adedi; aynı talepte iki kişi çalıştıysa ikisine de sayılır.</div></div>` : ''}`;
 }
