@@ -1989,14 +1989,36 @@ function renderIyGecmisModal(){
     </div>
   </div>`;
 }
+/* Arama malzeme bekleyenleri de buluyor (05.10.2026, kullanıcı isteği): malzeme bekleyen iş emrinin
+   çoğu zaman hiç operasyon kaydı yok, bu yüzden arama "eşleşen kayıt bulunamadı" diyordu. Talep no,
+   U kodu ya da mamul kodunda geçen aktif kayıtlar üstte, siparişin rengiyle (istek no yok = kırmızı,
+   var = sarı) gösteriliyor. */
+function iyMalzemeAramaSonuclari(q){
+  const s = String(q||'').trim().toUpperCase(); if(!s) return [];
+  return iyMalzemeBekleyenler().filter(x=>[x.talepNo, x.isEmriNo, x.mamulKodu].some(v=>String(v||'').toUpperCase().includes(s)));
+}
+function iyMalzemeAramaKartHtml(x){
+  const istek = String(x.caniasIstekNo||'').trim(), renk = malzemeIstekRenk(x), bek = mbBeklemeMetni(x.isaretTs);
+  return `<div class="analiz-chart-box iy-mb-kart ${istek?'var':'yok'}" style="margin-bottom:10px">
+    <div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:8px">
+      <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px">${esc(x.talepNo||x.isEmriNo||'—')}</span>
+      <span class="matrix-tag" style="--sb:${renk}">Malzeme bekliyor</span>
+      ${x.isEmriNo && x.isEmriNo!==x.talepNo ? `<span style="font-size:11px;color:var(--text-muted)">U kodu: ${esc(x.isEmriNo)}</span>` : ''}
+    </div>
+    <div style="margin-top:8px;font-size:13.5px;font-weight:600;color:${renk}">${istek ? `Sipariş açıldı · istek no ${esc(istek)}` : 'İstek no girilmedi · CANIAS isteği henüz açılmadı'}</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${esc(x.mamulAdi||'')}${x.mamulAdi?' · ':''}Beklenen: <span class="mono">${esc(x.hammaddeKod||'—')} · ${esc(String(x.gerekenMiktar||''))} ${esc(x.birim||'')}</span> · ${bek.metin}dir bekliyor · işaretleyen ${esc(x.isaretleyenName||x.isaretleyenUsername||'—')}</div>
+    ${canManageStock() ? `<button class="btn-ghost" style="width:auto;padding:6px 12px;margin-top:10px" onclick="stokSubView='bekleyen'; setView('stokYonetim')">Malzeme Bekleyenler'de aç</button>` : ''}
+  </div>`;
+}
 function iyAramaHtml(){
   const q = iyAramaMetni.trim();
   const sonuclar = q ? iyAramaSonuclari(q) : [];
+  const mbSonuc = q ? iyMalzemeAramaSonuclari(q) : [];
   return `<div style="margin-bottom:16px">
     <input id="iy-arama" type="search" class="filter-input mono" style="width:100%;max-width:420px" placeholder="İş Emri No / Talep No ile ara — nerede olduğunu gör" value="${esc(iyAramaMetni)}" oninput="setIyAramaMetni(this.value)">
-    ${q ? `<div style="margin-top:12px">${sonuclar.length===0
+    ${q ? `<div style="margin-top:12px">${sonuclar.length===0 && mbSonuc.length===0
       ? `<div class="analiz-chart-box" style="text-align:center;color:var(--text-muted);padding:16px">"${esc(q)}" ile eşleşen kayıt bulunamadı.</div>`
-      : sonuclar.map(iyAramaSonucKartHtml).join('')}</div>` : ''}
+      : mbSonuc.map(iyMalzemeAramaKartHtml).join('') + sonuclar.map(iyAramaSonucKartHtml).join('')}</div>` : ''}
   </div>`;
 }
 function iyGorunumSecici(){

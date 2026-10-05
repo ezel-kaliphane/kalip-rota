@@ -1441,3 +1441,5 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .iy-mb-satir.yok .iy-mb-istek{color:var(--danger-text);font-weight:700}
 .iy-mb-satir.var .iy-mb-istek{color:var(--warn-text);font-weight:700;font-family:var(--ff-mono)}
 .iy-mb-etiket{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:9px;margin-left:4px;color:var(--warn-text);background:color-mix(in srgb, var(--warn) 18%, transparent)}
+.iy-mb-kart{border-left:4px solid var(--danger);background:color-mix(in srgb, var(--danger) 10%, var(--panel))}
+.iy-mb-kart.var{border-left-color:var(--warn);background:color-mix(in srgb, var(--warn) 12%, var(--panel))}
