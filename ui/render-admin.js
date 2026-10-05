@@ -2792,7 +2792,8 @@ function operatorGosterimAdi(kayit){
 }
 
 const EKRAN_BASLIKLARI = {
-  report:       { baslik:'Rapor' },
+  report:       { baslik:'Kayıtlar', alt:'tamamlanan operasyonların listesi' },
+  raporlar:     { ustu:'Raporlar', baslik:'Tadilat Raporu' },
   genelBakis:   { ustu:'Canlı Panel', baslik:'Genel Bakış' },
   matrix:       { ustu:'Canlı Panel', baslik:'Makine Matrisi' },
   completed:    { ustu:'Canlı Panel', baslik:'Tamamlanan Kodlar' },
@@ -3091,7 +3092,8 @@ function renderExcelYukleme(){
    ayrı ayrı tutulup ayrışmasın. Koşullar eski kenar çubuğu markup'ındakilerin BİREBİR aynısı. */
 function adminNavOgeleri(){
   const o = [];
-  if(isAdminTabVisible('rapor')) o.push({ key:'rapor', label:'Rapor', ikon:'list', aktif: view==='report', tikla:"setView('report')" });
+  if(raporlarGorunur()) o.push({ key:'raporlar', label:'Raporlar', ikon:'file', aktif: view==='raporlar', tikla:"setView('raporlar')" });
+  if(isAdminTabVisible('rapor')) o.push({ key:'rapor', label:'Kayıtlar', ikon:'list', aktif: view==='report', tikla:"setView('report')" });
   if(canliPanelVisible()) o.push({ key:'canli', label:'Canlı Panel', ikon:'clock', aktif: isCanliPanelView(view), tikla:`setView('${canliPanelDefaultView()}')` });
   if(isAdminTabVisible('isYogunlugu')) o.push({ key:'isYogunlugu', label:'İş Yoğunluğu', ikon:'box', aktif: view==='isYogunlugu', tikla:"setView('isYogunlugu')" });
   if(!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz')) o.push({ key:'analiz', label:'Analiz', ikon:'chart', aktif: view==='analiz', tikla:"setView('analiz')" });
@@ -3113,7 +3115,8 @@ function adminNavOgeleri(){
    Çıkış'ı açıyor. Ana sekmeler sırayla: Rapor, Canlı Panel, Tadilat, Stok — kullanıcının
    yetkisi olmayan düşüyor, boşluğu listedeki sıradaki dolduruyor. */
 let adminMenuAcik = false;
-const ADMIN_MOBIL_BIRINCIL = ['rapor','canli','tadilat','stok'];
+/* Raporlar admine açık; Şef/Üretim Şef'te yok → boşluğu sıradaki (Kayıtlar) doldurur. */
+const ADMIN_MOBIL_BIRINCIL = ['raporlar','canli','tadilat','stok'];
 function adminAltBarHtml(ogeler){
   let birincil = ADMIN_MOBIL_BIRINCIL.map(k=>ogeler.find(n=>n.key===k)).filter(Boolean);
   for(const n of ogeler){ if(birincil.length>=4) break; if(!birincil.includes(n)) birincil.push(n); }
@@ -3140,10 +3143,10 @@ function adminMenuHtml(ogeler, kisiHtml){
 function renderAdmin(){
   /* Stok sekmesi uc bolumlu (takim / karbur / malzeme), asagida `stokYonetim` olarak ayrica ele
      aliniyor — bu yuzden burada karsiligi yok. */
-  const viewToTabKey = { report:'rapor', genelBakis:'genelBakis', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilatYonetim:'tadilat' };
+  const viewToTabKey = { raporlar:'raporlar', report:'rapor', genelBakis:'genelBakis', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilatYonetim:'tadilat' };
   if(viewToTabKey[view] && !isAdminTabVisible(viewToTabKey[view])){
-    const tabKeyToView = { rapor:'report', genelBakis:'genelBakis', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilat:'tadilatYonetim', takimStok:'stokYonetim', karbur:'stokYonetim' };
-    const fallbackKey = ADMIN_TAB_DEFS.map(t=>t.key).find(k=>isAdminTabVisible(k) && (k!=='tadilat' || canCreateTadilat()) && (k!=='analiz' || !(session.isSef || session.isUretimSef)));
+    const tabKeyToView = { raporlar:'raporlar', rapor:'report', genelBakis:'genelBakis', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilat:'tadilatYonetim', takimStok:'stokYonetim', karbur:'stokYonetim' };
+    const fallbackKey = ADMIN_TAB_DEFS.map(t=>t.key).find(k=>isAdminTabVisible(k) && (k!=='raporlar' || raporlarGorunur()) && (k!=='tadilat' || canCreateTadilat()) && (k!=='analiz' || !(session.isSef || session.isUretimSef)));
     view = fallbackKey ? tabKeyToView[fallbackKey] : 'report';
   }
   /* Stok sekmesi üç bölümden (takım / karbür / malzeme) oluşuyor; hiçbirine erişimi olmayan
@@ -3568,6 +3571,8 @@ function renderAdmin(){
       body += renderMalzemeStokAyarlar();
     }
     body += `</div>`;
+  } else if(view==='raporlar'){
+    body = renderRaporlar();
   } else if(view==='operatorler'){
     body = renderOperatorler();
   } else if(view==='excelYukleme'){
@@ -4122,6 +4127,7 @@ function renderAdmin(){
                   <input id="tad-ukodu" class="mono" placeholder="ör. U-8841-M10" value="${esc(newTadilatForm.uKodu)}" oninput="newTadilatForm.uKodu=this.value" onblur="tadUkoduBlur('new')" style="flex:1;min-width:0">
                   <button type="button" class="btn-ghost" style="padding:0 14px;flex:none" title="Malzeme Ara" onclick="openMalzemeArama('new')">${ico('search',14)}</button>
                 </div>
+                ${String(newTadilatForm.uKodu||'').trim() && !tadilatKoduGercekMi(newTadilatForm.uKodu) ? `<div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Kod listesinde yok — <b>kodsuz parça</b> olarak sayılır. Kodu varsa ${ico('search',11)} ile ara.</div>` : ''}
               </div>
             <div class="field" style="flex:1;min-width:0">
               <label for="tad-kisaaciklama">Kısa açıklama<span class="zorunlu">*</span></label>
@@ -4156,14 +4162,13 @@ function renderAdmin(){
             <div style="display:flex;gap:10px">
             <div class="field" style="flex:1;min-width:0">
               <label for="tad-bolum">Talep eden bölüm<span class="zorunlu">*</span></label>
-              <input id="tad-bolum" list="tadilat-bolum-options" placeholder="seç ya da yaz" value="${esc(newTadilatForm.bolum)}" oninput="newTadilatForm.bolum=this.value" onblur="render()">
+              <select id="tad-bolum" onchange="newTadilatForm.bolum=this.value; render()">${tadilatBolumSecenekleriHtml(newTadilatForm.bolum)}</select>
             </div>
             <div class="field" style="flex:1;min-width:0">
               <label for="tad-kisi">Talep eden kişi<span class="zorunlu">*</span></label>
               <input id="tad-kisi" list="uretim-personeli-options" placeholder="ad soyad" value="${esc(newTadilatForm.talepKisi)}" oninput="newTadilatForm.talepKisi=this.value">
             </div>
             </div>
-            <datalist id="tadilat-bolum-options">${tadilatBolumOptions().map(b=>`<option value="${b}">`).join('')}</datalist>
             <datalist id="uretim-personeli-options">${uretimPersoneliFor(newTadilatForm.bolum).map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
           </div>
 

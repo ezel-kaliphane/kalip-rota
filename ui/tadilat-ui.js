@@ -18,10 +18,9 @@ function renderTadilatEditModal(){
         </div>
         <div class="field" style="margin-top:14px"><label>Açıklama</label><input id="tedit-kisaaciklama" value="${esc(f.kisaAciklama)}" oninput="tadilatEditForm.kisaAciklama=this.value; tadilatEditForm.aciklamaManual=true"></div>
         <div style="display:flex;gap:8px">
-          <div class="field" style="flex:1"><label>Talep eden bölüm</label><input id="tedit-bolum" list="tadilat-bolum-options" value="${esc(f.bolum)}" oninput="tadilatEditForm.bolum=this.value" onblur="render()"></div>
+          <div class="field" style="flex:1"><label for="tedit-bolum">Talep eden bölüm</label><select id="tedit-bolum" onchange="tadilatEditForm.bolum=this.value; render()">${tadilatBolumSecenekleriHtml(f.bolum)}</select></div>
           <div class="field" style="flex:1"><label>Talep edilen makine</label><input id="tedit-makine" list="tadilat-makine-options-edit" value="${esc(f.talepMakine)}" oninput="tadilatEditForm.talepMakine=this.value"></div>
         </div>
-        <datalist id="tadilat-bolum-options">${tadilatBolumOptions().map(b=>`<option value="${b}">`).join('')}</datalist>
         <datalist id="tadilat-makine-options-edit">${isMerkezleriFor(f.bolum).map(k=>`<option value="${esc(k)}">`).join('')}</datalist>
         <div class="field"><label>Talep eden kişi (ad soyad)</label><input id="tedit-kisi" list="uretim-personeli-options-edit" value="${esc(f.talepEdenKisi)}" oninput="tadilatEditForm.talepEdenKisi=this.value"></div>
         <datalist id="uretim-personeli-options-edit">${uretimPersoneliFor(f.bolum).map(p=>`<option value="${esc(p)}">`).join('')}</datalist>

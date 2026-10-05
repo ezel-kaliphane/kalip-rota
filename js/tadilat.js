@@ -241,10 +241,12 @@ function addTadilat(){
   if(!/^\d+$/.test(adet)){ toast('Adet sadece rakam olmalı'); return; }
   const kisiErr = validateTalepEdenKisi(talepEdenKisi);
   if(kisiErr){ toast(kisiErr); return; }
-  if(!bolum){ toast('Talep eden bölüm girin'); return; }
+  if(!bolum){ toast('Talep eden bölümü seçin'); return; }
+  if(!tadilatBolumOptions().includes(bolum)){ toast('Bölümü listeden seçin'); return; }
   const makineErr = validateTalepMakine(bolum, talepMakine);
   if(makineErr){ toast(makineErr); return; }
   if(!aciklama){ toast('Ne işlem yapılacağını girin'); return; }
+  if(!tadilatAdetOnayli(adet)) return;
   tadilatFormAtolyeSet(atolye);
   const id = uid();
   DB.ref('tadilatlar/'+id).set({
@@ -295,6 +297,7 @@ function saveTadilatEdit(id){
   const makineErr = validateTalepMakine(bolum, talepMakine);
   if(makineErr){ toast(makineErr); return; }
   if(!aciklama){ toast('Ne işlem yapılacağı boş olamaz'); return; }
+  if(String(adet)!==String(t0.adet||'') && !tadilatAdetOnayli(adet)) return;
   DB.ref('tadilatlar/'+id).update({ uKodu, kisaAciklama, adet, bolum, talepMakine, talepEdenKisi: canonicalTalepEdenKisi(talepEdenKisi), atolye, aciklama }).then(()=>{
     toast('Tadilat talebi güncellendi');
     cancelTadilatEdit();

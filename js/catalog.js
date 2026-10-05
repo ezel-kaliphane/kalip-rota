@@ -399,7 +399,8 @@ let adminTabPermissions = {}; // { "LV": {rapor:true, matrix:false, ...}, "SEF":
    rapor'u kapalı olan biri artık Canlı Panel'in ilk sekmesine düşer, matrise değil.
    Rapor BİRLEŞMEDİ, kendi nav öğesi olarak ayrı duruyor. */
 const ADMIN_TAB_DEFS = [
-  { key:'rapor', label:'Rapor' },
+  { key:'rapor', label:'Kayıtlar' },
+  { key:'raporlar', label:'Raporlar' },
   { key:'genelBakis', label:'Canlı Panel · Genel Bakış' },
   { key:'matrix', label:'Canlı Panel · Makine Matrisi' },
   { key:'completed', label:'Canlı Panel · Tamamlanan Kodlar' },
@@ -476,6 +477,22 @@ function setTakimStokSubTabPermission(username, key, val){
   DB.ref(`adminTabPermissions/${username}/takimStokViews/${key}`).set(val);
 }
 function tadilatBolumOptions(){ return Object.keys(getBolumKurallari()); }
+/* Bölüm artık serbest yazılmıyor (05.10.2026): "Civata"/"CİVATA"/"civata" raporda ayrı sayılıyordu,
+   "asdas" gibi değerler giriyordu. Açılır liste tanımlı bölümlerden; eski bir kaydı düzeltirken
+   listede olmayan eski değer kaybolmasın diye seçenek olarak eklenir (bilinçli olarak değiştirilene kadar). */
+function tadilatBolumSecenekleriHtml(secili){
+  const ops = tadilatBolumOptions();
+  const s = String(secili||'');
+  const eski = s && !ops.includes(s) ? `<option value="${esc(s)}" selected>${esc(s)} (eski değer)</option>` : '';
+  return `<option value="" ${!s?'selected':''}>— seç —</option>${eski}${ops.map(o=>`<option value="${esc(o)}" ${o===s?'selected':''}>${esc(o)}</option>`).join('')}`;
+}
+/* Çok büyük adet yazım hatası olabilir — tek bir 3.000 adetlik talep bir ayın raporunu ikiye
+   katlıyordu. Eşiğin üstünde onay isteniyor; gerçekten büyük işler yine girilebilir. */
+const TADILAT_ADET_ONAY_ESIGI = 200;
+function tadilatAdetOnayli(adet){
+  const n = Number(adet)||0;
+  return n <= TADILAT_ADET_ONAY_ESIGI || confirm(`${n.toLocaleString('tr-TR')} adet yazdın. Doğru mu?\n\nRaporlar parça adedine göre hesaplanıyor; yanlışsa İptal'e bas ve düzelt.`);
+}
 function canManageBolumKurallari(){
   if(!session || !session.isSuperAdmin){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return false; }
   return true;
