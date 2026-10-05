@@ -121,7 +121,8 @@ function isEmriBilgisiBul(girilen){
 }
 function receteOku(mamulKodu){
   const k = String(mamulKodu||'').trim().toUpperCase();
-  return k ? (hammaddeRecete[k]||null) : null;
+  const r = k ? hammaddeRecete[k] : null;
+  return (r && r.hammaddeId) ? r : null; // yalnız karbür reçetesi olan mamul çelik reçetesi sayılmaz
 }
 
 function malzemeBekleyenEkle(veri, bitti){
@@ -159,7 +160,9 @@ function malzemeBekleyenEkle(veri, bitti){
     hammaddeRecete[mamul] = { ...eski, ...yeniRecete };
   }
   DB.ref().update(updates).then(()=>{
-    malzemeBekleyen[id] = kayit;
+    /* Yerel kopya elle güncellenmiyor: canlı dinleyici (ensureMalzemeBekleyenLoaded) yazmayı anında
+       getiriyor; elle yazmak, arada başka cihazdan gelen daha yeni değeri geri alabiliyordu. */
+    if(!malzemeBekleyenDinleniyor) malzemeBekleyen[id] = kayit;
     toast((kayit.isEmriNo||kayit.talepNo)+' malzeme bekliyor olarak işaretlendi');
     bitti && bitti();
     render();
@@ -179,7 +182,7 @@ function malzemeIstekNoKaydet(id, no){
   updates['malzemeBekleyen/'+id+'/istekGirenUsername'] = session.username;
   updates['malzemeBekleyen/'+id+'/istekTs'] = now;
   DB.ref().update(updates).then(()=>{
-    malzemeBekleyen[id] = { ...kayit, caniasIstekNo: temiz, istekGirenUsername: session.username, istekTs: now };
+    if(!malzemeBekleyenDinleniyor) malzemeBekleyen[id] = { ...kayit, caniasIstekNo: temiz, istekGirenUsername: session.username, istekTs: now };
     toast(temiz ? ('İstek no kaydedildi: '+temiz) : 'İstek no temizlendi');
     render();
   }).catch(err=>{ toast('Kaydedilemedi: '+((err&&err.message)||'hata')); });
@@ -198,7 +201,7 @@ function malzemeBekleyenKarsila(id){
   updates['malzemeBekleyen/'+id+'/karsilayanUsername'] = session.username;
   updates['malzemeBekleyen/'+id+'/karsilayanName'] = session.displayName;
   DB.ref().update(updates).then(()=>{
-    malzemeBekleyen[id] = { ...kayit, durum:'karsilandi', karsilanmaTs:now,
+    if(!malzemeBekleyenDinleniyor) malzemeBekleyen[id] = { ...kayit, durum:'karsilandi', karsilanmaTs:now,
       karsilayanUsername:session.username, karsilayanName:session.displayName };
     toast((kayit.isEmriNo||kayit.talepNo)+' karşılandı');
     render();

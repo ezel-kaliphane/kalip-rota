@@ -48,7 +48,9 @@ function usSecimKaldir(){ usSecim = null; usSayfa = 1; render(); }
 function usSayfaGit(n){ usSayfa = n; render(); rtKaydir('us-liste'); }
 
 function rtGun(ts){ const d=new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
-function rtAyEkle(ts, k){ const d=new Date(ts); return new Date(d.getFullYear(), d.getMonth()+k, d.getDate(), d.getHours(), d.getMinutes()).getTime(); }
+/* Gün hedef aya sığdırılıyor: 31 Ekim'den bir ay geri "31 Eylül" = 1 Ekim olup önceki dönem
+   seçili döneme taşıyordu (bulgu 05.10.2026). */
+function rtAyEkle(ts, k){ const d=new Date(ts); const Y=d.getFullYear(), M=d.getMonth()+k; const D=Math.min(d.getDate(), new Date(Y, M+1, 0).getDate()); return new Date(Y, M, D, d.getHours(), d.getMinutes()).getTime(); }
 function rtTarihOku(s){ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||''); return m ? new Date(+m[1], +m[2]-1, +m[3]).getTime() : null; }
 function rtTarihYaz(ts){ return dateKey(ts).split('-').reverse().join('.'); }
 
@@ -64,8 +66,9 @@ function rtAralik(){
   if(rtDonem==='son3Ay'){ const b = t(y,m-2,1); return { bas:b, son:t(y,m+1,1), ay:3, etiket:`${RT_AY[new Date(b).getMonth()]} – ${RT_AY[m]} ${y}` }; }
   if(rtDonem==='buYil')   return { bas:t(y,0,1),   son:t(y+1,0,1), ay:12, etiket:`${y}` };
   if(rtDonem==='ozel'){
-    const b = rtTarihOku(rtBas), s = rtTarihOku(rtSon);
-    if(b!=null && s!=null && s>=b) return { bas:b, son:s+86400000, etiket:`${rtTarihYaz(b)} – ${rtTarihYaz(s)}` };
+    let b = rtTarihOku(rtBas), s = rtTarihOku(rtSon);
+    if(b!=null && s!=null && s<b){ const x=b; b=s; s=x; } // ters girilmişse yer değiştir
+    if(b!=null && s!=null) return { bas:b, son:s+86400000, etiket:`${rtTarihYaz(b)} – ${rtTarihYaz(s)}` };
   }
   return { bas:t(y,m,1), son:t(y,m+1,1), ay:1, etiket:`${RT_AY[m]} ${y}` };
 }
@@ -256,7 +259,9 @@ function usOzet(liste, gruplar){
 }
 const US_KIRILIM = {
   'u-bolum':  e => [[usBolum(e), usBolum(e)]],
-  'u-makine': e => [[usMakine(e)||'—', usMakine(e)||'—']],
+  /* Rotasında o makine olan iş emirleri (yalnız SON makine değil) — "Makine yükü" çubukları her
+     operasyonu sayıyor, tıklayınca liste boş kalıyordu (ör. testere, ara makineler). */
+  'u-makine': e => [...new Set(usOps(e).map(usMakine).filter(Boolean))].map(m=>[m,m]),
 };
 function usSecimeUyar(e){
   if(!usSecim) return true;
@@ -430,7 +435,7 @@ function analizOzetHtml(t){
   const rtL = rtKayitlar(a.bas, a.son);
   const rt = rtOzet(rtL), rtOn = rtOzet(rtKayitlar(on.bas, on.son));
   let tOn = null;
-  try{ tOn = agVeri(dateKey(on.bas), dateKey(Math.max(on.bas, on.son-1)), analizAtolyeFilter).totals; }catch(e){ tOn = null; }
+  if(!agSaatKiyasYok()) try{ tOn = agVeri(dateKey(on.bas), dateKey(Math.max(on.bas, on.son-1)), analizAtolyeFilter).totals; }catch(e){ tOn = null; }
   const yon = (s,o)=> (o>0 && s!==o) ? `; önceki döneme göre iş emri %${Math.round(Math.abs(s-o)/o*100)} ${s>o?'fazla':'az'}` : '';
   const cumleler = [
     us.isEmri ? `Bu dönemde <b>${rtFmt(us.isEmri)} iş emri</b> bitti ve <b>${rtFmt(us.parca)} parça</b> üretildi${yon(us.isEmri, usOn.isEmri)}.` : 'Bu dönemde biten iş emri yok.',
@@ -441,16 +446,19 @@ function analizOzetHtml(t){
   const ayTablo = (()=>{
     const aylar = [];
     for(let d=new Date(a.bas); d.getTime()<Math.min(a.son, Date.now()); d=new Date(d.getFullYear(), d.getMonth()+1, 1)) aylar.push(new Date(d.getFullYear(), d.getMonth(), 1).getTime());
-    if(aylar.length<2) return '';
-    const satir = aylar.map(b=>{ const s = new Date(new Date(b).getFullYear(), new Date(b).getMonth()+1, 1).getTime();
+    /* Yalnızca en az ~6 haftalık dönemde (Son 3 ay, Bu yıl, uzun Özel): "Son 7 gün" iki aya
+       taşınca tablo iki ayın TAMAMINI gösteriyordu. Her satır dönemle kırpılır. */
+    if(aylar.length<2 || (a.son-a.bas) < 40*86400000) return '';
+    const satir = aylar.map(b0=>{ const s0 = new Date(new Date(b0).getFullYear(), new Date(b0).getMonth()+1, 1).getTime();
+      const b = Math.max(b0, a.bas), s = Math.min(s0, a.son);
       const u = usOzet(usBitenler(b, s), gr), r = rtOzet(rtKayitlar(b, s));
-      /* Devam eden ay yarım: tam bir ayla yüzde kıyası yanıltır (Ekim'in 5 günü / Eylül'ün tamamı = "−90%"). */
-      const yarim = s > Date.now();
-      const gun = yarim ? Math.max(1, Math.ceil((Date.now()-b)/86400000)) : 0;
+      /* Yarım ay (devam eden ya da dönemin kestiği): tam bir ayla yüzde kıyası yanıltır (Ekim'in 5 günü / Eylül'ün tamamı = "−90%"). */
+      const yarim = s0 > Date.now() || b > b0 || s < s0;
+      const gun = yarim ? Math.max(1, Math.ceil((Math.min(s, Date.now())-b)/86400000)) : 0;
       return { ad: RT_AY[new Date(b).getMonth()] + (yarim ? ` <small class="rt-silik">(${gun} gün)</small>` : ''), yarim, isEmri:u.isEmri, parca:u.parca, tParca:r.parca, tTalep:r.talep }; });
     const top = satir.reduce((x,r)=>({ isEmri:x.isEmri+r.isEmri, parca:x.parca+r.parca, tParca:x.tParca+r.tParca, tTalep:x.tTalep+r.tTalep }), {isEmri:0,parca:0,tParca:0,tTalep:0});
     /* Üretimde artış iyi (yeşil); tadilatta artış iyi ya da kötü değil (nötr). */
-    const hucre = (r,k,i,notr)=>{ const once = (i>0 && !r.yarim) ? satir[i-1][k] : null; const f = once ? Math.round((r[k]-once)/once*100) : null;
+    const hucre = (r,k,i,notr)=>{ const once = (i>0 && !r.yarim && !satir[i-1].yarim) ? satir[i-1][k] : null; const f = once ? Math.round((r[k]-once)/once*100) : null;
       return `<td class="r"><span class="mono">${rtFmt(r[k])}</span>${f!=null&&f!==0?`<small class="${notr?'notr':f>0?'iyi':'kotu'}">${f>0?'+':''}${f}%</small>`:''}</td>`; };
     return `<div class="rt-kutu ag-ay-tablo"><div class="rt-kutu-bas"><h4>Ay ay</h4><span>küçük rakam: bir önceki aya göre değişim · devam eden ay kıyaslanmaz</span></div>
       <div class="table-wrap"><table class="rt-tablo"><thead><tr><th>Ay</th><th class="r">Biten iş emri</th><th class="r">Üretilen parça</th><th class="r">Tadilat parça</th><th class="r">Tadilat talep</th></tr></thead><tbody>
@@ -750,7 +758,7 @@ function analizOzetTadilatHtml(t){
   const oz = rtOzet(liste), ozOn = rtOzet(onceki);
   const kapali = liste.filter(x=>tadilatTamamlandiMi(x)).length, kapaliOn = onceki.filter(x=>tadilatTamamlandiMi(x)).length;
   let tOn = null;
-  try{ tOn = agVeri(dateKey(on.bas), dateKey(Math.max(on.bas, on.son-1)), 'tadilat').totals; }catch(e){ tOn = null; }
+  if(!agSaatKiyasYok()) try{ tOn = agVeri(dateKey(on.bas), dateKey(Math.max(on.bas, on.son-1)), 'tadilat').totals; }catch(e){ tOn = null; }
   const cumleler = [
     oz.talep ? `Tadilat atölyesine bu dönemde <b>${rtFmt(oz.talep)} talep</b> ile <b>${rtFmt(oz.parca)} parça</b> geldi; tamamlanan talep <b>${rtFmt(kapali)}</b>.` : 'Bu dönemde tadilat atölyesine talep gelmedi.',
     (t && t.availMin>0) ? `Tadilat makinelerinin verimliliği <b>%${t.verimlilik}</b>${tOn && tOn.availMin>0 ? ` (${esc(onAd)}: %${tOn.verimlilik})` : ''}.` : '',
@@ -915,6 +923,11 @@ function analizTadilatPersonelHtml(){
    önceki dönemi (hem de İmalat/Tadilat bölümü için "tüm atölyeler"i) istediği için slot her
    render'da takla atıp hesabı baştan yaptırıyordu. Burada birkaç sonucu dakika kovasıyla tutuyoruz
    (computeAnalizData'nın kendi anahtarıyla aynı mantık; veri referansı değişince düşer). */
+/* Saat bazlı ölçüler (verimlilik, imalat/tadilat saati) computeAnalizData'dan TAM GÜN olarak
+   geliyor; "Bugün"de dünün tamamı bugünün şu ana kadarıyla kıyaslanır ve sabah her şey düşüş
+   görünürdü. Bu yüzden "Bugün"de bu ölçülerin önceki dönem kıyası gösterilmiyor (sayımlar —
+   iş emri, talep — saatine kadar kıyaslandığı için onlar kalıyor). */
+function agSaatKiyasYok(){ return rtDonem==='bugun'; }
 let _agVeriOnbellek = [];
 function agVeri(bas, son, atolye){
   const k = bas+'|'+son+'|'+(atolye||'tumu')+'|'+Math.floor(nowTick/60000);
@@ -968,7 +981,7 @@ function analizAyrimHtml(){
   const a = rtAralik(), on = rtOncekiAralik(a), onAd = rtOncekiAd(a,on);
   let d, dOn = null;
   try{ d = agVeri(analizFrom, analizTo, 'tumu'); }catch(e){ return ''; }
-  try{ dOn = agVeri(dateKey(on.bas), dateKey(Math.max(on.bas, on.son-1)), 'tumu'); }catch(e){ dOn = null; }
+  if(!agSaatKiyasYok()) try{ dOn = agVeri(dateKey(on.bas), dateKey(Math.max(on.bas, on.son-1)), 'tumu'); }catch(e){ dOn = null; }
   const x = agAyrimTopla(d), xOn = dOn ? agAyrimTopla(dOn) : null;
   const fAt = analizAtolyeFilter;
   const sa = dk => dk/60; // KPI ve farklar saat cinsinden

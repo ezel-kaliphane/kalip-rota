@@ -1482,7 +1482,9 @@ function karburReceteUygula(tur, i){
   const bos = satir && (tur === 'adet' ? (!satir.katalogId && !satir.adet) : (!satir.disCap && !satir.boy && !satir.adet));
   const im = bos ? karburReceteMamul(satir.isEmri) : null;
   const rec = im ? karburReceteOku(im.mamul) : null;
-  const ayniIs = x => karburBaseIsEmri(x.isEmri) === im.base && x._recete;
+  /* Bu iş emri için planda BAŞKA herhangi bir satır varsa (elle girilmiş ya da reçeteden gelmiş)
+     doldurma yapılmaz — aksi hâlde aynı karbür iki kez kesilip stoktan iki kez düşerdi. */
+  const ayniIs = x => x !== satir && karburBaseIsEmri(x.isEmri) === im.base;
   if(!rec || karburRows.some(ayniIs) || karburAdetRows.some(ayniIs)){ render(); return; }
   const adetHesap = s => (Number(s.birimBasina) > 0 && im.ieMiktar > 0) ? Math.max(1, Math.round(s.birimBasina * im.ieMiktar)) : (Number(s.adet) || '');
   const etiket = { gozlem: rec.gozlemSayisi || 1, mamul: im.mamul };

@@ -1046,6 +1046,7 @@ function setAnalizPreset(days){
 function buildTadilatSynthetic(){
   const out = [];
   tadilatArray().forEach(t=>{
+    if(t.testKaydi) return; // test kaydı (05.10.2026 işaretlendi) — hiçbir analize girmez
     let ilkOpYazildi = false;
     tadilatOperasyonlarArray(t).forEach(o=>{
       if(!o.makine || !o.baslamaTs) return;

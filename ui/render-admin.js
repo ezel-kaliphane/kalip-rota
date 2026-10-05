@@ -2006,7 +2006,7 @@ function iyMalzemeAramaKartHtml(x){
       ${x.isEmriNo && x.isEmriNo!==x.talepNo ? `<span style="font-size:11px;color:var(--text-muted)">U kodu: ${esc(x.isEmriNo)}</span>` : ''}
     </div>
     <div style="margin-top:8px;font-size:13.5px;font-weight:600;color:${renk}">${istek ? `Sipariş açıldı · istek no ${esc(istek)}` : 'İstek no girilmedi · CANIAS isteği henüz açılmadı'}</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${esc(x.mamulAdi||'')}${x.mamulAdi?' · ':''}Beklenen: <span class="mono">${esc(x.hammaddeKod||'—')} · ${esc(String(x.gerekenMiktar||''))} ${esc(x.birim||'')}</span> · ${bek.metin}dir bekliyor · işaretleyen ${esc(x.isaretleyenName||x.isaretleyenUsername||'—')}</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${esc(x.mamulAdi||'')}${x.mamulAdi?' · ':''}Beklenen: <span class="mono">${esc(x.hammaddeKod||'—')} · ${esc(String(x.gerekenMiktar||''))} ${esc(x.birim||'')}</span> · ${bek.metin} bekliyor · işaretleyen ${esc(x.isaretleyenName||x.isaretleyenUsername||'—')}</div>
     ${canManageStock() ? `<button class="btn-ghost" style="width:auto;padding:6px 12px;margin-top:10px" onclick="stokSubView='bekleyen'; setView('stokYonetim')">Malzeme Bekleyenler'de aç</button>` : ''}
   </div>`;
 }
@@ -3738,7 +3738,7 @@ function renderAdmin(){
       body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizSaha()}</div>`;
     } else {
     analizDonemiEsitle(); // Genel görünüm: dönem ortak seçiciden (bkz. ui/analiz-genel.js)
-    const data = computeAnalizData(analizFrom, analizTo, analizAtolyeFilter);
+    const data = agVeri(analizFrom, analizTo, analizAtolyeFilter); // ortak önbellek (ui/analiz-genel.js) — tek slotlu computeAnalizData önbelleği önceki dönem çağrılarıyla takla atıyordu
     lastAnalizData = data; // initAnalizCharts (app.js) bunu kullanır — bkz. catalog.js'teki not
     const t = data.totals;
     const durusReasonTotals = {};
