@@ -668,7 +668,8 @@ function yeniHammaddeYaz(alan, deger, cizme){
 /* Kaydedilen kalemi açıldığı yerde seçili hâle getir. */
 function yeniHammaddeHedefeSec(hedef, id, lotId){
   const it = stockItems[id]; if(!it){ render(); return; }
-  if(hedef==='mb'){ mbHamSec(id); return; }
+  /* İşaretleme penceresi o arada kapatılmış olsa bile taslağıyla birlikte geri açılsın. */
+  if(hedef==='mb'){ mbYeniAcik = true; mbHamSec(id); return; }
   if(hedef==='giris'){ stokGirisArama = ''; stockGirisSecKalem(id); return; }
   if(String(hedef).startsWith('op')){
     const deger = it.tur==='boy' ? (lotId ? id+'::'+lotId : '') : id;

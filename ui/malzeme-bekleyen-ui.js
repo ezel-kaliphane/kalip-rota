@@ -11,13 +11,20 @@ let mbIstekDuzenId = null, mbIstekDeger = '';
 let mbGecmisAcik = false;
 let mbHamAra = '';
 
+/* TASLAK KORUNUYOR (05.10.2026): şef formu doldurup malzemenin olmadığını görünce yeni hammadde
+   açıyor; eskiden pencere kapanıp yeniden açılınca her şeyi baştan yazıyordu. Artık form yalnızca
+   kayıt başarılı olunca ya da "Vazgeç"e basılınca sıfırlanıyor; boşluğa basıp kapatmak taslağı
+   silmiyor, tekrar açınca kaldığı yerden devam ediyor. */
+function mbFormBos(){ return { girilen:'', talepNo:'', mamulKodu:'', mamulAdi:'', ieMiktar:'', hammaddeId:'', gerekenMiktar:'', busy:false, bulundu:null }; }
+function mbTaslakVar(){ return !!(mbForm && (String(mbForm.girilen||'').trim() || mbForm.hammaddeId || String(mbForm.ieMiktar||'').trim() || String(mbForm.gerekenMiktar||'').trim())); }
 function mbYeniAc(){
   if(!canManageStock()){ toast('Bu işlem için Şef ya da SuperAdmin yetkisi gerekli'); return; }
   mbYeniAcik = true; mbHamAra = '';
-  mbForm = { girilen:'', talepNo:'', mamulKodu:'', mamulAdi:'', ieMiktar:'', hammaddeId:'', gerekenMiktar:'', busy:false, bulundu:null };
+  if(!mbTaslakVar()) mbForm = mbFormBos();
+  mbForm.busy = false;
   render();
 }
-function mbYeniKapat(){ mbYeniAcik = false; render(); }
+function mbYeniKapat(taslakSil){ mbYeniAcik = false; if(taslakSil){ mbForm = mbFormBos(); mbHamAra = ''; } render(); }
 function mbGecmisToggle(){ mbGecmisAcik = !mbGecmisAcik; render(); }
 
 /* İş emri / talep no girilince ERP listesinden mamul, varsa reçeteden hammadde ve miktar
@@ -88,7 +95,7 @@ function mbKaydet(){
     ieMiktar: Number(mbForm.ieMiktar)||0,
     hammaddeId: mbForm.hammaddeId, hammaddeKod: hammaddeEtiket(it),
     gerekenMiktar: gereken, birim: (it && it.birim) || 'adet'
-  }, ()=>{ mbYeniAcik = false; });
+  }, ()=>{ mbYeniAcik = false; mbForm = mbFormBos(); mbHamAra = ''; });
 }
 function mbIstekAc(id, mevcut){
   if(!malzemeIstekNoYetkisi()){ toast('İstek numarasını yalnızca SuperAdmin girebilir'); return; }
@@ -308,7 +315,7 @@ function renderMbYeniModal(){
 
       <div style="display:flex;gap:8px;margin-top:4px">
         <button class="btn-primary" style="flex:1" ${mbForm.busy?'disabled':''} onclick="mbKaydet()">${mbForm.busy?'Kaydediliyor…':'İşaretle'}</button>
-        <button class="btn-ghost" onclick="mbYeniKapat()">Vazgeç</button>
+        <button class="btn-ghost" onclick="mbYeniKapat(true)">Vazgeç</button>
       </div>
     </div></div>`;
 }
