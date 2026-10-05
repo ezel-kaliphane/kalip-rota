@@ -1837,11 +1837,10 @@ function stokBolumSayisi(key){
    onun da iş yoğunluğunda görünmesiydi". Malzeme bekleyen iş emrinin çoğu zaman HİÇ kaydı yok
    (testereye bile geçemedi), bu yüzden "sıradaki makine" kuyruğunda görünmüyordu. Ayrı bir satır
    olarak en üstte duruyor; satır rengi siparişin durumuna göre: istek no yoksa kırmızı, varsa sarı
-   (malzemeIstekRenk). malzemeBekleyen canlı dinlenmiyor (maliyet, bkz. js/malzeme-bekleyen.js) —
-   bu ekran açıkken dakikada bir yeniden okunuyor. */
+   (malzemeIstekRenk). malzemeBekleyen canlı dinleniyor (bkz. js/malzeme-bekleyen.js). */
 function iyMalzemeBekleyenler(){
   if(typeof malzemeBekleyenAktif!=='function') return [];
-  if(Date.now() - (malzemeBekleyenDenemeTs||0) > 60000) ensureMalzemeBekleyenLoaded(()=>safeRender(), true);
+  ensureMalzemeBekleyenLoaded();
   if(!malzemeBekleyenReady) return [];
   return malzemeBekleyenAktif().slice().sort((a,b)=>(malzemeIstekVar(a)-malzemeIstekVar(b)) || (Number(a.isaretTs)||0)-(Number(b.isaretTs)||0));
 }

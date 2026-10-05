@@ -243,6 +243,12 @@ function renderMalzemeBekleyen(){
 
 function renderMbYeniModal(){
   if(!mbYeniAcik) return '';
+  /* "Yeni malzeme oluştur"a basılınca bu pencere yeni hammadde penceresinin ÜSTÜNDE kalıyordu
+     (ikisi aynı katmanda, bu sonra çiziliyor) — şef kapatmak için boşluğa basmak zorundaydı
+     (05.10.2026). Yeni hammadde penceresi açıkken bu pencere gizleniyor; form bilgisi
+     korunuyor. Hammadde kaydedilince (hedef 'mb') bu pencere yeni kalem seçili hâlde geri
+     geliyor, vazgeçilirse olduğu gibi geri geliyor. */
+  if(typeof yhModal!=='undefined' && yhModal) return '';
   /* CANİAS listesi yüklendikten sonra (01.10.2026) burada ~370 kalem var. Şef arama
      kutusuna sistemin her yerdeki gibi yazar ("4140 25", "4140 Ø25", "b13 kalın", %joker%)
      ve altında çıkan satıra dokunur (hammaddeAra, js/catalog.js). Açılır liste göz atmak

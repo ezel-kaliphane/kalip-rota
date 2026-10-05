@@ -22,24 +22,29 @@
    hammaddeRecete'ye yazılıyor; aynı mamul ikinci kez geldiğinde hammadde ve birim
    başına miktar hazır geliyor. Ayrı bir "reçete gir" ekranı YOK — kimse doldurmaz.
 
-   MALİYET: bu düğüm canlı DİNLENMİYOR (toolStock/karburStok ile aynı gerekçe), ekran
-   açıldığında bir kez okunuyor. Liste küçük (bekleyen iş emri sayısı), yazma sonrası
-   yerel kopya elle güncelleniyor ki kullanıcı kendi işlemini yenilemeden görsün. */
+   CANLI (05.10.2026): eskiden maliyet gerekçesiyle bir kez okunuyordu; kullanıcı "şefin girdiği
+   sipariş ya da benim girdiğim istek no anlık güncellenmiyor, uygulamayı kapatıp açmam gerekiyor"
+   dedi. Artık ilk ihtiyaç anında (Malzeme Bekleyenler ya da İş Yoğunluğu açılınca) on('value')
+   ile dinleniyor ve oturum boyunca açık kalıyor. Liste küçük (bekleyen iş emri sayısı, onlarca
+   kayıt) ve seyrek değişiyor; RTDB yalnızca değişen kısmı gönderiyor. Yazma sonrası yerel
+   kopyanın elle güncellenmesi duruyor — dinleyici gelene kadar anında görünsün diye. */
 
 let malzemeBekleyen = {}, malzemeBekleyenReady = false, malzemeBekleyenLoading = false, malzemeBekleyenError = null;
-let malzemeBekleyenDenemeTs = 0; // son okuma denemesi — İş Yoğunluğu bununla dakikada bir tazeliyor
+let malzemeBekleyenDenemeTs = 0, malzemeBekleyenDinleniyor = false;
 let hammaddeRecete = {}, hammaddeReceteReady = false, hammaddeReceteLoading = false;
 
-function ensureMalzemeBekleyenLoaded(cb, force){
-  if((malzemeBekleyenReady && !force) || malzemeBekleyenLoading) return;
-  malzemeBekleyenLoading = true;
+function ensureMalzemeBekleyenLoaded(cb){
+  /* Dinleyici bir kez kurulur. Hata olursa (ör. yetki) her render'da yeniden denemesin diye
+     en erken bir dakika sonra tekrar denenir. */
+  if(malzemeBekleyenDinleniyor && !(malzemeBekleyenError && Date.now()-malzemeBekleyenDenemeTs > 60000)) return;
+  malzemeBekleyenDinleniyor = true; malzemeBekleyenLoading = true;
   malzemeBekleyenDenemeTs = Date.now();
-  DB.ref('malzemeBekleyen').once('value').then(snap => {
+  DB.ref('malzemeBekleyen').on('value', snap => {
     malzemeBekleyenLoading = false;
     malzemeBekleyen = snap.val() || {};
     malzemeBekleyenReady = true; malzemeBekleyenError = null;
-    cb && cb();
-  }).catch(err => {
+    safeRender();
+  }, err => {
     malzemeBekleyenLoading = false;
     malzemeBekleyenError = (err && err.message) || 'okuma hatası';
     safeRender();
