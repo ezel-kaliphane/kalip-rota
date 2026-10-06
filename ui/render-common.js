@@ -951,6 +951,7 @@ const EZEL_LOGO_SRC = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAABeCAM
 function ezelLogoHtml(sinif){ return `<span class="${sinif||'logo-plate'}"><img src="${EZEL_LOGO_SRC}" alt="Ezel Cıvata"></span>`; }
 
 const ICONS = {
+  star:'<path d="M12 3.2l2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.6l6.1-.9z"/>',
   factory:'<path d="M3 21h18"/><path d="M4 21V11l5 3V11l5 3V8l5 3v10"/><path d="M8 21v-3"/>',
   history:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 7.5V12l3 2"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',

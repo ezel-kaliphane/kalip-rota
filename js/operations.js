@@ -387,14 +387,49 @@ function pickDurusReason(i){
    (kaç iş emri o makineyi bekliyor) buradan çıkarılabiliyor. Duruş modalıyla birebir aynı desen
    (renderDurusModal / durusOptionsListHtml) kullanılıyor, sadece seçenek listesi makineler. */
 const NEXT_OP_BELIRSIZ = '__BILINMIYOR__';
+/* FAVORİ MAKİNELER (06.10.2026, kullanıcı isteği): operatörler sıradaki makineyi seçerken uzun
+   listede çok arıyordu. Her makinenin yanında yıldız; yıldızlananlar listenin en üstünde
+   "Favoriler" başlığı altında. Kişiye özel: operators/{kod}/favoriMakineler/{makineKodu}=true
+   (telefon değişse de kalsın). RTDB kuralı bu alanı tanımayan bir sürümde yazma reddedilir;
+   o yüzden her zaman bu cihazda da (localStorage) tutuluyor — veritabanında yoksa oradan okunur. */
+function makineFavorileri(){
+  const u = session && session.username; if(!u) return [];
+  const db = (STATE.operators[u]||{}).favoriMakineler;
+  if(db && typeof db==='object'){ const l = Object.keys(db).filter(k=>db[k]); if(l.length) return l; }
+  try{ const l = JSON.parse(localStorage.getItem('favoriMakineler:'+u)||'[]'); return Array.isArray(l) ? l : []; }catch(e){ return []; }
+}
+function makineFavoriToggle(code){
+  const u = session && session.username; if(!u || !code) return;
+  const fav = new Set(makineFavorileri());
+  const ekle = !fav.has(code);
+  if(ekle) fav.add(code); else fav.delete(code);
+  const liste = [...fav];
+  try{ localStorage.setItem('favoriMakineler:'+u, JSON.stringify(liste)); }catch(e){}
+  const op = STATE.operators[u];
+  if(op) op.favoriMakineler = liste.length ? Object.fromEntries(liste.map(k=>[k,true])) : null;
+  DB.ref('operators/'+u+'/favoriMakineler/'+code).set(ekle ? true : null)
+    .catch(err=>console.warn('Favori veritabanına yazılamadı (kural yayınlanmamış olabilir) — bu cihazda saklandı:', err && err.message));
+  nextOpListeyiTazele();
+}
+function nextOpListeyiTazele(){
+  const el = document.getElementById('nextop-picker-inner');
+  if(!el){ render(); return; }
+  const y = el.scrollTop; el.innerHTML = nextOpOptionsListHtml(); el.scrollTop = y; updateNextOpStartBtn();
+}
 function nextOpOptionsListHtml(){
-  const cards = allMachines().map(m=>{
-    const isActive = nextOpMachineSel===m.code;
-    return `<button class="durus-option-card" style="${isActive?'border-color:var(--accent);background:var(--accent-dim)':''}" onclick="pickNextOpMachine('${m.code}')">
+  const fav = new Set(makineFavorileri());
+  const kart = m=>{
+    const isActive = nextOpMachineSel===m.code, f = fav.has(m.code);
+    return `<div class="nextop-satir"><button class="durus-option-card" style="${isActive?'border-color:var(--accent);background:var(--accent-dim)':''}" onclick="pickNextOpMachine('${m.code}')">
       <span class="durus-radio" style="${isActive?'border-color:var(--accent)':''}"><span style="width:10px;height:10px;border-radius:50%;background:${isActive?'var(--accent)':'transparent'}"></span></span>
       <span class="durus-option-name" style="${isActive?'color:var(--accent)':''}">${esc(m.code)} · ${esc(m.name)}</span>
-    </button>`;
-  }).join('');
+    </button><button type="button" class="nextop-yildiz ${f?'on':''}" aria-pressed="${f}" title="${f?'Favorilerden çıkar':'Favorilere ekle'}" aria-label="${f?'Favorilerden çıkar':'Favorilere ekle'}" onclick="makineFavoriToggle('${m.code}')">${ico('star',22)}</button></div>`;
+  };
+  const tum = allMachines();
+  const favoriler = tum.filter(m=>fav.has(m.code)), digerleri = tum.filter(m=>!fav.has(m.code));
+  const cards = favoriler.length
+    ? `<div class="durus-option-divider">FAVORİLER</div>${favoriler.map(kart).join('')}<div class="durus-option-divider">TÜM MAKİNELER</div>${digerleri.map(kart).join('')}`
+    : `<div class="nextop-ipucu">${ico('star',14)} Sık gönderdiğin makinelerin yanındaki yıldıza dokun — en üste gelir.</div>${digerleri.map(kart).join('')}`;
   const isBelirsiz = nextOpMachineSel===NEXT_OP_BELIRSIZ;
   return `${cards}
     <div class="durus-option-divider">DİĞER</div>
@@ -405,9 +440,7 @@ function nextOpOptionsListHtml(){
 }
 function pickNextOpMachine(code){
   nextOpMachineSel = code;
-  const el = document.getElementById('nextop-picker-inner');
-  if(el){ el.innerHTML = nextOpOptionsListHtml(); updateNextOpStartBtn(); }
-  else { render(); }
+  nextOpListeyiTazele();
 }
 function updateNextOpStartBtn(){
   const btn = document.getElementById('nextop-start-btn');

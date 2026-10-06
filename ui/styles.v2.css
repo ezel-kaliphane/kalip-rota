@@ -1447,3 +1447,10 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .hk-is{font-family:var(--ff-mono);font-size:11px;padding:1px 7px;border-radius:9px;background:color-mix(in srgb, var(--warn) 16%, transparent);color:var(--text)}
 .hk-is small{font-family:var(--ff-sans, inherit);color:var(--text-muted)}
 .hk-is.kapali{background:var(--panel-alt);color:var(--text-muted);text-decoration:line-through}
+/* Sıradaki operasyon: favori makineler (06.10.2026) */
+.nextop-satir{display:flex;gap:8px;align-items:stretch;margin-bottom:9px}
+.nextop-satir .durus-option-card{margin-bottom:0;flex:1;min-width:0}
+.nextop-yildiz{flex:0 0 54px;min-height:44px;border:1px solid var(--border);border-radius:var(--r-lg);background:transparent;color:var(--text-subtle);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.nextop-yildiz.on{color:var(--warn);border-color:var(--warn-border);background:var(--warn-soft)}
+.nextop-yildiz.on svg{fill:currentColor}
+.nextop-ipucu{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-muted);margin:0 4px 10px}

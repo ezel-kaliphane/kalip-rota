@@ -42,6 +42,7 @@
         "permTakimStokGor":     { ".validate": "newData.isBoolean()" },
         "permTakimStokSayim":   { ".validate": "newData.isBoolean()" },
         "fcmTokens":            { ".validate": true },
+        "favoriMakineler":      { "$makine": { ".validate": "newData.isBoolean()" } },
         "isAdmin":              { ".validate": false },
         "isSuperAdmin":         { ".validate": false },
         "isSef":                { ".validate": false },
