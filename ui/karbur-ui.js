@@ -172,14 +172,12 @@ function renderKarburRowsTable(){
       <td><input value="${esc(r.isEmri)}" oninput="karburSetRow(${i},'isEmri',this.value)" onblur="karburReceteUygula('kesim',${i})" placeholder="2609010024"></td>
       <td><input class="mono" list="karbur-cap-listesi" value="${r.disCap ? 'Ø'+karburFmt(karburNum(r.disCap)) : ''}" placeholder="Ø10"
         onfocus="this.select()" onchange="karburCapYaz(${i},this.value)" onkeydown="if(event.key==='Enter') this.blur()" title="Yaz (ör. 10) ya da listeden seç"></td>
-      <td><select onchange="karburSetRowSel(${i},'delik',this.value)">
-        <option value="" ${!r.delik?'selected':''}>hepsi</option>
-        ${karburDelikler(r.disCap).map(d=>`<option value="${esc(d)}" ${r.delik===d?'selected':''}>${esc(d)}</option>`).join('')}
-      </select></td>
-      <td><select onchange="karburSetRowSel(${i},'kalite',this.value)">
-        <option value="" ${!r.kalite?'selected':''}>hepsi</option>
-        ${karburKaliteler(r.disCap, r.delik).map(k=>`<option value="${esc(k)}" ${r.kalite===k?'selected':''}>${esc(k)}</option>`).join('')}
-      </select></td>
+      <td><input class="mono" list="karbur-delik-${i}" value="${esc(r.delik||'')}" placeholder="hepsi"
+        onfocus="this.select()" onchange="karburSecimYaz(${i},'delik',this.value)" onkeydown="if(event.key==='Enter') this.blur()" title="Yaz ya da listeden seç — boş: hepsi">
+        <datalist id="karbur-delik-${i}">${karburDelikler(r.disCap).map(d=>`<option value="${esc(d)}"></option>`).join('')}</datalist></td>
+      <td><input class="mono" list="karbur-kalite-${i}" value="${esc(r.kalite||'')}" placeholder="hepsi"
+        onfocus="this.select()" onchange="karburSecimYaz(${i},'kalite',this.value)" onkeydown="if(event.key==='Enter') this.blur()" title="Yaz ya da listeden seç — boş: hepsi">
+        <datalist id="karbur-kalite-${i}">${karburKaliteler(r.disCap, r.delik).map(k=>`<option value="${esc(k)}"></option>`).join('')}</datalist></td>
       <td><input value="${esc(r.boy)}" style="text-align:right"
         oninput="this.value=this.value.replace(/[^\\d,.]/g,''); karburSetRow(${i},'boy',this.value)" onblur="render()" placeholder="52"></td>
       <td><input value="${esc(r.adet)}" style="text-align:right"

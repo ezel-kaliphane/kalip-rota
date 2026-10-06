@@ -436,6 +436,25 @@ function karburCapYaz(i, v){
   if(c == null) toast('Ø' + karburFmt(n) + ' stokta yok — mevcut çaplar listede');
   karburSetRowSel(i, 'disCap', String(c != null ? c : n));
 }
+/* Delik ve kalite de elle (06.10.2026): büyük/küçük harf, boşluk ve virgül/nokta farkı
+   gözetilmez ("va90" → VA90, "3,75" → 3.75 hangisi kayıtlıysa). Tek bir seçeneğin başıyla
+   eşleşen yazım da kabul ("va" → VA90, o çap/delikte tek VA varsa). Boş = hepsi. Listede
+   olmayan değer yazılırsa uyarı; satır altında "bu özellikte stok kalemi yok" görünür. */
+function karburSecimYaz(i, alan, v){
+  const r = karburRows[i]; if(!r) return;
+  const norm = s => String(s == null ? '' : s).toLocaleUpperCase('tr-TR').replace(/\s+/g, '').replace(',', '.').replace(/^Ø/, '');
+  const q = norm(v);
+  if(!q){ karburSetRowSel(i, alan, ''); return; }
+  const secenekler = alan === 'delik' ? karburDelikler(r.disCap) : karburKaliteler(r.disCap, r.delik);
+  let bulunan = secenekler.find(s => norm(s) === q);
+  if(bulunan == null){ const bas = secenekler.filter(s => norm(s).startsWith(q)); if(bas.length === 1) bulunan = bas[0];
+    else if(bas.length > 1){ toast('"' + String(v).trim() + '" birden fazla seçenekle eşleşiyor: ' + bas.join(', ') + ' — biraz daha yaz'); render(); return; } }
+  if(bulunan == null){
+    if(!r.disCap) toast('Önce dış çapı seçin');
+    else toast((alan === 'delik' ? 'Delik ' : 'Kalite ') + String(v).trim() + ' bu çapta yok' + (secenekler.length ? ' — seçenekler: ' + secenekler.join(', ') : ''));
+  }
+  karburSetRowSel(i, alan, bulunan != null ? bulunan : String(v).trim().toLocaleUpperCase('tr-TR'));
+}
 function karburSetRowFam(i, v){
   if(!v || !karburRows[i]) return;
   const parts = String(v).split('|');
