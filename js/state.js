@@ -106,6 +106,24 @@ function isFasonMachine(makineLabel){
   const code = String(makineLabel||'').split(' · ')[0];
   return !!fasonMachines[code];
 }
+/* PARALEL İŞ (06.10.2026, kullanıcı isteği): "FKK'da devam eden iş varken yeni iş açılmıyor".
+   "Bu makinede zaten aktif bir iş var" kuralı makineye bakıyor; operatörün Çoklu İş izni onu
+   aşmıyor. Fason işaretlemek kuralı kaldırır ama makineyi analizden çıkarır ve Fasonda Bekleyen
+   İşler listesine sokar — FKK için yanlış. Bu ayar YALNIZCA makine-meşgul kuralını (ve "Devral"
+   önerisini) kaldırır. settings/paralelMakineler/{kod} (settings canlı, kural değişikliği yok).
+   Final Kalite Kontrol varsayılan olarak açık (birden çok iş emri aynı anda kontrol bekliyor). */
+function isParalelMachine(makineLabel){
+  const code = String(makineLabel||'').split(' · ')[0].trim();
+  const v = ((typeof appSettings!=='undefined' && appSettings && appSettings.paralelMakineler) || {})[code];
+  return v===undefined || v===null ? code==='FKK' : !!v;
+}
+function toggleMachineParalel(code){
+  if(!session || !(session.isSuperAdmin || session.isSef)){ toast('Bu işlem için yetkin yok'); return; }
+  const yeni = !isParalelMachine(code);
+  DB.ref('settings/paralelMakineler/'+code).set(yeni)
+    .then(()=>toast(code+(yeni ? ': aynı anda birden fazla iş açılabilir' : ': aynı anda tek iş')))
+    .catch(err=>toast('Kaydedilemedi: '+((err&&err.message)||'hata')));
+}
 function toggleMachineFason(code){
   if(!session || !(session.isSuperAdmin || session.isSef)){ toast('Bu işlem için yetkin yok'); return; }
   const yeni = !fasonMachines[code];

@@ -227,7 +227,7 @@ function baslat(){
       toast(`Tamamlanmamış ${msg} — bu iş emrine (birleştirme) önce onlar bitmeden başlanamaz.`); return;
     }
   }
-  const machineBusy = !isFasonMachine(makine) && entriesArray().some(e => e.makine === makine && e.status === 'devam');
+  const machineBusy = !isFasonMachine(makine) && !isParalelMachine(makine) && entriesArray().some(e => e.makine === makine && e.status === 'devam');
   if(machineBusy){ toast('Bu makinede zaten aktif bir iş var. Önce o iş bitirilmeli ya da duraklatılmalı.'); return; }
   const { isEmriNo, talepNo } = resolveTrackingCode(isEmriNoRaw, bilesenSel);
   const wasFirst = isFirstOperationFor(isEmriNo);
@@ -532,7 +532,7 @@ function confirmDurus(id){
 // asıl operatör aynı makineyi seçtiğinde, üzerinde kimin başlattığı yarım bir iş varsa burada
 // buluyoruz — yeni kayıt açmak yerine "Devral" ile aynı kayda kaldığı yerden devam edebilsin.
 function machineHandoffCandidate(makineLabel){
-  if(!makineLabel || isFasonMachine(makineLabel)) return null;
+  if(!makineLabel || isFasonMachine(makineLabel) || isParalelMachine(makineLabel)) return null; // paralel makinede başkasının işi "devral" adayı değil
   return entriesArray().find(e => e.makine===makineLabel && (e.status==='devam'||e.status==='duruş') && e.operatorUsername!==session.username) || null;
 }
 function devralIs(id){
@@ -550,7 +550,7 @@ function devralIs(id){
 }
 function devamEt(id){
   const e = STATE.entries[id] || {};
-  const machineBusy = !isFasonMachine(e.makine) && entriesArray().some(o => o.id!==id && o.makine===e.makine && o.status==='devam' && !(e.groupId && o.groupId===e.groupId));
+  const machineBusy = !isFasonMachine(e.makine) && !isParalelMachine(e.makine) && entriesArray().some(o => o.id!==id && o.makine===e.makine && o.status==='devam' && !(e.groupId && o.groupId===e.groupId));
   if(machineBusy){ toast('Bu makinede zaten aktif başka bir iş var. Önce onu bitir ya da duraklat.'); return; }
   // DÜZELTME (duruş süresinin çift sayılması): Eskiden burada bitir()'deki gibi bir DURUM KONTROLÜ
   // yoktu ve duruşTs hiç temizlenmiyordu. Operatör "Devam Ettir"e mobilde iki kez dokunduğunda
@@ -595,7 +595,7 @@ function devamGrup(groupId){
   const members = groupMembersOf(groupId);
   if(members.length===0) return;
   const makine = members[0].makine;
-  const machineBusy = !isFasonMachine(makine) && entriesArray().some(o => o.groupId!==groupId && o.makine===makine && o.status==='devam');
+  const machineBusy = !isFasonMachine(makine) && !isParalelMachine(makine) && entriesArray().some(o => o.groupId!==groupId && o.makine===makine && o.status==='devam');
   if(machineBusy){ toast('Bu makinede zaten aktif başka bir iş var. Önce onu bitir ya da duraklat.'); return; }
   const now = Date.now();
   members.forEach(e=>{

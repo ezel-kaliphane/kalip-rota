@@ -3374,6 +3374,9 @@ function renderAdmin(){
               <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
                 <input type="checkbox" style="width:auto" ${fasonMachines[m.code]?'checked':''} onchange="toggleMachineFason('${m.code}')"> Fason
               </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer" title="Bu makinede devam eden iş varken başka bir iş de açılabilir (ör. Final Kalite Kontrol). Fason'dan farklı olarak makine analizlerden çıkmaz.">
+                <input type="checkbox" style="width:auto" ${isParalelMachine(m.code)?'checked':''} onchange="toggleMachineParalel('${m.code}')"> Aynı anda birden fazla iş
+              </label>
               <select onchange="setMachineAtolye('${m.code}', this.value)" style="width:170px">
                 <option value="imalat" ${machineAtolyeOf(m.code)==='imalat'?'selected':''}>${ico('factory',14)} İmalat Atölye</option>
                 <option value="tadilat" ${machineAtolyeOf(m.code)==='tadilat'?'selected':''}>${ico('wrench',14)} Tadilat Atölye</option>
