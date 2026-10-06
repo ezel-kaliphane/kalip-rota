@@ -424,6 +424,18 @@ function karburSetRowSel(i, f, v){
   if(f === 'delik'){ karburRows[i].kalite = ''; }
   karburResetPlan(); render();
 }
+/* Dış çap elle (06.10.2026, kullanıcı isteği): "10", "Ø10", "10,5", "ø 10.5" hepsi kabul. Stokta
+   olmayan çap da yazılabilir — satır altında "bu özellikte stok kalemi yok" görünür, ayrıca uyarı. */
+function karburCapYaz(i, v){
+  if(!karburRows[i]) return;
+  const ham = String(v == null ? '' : v).replace(/[^\d,.]/g, '');
+  if(!ham){ karburSetRowSel(i, 'disCap', ''); return; }
+  const n = karburNum(ham);
+  if(!(n > 0)){ toast('Çap anlaşılmadı: ' + v); render(); return; }
+  const c = karburCaps().find(x => Math.abs(Number(x) - n) < 0.001);
+  if(c == null) toast('Ø' + karburFmt(n) + ' stokta yok — mevcut çaplar listede');
+  karburSetRowSel(i, 'disCap', String(c != null ? c : n));
+}
 function karburSetRowFam(i, v){
   if(!v || !karburRows[i]) return;
   const parts = String(v).split('|');

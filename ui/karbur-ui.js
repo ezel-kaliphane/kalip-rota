@@ -170,10 +170,8 @@ function renderKarburRowsTable(){
     const hazir = (!f.hata && !f.secimBekliyor && boy > 0) ? karburFamHazir(f, boy) : null;
     html += `<tr>
       <td><input value="${esc(r.isEmri)}" oninput="karburSetRow(${i},'isEmri',this.value)" onblur="karburReceteUygula('kesim',${i})" placeholder="2609010024"></td>
-      <td><select onchange="karburSetRowSel(${i},'disCap',this.value)">
-        <option value="" ${!r.disCap?'selected':''}>—</option>
-        ${caps.map(c=>`<option value="${c}" ${String(r.disCap)===String(c)?'selected':''}>Ø${karburFmt(c)}</option>`).join('')}
-      </select></td>
+      <td><input class="mono" list="karbur-cap-listesi" value="${r.disCap ? 'Ø'+karburFmt(karburNum(r.disCap)) : ''}" placeholder="Ø10"
+        onfocus="this.select()" onchange="karburCapYaz(${i},this.value)" onkeydown="if(event.key==='Enter') this.blur()" title="Yaz (ör. 10) ya da listeden seç"></td>
       <td><select onchange="karburSetRowSel(${i},'delik',this.value)">
         <option value="" ${!r.delik?'selected':''}>hepsi</option>
         ${karburDelikler(r.disCap).map(d=>`<option value="${esc(d)}" ${r.delik===d?'selected':''}>${esc(d)}</option>`).join('')}
@@ -209,7 +207,8 @@ function renderKarburRowsTable(){
     if(r._recete) not += ` <span class="chip" style="pointer-events:none;border-color:var(--accent);color:var(--accent)" title="Bu mamulün önceki karbür çıkışlarından">reçeteden · ${r._recete.gozlem}. kayıt</span>`;
     html += `<tr><td colspan="7" style="padding-top:0;font-size:11px">${not}</td></tr>`;
   });
-  return html + `</tbody></table>`;
+  /* Dış çap: elle yazılabilir + öneri listesi (06.10.2026). Liste stoktaki çaplar. */
+  return html + `</tbody></table><datalist id="karbur-cap-listesi">${caps.map(c=>`<option value="Ø${karburFmt(c)}"></option>`).join('')}</datalist>`;
 }
 
 /* Adet olarak verilecekler — kesim planina girmeyen kalemler (somunlar, hazir kisa parcalar).
