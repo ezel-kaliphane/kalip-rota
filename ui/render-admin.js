@@ -1335,6 +1335,7 @@ function ensureStokSonHareketlerLoaded(cb){
     });
     if(karburSnap) karburSnap.forEach(c=>{
       const v = c.val();
+      if(v.tip==='plan') return; // plan girdisi (yeniden yükle için) — stok hareketi değil
       if(v.tip==='tahsis') hepsi.push({ kod: v.kod||'', baslik:'Karbür tahsis'+(v.isEmriNo?' · '+v.isEmriNo:''),
         altBaslik: `${v.parca||v.kod||''}${v.mm?' · '+v.mm+'mm':''}`, ts: v.ts||0, svg: stokHareketSvg('tahsis') });
       else { const eylem = v.tip==='giris' ? 'giris' : v.tip==='sayim' ? 'sayim' : 'cikis';

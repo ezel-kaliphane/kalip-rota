@@ -714,6 +714,7 @@ function renderKarburGecmis(){
     if(eskiBicim) h._eski = true;
     /* Geri alma kayıtları planın kendi numarasını taşıyor — aynı grupta ama AYRI bölümde,
        yoksa toplamlara karışıp planı iki kat büyük gösterirlerdi. */
+    if(h.tip === 'plan'){ g.girdi = h; return; } // giriş satırları (yeniden yükle) — stok hareketi değil
     if(h.tip === 'iptal'){ g.iptalKayitlari.push(h); g.iptal = true; return; }
     if(h.iptalTs) g.iptal = true;
     if(h.tip === 'fire_uretim') g.artik.push(h);
@@ -752,6 +753,11 @@ function renderKarburGecmis(){
           artikToplam ? artikToplam + ' artık' : '',
           g.tahsis.length + ' iş emri'
         ].filter(Boolean).join(' · ')}</span>
+        ${(()=>{ const ie = [...new Set(g.tahsis.concat(g.fire).map(h=>h.isEmriNo).filter(Boolean))];
+          if(!ie.length) return ''; const kesilen = ie.filter(n=>{ const d = karburEdmDurumu(n, g.ts); return d && d.durum==='kesildi'; }).length;
+          return `<span class="chip" style="pointer-events:none;font-size:10.5px;border-color:${kesilen===ie.length?'var(--success)':'var(--warn)'};color:${kesilen===ie.length?'var(--success)':'var(--warn)'}" title="Tel erozyonda (TE01/TE02) kesimi yapılan iş emri">EDM ${kesilen}/${ie.length} kesildi</span>`; })()}
+        ${canManageKarbur() ? `<button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" ${karburBusy?'disabled':''}
+          onclick="karburPlanYukle('${escJs(g.planNo)}')" title="Bu planın satırlarını Kesim Planı ekranına yükle — yeni plan olarak tekrar kaydedebilirsin">⟳ Yeniden yükle</button>` : ''}
         ${(canManageKarbur() && !g.iptal) ? `<button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px"
           ${(karburBusy||karburIptalYukleniyor)?'disabled':''} onclick="karburPlanIptalIste('${esc(g.planNo)}')"
           title="Bu planın stok düşümlerini ve iş emri tüketimini geri al">↩ Geri al</button>` : ''}
@@ -770,7 +776,7 @@ function renderKarburGecmis(){
     if(g.tahsis.length || g.fire.length){
       html += `<div style="font-size:11px;color:var(--text-muted);margin:8px 0 3px">İş emirlerine tahsis</div>
         <table class="tbl"><thead><tr><th>İş Emri</th><th>Kaynak</th>
-          <th style="text-align:right">Parça</th><th style="text-align:right">mm</th><th>Detay</th></tr></thead><tbody>
+          <th style="text-align:right">Parça</th><th style="text-align:right">mm</th><th>Detay</th><th>EDM kesim</th></tr></thead><tbody>
         ${g.tahsis.concat(g.fire).sort((a,b)=>String(a.isEmriNo).localeCompare(String(b.isEmriNo)))
           .map(h => `<tr><td>${esc(h.isEmriNo || '—')}</td>
           <td style="font-size:11px;color:${h._eski ? 'var(--text-muted)' : karburTipEtiket(h.tip).renk}">${h._eski
@@ -780,7 +786,8 @@ function renderKarburGecmis(){
           <td style="text-align:right">${h.mm ? karburFmt(h.mm) : '—'}</td>
           <td style="font-size:11px;color:var(--text-muted)">${h._eski
             ? 'parça detayı kaydedilmemiş (mm doğru)'
-            : esc(h.aciklama || '')}</td></tr>`).join('')}
+            : esc(h.aciklama || '')}</td>
+          <td style="font-size:11px">${karburEdmHucre(h.isEmriNo, g.ts)}</td></tr>`).join('')}
         </tbody></table>`;
     }
     if(g.artik.length){
@@ -1055,4 +1062,11 @@ function renderKarburReceteListesi(){
     </tr>`).join('')}
   </tbody></table></div>`;
   return html;
+}
+/* EDM kesim durumu hücresi (Geçmiş → plan tahsis tablosu). */
+function karburEdmHucre(isEmriNo, planTs){
+  const d = karburEdmDurumu(isEmriNo, planTs); if(!d) return '—';
+  if(d.durum==='kesildi') return `<span style="color:var(--success);font-weight:600">✓ Kesildi</span> <span style="color:var(--text-muted)">${esc(String(d.e.makine||'').split(' · ')[0])} · ${esc(d.e.operatorName||d.e.operatorUsername||'')} · ${karburTarih(d.e.endTs)}</span>`;
+  if(d.durum==='kesiliyor') return `<span style="color:var(--accent);font-weight:600">${esc(String(d.e.makine||'').split(' · ')[0])}'de ${d.e.status==='duruş'?'duraklatıldı':'kesiliyor'}</span> <span style="color:var(--text-muted)">${esc(d.e.operatorName||'')}</span>`;
+  return `<span style="color:var(--text-muted)">Kesim bekliyor</span>`;
 }

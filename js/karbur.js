@@ -635,6 +635,7 @@ function karburPlanKaydet(){
   karburBusy = true; karburEksikUyari = null; render();
   const now = Date.now();
   const receteGozlem = karburReceteGozlemleri(); // satırlar kayıt sonrası temizleniyor — önce al
+  const planGirdisi = karburPlanGirdisi(); // "yeniden yükle" için planın giriş satırları (aynı gerekçe)
 
   /* 2. katman — TAZE stokla doğrula. Plan burada YENİDEN KURULMUYOR: ekrandakinden farklı bir
      planı sessizce kaydetmek, yazdırılan kâğıt ile kaydı birbirinden ayırırdı. Bunun yerine
@@ -787,6 +788,7 @@ function karburPlanKaydet(){
          kaydı yapan cihazda şerit sayfa yenilenene kadar görünmüyordu. */
       Object.keys(ozetEk).forEach(base => { delete karburOzetCache[base]; });
       karburReceteYaz(receteGozlem);
+      karburPlanGirdisiYaz(planNo, planGirdisi, now);
       /* Yazan cihaz kendi yazdığını görsün — yerel kopyalar tazelenir */
       ensureKarburStokLoaded(() => safeRender(), true);
       ensureKarburFireLoaded(() => safeRender(), true);
@@ -1535,4 +1537,81 @@ function karburReceteUygula(tur, i){
   });
   if(dolan){ karburResetPlan(); toast(im.mamul + ' reçetesinden ' + dolan + ' satır dolduruldu — kontrol et'); }
   render();
+}
+/* ==================== GEÇMİŞ PLANI YENİDEN YÜKLE (06.10.2026, kullanıcı isteği) ====================
+   "Kesim planlarında geçmiş kayıtları görmek, eskiden kaydettiğim bir planı tekrar kaydedebilmek."
+   Yeni planlarda giriş satırları birebir saklanır: karburHareketleri/{id} = { tip:'plan', planNo,
+   ts, satirlar, adetSatirlar, pay } (stok hareketi DEĞİL — Geçmiş ve geri alma bu tipi atlar; kural
+   değişikliği yok). Bundan önceki planlar hareket kayıtlarından kurulur: tahsis açıklamasındaki
+   "N × L mm" (L = boy + pay, pay o gün varsayılan 2 mm kabul edilir), kesimsiz kayıtların boyu, adet
+   çıkışları; fireden kesilenler o fire hâlâ havuzdaysa çapıyla. Yüklenen plan yeni bir plandır —
+   HESAPLA ile yeni numara alır, stok o anki duruma göre yeniden planlanır. */
+function karburPlanGirdisi(){
+  return {
+    satirlar: karburRows.map(r => ({ isEmri: String(r.isEmri||'').trim(), disCap: r.disCap||'', delik: r.delik||'', kalite: r.kalite||'', boy: r.boy||'', adet: r.adet||'' }))
+      .filter(r => r.isEmri || r.disCap || r.boy || r.adet),
+    adetSatirlar: karburAdetRows.map(r => ({ isEmri: String(r.isEmri||'').trim(), katalogId: r.katalogId||'', adet: r.adet||'' })).filter(r => r.katalogId),
+    pay: karburPay
+  };
+}
+function karburPlanGirdisiYaz(planNo, g, ts){
+  if(!planNo || !g || (!g.satirlar.length && !g.adetSatirlar.length)) return;
+  DB.ref('karburHareketleri').push({ tip:'plan', planNo, ts: ts || Date.now(), satirlar: g.satirlar, adetSatirlar: g.adetSatirlar, pay: g.pay,
+    operatorUsername: session.username, operatorName: session.displayName || session.username })
+    .catch(err => console.warn('Plan girdisi yazılamadı:', err));
+}
+function karburPlanSatirlariniKur(planNo){
+  const kayitlar = (karburHareketler || []).filter(h => h.planNo === planNo);
+  const anlik = kayitlar.find(h => h.tip === 'plan');
+  if(anlik) return { satirlar: (anlik.satirlar||[]).map(r => ({ ...r })), adetSatirlar: (anlik.adetSatirlar||[]).map(r => ({ ...r })), pay: anlik.pay, tam: true, atlanan: 0 };
+  const isEmri = no => String(no||'').replace(/_ELMAS$/i, '');
+  const satirlar = [], adetSatirlar = []; let atlanan = 0;
+  kayitlar.forEach(h => {
+    const it = h.katalogId ? karburKatalog[h.katalogId] : null;
+    if(h.tip === 'tahsis' && it){
+      const re = /(\d+)\s*×\s*([\d.,]+)\s*mm/g; let m, bulundu = false;
+      while((m = re.exec(String(h.aciklama||''))) !== null){
+        bulundu = true;
+        const boy = Math.round((karburNum(m[2]) - KARBUR_PAY_VARSAYILAN) * 100) / 100;
+        satirlar.push({ isEmri: isEmri(h.isEmriNo), disCap: String(it.disCap), delik: it.delik||'', kalite: it.kalite||'', boy: karburFmt(boy), adet: m[1] });
+      }
+      if(!bulundu) atlanan++;
+    } else if(h.tip === 'kesimsiz' && it){
+      satirlar.push({ isEmri: isEmri(h.isEmriNo), disCap: String(it.disCap), delik: it.delik||'', kalite: it.kalite||'', boy: karburFmt(h.boy), adet: String(Math.abs(Number(h.parca||h.adet)||0)) });
+    } else if(h.tip === 'adet_cikis' && h.katalogId){
+      adetSatirlar.push({ isEmri: isEmri(h.isEmriNo), katalogId: h.katalogId, adet: String(Math.abs(Number(h.parca||h.adet)||0)) });
+    } else if(h.tip === 'fire_kullanim'){
+      const f = karburFire[h.fireId];
+      if(f) satirlar.push({ isEmri: isEmri(h.isEmriNo), disCap: String(f.disCap), delik: f.delik||'', kalite: f.kalite||'', boy: karburFmt(h.boy), adet:'1' });
+      else atlanan++;
+    } else if(h.tip === 'kesim' && h.isEmriNo && h.oncekiAdet == null){ atlanan++; } // ilk sürüm: parça detayı yok
+  });
+  return { satirlar, adetSatirlar, pay: null, tam: false, atlanan };
+}
+function karburPlanYukle(planNo){
+  if(!canManageKarbur()){ toast('Bu işlem için karbür yetkisi gerekli'); return; }
+  const k = karburPlanSatirlariniKur(planNo);
+  if(!k.satirlar.length && !k.adetSatirlar.length){ toast('Bu plandan satır çıkarılamadı'); return; }
+  if((karburRows.length || karburAdetRows.length) && !confirm('Kesim Planı ekranındaki mevcut satırlar silinip ' + planNo + ' yüklensin mi?')) return;
+  karburRows = k.satirlar.map(r => ({ isEmri:r.isEmri||'', disCap:r.disCap||'', delik:r.delik||'', kalite:r.kalite||'', boy:r.boy||'', adet:r.adet||'' }));
+  karburAdetRows = k.adetSatirlar.map(r => ({ isEmri:r.isEmri||'', katalogId:r.katalogId||'', adet:r.adet||'' }));
+  if(k.pay != null && karburNum(k.pay) >= 0) karburPay = karburNum(k.pay);
+  karburResetPlan(); karburSubView = 'plan';
+  toast(planNo + ' yüklendi — ' + (karburRows.length + karburAdetRows.length) + ' satır' + (k.tam ? '' : ' (eski plan: kayıtlardan kuruldu, kontrol et)') + (k.atlanan ? ' · ' + k.atlanan + ' kayıt çıkarılamadı' : '') + '. HESAPLA ile yeni plan olarak kaydedebilirsin.');
+  render();
+}
+/* ==================== EDM GÖSTERGESİ ====================
+   Plandaki iş emrinin karbür parçası tel erozyonda (TE01/TE02) kesildi mi: aynı talep no'nun
+   _ELMAS dalında, plandan sonra açılmış TE kaydı. Kesim yapılınca "kesildi", sürüyorsa "kesiliyor". */
+function karburEdmMakinesiMi(makine){ return /^TE\d/.test(String(makine||'').split(' · ')[0].trim().toUpperCase()); }
+function karburEdmDurumu(isEmriNo, planTs){
+  const talep = String(isEmriNo||'').replace(/_ELMAS$/i, '').trim().toUpperCase();
+  if(!talep) return null;
+  const l = entriesArray().filter(e => String(e.talepNo||'').trim().toUpperCase()===talep && karburEdmMakinesiMi(e.makine)
+      && (!e.isEmriNo || /_ELMAS$/i.test(e.isEmriNo) || !/_ZARF$/i.test(e.isEmriNo)) && (e.startTs||0) >= (planTs||0) - 12*3600000)
+    .sort((a,b) => (b.startTs||0) - (a.startTs||0));
+  const bitti = l.find(e => e.status==='tamamlandi');
+  if(bitti) return { durum:'kesildi', e: bitti };
+  if(l[0]) return { durum:'kesiliyor', e: l[0] };
+  return { durum:'bekliyor', e: null };
 }
