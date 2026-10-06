@@ -3223,7 +3223,8 @@ function adminNavOgeleri(){
   if(isAdminTabVisible('rapor')) o.push({ key:'rapor', label:'Kayıtlar', ikon:'list', aktif: view==='report', tikla:"setView('report')" });
   if(canliPanelVisible()) o.push({ key:'canli', label:'Canlı Panel', ikon:'clock', aktif: isCanliPanelView(view), tikla:`setView('${canliPanelDefaultView()}')` });
   if(isAdminTabVisible('isYogunlugu')) o.push({ key:'isYogunlugu', label:'İş Yoğunluğu', ikon:'box', aktif: view==='isYogunlugu', tikla:"setView('isYogunlugu')" });
-  if(!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz')) o.push({ key:'analiz', label:'Analiz', ikon:'chart', aktif: view==='analiz', tikla:"setView('analiz')" });
+  if(sefKaliteAnalizi()) o.push({ key:'analiz', label:'Kalite', ikon:'chart', aktif: view==='analiz', tikla:"analizRole='kalite'; setView('analiz')" }); // Şef: yalnız Analiz → Kalite
+  else if(!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz')) o.push({ key:'analiz', label:'Analiz', ikon:'chart', aktif: view==='analiz', tikla:"setView('analiz')" });
   if(canCreateTadilat() && isAdminTabVisible('tadilat')) o.push({ key:'tadilat', label:'Tadilat', ikon:'wrench', aktif: view==='tadilatYonetim', tikla:"setView('tadilatYonetim')" });
   if(stokErisimVar()) o.push({ key:'stok', label:'Stok', ikon:'box', aktif: view==='stokYonetim', tikla:"setView('stokYonetim')" });
   if(session.isAdmin){
@@ -3272,7 +3273,7 @@ function renderAdmin(){
      aliniyor — bu yuzden burada karsiligi yok. */
   if(view==='raporlar') view = 'analiz'; // 05.10.2026'da ayrı Raporlar sekmesi Analiz → Genel'e katıldı
   const viewToTabKey = { report:'rapor', genelBakis:'genelBakis', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilatYonetim:'tadilat' };
-  if(viewToTabKey[view] && !isAdminTabVisible(viewToTabKey[view])){
+  if(viewToTabKey[view] && !isAdminTabVisible(viewToTabKey[view]) && !(view==='analiz' && sefKaliteAnalizi())){
     const tabKeyToView = { rapor:'report', genelBakis:'genelBakis', matrix:'matrix', completed:'completed', isYogunlugu:'isYogunlugu', analiz:'analiz', tadilat:'tadilatYonetim', takimStok:'stokYonetim', karbur:'stokYonetim' };
     const fallbackKey = ADMIN_TAB_DEFS.map(t=>t.key).find(k=>isAdminTabVisible(k) && (k!=='tadilat' || canCreateTadilat()) && (k!=='analiz' || !(session.isSef || session.isUretimSef)));
     view = fallbackKey ? tabKeyToView[fallbackKey] : 'report';
@@ -3342,7 +3343,8 @@ function renderAdmin(){
 
   let body = '';
   if(view==='adminSettings' && !session.isAdmin){ view = 'report'; }
-  if((session.isSef || session.isUretimSef) && view==='analiz'){ view = canliPanelDefaultView(); }
+  if((session.isSef || session.isUretimSef) && view==='analiz' && !sefKaliteAnalizi()){ view = canliPanelDefaultView(); }
+  if(sefKaliteAnalizi() && view==='analiz') analizRole = 'kalite';
   /* Veri Listeleri Excel Yükleme ekranına taşındığı için Şef'in izinli alt sekmeleri arasından çıktı;
      yasak bir sekmeye düşen Şef artık boş bir ekrana değil MENÜYE atılıyor. */
   /* Bir alt sekme kaldirildiginda (Veri Listeleri -> Excel Yukleme ekranina tasindi) eski deger

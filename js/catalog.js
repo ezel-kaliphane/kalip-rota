@@ -435,9 +435,13 @@ const ANALIZ_VIEW_DEFS = [
   { key:'operator', label:'Operatör Analizi' },
   { key:'saha', label:'Saha Ekranı' },
 ];
+/* Şef (kaliteci) Analiz'de YALNIZCA Kalite'yi görür (06.10.2026, kullanıcı isteği) — sekme izninde
+   Analiz kapalı olsa bile; Genel / Kişi Bazlı vb. Şef'e kapalı kalır (rapor kararı S5: adminler). */
+function sefKaliteAnalizi(){ return !!(session && session.isSef && !session.isSuperAdmin); }
 function isAnalizViewVisible(key){
   if(!session) return false;
   if(session.isSuperAdmin) return true;
+  if(sefKaliteAnalizi()) return key==='kalite';
   if(!isAdminTabVisible('analiz')) return false;
   const mine = adminTabPermissions[session.username]?.analizViews;
   if(!mine) return true; // hiç ayar girilmemiş -> varsayılan hepsi görünür
