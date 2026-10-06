@@ -429,6 +429,7 @@ function setAdminTabPermission(username, key, val){
 */
 const ANALIZ_VIEW_DEFS = [
   { key:'yonetici', label:'Genel' },
+  { key:'kalite', label:'Kalite' }, // 06.10.2026: FKK + proses içi hatalar, personel karnesi (ui/analiz-genel.js analizKaliteHtml)
   { key:'sef', label:'Atölye Şefi' },
   { key:'kisi', label:'Kişi Bazlı' },
   { key:'operator', label:'Operatör Analizi' },

@@ -410,7 +410,8 @@ function agDetayDugme(k, etiket){
 }
 
 /* ---------- Ortak üst kısım ---------- */
-function analizGenelUstHtml(){
+function analizGenelUstHtml(opt){
+  opt = opt || {};
   const a = rtAralik(), on = rtOncekiAralik(a);
   const donemBtn = (k, ad) => `<button type="button" class="rt-donem ${rtDonem===k?'on':''}" onclick="rtDonemSec('${k}')">${ad}</button>`;
   const atolyeBtn = (k, ad) => `<button type="button" class="rt-donem ${analizAtolyeFilter===k?'on':''}" onclick="rtAtolyeSec('${k}')">${ad}</button>`;
@@ -418,7 +419,7 @@ function analizGenelUstHtml(){
     <div class="rt-filtre">
       <div class="rt-filtre-grup">${donemBtn('bugun','Bugün')}${donemBtn('son7','Son 7 gün')}${donemBtn('buAy','Bu ay')}${donemBtn('gecenAy','Geçen ay')}${donemBtn('son3Ay','Son 3 ay')}${donemBtn('buYil','Bu yıl')}${donemBtn('ozel','Özel')}</div>
       ${rtDonem==='ozel' ? `<div class="rt-filtre-grup"><input type="date" id="rt-bas" value="${esc(rtBas)}" onchange="rtOzelYaz('bas',this.value)"><span style="color:var(--text-muted)">–</span><input type="date" id="rt-son" value="${esc(rtSon)}" onchange="rtOzelYaz('son',this.value)"></div>` : ''}
-      <div class="rt-filtre-grup ag-atolye">${atolyeBtn('tumu','Tüm atölyeler')}${atolyeBtn('imalat','İmalat')}${atolyeBtn('tadilat','Tadilat')}</div>
+      ${opt.atolyeYok ? '' : `<div class="rt-filtre-grup ag-atolye">${atolyeBtn('tumu','Tüm atölyeler')}${atolyeBtn('imalat','İmalat')}${atolyeBtn('tadilat','Tadilat')}</div>`}
     </div>
     <div class="rt-donem-bilgi"><b>${esc(a.etiket)}</b> · kıyaslanan: ${esc(rtOncekiAd(a,on))} (${rtTarihYaz(on.bas)} – ${rtTarihYaz(Math.max(on.bas, on.son-1))})</div>
   </div>`;

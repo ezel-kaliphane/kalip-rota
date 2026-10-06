@@ -3825,6 +3825,8 @@ function renderAdmin(){
       body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizTadilat()}</div>`;
     } else if(analizRole==='saha'){
       body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizSaha()}</div>`;
+    } else if(analizRole==='kalite'){
+      body = `<div class="analiz-wrap">${analizRoleBar}${analizGenelUstHtml({ atolyeYok:true })}${analizKaliteHtml()}</div>`;
     } else {
     analizDonemiEsitle(); // Genel görünüm: dönem ortak seçiciden (bkz. ui/analiz-genel.js)
     const data = agVeri(analizFrom, analizTo, analizAtolyeFilter); // ortak önbellek (ui/analiz-genel.js) — tek slotlu computeAnalizData önbelleği önceki dönem çağrılarıyla takla atıyordu
