@@ -757,7 +757,8 @@ function renderKarburGecmis(){
           if(!ie.length) return ''; const kesilen = ie.filter(n=>{ const d = karburEdmDurumu(n, g.ts); return d && d.durum==='kesildi'; }).length;
           return `<span class="chip" style="pointer-events:none;font-size:10.5px;border-color:${kesilen===ie.length?'var(--success)':'var(--warn)'};color:${kesilen===ie.length?'var(--success)':'var(--warn)'}" title="Tel erozyonda (TE01/TE02) kesimi yapılan iş emri">EDM ${kesilen}/${ie.length} kesildi</span>`; })()}
         ${canManageKarbur() ? `<button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" ${karburBusy?'disabled':''}
-          onclick="karburPlanYukle('${escJs(g.planNo)}')" title="Bu planın satırlarını Kesim Planı ekranına yükle — yeni plan olarak tekrar kaydedebilirsin">⟳ Yeniden yükle</button>` : ''}
+          onclick="karburPlanYukle('${escJs(g.planNo)}')" title="Bu planın satırlarını Kesim Planı ekranına yükle — yeni plan olarak tekrar kaydedebilirsin">⟳ Yeniden yükle</button>` : ''}
+        <button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" onclick="karburGecmisRaporYazdir('${escJs(g.planNo)}')" title="Bu planın kesim raporunu aç / yazdır">🖨 Kesim raporu</button>
         ${(canManageKarbur() && !g.iptal) ? `<button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px"
           ${(karburBusy||karburIptalYukleniyor)?'disabled':''} onclick="karburPlanIptalIste('${esc(g.planNo)}')"
           title="Bu planın stok düşümlerini ve iş emri tüketimini geri al">↩ Geri al</button>` : ''}
@@ -935,6 +936,24 @@ function karburOzetSerit(isEmriNoRaw){
 /* ==================== YAZDIR — A4 YATAY KESİM RAPORU ====================
    Ayrı pencerede yazdırılıyor ki ana sayfanın @media print kuralları ile çakışmasın
    (aynı gerekçe js/toolstock.js:620-632 printToolLabels içinde de yazılı). */
+const KARBUR_RAPOR_CSS = `
+    @page{ size:A4 landscape; margin:10mm; }
+    body{font:11px/1.35 Arial,sans-serif;color:#000;margin:0}
+    .hdr{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:8px}
+    .hdr h1{font-size:15px;margin:0}
+    h3{font-size:12px;margin:11px 0 3px;background:#e6e6e6;padding:3px 5px;border:1px solid #888}
+    h4{font-size:11px;margin:7px 0 2px}
+    .sub{font-weight:normal;font-size:10px}
+    table{border-collapse:collapse;width:100%;margin-bottom:6px}
+    th,td{border:1px solid #666;padding:3px 5px;text-align:left}
+    th{background:#f2f2f2;font-size:10px}
+    td.pc{font-weight:bold;background:#f8f8f8;white-space:nowrap}
+    td.pc .ie{display:block;font-weight:normal;font-size:8.5px;color:#333;letter-spacing:-.2px}
+    .ieozet{font-size:10px;margin:-3px 0 8px;line-height:1.5}
+    td .dev{font-size:9px;color:#555}
+    tr{break-inside:avoid}
+    .ft{margin-top:10px;font-size:10px;color:#555}
+  `;
 function karburYazdir(){
   const plan = karburComputePlan();
   const w = window.open('', '_blank');
@@ -1011,24 +1030,7 @@ function karburYazdir(){
 
   if(!body){ toast('Yazdırılacak çıkış yok'); w.close(); return; }   // adet çıkışları da bölüm 1'de sayılıyor
 
-  w.document.write(`<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"><title>Karbür Kesim Raporu</title><style>
-    @page{ size:A4 landscape; margin:10mm; }
-    body{font:11px/1.35 Arial,sans-serif;color:#000;margin:0}
-    .hdr{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:8px}
-    .hdr h1{font-size:15px;margin:0}
-    h3{font-size:12px;margin:11px 0 3px;background:#e6e6e6;padding:3px 5px;border:1px solid #888}
-    h4{font-size:11px;margin:7px 0 2px}
-    .sub{font-weight:normal;font-size:10px}
-    table{border-collapse:collapse;width:100%;margin-bottom:6px}
-    th,td{border:1px solid #666;padding:3px 5px;text-align:left}
-    th{background:#f2f2f2;font-size:10px}
-    td.pc{font-weight:bold;background:#f8f8f8;white-space:nowrap}
-    td.pc .ie{display:block;font-weight:normal;font-size:8.5px;color:#333;letter-spacing:-.2px}
-    .ieozet{font-size:10px;margin:-3px 0 8px;line-height:1.5}
-    td .dev{font-size:9px;color:#555}
-    tr{break-inside:avoid}
-    .ft{margin-top:10px;font-size:10px;color:#555}
-  </style></head><body>
+  w.document.write(`<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"><title>Karbür Kesim Raporu</title><style>${KARBUR_RAPOR_CSS}</style></head><body>
     <div class="hdr"><h1>KARBÜR ÇIKIŞ / KESİM RAPORU</h1><div>${karburPlanNo ? '<b>Plan No: ' + esc(karburPlanNo) + '</b> &nbsp;|&nbsp; ' : ''}Pay: ${karburFmt(karburPay)} mm &nbsp;|&nbsp; ${tarih}</div></div>
     ${body}
     <div class="ft">Yazdırma penceresi açılmadıysa Ctrl+P ile yazdırabilirsin.</div>
@@ -1069,4 +1071,94 @@ function karburEdmHucre(isEmriNo, planTs){
   if(d.durum==='kesildi') return `<span style="color:var(--success);font-weight:600">✓ Kesildi</span> <span style="color:var(--text-muted)">${esc(String(d.e.makine||'').split(' · ')[0])} · ${esc(d.e.operatorName||d.e.operatorUsername||'')} · ${karburTarih(d.e.endTs)}</span>`;
   if(d.durum==='kesiliyor') return `<span style="color:var(--accent);font-weight:600">${esc(String(d.e.makine||'').split(' · ')[0])}'de ${d.e.status==='duruş'?'duraklatıldı':'kesiliyor'}</span> <span style="color:var(--text-muted)">${esc(d.e.operatorName||'')}</span>`;
   return `<span style="color:var(--text-muted)">Kesim bekliyor</span>`;
+}
+/* ==================== GEÇMİŞ PLANIN KESİM RAPORU (06.10.2026, kullanıcı isteği) ====================
+   Kayıtlı bir planın A4 raporu — Kesim Planı'ndaki yazdırmayla aynı biçim. Kaynak planın hareketleri:
+   kesimsiz / adet çıkışları, fireden karşılananlar, çubuk tüketimi (kesim) + iş emri tahsisleri.
+   Çubuk üzerindeki yerleşim kayıtlı değil; tahsislerdeki parçalardan aynı algoritmayla (karburPack,
+   o planın payıyla) yeniden çizilir — çubuk sayısı kayıttan farklı çıkarsa raporda belirtilir. Sonda
+   iş emri başına EDM (TE01/TE02) kesim durumu. */
+function karburGecmisRaporYazdir(planNo){
+  const kayitlar = (karburHareketler || []).filter(h => h.planNo === planNo && h.tip !== 'iptal');
+  if(!kayitlar.length){ toast('Bu planın kayıtları okunmadı — ↻ Yenile'); return; }
+  const anlik = kayitlar.find(h => h.tip === 'plan');
+  const pay = (anlik && karburNum(anlik.pay) >= 0) ? karburNum(anlik.pay) : KARBUR_PAY_VARSAYILAN;
+  const ts = Math.max(...kayitlar.map(h => h.ts || 0));
+  const kim = (kayitlar.find(h => h.operatorName) || {}).operatorName || '';
+  const iptal = kayitlar.some(h => h.iptalTs);
+  const ie = n => String(n || '').replace(/_ELMAS$/i, '');
+  const w = window.open('', '_blank');
+  if(!w){ toast('Açılır pencere engellendi — tarayıcı ayarından izin ver'); return; }
+  let body = '';
+
+  const kesimsiz = kayitlar.filter(h => h.tip === 'kesimsiz'), adetC = kayitlar.filter(h => h.tip === 'adet_cikis');
+  if(kesimsiz.length || adetC.length){
+    const it = h => karburKatalog[h.katalogId] || {};
+    body += `<h3>1) KESİM YAPILMAYANLAR <span class="sub">— doğrudan stoktan verildi</span></h3>
+      <table><tr><th>İş Emri</th><th>Stok Kodu</th><th>Kalite</th><th>Boy</th><th>Adet</th><th>Not</th></tr>
+      ${kesimsiz.map(h=>`<tr><td>${esc(ie(h.isEmriNo))}</td><td>${esc(h.kod||'')}</td><td>${esc(it(h).kalite||'')}</td><td>${karburFmt(h.boy)} mm</td><td>${Math.abs(Number(h.parca||h.adet)||0)}</td><td>standart boy — kesim yok</td></tr>`).join('')}
+      ${adetC.map(h=>`<tr><td>${esc(ie(h.isEmriNo))}</td><td>${esc(h.kod||'')}</td><td>${esc(it(h).kalite||'')}</td><td>${it(h).boy ? karburFmt(it(h).boy)+' mm' : '—'}</td><td>${Math.abs(Number(h.parca||h.adet)||0)}</td><td>adet olarak verildi</td></tr>`).join('')}
+      </table>`;
+  }
+  const fireK = kayitlar.filter(h => h.tip === 'fire_kullanim');
+  if(fireK.length){
+    body += `<h3>2) FİREDEN KARŞILANANLAR <span class="sub">— artık parçadan</span></h3>
+      <table><tr><th>İş Emri</th><th>Kaynak</th><th>Parça</th><th>İşlem</th></tr>
+      ${fireK.map(h=>`<tr><td>${esc(ie(h.isEmriNo))}</td><td>${esc(h.kod||'')}</td><td>${karburFmt(h.boy)} mm</td><td>${esc(h.aciklama||'')}</td></tr>`).join('')}</table>`;
+  }
+  const kesimler = kayitlar.filter(h => h.tip === 'kesim' && h.katalogId && !(h.isEmriNo && h.oncekiAdet == null));
+  if(kesimler.length){
+    body += `<h3>3) KESİMLİ ÇIKIŞLAR <span class="sub">— çubuktan kesildi</span></h3>`;
+    const SUTUN = 5;
+    kesimler.forEach(k => {
+      const item = karburKatalog[k.katalogId];
+      const cubukKayit = Math.abs(Number(k.adet) || 0);
+      if(!item){ body += `<h4>${esc(k.kod||'')} — ${cubukKayit} çubuk · ${esc(k.aciklama||'')}</h4><div class="ieozet">Kalem katalogdan kalkmış; yerleşim çizilemedi.</div>`; return; }
+      const pieces = [];
+      kayitlar.filter(h => h.tip === 'tahsis' && h.katalogId === k.katalogId).forEach(h => {
+        const re = /(\d+)\s*×\s*([\d.,]+)\s*mm/g; let m;
+        while((m = re.exec(String(h.aciklama || ''))) !== null){
+          const boy = Math.round((karburNum(m[2]) - pay) * 100) / 100;
+          for(let n = 0; n < Number(m[1]); n++) pieces.push({ isEmri: ie(h.isEmriNo), boy });
+        }
+      });
+      const eskiPay = karburPay; karburPay = pay;
+      const s = pieces.length ? karburPack(item, pieces) : null;
+      karburPay = eskiPay;
+      body += `<h4>${esc(item.kod)} — Ø${karburFmt(item.disCap)} · delik ${esc(item.delik||'')} · ${esc(item.kalite||'')} · çubuk ${karburFmt(item.boy)} mm · ${cubukKayit} adet</h4>`;
+      if(!s){ body += `<div class="ieozet">${esc(k.aciklama||'')} — parça detayı kayıtlı değil.</div>`; return; }
+      const maxCell = s.bars.reduce((mx, bb) => Math.max(mx, bb.pieces.length), 0), sutunSayisi = Math.min(maxCell, SUTUN);
+      body += `<table><tr><th>Çubuk</th>${Array.from({length:sutunSayisi},(_,i)=>`<th>${i+1}. PARÇA</th>`).join('')}<th>TOPLAM</th><th>ARTIK</th><th>KESİM</th></tr>`;
+      s.bars.forEach((bb, bi) => {
+        for(let off = 0; off < bb.pieces.length; off += SUTUN){
+          const dilim = bb.pieces.slice(off, off + SUTUN), ilk = off === 0;
+          body += `<tr><td>${ilk ? '#' + (bi+1) : '<span class="dev">#' + (bi+1) + ' devam</span>'}</td>
+            ${dilim.map(pp=>`<td class="pc">${karburFmt(pp.boy + pay)}<span class="ie">${esc(pp.isEmri||'—')}</span></td>`).join('')}
+            ${Array.from({length:sutunSayisi-dilim.length},()=>'<td></td>').join('')}
+            ${ilk ? `<td>${karburFmt(bb.used)}</td><td>${karburFmt(bb.fire)}</td><td>${bb.kesim}</td>` : '<td></td><td></td><td></td>'}</tr>`;
+        }
+      });
+      const say = {}; pieces.forEach(pp => { say[pp.isEmri||'(iş emri yok)'] = (say[pp.isEmri||'(iş emri yok)'] || 0) + 1; });
+      body += `</table><div class="ieozet">İş emirleri: ${Object.keys(say).sort().map(x=>`<b>${esc(x)}</b> ${say[x]} parça`).join(' &nbsp;·&nbsp; ')}${s.cubuk !== cubukKayit ? ` &nbsp;—&nbsp; <i>kayıtta ${cubukKayit} çubuk; yerleşim kayıttaki parçalardan yeniden çizildi (${s.cubuk} çubuk)</i>` : ''}</div>`;
+    });
+  }
+  const artik = kayitlar.filter(h => h.tip === 'fire_uretim');
+  if(artik.length) body += `<h3>ARTIKLAR <span class="sub">— fire havuzuna döndü</span></h3><div class="ieozet">${artik.map(h=>esc(h.kod||'')).join(' &nbsp;·&nbsp; ')}</div>`;
+  const ieler = [...new Set(kayitlar.filter(h => h.isEmriNo).map(h => h.isEmriNo))].sort();
+  if(ieler.length){
+    body += `<h3>EDM KESİM DURUMU <span class="sub">— tel erozyon (TE01/TE02), ${new Date().toLocaleString('tr-TR')} itibarıyla</span></h3>
+      <table><tr><th>İş Emri</th><th>Durum</th><th>Makine</th><th>Operatör</th><th>Tarih</th></tr>
+      ${ieler.map(n=>{ const d = karburEdmDurumu(n, ts) || {}; const e = d.e;
+        return `<tr><td>${esc(ie(n))}</td><td>${d.durum==='kesildi'?'<b>Kesildi</b>':d.durum==='kesiliyor'?(e&&e.status==='duruş'?'Duraklatıldı':'Kesiliyor'):'Kesim bekliyor'}</td>
+          <td>${e?esc(String(e.makine||'').split(' · ')[0]):'—'}</td><td>${e?esc(e.operatorName||e.operatorUsername||''):'—'}</td><td>${e?karburTarih(d.durum==='kesildi'?e.endTs:e.startTs):'—'}</td></tr>`; }).join('')}
+      </table>`;
+  }
+  if(!body){ toast('Bu planda yazdırılacak çıkış yok'); w.close(); return; }
+  w.document.write(`<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"><title>Karbür Kesim Raporu ${esc(planNo)}</title><style>${KARBUR_RAPOR_CSS}</style></head><body>
+    <div class="hdr"><h1>KARBÜR ÇIKIŞ / KESİM RAPORU${iptal ? ' — GERİ ALINDI' : ''}</h1><div><b>Plan No: ${esc(planNo)}</b> (kayıtlı plan) &nbsp;|&nbsp; ${karburTarih(ts)}${kim?' · '+esc(kim):''} &nbsp;|&nbsp; Pay: ${karburFmt(pay)} mm</div></div>
+    ${body}
+    <div class="ft">Kayıtlı plandan oluşturuldu: ${new Date().toLocaleString('tr-TR')}. Yazdırma penceresi açılmadıysa Ctrl+P ile yazdırabilirsin.</div>
+  </body></html>`);
+  w.document.close();
+  setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 250);
 }
