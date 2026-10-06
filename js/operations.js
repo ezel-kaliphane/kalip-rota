@@ -251,6 +251,11 @@ function baslat(){
   const entry = { isEmriNo, talepNo, makine, malzemeCinsi, capBoy, adet, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startedByUsername:session.username, startedByName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0, excludedMs:0 };
   const pendingParti = findPendingParti(isEmriNo);
   if(pendingParti){ entry.partiRootId = pendingParti.partiRootId; entry.parentEntryId = pendingParti.id; }
+  /* Düzeltme (rework) işi — bkz. js/kalite.js; süresi kalitesizlik maliyeti, hatayı yapana atfedilir. */
+  if(newForm.duzeltme && typeof kaliteDuzeltmeKaydi==='function'){
+    const sel = document.getElementById('nf-duzeltme-ref');
+    entry.duzeltme = kaliteDuzeltmeKaydi(sel ? sel.value : (newForm.duzeltmeRef||''));
+  }
   DB.ref('entries/'+id).set(entry);
   if(stockItemIdSel && stockMiktarSel>0) consumeStock(stockItemIdSel, stockLotIdSel, stockMiktarSel, { isEmriNo, talepNo });
   toast(pendingParti ? `Operasyon başlatıldı — bekleyen ${pendingParti.adet} adetlik partiye bağlandı` : 'Operasyon başlatıldı');

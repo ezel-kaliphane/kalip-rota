@@ -1509,3 +1509,8 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .kal-hata-adim.on{border-color:var(--accent);background:var(--accent-dim)}
 .kal-hata-adim.on b,.kal-hata-adim.on span{color:var(--accent)}
 .kal-hata-adim.belirsiz{justify-content:center;border-style:dashed}
+.kal-karar-secim{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.kal-karar-btn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border:1px solid var(--border);background:var(--panel-alt);color:var(--text);border-radius:8px;padding:8px 10px;cursor:pointer;min-height:48px}
+.kal-karar-btn small{font-size:11px;color:var(--text-muted)}
+.kal-karar-btn.on{border-color:var(--accent);background:var(--accent-dim)}
+.kal-karar-btn.on b{color:var(--accent)}

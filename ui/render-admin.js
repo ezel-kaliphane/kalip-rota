@@ -2032,6 +2032,7 @@ function renderIyGecmisModal(){
       <div class="modal-body">
         <div style="font-size:13.5px;font-weight:600;color:${durum.renk}">${durum.metin}</div>
         ${durum.detay ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;margin-bottom:16px">${durum.detay}</div>` : '<div style="margin-bottom:16px"></div>'}
+        ${canManageStock() ? `<button class="btn-ghost" style="width:auto;padding:8px 14px;margin:-4px 0 14px;color:var(--danger);border-color:var(--danger-border)" onclick="uygModalAc('${escJs(last.id)}')">${ico('alert',14)} Uygunsuzluk bildir</button>` : ''}
         <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:10px">Geçmiş — ${kayitlar.length} adım</div>
         <div style="display:flex;flex-direction:column;gap:10px">
           ${kayitlar.map((e,i)=>{
@@ -2046,6 +2047,7 @@ function renderIyGecmisModal(){
               <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${fmtDT(e.startTs)} → ${e.endTs?fmtDT(e.endTs):'—'} · ${sureTxt}${e.adet?` · Adet: ${esc(e.adet)}`:''}</div>
               ${e.status==='duruş' && e.duruşNedeni ? `<div style="font-size:12px;color:var(--warn);margin-top:4px">Duruş: "${esc(e.duruşNedeni)}"</div>` : ''}
               ${e.kalite ? `<div style="font-size:12px;color:${kaliteDagilim(e.kalite).red?'var(--danger)':kaliteDagilim(e.kalite).sartli?'var(--warn)':'var(--success)'};margin-top:4px">Kalite: ${esc(kaliteOzetMetni(e.kalite))}${e.kalite.redNeden?` · red: ${esc(e.kalite.redNeden)}`:''}${e.kalite.sartliNeden?` · şartlı: ${esc(e.kalite.sartliNeden)}`:''}${kaliteAciklamaMetni(e.kalite)?` — ${esc(kaliteAciklamaMetni(e.kalite))}`:''}${e.kalite.redHataOp||e.kalite.sartliHataOp?` · hata: ${[e.kalite.redHataOp,e.kalite.sartliHataOp].filter(Boolean).map(h=>esc(kaliteHataMetni(h))).join(', ')}`:''} · ${esc(e.kalite.name||'')}</div>` : ''}
+              ${kaliteGecmisEkHtml(e)}
               ${e.sonrakiMakine ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">${ico('chevronRight',11)} Sıradaki: ${esc(e.sonrakiMakine)}</div>` : ''}
             </div>`;
           }).join('')}
@@ -2307,7 +2309,7 @@ function renderIsYogunlugu(){
     ${iyGorunumSecici()}
     ${iyKpiHtml(v)}
     ${govde}
-  </div>${iyGecmisModalIsEmriNo ? renderIyGecmisModal() : ''}`;
+  </div>${iyGecmisModalIsEmriNo && !uygModal ? renderIyGecmisModal() : ''}`;
 }
 /* Sidebar'ın "Yönetim" grubundaki Excel Yükleme (A.11, 22.09.2026) ve Operatörler (A.12,
    28.09.2026) artık KENDİ ekranlarına gidiyor; ikisi de eskiden var olan işlevlere
@@ -3335,7 +3337,7 @@ function renderAdmin(){
     ${uzunDevamEdenModalOpen ? renderUzunDevamEdenModal() : ''}
     ${messagesModalOpen ? renderMessagesModal() : ''}
     ${myPushHistoryModalOpen ? renderMyPushHistoryModal() : ''}
-    ${yeniHammaddeModalHtml()}${hammaddeDuzeltModalHtml()}${renderKaliteKararModal()}${renderYmCikisModal()}`;
+    ${yeniHammaddeModalHtml()}${hammaddeDuzeltModalHtml()}${renderKaliteKararModal()}${renderYmCikisModal()}${renderUygModal()}`;
 
   let body = '';
   if(view==='adminSettings' && !session.isAdmin){ view = 'report'; }

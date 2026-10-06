@@ -309,6 +309,18 @@ function renderOperator(){
       ${!newForm.cokluMode ? `<div class="field"><label>Adet</label><input id="nf-adet" inputmode="numeric" placeholder="ör. 120" value="${esc(newForm.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newForm.adet=this.value" onblur="render()"></div>` : ''}
       ${(twoStep && !newForm.cokluMode) ? `<div style="display:flex;gap:8px;margin:-6px 0 16px">${[10,50,100,250,500].map(n=>`<button type="button" class="chip" style="flex:1;text-align:center;padding:11px 4px" onclick="setAdetQuick(${n})">${n}</button>`).join('')}</div>` : ''}
       <div class="field"><label>Not (opsiyonel)</label><textarea id="nf-not" style="min-height:60px" placeholder="Serbest not" oninput="newForm.not=this.value">${esc(newForm.not)}</textarea></div>
+      ${(()=>{ /* Düzeltme (rework) işi — iş emrinin kayıtlı bir hatası varsa (06.10.2026) */
+        if(newForm.cokluMode || !newForm.isEmriNo || typeof kaliteAcikHatalar!=='function') return '';
+        const t = resolveTrackingCode(newForm.isEmriNo, newForm.bilesen), ref = { isEmriNo: t.isEmriNo, talepNo: t.talepNo };
+        const hatalar = kaliteAcikHatalar(ref); if(!hatalar.length) return '';
+        const makine = (document.getElementById('nf-makine')||{}).value || newForm.makine || '';
+        const anahtar = t.isEmriNo+'|'+makine;
+        if(newForm.duzeltmeOto!==anahtar){ newForm.duzeltmeOto = anahtar; const o = kaliteDuzeltmeOnerisi(ref, makine); if(o){ newForm.duzeltme = true; newForm.duzeltmeRef = o; } }
+        return `${switchRow('nf-duzeltme', newForm.duzeltme, 'Düzeltme (rework) işi', 'Bir hatanın düzeltmesi — süresi ayrıca sayılır', {onchange:'newForm.duzeltme=this.checked; render()', style:'margin-bottom:10px'})}
+          ${newForm.duzeltme ? `<div class="field" style="margin-top:-4px"><label>Hangi hatanın düzeltmesi?</label><select id="nf-duzeltme-ref" onchange="newForm.duzeltmeRef=this.value">
+            ${hatalar.map(h=>`<option value="${esc(h.ref)}" ${newForm.duzeltmeRef===h.ref?'selected':''}>${esc(h.etiket)}</option>`).join('')}
+            <option value="" ${newForm.duzeltmeRef===''?'selected':''}>Listede yok</option></select></div>` : ''}`;
+      })()}
       ${switchRow('nf-son-operasyon', newForm.sonOperasyon, 'Son Operasyon', 'Bitince iş rotası kapanır', {onchange:'newForm.sonOperasyon=this.checked', style:'margin-bottom:14px'})}
       <button class="btn-start" onclick="baslat()">${ico('play',14)} Başla (saat otomatik)</button>
       ` : ''}

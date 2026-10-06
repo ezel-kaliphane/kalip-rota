@@ -191,32 +191,120 @@ function kaliteKararKaydet(){
     .catch(err=>{ m.busy = false; toast('Kaydedilemedi: '+((err&&err.message)||'hata')); render(); });
 }
 
-/* ---------- Yarı mamul deposu ---------- */
-function yariMamulKayitlari(){
-  return entriesArray().filter(e=>e.kalite && kaliteDagilim(e.kalite).yariMamul>0).map(e=>{
-    const giren = kaliteDagilim(e.kalite).yariMamul;
-    const cikislar = Object.entries(e.kalite.yariMamulCikislar||{}).map(([k,v])=>({ k, ...v })).sort((a,b)=>(a.ts||0)-(b.ts||0));
-    const cikan = cikislar.reduce((t,c)=>t+kaliteSayi(c.adet), 0);
-    const girisTs = e.kalite.ymGirisTs || e.kalite.ts || e.endTs; // depoya ilk giriş
-    return { e, giren, cikan, kalan: giren - cikan, cikislar, girisTs };
-  }).sort((a,b)=>(a.girisTs||0)-(b.girisTs||0));
+/* ---------- PROSES İÇİ UYGUNSUZLUK (06.10.2026, kullanıcı isteği) ----------
+   "Bazen final kaliteye gelmeden hatalar meydana geliyor ve düzeltiliyor." Şef / SuperAdmin iş
+   emrinin geçmiş penceresinden kaydeder (kullanıcı kararı: personel adı içeren kayıt — kontrol
+   şefte). Kayıt iş emrinin o anki SON kaydının altına yazılır:
+     entries/{baglamId}/uygunsuzluklar/{k} = { kaynak:'proses', adet, neden, aciklama,
+       hataOp, karar:'yerinde'|'revizyon'|'yariMamul'|'hurda', geriMakine, kullanimNotu,
+       ymGirisTs, cikislar/{k}, ts, username, name }
+   Revizyonda iş emrinin son kaydı bitmişse sonrakiMakine geri operasyona çevrilir. */
+const UYG_KARAR = [
+  ['yerinde',   'Yerinde düzeltildi', 'fark eden düzeltti, iş devam ediyor'],
+  ['revizyon',  'Revizyona gönderildi', 'geri operasyona gider'],
+  ['yariMamul', 'Yarı mamul deposu', 'başka yerde işlenerek kullanılabilir'],
+  ['hurda',     'Hurda', 'kullanılamaz']
+];
+let uygModal = null;
+function prosesUygunsuzluklari(){
+  const l = [];
+  entriesArray().forEach(e=>Object.entries(e.uygunsuzluklar||{}).forEach(([k,u])=>{ if(u) l.push({ ...u, _e:e, _k:k }); }));
+  return l;
 }
-function ymCikisAc(id, tur){
+function kaliteIsSonKaydi(e){ return kaliteIsKayitlari(e).sort((a,b)=>(b.startTs||0)-(a.startTs||0))[0] || null; }
+function uygModalAc(baglamId){
+  if(!canManageStock()){ toast('Uygunsuzluğu Şef ya da SuperAdmin kaydeder'); return; }
+  const e = STATE.entries[baglamId]; if(!e) return;
+  uygModal = { baglamId, adet:'1', neden:'', aciklama:'', hata:'', karar:'yerinde', geriMakine:'', kullanimNotu:'', busy:false };
+  render();
+}
+function uygKapat(){ uygModal = null; render(); }
+function uygYaz(alan, deger, cizme){ if(!uygModal) return; uygModal[alan] = deger; if(cizme!==false) render(); }
+function uygKaydet(){
+  const m = uygModal; if(!m || m.busy) return;
+  const e = STATE.entries[m.baglamId]; if(!e){ uygKapat(); return; }
+  const adet = kaliteSayi(m.adet);
+  if(!(adet>0)){ toast('Adedi girin'); return; }
+  if(!String(m.neden||'').trim()){ toast('Nedeni seçin ya da yazın'); return; }
+  if(!m.hata){ toast('Hatanın oluştuğu operasyonu seçin (bilinmiyorsa "Belli değil")'); return; }
+  if(m.karar==='revizyon' && !m.geriMakine){ toast('Revizyon için geri gideceği operasyonu seçin'); return; }
+  const ts = Date.now(), k = DB.ref().push().key, updates = {};
+  updates['entries/'+m.baglamId+'/uygunsuzluklar/'+k] = { kaynak:'proses', adet, neden: String(m.neden).trim(),
+    aciklama: String(m.aciklama||'').trim() || null, hataOp: kaliteHataOp(m.hata), karar: m.karar,
+    geriMakine: m.karar==='revizyon' ? m.geriMakine : null,
+    kullanimNotu: m.karar==='yariMamul' ? (String(m.kullanimNotu||'').trim() || null) : null,
+    ymGirisTs: m.karar==='yariMamul' ? ts : null, ts, username: session.username, name: session.displayName||session.username };
+  if(m.karar==='revizyon'){
+    const son = kaliteIsSonKaydi(e);
+    if(son && son.status==='tamamlandi'){ updates['entries/'+son.id+'/sonrakiMakine'] = m.geriMakine; updates['entries/'+son.id+'/sonOperasyon'] = false; }
+  }
+  m.busy = true; render();
+  DB.ref().update(updates).then(()=>{ toast('Uygunsuzluk kaydedildi'); uygModal = null; render(); })
+    .catch(err=>{ m.busy = false; toast('Kaydedilemedi: '+((err&&err.message)||'hata')); render(); });
+}
+
+/* ---------- DÜZELTME (REWORK) İŞİ (06.10.2026) ----------
+   Operatör iş başlatırken "düzeltme işi" işaretler ve hangi hatanın düzeltmesi olduğunu seçer:
+     entries/{id}/duzeltme = { ref:'fkk:<entryId>'|'proses:<entryId>|<k>'|null, kaynak, hataOp }
+   Süresi kalitesizlik maliyeti olarak sayılır ve hatayı yapana atfedilir. FKK'dan revizyonla
+   gelen işte, geri gidilen makinede iş açılınca kendiliğinden işaretli gelir. */
+function kaliteAcikHatalar(isEmriKaydi){
+  const l = [];
+  kaliteIsKayitlari(isEmriKaydi).forEach(e=>{
+    const k = e.kalite;
+    if(k && kaliteDagilim(k).revizyon>0) l.push({ ref:'fkk:'+e.id, kaynak:'fkk', hataOp: k.redHataOp||null, geriMakine: k.geriMakine||'', ts: k.ts||e.endTs,
+      etiket:`FKK red · ${k.redNeden||'—'} · ${fmtDT(k.ts||e.endTs)}${k.redHataOp?' · hata: '+kaliteHataMetni(k.redHataOp):''}` });
+    Object.entries(e.uygunsuzluklar||{}).forEach(([kk,u])=>{ if(u && (u.karar==='revizyon' || u.karar==='yerinde')) l.push({ ref:'proses:'+e.id+'|'+kk, kaynak:'proses', hataOp: u.hataOp||null, geriMakine: u.geriMakine||'', ts: u.ts,
+      etiket:`Proses · ${u.neden||'—'} · ${fmtDT(u.ts)}${u.hataOp?' · hata: '+kaliteHataMetni(u.hataOp):''}` }); });
+  });
+  return l.sort((a,b)=>(b.ts||0)-(a.ts||0));
+}
+function kaliteDuzeltmeOnerisi(isEmriKaydi, makine){
+  if(!makine) return '';
+  const son = kaliteIsSonKaydi(isEmriKaydi); if(!son) return '';
+  return (kaliteAcikHatalar(isEmriKaydi).find(h=>h.geriMakine===makine && (h.ts||0) >= (son.startTs||0)-60000) || {}).ref || '';
+}
+function kaliteDuzeltmeKaydi(ref){
+  if(!ref) return { ref:null, kaynak:null, hataOp:null };
+  if(ref.startsWith('fkk:')){ const e = STATE.entries[ref.slice(4)]; return { ref, kaynak:'fkk', hataOp: (e && e.kalite && e.kalite.redHataOp) || null }; }
+  if(ref.startsWith('proses:')){ const [eid,k] = ref.slice(7).split('|'); const u = ((STATE.entries[eid]||{}).uygunsuzluklar||{})[k]; return { ref, kaynak:'proses', hataOp: (u && u.hataOp) || null }; }
+  return { ref:null, kaynak:null, hataOp:null };
+}
+
+/* ---------- Yarı mamul deposu (FKK + proses içi) ----------
+   Ayrı düğüm yok: FKK'da dagilim.yariMamul ve proses kaydında karar 'yariMamul' olan adetler,
+   kendi çıkışları düşülerek depoyu oluşturur. Her satırın çıkış yolu ayrı (yol). */
+function ymSatir(e, key, yol, giren, cikisObj, girisTs, kaynak, neden, aciklama, not){
+  const cikislar = Object.entries(cikisObj||{}).map(([k,v])=>({ k, ...v })).sort((a,b)=>(a.ts||0)-(b.ts||0));
+  const cikan = cikislar.reduce((t,c)=>t+kaliteSayi(c.adet), 0);
+  return { key, e, yol, giren, cikan, kalan: giren-cikan, cikislar, girisTs, kaynak, neden, aciklama, kullanimNotu: not };
+}
+function yariMamulKayitlari(){
+  const l = [];
+  entriesArray().forEach(e=>{
+    if(e.kalite && kaliteDagilim(e.kalite).yariMamul>0){ const k = e.kalite;
+      l.push(ymSatir(e, e.id, 'entries/'+e.id+'/kalite/yariMamulCikislar', kaliteDagilim(k).yariMamul, k.yariMamulCikislar, k.ymGirisTs||k.ts||e.endTs, 'FKK', k.redNeden, kaliteAciklamaMetni(k), k.kullanimNotu)); }
+    Object.entries(e.uygunsuzluklar||{}).forEach(([kk,u])=>{ if(u && u.karar==='yariMamul' && kaliteSayi(u.adet)>0)
+      l.push(ymSatir(e, e.id+'|'+kk, 'entries/'+e.id+'/uygunsuzluklar/'+kk+'/cikislar', kaliteSayi(u.adet), u.cikislar, u.ymGirisTs||u.ts, 'Proses', u.neden, u.aciklama, u.kullanimNotu)); });
+  });
+  return l.sort((a,b)=>(a.girisTs||0)-(b.girisTs||0));
+}
+function ymCikisAc(key, tur){
   if(!canManageStock()){ toast('Bu işlem için Şef ya da SuperAdmin yetkisi gerekli'); return; }
-  const x = yariMamulKayitlari().find(r=>r.e.id===id); if(!x || x.kalan<=0) return;
-  ymCikisModal = { id, tur, adet: String(x.kalan), isEmri:'', aciklama:'', busy:false };
+  const x = yariMamulKayitlari().find(r=>r.key===key); if(!x || x.kalan<=0) return;
+  ymCikisModal = { key, tur, adet: String(x.kalan), isEmri:'', aciklama:'', busy:false };
   render();
 }
 function ymCikisKapat(){ ymCikisModal = null; render(); }
 function ymCikisKaydet(){
   const m = ymCikisModal; if(!m || m.busy) return;
-  const x = yariMamulKayitlari().find(r=>r.e.id===m.id); if(!x){ ymCikisKapat(); return; }
+  const x = yariMamulKayitlari().find(r=>r.key===m.key); if(!x){ ymCikisKapat(); return; }
   const a = kaliteSayi(m.adet);
   if(!(a>0 && a<=x.kalan)){ toast(`Adet 1 ile ${x.kalan} arasında olmalı`); return; }
   const kayit = { adet:a, tur:m.tur, isEmri: String(m.isEmri||'').trim().toUpperCase() || null, aciklama: String(m.aciklama||'').trim() || null,
     ts: Date.now(), username: session.username, name: session.displayName||session.username };
   m.busy = true; render();
-  DB.ref('entries/'+m.id+'/kalite/yariMamulCikislar').push(kayit).then(()=>{
+  DB.ref(x.yol).push(kayit).then(()=>{
     toast(m.tur==='hurda' ? `${a} adet hurdaya ayrıldı` : `${a} adet depodan çıktı`+(kayit.isEmri?' — '+kayit.isEmri:''));
     ymCikisModal = null; render();
   }).catch(err=>{ m.busy = false; toast('Kaydedilemedi: '+((err&&err.message)||'hata')); render(); });
