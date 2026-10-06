@@ -93,6 +93,11 @@
       ".indexOn": ["isaretTs"],
       "$kayitId": { ".write": true }
     },
+    "malzemeIstek": {
+      ".read": true,
+      ".write": false,
+      "$anahtar": { ".write": true }
+    },
     "hammaddeRecete": {
       ".read": true,
       ".write": false,

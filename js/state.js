@@ -477,6 +477,27 @@ let stokGirisMiktar = 1;
 let stokGirisNot = '';
 let stokGirisSiparisAcik = false;
 let stokGirisCubukBoyu = '';
+let stokGirisIstekKapat = {}; // { istekNo: true } — bu giriş hangi açık malzeme siparişinin teslimi (06.10.2026)
+/* Girişten sonra işaretli siparişleri "geldi" yap. */
+function stokGirisIstekleriKapat(itemId){
+  const nolar = Object.keys(stokGirisIstekKapat).filter(k=>stokGirisIstekKapat[k]);
+  stokGirisIstekKapat = {};
+  if(!nolar.length || typeof malzemeIstekGeldiYaz!=='function') return;
+  nolar.forEach(no=>malzemeIstekGeldiYaz(no, itemId, true));
+  toast('Sipariş geldi olarak işaretlendi: '+nolar.join(', '));
+}
+/* Seçili kalemin açık malzeme siparişleri — Stok Girişi'nde "teslim" kutuları. */
+function stokGirisIstekKutulariHtml(itemId){
+  if(typeof malzemeAcikIstekler!=='function') return '';
+  if(typeof ensureMalzemeBekleyenLoaded==='function') ensureMalzemeBekleyenLoaded();
+  const liste = malzemeAcikIstekler(itemId); if(!liste.length) return '';
+  return `<div class="notice" style="--nc:var(--warn);margin:0 0 12px;padding:9px 12px"><div class="notice-sub">
+    <b>Bu malzemenin açık siparişi var.</b> Bu giriş bir siparişin teslimiyse işaretle — sipariş "geldi" olur:
+    ${liste.map(s=>`<label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer">
+      <input type="checkbox" style="width:auto" ${stokGirisIstekKapat[s.istekNo]?'checked':''} onchange="stokGirisIstekKapat['${escJs(s.istekNo)}']=this.checked">
+      İstek <b class="mono">${esc(s.istekNo)}</b> · ${s.miktar==null?'miktar bilinmiyor':s.miktar+' '+esc(s.birim||'')} · ${s.bagli.length} iş emri bekliyor</label>`).join('')}
+  </div></div>`;
+}
 function stockGirisAramaSonuclar(){
   const q = stokGirisArama.trim();
   if(!q) return [];
@@ -491,6 +512,7 @@ function stockGirisSecKalem(itemId){
   stokGirisNot = '';
   stokGirisSiparisAcik = !!it.siparisAcik;
   stokGirisCubukBoyu = '';
+  stokGirisIstekKapat = {};
   render();
 }
 function stokGirisScanQr(){
@@ -519,6 +541,7 @@ function stokGirisCubukEkle(){
     DB.ref(`stockItems/${itemId}/sonHareketTs`).set(Date.now()); // Genel Bakış "Son Hareket" sütunu için denormalize alan
     DB.ref(`stockItems/${itemId}/sonHareketAciklama`).set('Yeni çubuk eklendi');
     toast('Yeni çubuk eklendi');
+    stokGirisIstekleriKapat(itemId);
     stokGirisGeriDon();
   });
 }
@@ -545,6 +568,7 @@ function stockGirisKaydet(){
       stockHareketleri[hid] = hareket;
       stockItems[itemId] = { ...item, miktar: sonrakiMiktar, siparisAcik, sonHareketTs: Date.now() };
       toast(`Giriş kaydedildi: ${item.kod||''} (+${miktar})`);
+      stokGirisIstekleriKapat(itemId);
       stokGirisGeriDon();
     }).catch(err=>{
       toast('Giriş kaydedilemedi: '+(err.message||'bilinmeyen hata'));

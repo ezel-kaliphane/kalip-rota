@@ -7,7 +7,8 @@
 
 let mbYeniAcik = false;
 let mbForm = { girilen:'', talepNo:'', mamulKodu:'', mamulAdi:'', ieMiktar:'', hammaddeId:'', gerekenMiktar:'', busy:false, bulundu:null };
-let mbIstekDuzenId = null, mbIstekDeger = '';
+let mbIstekDuzenId = null, mbIstekDeger = '', mbIstekMiktar = '';
+let mbSiparisMiktarAcik = null, mbSiparisMiktarDeger = ''; // grup başlığında miktar düzenlenen sipariş anahtarı
 let mbGecmisAcik = false;
 let mbHamAra = '';
 
@@ -99,13 +100,16 @@ function mbKaydet(){
 }
 function mbIstekAc(id, mevcut){
   if(!malzemeIstekNoYetkisi()){ toast('İstek numarasını yalnızca SuperAdmin girebilir'); return; }
-  mbIstekDuzenId = id; mbIstekDeger = mevcut||''; render();
+  mbIstekDuzenId = id; mbIstekDeger = mevcut||''; mbIstekMiktar = '';
+  const k = malzemeBekleyen[id];
+  if(k && mevcut){ const s = malzemeIstekKaydi(mevcut, k.hammaddeId); if(s && s.miktar) mbIstekMiktar = String(s.miktar); }
+  render();
 }
 function mbIstekKapat(){ mbIstekDuzenId = null; render(); }
 function mbIstekKaydet(){
   const id = mbIstekDuzenId; if(!id) return;
   mbIstekDuzenId = null;
-  malzemeIstekNoKaydet(id, mbIstekDeger);
+  malzemeIstekNoKaydet(id, mbIstekDeger, mbIstekMiktar);
 }
 
 function mbBeklemeMetni(ts){
@@ -141,7 +145,7 @@ function renderMalzemeBekleyen(){
   const grupListesi = Object.entries(gruplar).map(([hid, satirlar])=>{
     const it = items[hid];
     const stok = hammaddeStokSayi(it);
-    const rezerve = satirlar.reduce((t,s)=>t+(Number(s.gerekenMiktar)||0), 0);
+    const rezerve = satirlar.reduce((t,s)=>t+malzemeIhtiyac(s), 0); // testere payı dahil
     return { hid, it, stok, rezerve, kullanilabilir: stok-rezerve,
       satirlar: satirlar.sort((a,b)=>(Number(a.isaretTs)||0)-(Number(b.isaretTs)||0)) };
   }).sort((a,b)=> a.kullanilabilir - b.kullanilabilir);
@@ -180,21 +184,23 @@ function renderMalzemeBekleyen(){
         <span class="matrix-tag" style="--sb:${durum.r}">${durum.t}</span>
         <span class="mb-olcu">${g.it && g.it.isim ? esc(String(g.it.isim).slice(0,40))+' · ' : ''}Stok <b${g.stok<0?' style="color:var(--danger)"':''}>${g.stok} ${esc(birim)}</b> · Rezerve <b>${g.rezerve} ${esc(birim)}</b> · Kullanılabilir <b style="color:${g.kullanilabilir<0?'var(--danger)':'var(--success)'}">${g.kullanilabilir} ${esc(birim)}</b></span>
       </div>
+      ${mbSiparislerHtml(g)}
       ${basliklar}
       ${g.satirlar.map(s=>{
         const bek = mbBeklemeMetni(s.isaretTs);
         const istek = String(s.caniasIstekNo||'').trim();
-        return `<div class="mb-satir ${istek?'mb-istek-var':'mb-istek-yok'}" title="${istek?'İstek no girildi — sipariş açıldı, malzeme bekleniyor':'İstek no girilmedi — CANIAS isteği henüz açılmadı'}">
+        const sd = malzemeIstekDurumu(s), pay = malzemeKesimPayi(s);
+        return `<div class="mb-satir ${sd==='yok'?'mb-istek-yok':sd==='geldi'?'mb-istek-geldi':'mb-istek-var'}" title="${sd==='yok'?'İstek no girilmedi — CANIAS isteği henüz açılmadı':sd==='geldi'?'Sipariş geldi — malzeme stokta':'İstek no girildi — sipariş açık, malzeme yolda'}">
           <span><span class="mb-ie">${esc(s.isEmriNo||'—')}</span><span class="mb-talep">${esc(s.talepNo||'')}</span></span>
           <span class="mb-mamul" title="${esc(s.mamulAdi||'')}">${esc(s.mamulAdi||'—')}</span>
           <span class="mb-sag">${s.ieMiktar||'—'}</span>
-          <span class="mb-sag">${s.gerekenMiktar} ${esc(s.birim||'')}</span>
+          <span class="mb-sag">${s.gerekenMiktar} ${esc(s.birim||'')}${pay?`<small class="mb-pay" title="Testere payı: kesim başına ${MALZEME_KESIM_PAYI_MM} mm">+${pay}</small>`:''}</span>
           <span style="color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(operatorGosterimAdi({operatorName:s.isaretleyenName, operatorUsername:s.isaretleyenUsername}))}</span>
           <span class="mb-sag" style="color:${bek.renk}">${bek.metin}</span>
           <span class="mb-sag">${istek
             ? (malzemeIstekNoYetkisi()
-                ? `<button class="btn-ghost mb-mini mb-istek-no" onclick="mbIstekAc('${escJs(s.id)}','${escJs(istek)}')">${esc(istek)}</button>`
-                : `<span class="mb-istek-no">${esc(istek)}</span>`)
+                ? `<button class="btn-ghost mb-mini mb-istek-no" onclick="mbIstekAc('${escJs(s.id)}','${escJs(istek)}')">${esc(istek)}</button>${s.istekOtomatik?'<small class="mb-oto" title="Açık siparişin fazlasına kendiliğinden bağlandı">oto</small>':''}`
+                : `<span class="mb-istek-no">${esc(istek)}</span>${s.istekOtomatik?'<small class="mb-oto" title="Açık siparişin fazlasına kendiliğinden bağlandı">oto</small>':''}`)
             : (malzemeIstekNoYetkisi()
                 ? `<button class="btn-ghost mb-mini mb-istek-gir" onclick="mbIstekAc('${escJs(s.id)}','')">no gir</button>`
                 : `<span class="mb-istek-gir-yazi">istek yok</span>`)}</span>
@@ -293,7 +299,7 @@ function renderMbYeniModal(){
             oninput="this.value=this.value.replace(/[^0-9.]/g,'')" onchange="mbFormYaz('ieMiktar',this.value)"></div>
         <div class="field"><label for="mb-gereken">Gereken Miktar</label>
           <input id="mb-gereken" inputmode="numeric" placeholder="0" value="${esc(mbForm.gerekenMiktar)}"
-            oninput="this.value=this.value.replace(/[^0-9.]/g,''); mbForm.gerekenMiktar=this.value"></div>
+            oninput="this.value=this.value.replace(/[^0-9.]/g,''); mbForm.gerekenMiktar=this.value" onchange="mbFormYaz('gerekenMiktar',this.value)"></div>
       </div>
 
       <div class="field">
@@ -311,7 +317,7 @@ function renderMbYeniModal(){
       </div>
       ${secili ? `<div style="font-size:12px;color:var(--text-muted);margin:-6px 0 12px">
         Stok <b style="color:${stok<=0?'var(--danger)':'var(--text)'}">${stok} ${esc(secili.birim||'')}</b> ·
-        mevcut rezerve <b>${rezerve} ${esc(secili.birim||'')}</b></div>` : ''}
+        mevcut rezerve <b>${rezerve} ${esc(secili.birim||'')}</b></div>${mbSiparisOnizlemeHtml(secili)}` : ''}
 
       <div style="display:flex;gap:8px;margin-top:4px">
         <button class="btn-primary" style="flex:1" ${mbForm.busy?'disabled':''} onclick="mbKaydet()">${mbForm.busy?'Kaydediliyor…':'İşaretle'}</button>
@@ -332,9 +338,50 @@ function renderMbIstekModal(){
         <label for="mb-istek">İstek No</label>
         <input id="mb-istek" placeholder="ör. 4711" value="${esc(mbIstekDeger)}" oninput="mbIstekDeger=this.value">
       </div>
+      <div class="field">
+        <label for="mb-istek-mik">Sipariş miktarı (${esc(k.birim||'')})</label>
+        <input id="mb-istek-mik" inputmode="decimal" placeholder="ör. 1500 — bu istekle sipariş edilen toplam" value="${esc(mbIstekMiktar)}" oninput="mbIstekMiktar=this.value.replace(/[^0-9.,]/g,'')">
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Aynı istek no'yu başka iş emrine yazarken boş bırakabilirsin. Fazlası yeni gelen iş emirlerine kendiliğinden bağlanır.</div>
+      </div>
       <div style="display:flex;gap:8px;margin-top:4px">
         <button class="btn-primary" style="flex:1" onclick="mbIstekKaydet()">Kaydet</button>
         <button class="btn-ghost" onclick="mbIstekKapat()">Vazgeç</button>
       </div>
     </div></div>`;
+}
+/* Grup başlığının altında açık siparişler: miktar, bağlı iş emirleri, fazla/eksik, Geldi. */
+function mbSiparislerHtml(g){
+  if(!g.it) return '';
+  const liste = malzemeAcikIstekler(g.hid); if(!liste.length) return '';
+  const birim = g.it.birim || '';
+  return `<div class="mb-siparisler">${liste.map(s=>{
+    const duzen = mbSiparisMiktarAcik===s.anahtar;
+    const durum = s.miktar==null ? `<span class="mb-sip-bilinmiyor">miktar bilinmiyor</span>`
+      : s.fazla>=0 ? `<span class="mb-sip-fazla">fazla ${Math.round(s.fazla)} ${esc(birim)}</span>`
+      : `<span class="mb-sip-eksik">eksik ${Math.round(-s.fazla)} ${esc(birim)}</span>`;
+    return `<div class="mb-siparis">
+      <span>${ico('box',13)} İstek <b class="mono">${esc(s.istekNo)}</b> · ${s.miktar==null?'—':`<b>${s.miktar} ${esc(birim)}</b>`} sipariş · ${s.bagli.length} iş emri ${Math.round(s.kullanilan)} ${esc(birim)} · ${durum}</span>
+      <span class="mb-sip-eylem">
+        ${malzemeIstekNoYetkisi() ? (duzen
+          ? `<input class="mono" style="width:110px;margin:0" inputmode="decimal" placeholder="miktar" value="${esc(mbSiparisMiktarDeger)}" oninput="mbSiparisMiktarDeger=this.value.replace(/[^0-9.,]/g,'')">
+             <button class="btn-primary mb-mini" onclick="malzemeIstekMiktarKaydet('${escJs(s.istekNo)}','${escJs(g.hid)}', mbSiparisMiktarDeger); mbSiparisMiktarAcik=null">Kaydet</button>
+             <button class="btn-ghost mb-mini" onclick="mbSiparisMiktarAcik=null; render()">Vazgeç</button>`
+          : `<button class="btn-ghost mb-mini" onclick="mbSiparisMiktarAcik='${escJs(s.anahtar)}'; mbSiparisMiktarDeger='${s.miktar||''}'; render()">${s.miktar==null?'Miktar gir':'Miktarı düzelt'}</button>`) : ''}
+        ${canManageStock() ? `<button class="btn-ghost mb-mini mb-sip-geldi" onclick="malzemeIstekGeldi('${escJs(s.istekNo)}','${escJs(g.hid)}')">Geldi</button>` : ''}
+      </span>
+    </div>`; }).join('')}</div>`;
+}
+/* Yeni kayıt penceresinde: bu ihtiyaç açık siparişten karşılanır mı? (kendiliğinden bağlanır) */
+function mbSiparisOnizlemeHtml(secili){
+  const g = Number(mbForm.gerekenMiktar)||0; if(!(g>0)) return '';
+  const tahmini = { gerekenMiktar: g, ieMiktar: Number(mbForm.ieMiktar)||0, birim: secili.birim||'' };
+  const ihtiyac = malzemeIhtiyac(tahmini), pay = malzemeKesimPayi(tahmini);
+  const acik = malzemeAcikIstekler(mbForm.hammaddeId); if(!acik.length) return '';
+  const uygun = malzemeUygunIstek(mbForm.hammaddeId, ihtiyac), b = esc(secili.birim||'');
+  const enCok = acik.filter(s=>s.fazla!=null).sort((a,c)=>c.fazla-a.fazla)[0];
+  return uygun
+    ? `<div class="notice" style="--nc:var(--warn);margin:-4px 0 12px;padding:9px 12px"><div class="notice-sub">
+        <b>Açık siparişten karşılanır:</b> istek <b class="mono">${esc(uygun.istekNo)}</b> · ihtiyaç ${ihtiyac} ${b}${pay?` (${pay} ${b} testere payı dahil)`:''} · kalan fazla <b>${Math.round(uygun.fazla-ihtiyac)} ${b}</b>. Kayıt bu siparişe kendiliğinden bağlanır, yeni istek gerekmez.</div></div>`
+    : `<div class="notice" style="--nc:var(--danger);margin:-4px 0 12px;padding:9px 12px"><div class="notice-sub">
+        ${enCok ? `Yolda en fazla <b>${Math.round(enCok.fazla)} ${b}</b> fazla var (istek ${esc(enCok.istekNo)}) ama <b>${ihtiyac} ${b}</b> gerekiyor${pay?` (${pay} ${b} testere payı dahil)`:''} — yeni istek gerekir.` : `Bu malzemenin açık siparişinin miktarı bilinmiyor — fazlası hesaplanamıyor, kayıt istek no'suz açılır.`}</div></div>`;
 }

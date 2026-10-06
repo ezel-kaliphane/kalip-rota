@@ -916,6 +916,7 @@ function renderMalzemeStokScreen(){
             <div class="field"><label>Yeni çubuk boyu (${esc(it.birim||'mm')})</label>
               <input type="number" value="${esc(stokGirisCubukBoyu)}" placeholder="ör. 2000" oninput="stokGirisCubukBoyu=this.value">
             </div>
+            ${stokGirisIstekKutulariHtml(stokGirisFoundId)}
             <button class="btn-primary" style="width:100%;padding:12px;margin-top:6px" onclick="stokGirisCubukEkle()">✓ Çubuğu Ekle</button>
           ` : `
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:14px">
@@ -938,6 +939,7 @@ function renderMalzemeStokScreen(){
               <input type="checkbox" style="width:auto" ${stokGirisSiparisAcik?'checked':''} onchange="stokGirisSiparisAcik=this.checked">
               Sipariş açık (bu kalem için tedarikçiye sipariş verildi)
             </label>
+            ${stokGirisIstekKutulariHtml(stokGirisFoundId)}
             <button class="btn-primary" style="width:100%;padding:12px" onclick="stockGirisKaydet()">✓ Girişi Kaydet</button>
           `}
         </div>`;
@@ -2057,7 +2059,7 @@ function iyMalzemeAramaKartHtml(x){
       <span class="matrix-tag" style="--sb:${renk}">Malzeme bekliyor</span>
       ${x.isEmriNo && x.isEmriNo!==x.talepNo ? `<span style="font-size:11px;color:var(--text-muted)">U kodu: ${esc(x.isEmriNo)}</span>` : ''}
     </div>
-    <div style="margin-top:8px;font-size:13.5px;font-weight:600;color:${renk}">${istek ? `Sipariş açıldı · istek no ${esc(istek)}` : 'İstek no girilmedi · CANIAS isteği henüz açılmadı'}</div>
+    <div style="margin-top:8px;font-size:13.5px;font-weight:600;color:${renk}">${istek ? (malzemeIstekDurumu(x)==='geldi' ? `Malzeme geldi · istek no ${esc(istek)}` : `Sipariş açıldı · istek no ${esc(istek)}`) : 'İstek no girilmedi · CANIAS isteği henüz açılmadı'}</div>
     <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${esc(x.mamulAdi||'')}${x.mamulAdi?' · ':''}Beklenen: <span class="mono">${esc(x.hammaddeKod||'—')} · ${esc(String(x.gerekenMiktar||''))} ${esc(x.birim||'')}</span> · ${bek.metin} bekliyor · işaretleyen ${esc(x.isaretleyenName||x.isaretleyenUsername||'—')}</div>
     ${canManageStock() ? `<button class="btn-ghost" style="width:auto;padding:6px 12px;margin-top:10px" onclick="stokSubView='bekleyen'; setView('stokYonetim')">Malzeme Bekleyenler'de aç</button>` : ''}
   </div>`;
@@ -2143,11 +2145,11 @@ function iyListeHtml(v){
 /* Malzeme Bekliyor satırının açılan detayı — her kayıt kendi renginde (istek no yoksa kırmızı, varsa sarı). */
 function iyMalzemeDetayHtml(r){
   return `${r.kayitlar.map(x=>{ const istek = String(x.caniasIstekNo||'').trim(); const bek = mbBeklemeMetni(x.isaretTs);
-    return `<div class="iy-detay-row iy-mb-satir ${istek?'var':'yok'}">
+    return `<div class="iy-detay-row iy-mb-satir ${istek?(malzemeIstekDurumu(x)==='geldi'?'geldi':'var'):'yok'}">
       <span><span class="mono" style="font-weight:700">${esc(x.talepNo||x.isEmriNo||'—')}</span>${x.isEmriNo && x.isEmriNo!==x.talepNo ? `<span class="mono" style="display:block;font-size:10.5px;color:var(--text-subtle)">${esc(x.isEmriNo)}</span>` : ''}</span>
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.mamulAdi||'')}">${esc(x.mamulAdi||'—')}</span>
       <span class="mono">${esc(x.hammaddeKod||'—')} <span style="color:var(--text-muted)">· ${esc(String(x.gerekenMiktar||''))} ${esc(x.birim||'')}</span></span>
-      <span class="iy-mb-istek">${istek ? `İstek ${esc(istek)}` : 'İstek no yok'}</span>
+      <span class="iy-mb-istek">${istek ? (malzemeIstekDurumu(x)==='geldi' ? `Geldi · istek ${esc(istek)}` : `İstek ${esc(istek)}`) : 'İstek no yok'}</span>
       <span class="mono sag" style="color:${bek.renk}">${bek.metin} bekliyor</span>
     </div>`; }).join('')}
   ${canManageStock() ? `<div style="padding-top:10px"><button class="btn-ghost" style="width:auto;padding:7px 12px" onclick="stokSubView='bekleyen'; setView('stokYonetim')">Malzeme Bekleyenler'de aç</button></div>` : ''}`;
