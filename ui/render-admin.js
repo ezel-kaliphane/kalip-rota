@@ -2030,11 +2030,12 @@ function renderIyGecmisModal(){
             return `<div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
               <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
                 <span style="font-weight:700;color:var(--accent);font-size:13px">${i+1}. ${esc(e.makine||'—')}</span>
-                <span style="font-size:11.5px;color:var(--text-muted)">${durumEtiket}</span>
+                <span style="font-size:11.5px;color:var(--text-muted)">${kaliteRozet(e)} ${durumEtiket}</span>
               </div>
               <div style="font-size:12.5px;margin-top:6px">${esc(e.operatorName||e.operatorUsername||'—')}${e.finishedByUsername && e.finishedByUsername!==e.operatorUsername ? ` · Bitiren: ${esc(e.finishedByName||e.finishedByUsername)}` : ''}</div>
               <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${fmtDT(e.startTs)} → ${e.endTs?fmtDT(e.endTs):'—'} · ${sureTxt}${e.adet?` · Adet: ${esc(e.adet)}`:''}</div>
               ${e.status==='duruş' && e.duruşNedeni ? `<div style="font-size:12px;color:var(--warn);margin-top:4px">Duruş: "${esc(e.duruşNedeni)}"</div>` : ''}
+              ${e.kalite && e.kalite.sonuc!=='onay' ? `<div style="font-size:12px;color:${e.kalite.sonuc==='red'?'var(--danger)':'var(--warn)'};margin-top:4px">${esc(KALITE_SONUC_AD[e.kalite.sonuc]||'')}: ${esc(e.kalite.neden||'')}${e.kalite.aciklama?` — ${esc(e.kalite.aciklama)}`:''} · ${esc(e.kalite.name||'')}</div>` : ''}
               ${e.sonrakiMakine ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">${ico('chevronRight',11)} Sıradaki: ${esc(e.sonrakiMakine)}</div>` : ''}
             </div>`;
           }).join('')}
@@ -2817,6 +2818,7 @@ function renderAyarlarMenu(){
 
   const g3 = grup('Üretim Kuralları', [
     sa && ayarSatiri({ etiket:'Duruş Nedenleri', alt:'Planlı Mola ve Gün Sonu verimlilik paydasına girmez', hedef:'durusReasons' }),
+    sa && ayarSatiri({ etiket:'Kalite Red Nedenleri', alt:'Final Kalite Kontrol — şartlı kabul ve red nedenleri', deger:`${kaliteNedenleri().length} neden`, hedef:'kaliteNedenleri' }),
     canManageBildirimAyarlari() && ayarSatiri({ etiket:'Uzun Duruş Uyarı Eşiği', alt:'Bildirim ayarlarının tamamı', deger:`${esikDk} dk`, hedef:'uyarilar' }),
     sa && ayarSatiri({ etiket:'Tadilat Hazır Açıklama Şablonları', hedef:'tadilatSablonlari' }),
     sa && ayarSatiri({ etiket:'Bölüm &rarr; İş Merkezi Eşleştirme', deger:`${bolumKuralSay} kural`, hedef:'bolumKurallari' }),
@@ -3334,7 +3336,7 @@ function renderAdmin(){
      state'te kalabiliyor; asagidaki if/else zincirinden dusup bombos bir Ayarlar ekrani veriyordu.
      Taninmayan her deger menuye donuyor. Rol zorlamalari bunun USTUNE calisiyor, sirasi onemli. */
   const AYAR_ALT_SEKMELERI = ['menu','access','makineAyarlari','addMachine','bolumKurallari',
-    'tabErisimi','resimBul','uyarilar','bildirimlerim','bildirimGonder','durusReasons',
+    'tabErisimi','resimBul','uyarilar','bildirimlerim','bildirimGonder','durusReasons','kaliteNedenleri',
     'tadilatSablonlari','takimStok','karbur','stok'];
   if(view==='adminSettings' && AYAR_ALT_SEKMELERI.indexOf(settingsSubTab)===-1){ settingsSubTab = 'menu'; }
   if(session.isSef && view==='adminSettings' && settingsSubTab!=='menu' && settingsSubTab!=='stok' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'menu'; }
@@ -3654,6 +3656,23 @@ function renderAdmin(){
               <button class="del-btn" onclick="removeDurusReason(${i})" title="Sil">${ico('trash',14)}</button>
             </div>
           `).join('')}
+        </div>`;
+    } else if(settingsSubTab==='kaliteNedenleri'){
+      const list = kaliteNedenleri();
+      body += `<div style="font-size:16px;font-weight:600;margin-bottom:6px">Kalite Red Nedenleri</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:18px;max-width:640px">Final Kalite Kontrol'de <b>Şartlı kabul</b> ya da <b>Red</b> verilirken seçilen nedenler. <b>"Diğer"</b> sabittir, her zaman listenin sonunda çıkar ve açıklama ister. Analiz → Genel → Kalite bölümü bu nedenlere göre gruplar — bir nedeni sonradan yeniden adlandırırsan eski kayıtlar eski adla kalır.</div>
+        <div style="max-width:480px;margin-bottom:18px">
+          <div class="field"><label>Yeni Neden Ekle</label><input id="kalite-neden-yeni" placeholder="ör. Isıl işlem sonrası çatlak"></div>
+          <button class="btn-primary" style="width:auto;padding:10px 18px" onclick="kaliteNedeniEkle()">+ Ekle</button>
+        </div>
+        <div class="sec-h" style="margin-top:0">Mevcut Nedenler (${list.length})</div>
+        <div class="op-settings-table">
+          ${list.map((r,i)=>`
+            <div class="op-settings-row">
+              <input id="kalite-neden-${i}" value="${esc(r)}" style="flex:1">
+              <button class="btn-ghost" onclick="kaliteNedeniDuzenle(${i})" title="Kaydet">Kaydet</button>
+              <button class="del-btn" onclick="kaliteNedeniSil(${i})" title="Sil">${ico('trash',14)}</button>
+            </div>`).join('')}
         </div>`;
     } else if(settingsSubTab==='tadilatSablonlari'){
       const list = tadilatOnHazirIstekListesi();

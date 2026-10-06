@@ -842,7 +842,8 @@ function renderGroupScreen(groupId, groupMembers){
     </div>` : '';
 
   const showNextOp = nextOpPendingGroupId===groupId || groupMembers.some(m=>m.id===nextOpPendingId);
-  return `<div class="root-mobile theme-${resolvedTheme()}">${header}${body}${editBlock}${!anyDurus && durusOpen ? renderDurusModal() : ''}${showNextOp ? renderNextOpModal() : ''}</div>`;
+  const showKalite = !!kaliteModal && (kaliteModal.groupId===groupId || groupMembers.some(m=>m.id===kaliteModal.id));
+  return `<div class="root-mobile theme-${resolvedTheme()}">${header}${body}${editBlock}${!anyDurus && durusOpen ? renderDurusModal() : ''}${showNextOp ? renderNextOpModal() : ''}${showKalite ? renderKaliteModal() : ''}</div>`;
 }
 function renderLockScreen(active){
   const header = `
@@ -921,7 +922,7 @@ function renderLockScreen(active){
       ${durusBlock}
       ${editButton}
       ${editBlock}
-    </div>${durusOpen ? renderDurusModal() : ''}${kismiAktarId ? renderKismiAktarModal() : ''}${nextOpPendingId===active.id ? renderNextOpModal() : ''}</div>`;
+    </div>${durusOpen ? renderDurusModal() : ''}${kismiAktarId ? renderKismiAktarModal() : ''}${nextOpPendingId===active.id ? renderNextOpModal() : ''}${kaliteModal && kaliteModal.id===active.id ? renderKaliteModal() : ''}</div>`;
 }
 
 /* ===================== MOBİL ALT GEZİNME (v27) =====================

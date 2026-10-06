@@ -1467,3 +1467,13 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .mb-sip-eksik{color:var(--danger-text);font-weight:700}
 .mb-sip-bilinmiyor{color:var(--warn-text);font-weight:600}
 .mb-sip-geldi{color:var(--success-text, var(--success));border-color:var(--success)}
+/* Final Kalite Kontrol (06.10.2026) */
+.kal-sonuclar{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.kal-sonuc{min-height:56px;border-radius:var(--r-lg);border:1.5px solid var(--border);background:var(--panel-alt);color:var(--text);font-size:15px;font-weight:700;cursor:pointer}
+.kal-sonuc.on{border-color:var(--kc);background:color-mix(in srgb, var(--kc) 18%, transparent);color:var(--kc)}
+.kal-adetler{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kal-not{font-size:12px;color:var(--text-muted);margin:4px 2px 10px}
+.kal-rozet{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:9px;white-space:nowrap}
+.kal-rozet.onay{color:var(--success);background:color-mix(in srgb, var(--success) 15%, transparent)}
+.kal-rozet.sartli{color:var(--warn-text);background:color-mix(in srgb, var(--warn) 18%, transparent)}
+.kal-rozet.red{color:var(--danger-text);background:color-mix(in srgb, var(--danger) 15%, transparent)}

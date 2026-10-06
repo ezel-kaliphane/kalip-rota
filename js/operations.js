@@ -265,6 +265,7 @@ function baslat(){
 // hangi makinede/konumda beklediğini görüp makine bazlı iş yoğunluğunu çıkarabilmek.
 function bitir(id){
   const e = STATE.entries[id] || {};
+  if(kaliteMakinesiMi(e.makine)){ kaliteModalAc(id, null); return; } // Final Kalite Kontrol: önce sonuç
   if(!e.sonOperasyon){
     nextOpPendingId = id;
     nextOpPendingGroupId = null;
@@ -289,6 +290,15 @@ function finishEntry(id, sonrakiMakine, forceSonOperasyon){
   const excludedLog = isVerimDisi ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
   const updates = { endTs: Date.now(), status:'tamamlandi', duruşToplamMs, excludedMs, durusLog, excludedLog, finishedByUsername: session.username, finishedByName: session.displayName, sonrakiMakine: sonrakiMakine || null };
   if(forceSonOperasyon) updates.sonOperasyon = true;
+  /* Final Kalite Kontrol sonucu (kaliteOnayla): onay/şartlı rotayı kapatır; red rotayı açık
+     bırakır, iş emri seçilen düzeltme makinesinde bekler. */
+  const kb = kaliteBekleyen[id];
+  if(kb){
+    updates.kalite = kb;
+    if(kb.sonuc==='red'){ updates.sonOperasyon = false; }
+    else { updates.sonOperasyon = true; updates.sonrakiMakine = null; }
+    delete kaliteBekleyen[id];
+  }
   DB.ref('entries/'+id).update(updates);
   toast('Operasyon tamamlandı');
   if(activeDetailId===id){ activeDetailId=null; view='list'; }
@@ -447,6 +457,9 @@ function updateNextOpStartBtn(){
   if(btn) btn.disabled = !nextOpMachineSel;
 }
 function closeNextOpModal(){
+  /* Kalite reddinden gelindiyse sonuç da iptal — kayıt hiç bitirilmedi. */
+  if(nextOpPendingId) delete kaliteBekleyen[nextOpPendingId];
+  if(nextOpPendingGroupId) delete kaliteBekleyen['g:'+nextOpPendingGroupId];
   nextOpPendingId = null; nextOpPendingGroupId = null; nextOpMachineSel = '';
   render();
 }
@@ -605,6 +618,7 @@ function devamGrup(groupId){
 function bitirGrup(groupId){
   const members = groupMembersOf(groupId);
   if(members.length===0) return;
+  if(members.some(e=>kaliteMakinesiMi(e.makine))){ kaliteModalAc(null, groupId); return; }
   if(members.some(e=>!e.sonOperasyon)){
     nextOpPendingGroupId = groupId;
     nextOpPendingId = null;
@@ -656,8 +670,16 @@ function finishGrup(groupId, sonrakiMakine, sonrakiMakineKodu){
       sonrakiMakine: x.e.sonOperasyon ? null : (sonrakiMakine || null)
     };
     if(forceSonOperasyon) updates.sonOperasyon = true;
+    const kbg = kaliteBekleyen['g:'+groupId];
+    if(kbg){
+      const adet = Number(x.e.adet)||0;
+      updates.kalite = { ...kbg, kontrolAdet: adet, sorunluAdet: kbg.sonuc==='onay' ? 0 : adet };
+      if(kbg.sonuc==='red'){ updates.sonOperasyon = false; updates.sonrakiMakine = sonrakiMakine || null; }
+      else { updates.sonOperasyon = true; updates.sonrakiMakine = null; }
+    }
     DB.ref('entries/'+x.e.id).update(updates);
   });
+  delete kaliteBekleyen['g:'+groupId];
   toast('Tüm iş emirleri tamamlandı');
   activeGroupId = null; view='list'; render();
 }
@@ -748,4 +770,88 @@ function toggleUserPerm(code, field){
   const op = STATE.operators[code]; if(!op) return;
   const newVal = field==='permReportEdit' ? (op.permReportEdit===false) : !op[field];
   DB.ref('operators/'+code+'/'+field).set(newVal);
+}
+/* ===================== FİNAL KALİTE KONTROL SONUCU (06.10.2026, kullanıcı isteği) =====================
+   "Final kalite kontrol operasyonunda onay / şartlı kabul / red durumunu ve nedenini kaydetmek ve
+   görmek istiyoruz." Kararlar: red verilen iş emri DÜZELTMEYE gider (rota açık kalır, kaliteci
+   düzeltme makinesini seçer); kısmi red — kontrol edilen ve sorunlu adet ayrı; neden hazır listeden
+   (Ayarlar → Kalite Red Nedenleri, settings/kaliteNedenleri) + açıklama.
+   FKK'da "Bitir"e basınca bu pencere açılır. Sonuç kaydın kendisine yazılır:
+     entries/{id}/kalite = { sonuc:'onay'|'sartli'|'red', kontrolAdet, sorunluAdet, neden, aciklama,
+                             ts, username, name }
+   (entries kuralı ek alanlara açık — kural değişikliği yok). Onay ve şartlı kabul rotayı kapatır
+   (sonOperasyon), red kapatmaz ve "Sıradaki Operasyon" penceresi düzeltme makinesi için açılır. */
+const KALITE_MAKINE_KODU = 'FKK';
+const KALITE_NEDENLERI_VARSAYILAN = ['Ölçü dışı','Yüzey hatası / çizik','Sertlik uygun değil','Çapak / kenar hatası','Form / geometri hatası','Diş / vida hatası','Teknik resme uygunsuz','Malzeme hatası','Montaj / geçme sorunu'];
+const KALITE_SONUC_AD = { onay:'Onay', sartli:'Şartlı kabul', red:'Red' };
+let kaliteModal = null;      // { id, groupId, sonuc, kontrolAdet, sorunluAdet, neden, aciklama }
+let kaliteBekleyen = {};     // id | 'g:'+groupId -> kalite nesnesi (red: düzeltme makinesi seçilene kadar)
+function kaliteMakinesiMi(makine){ return String(makine||'').split(' · ')[0].trim().toUpperCase()===KALITE_MAKINE_KODU; }
+function kaliteNedenleri(){
+  const l = (typeof appSettings!=='undefined' && appSettings && Array.isArray(appSettings.kaliteNedenleri)) ? appSettings.kaliteNedenleri.filter(Boolean) : [];
+  return l.length ? l : KALITE_NEDENLERI_VARSAYILAN;
+}
+function kaliteModalAc(id, groupId){
+  const adet = id ? (Number((STATE.entries[id]||{}).adet)||0) : groupMembersOf(groupId).reduce((s,e)=>s+(Number(e.adet)||0),0);
+  kaliteModal = { id, groupId, sonuc:'', kontrolAdet: adet ? String(adet) : '', sorunluAdet:'', neden:'', aciklama:'' };
+  render();
+}
+function kaliteModalKapat(){ kaliteModal = null; render(); }
+function kaliteSec(alan, deger){
+  if(!kaliteModal) return;
+  kaliteModal[alan] = deger;
+  if(alan==='sonuc' && deger!=='onay' && !kaliteModal.sorunluAdet) kaliteModal.sorunluAdet = kaliteModal.kontrolAdet;
+  render();
+}
+function kaliteOnayla(){
+  const m = kaliteModal; if(!m) return;
+  if(!m.sonuc){ toast('Sonucu seçin: Onay, Şartlı kabul ya da Red'); return; }
+  const kontrol = Math.round(Number(m.kontrolAdet)||0), sorunlu = Math.round(Number(m.sorunluAdet)||0);
+  if(!m.groupId){
+    if(!(kontrol>0)){ toast('Kontrol edilen adedi girin'); return; }
+    if(m.sonuc!=='onay' && !(sorunlu>0 && sorunlu<=kontrol)){ toast(`${KALITE_SONUC_AD[m.sonuc]} adedi 1 ile ${kontrol} arasında olmalı`); return; }
+  }
+  if(m.sonuc!=='onay'){
+    if(!m.neden){ toast('Nedeni seçin'); return; }
+    if(m.neden==='Diğer' && !String(m.aciklama||'').trim()){ toast('"Diğer" için açıklama yazın'); return; }
+  }
+  const k = { sonuc: m.sonuc, kontrolAdet: kontrol, sorunluAdet: m.sonuc==='onay' ? 0 : sorunlu,
+    neden: m.sonuc==='onay' ? null : m.neden, aciklama: String(m.aciklama||'').trim() || null,
+    ts: Date.now(), username: session.username, name: session.displayName||session.username };
+  const anahtar = m.groupId ? 'g:'+m.groupId : m.id;
+  kaliteBekleyen[anahtar] = k;
+  kaliteModal = null;
+  if(m.sonuc==='red'){
+    /* Rota açık kalır: düzeltme için hangi makineye gidiyor? */
+    nextOpPendingId = m.groupId ? null : m.id; nextOpPendingGroupId = m.groupId || null; nextOpMachineSel = '';
+    render(); return;
+  }
+  if(m.groupId) finishGrup(m.groupId, null, null); else finishEntry(m.id, null, true);
+  toast(m.sonuc==='onay' ? 'Kalite: Onay — rota kapandı' : 'Kalite: Şartlı kabul — rota kapandı');
+  render();
+}
+/* Ayarlar → Kalite Red Nedenleri (SuperAdmin). settings canlı dinleniyor. */
+function kaliteNedeniEkle(){
+  if(!session || !session.isSuperAdmin) return;
+  const el = document.getElementById('kalite-neden-yeni'); const v = String(el && el.value || '').trim();
+  if(!v){ toast('Bir neden yazın'); return; }
+  const l = kaliteNedenleri(); if(l.includes(v)){ toast('Bu neden zaten listede'); return; }
+  DB.ref('settings/kaliteNedenleri').set([...l, v]).then(()=>toast('Eklendi'));
+}
+function kaliteNedeniDuzenle(i){
+  if(!session || !session.isSuperAdmin) return;
+  const el = document.getElementById('kalite-neden-'+i); const v = String(el && el.value || '').trim();
+  if(!v){ toast('Boş olamaz'); return; }
+  const l = [...kaliteNedenleri()]; l[i] = v; DB.ref('settings/kaliteNedenleri').set(l).then(()=>toast('Kaydedildi'));
+}
+function kaliteNedeniSil(i){
+  if(!session || !session.isSuperAdmin) return;
+  const l = kaliteNedenleri(); if(!confirm(`"${l[i]}" silinsin mi?`)) return;
+  DB.ref('settings/kaliteNedenleri').set(l.filter((_,j)=>j!==i)).then(()=>toast('Silindi'));
+}
+/* Bir kaydın kalite rozeti (geçmiş pencereleri, Analiz). */
+function kaliteRozet(e){
+  const k = e && e.kalite; if(!k || !k.sonuc) return '';
+  const adet = k.sonuc!=='onay' && k.kontrolAdet ? ` ${k.sorunluAdet}/${k.kontrolAdet}` : '';
+  return `<span class="kal-rozet ${esc(k.sonuc)}" title="${esc([KALITE_SONUC_AD[k.sonuc], k.neden, k.aciklama].filter(Boolean).join(' · '))}">${esc(KALITE_SONUC_AD[k.sonuc]||k.sonuc)}${adet}</span>`;
 }
