@@ -17,7 +17,10 @@
    VERİ (kural değişikliği yok — entries/$id ek alanlara açık):
      entries/{id}/kalite = { surum:2, kontrolNo, kontrolAdet,
        dagilim:{ onay, sartli, red, revizyon, kstok, yariMamul, hurda, bekliyor },
-       sartliNeden, redNeden, aciklama, geriMakine, kullanimNotu, ts, username, name,
+       sartliNeden, sartliAciklama, sartliHataOp, redNeden, redAciklama, redHataOp,
+       geriMakine, kullanimNotu, ts, username, name,
+       (…HataOp = { entryId, makine, operatorUsername, operatorName } | { belirsiz:true } — hatanın
+        oluştuğu operasyon ve kişi, geçmiş rotadan seçilir; 06.10.2026 kullanıcı isteği)
        kararlar/{k}: { revizyon, kstok, yariMamul, hurda, geriMakine, kullanimNotu, ts, username, name },
        yariMamulCikislar/{k}: { adet, tur:'kullanim'|'hurda', isEmri, aciklama, ts, username, name } }
    Yarı mamul deposu ayrı düğüm DEĞİL: dagilim.yariMamul − çıkışlar = depodaki adet (tek kaynak).
@@ -48,6 +51,19 @@ function kaliteIsAnahtari(e){ return String((e && e.talepNo)||'').trim().toUpper
 function kaliteIsKayitlari(e){ const k = kaliteIsAnahtari(e); return entriesArray().filter(o=>kaliteIsAnahtari(o)===k); }
 /* Kaçıncı kontrol: aynı iş emrinin bu kayıttan önce kalite sonucu almış FKK kayıtları + 1. */
 function kaliteKontrolNo(e){ return 1 + kaliteIsKayitlari(e).filter(o=>o.id!==e.id && o.kalite && (o.startTs||0) < (e.startTs||0)).length; }
+/* Hata alanı seçimi için geçmiş rota ADIMLARI (her kayıt bir adım: makine + operatör + tarih). */
+function kaliteGecmisAdimlar(e){
+  return kaliteIsKayitlari(e).filter(o=>o.id!==e.id && !kaliteMakinesiMi(o.makine) && o.makine && (o.startTs||0) <= (e.startTs||Date.now()))
+    .sort((a,b)=>(a.startTs||0)-(b.startTs||0));
+}
+const KALITE_HATA_BELIRSIZ = '__belirsiz__';
+function kaliteHataOp(secim){
+  if(!secim) return null;
+  if(secim===KALITE_HATA_BELIRSIZ) return { belirsiz:true };
+  const o = STATE.entries[secim]; if(!o) return null;
+  return { entryId: secim, makine: o.makine||'', operatorUsername: o.operatorUsername||'', operatorName: o.operatorName||o.operatorUsername||'' };
+}
+function kaliteHataMetni(h){ if(!h) return ''; if(h.belirsiz) return 'belli değil'; return `${String(h.makine||'').split(' · ')[0]} · ${h.operatorName||h.operatorUsername||''}`; }
 /* Geçmiş rota: iş emrinin geçtiği makineler (FKK hariç), ilk geçiş sırasıyla. */
 function kaliteGecmisRota(e){
   const gor = new Set(), l = [];
@@ -67,7 +83,12 @@ function kaliteRozet(e){
   const k = e && e.kalite; if(!k) return '';
   const d = kaliteDagilim(k), sinif = d.red ? 'red' : d.sartli ? 'sartli' : 'onay';
   const metin = d.red ? `Red ${d.red}/${k.kontrolAdet||'?'}` : d.sartli ? `Şartlı ${d.sartli}/${k.kontrolAdet||'?'}` : 'Onay';
-  return `<span class="kal-rozet ${sinif}" title="${esc(kaliteOzetMetni(k) + (k.redNeden?' · red: '+k.redNeden:'') + (k.sartliNeden?' · şartlı: '+k.sartliNeden:''))}">${esc(metin)}</span>`;
+  return `<span class="kal-rozet ${sinif}" title="${esc(kaliteOzetMetni(k) + (k.redNeden?' · red: '+k.redNeden:'') + (k.sartliNeden?' · şartlı: '+k.sartliNeden:'') + (k.redHataOp?' · hata: '+kaliteHataMetni(k.redHataOp):''))}">${esc(metin)}</span>`;
+}
+/* Kayıttaki açıklamaların tek satırı (eski tek "aciklama" alanı da okunur). */
+function kaliteAciklamaMetni(k){
+  if(!k) return '';
+  return [k.sartliAciklama ? 'şartlı: '+k.sartliAciklama : '', k.redAciklama ? 'red: '+k.redAciklama : '', k.aciklama||''].filter(Boolean).join(' · ');
 }
 
 /* ---------- FKK "Bitir" ---------- */
@@ -75,7 +96,8 @@ function kaliteModalAc(id, groupId){
   if(groupId){ kaliteModal = { groupId, grupSonuc:'', neden:'', aciklama:'' }; render(); return; }
   const e = STATE.entries[id] || {}, adet = kaliteSayi(e.adet);
   kaliteModal = { id, kontrol: adet ? String(adet) : '', onay: adet ? String(adet) : '', sartli:'', red:'',
-    sartliNeden:'', redNeden:'', aciklama:'', revizyon:'', kstok:'', yariMamul:'', hurda:'', bekliyor:'',
+    sartliNeden:'', sartliAciklama:'', sartliHata:'', redNeden:'', redAciklama:'', redHata:'',
+    revizyon:'', kstok:'', yariMamul:'', hurda:'', bekliyor:'',
     geriMakine:'', kullanimNotu:'', kontrolNo: kaliteKontrolNo({ ...e, id }) };
   render();
 }
@@ -107,7 +129,7 @@ function kaliteOnayla(){
   if(m.groupId){
     if(!m.grupSonuc){ toast('Sonucu seçin'); return; }
     if(m.grupSonuc!=='onay' && !m.neden){ toast('Nedeni seçin'); return; }
-    if(m.neden==='Diğer' && !String(m.aciklama||'').trim()){ toast('"Diğer" için açıklama yazın'); return; }
+    if(m.grupSonuc==='sartli' && !String(m.aciklama||'').trim()){ toast('Şartlı kabul için açıklama yazın'); return; }
     kaliteBekleyen['g:'+m.groupId] = { grup:true, tur: m.grupSonuc, neden: m.grupSonuc==='onay' ? null : m.neden, aciklama: String(m.aciklama||'').trim()||null, ts, ...kim };
     const gid = m.groupId; kaliteModal = null;
     finishGrup(gid, null, null);
@@ -116,16 +138,18 @@ function kaliteOnayla(){
   const K = kaliteSayi(m.kontrol), O = kaliteSayi(m.onay), S = kaliteSayi(m.sartli), R = kaliteSayi(m.red);
   if(!(K>0)){ toast('Kontrol edilen adedi girin'); return; }
   if(O+S+R!==K){ toast(`Onay + Şartlı + Red = ${O+S+R}, kontrol edilen ${K} olmalı`); return; }
-  if(S>0 && !m.sartliNeden){ toast('Şartlı kabul nedenini seçin'); return; }
-  if(R>0 && !m.redNeden){ toast('Red nedenini seçin'); return; }
-  if((m.sartliNeden==='Diğer' || m.redNeden==='Diğer') && !String(m.aciklama||'').trim()){ toast('"Diğer" için açıklama yazın'); return; }
+  if(S>0 && !String(m.sartliNeden||'').trim()){ toast('Şartlı kabul nedenini seçin ya da yazın'); return; }
+  if(S>0 && !String(m.sartliAciklama||'').trim()){ toast('Şartlı kabul için açıklama / not yazın'); return; }
+  if(S>0 && !m.sartliHata){ toast('Şartlı kabul: hatanın oluştuğu operasyonu seçin (bilinmiyorsa "Belli değil")'); return; }
+  if(R>0 && !String(m.redNeden||'').trim()){ toast('Red nedenini seçin ya da yazın'); return; }
+  if(R>0 && !m.redHata){ toast('Red: hatanın oluştuğu operasyonu seçin (bilinmiyorsa "Belli değil")'); return; }
   const rv = kaliteSayi(m.revizyon), ks = kaliteSayi(m.kstok), ym = kaliteSayi(m.yariMamul), hu = kaliteSayi(m.hurda), bk = kaliteSayi(m.bekliyor);
   if(R>0 && rv+ks+ym+hu+bk!==R){ toast(`Red parçaların dağılımı ${rv+ks+ym+hu+bk}, red ${R} olmalı`); return; }
   if(rv>0 && !m.geriMakine){ toast('Revizyon için geri gideceği operasyonu seçin'); return; }
   const kalite = { surum:2, kontrolNo: m.kontrolNo||1, kontrolAdet:K,
     dagilim:{ onay:O, sartli:S, red:R, revizyon: R?rv:0, kstok: R?ks:0, yariMamul: R?ym:0, hurda: R?hu:0, bekliyor: R?bk:0 },
-    sartliNeden: S ? m.sartliNeden : null, redNeden: R ? m.redNeden : null,
-    aciklama: String(m.aciklama||'').trim() || null,
+    sartliNeden: S ? String(m.sartliNeden).trim() : null, sartliAciklama: S ? String(m.sartliAciklama).trim() : null, sartliHataOp: S ? kaliteHataOp(m.sartliHata) : null,
+    redNeden: R ? String(m.redNeden).trim() : null, redAciklama: R ? (String(m.redAciklama||'').trim() || null) : null, redHataOp: R ? kaliteHataOp(m.redHata) : null,
     geriMakine: R && rv ? m.geriMakine : null,
     kullanimNotu: R && ym ? (String(m.kullanimNotu||'').trim() || null) : null, ymGirisTs: R && ym ? ts : null, ts, ...kim };
   const kapat = !(R && (rv>0 || bk>0));

@@ -1102,8 +1102,15 @@ function analizKaliteHtml(){
   const nedenG = {}; sorunlu.forEach(e=>{ const k=e.kalite, d=kaliteDagilim(k);
     [[k.redNeden, d.red],[k.sartliNeden, d.sartli]].forEach(([n,v])=>{ if(!v) return; const x = nedenG[n||'—'] || (nedenG[n||'—'] = { ad:n||'—', v:0, n:0 }); x.v += v; x.n += 1; }); });
   const neden = Object.values(nedenG).sort((p,q)=>q.v-p.v);
-  const kaynak = fn => { const g = {}; liste.forEach(e=>{ const d = kaliteDagilim(e.kalite); if(!d.red) return; const p = kaliteOncekiOp(e); const k = p ? fn(p) : 'bilinmiyor'; const x = g[k] || (g[k] = { ad:k, v:0, n:0 }); x.v += d.red; x.n += 1; }); return Object.values(g).sort((p,q)=>q.v-p.v); };
-  const kaynakMakine = kaynak(p=>String(p.makine||'').split(' · ')[0]), kaynakKisi = kaynak(p=>p.operatorName||p.operatorUsername);
+  /* Hatanın oluştuğu operasyon: kaliteci geçmiş rotadan seçiyor (redHataOp / sartliHataOp). Seçim
+     yoksa (eski kayıt) FKK'dan önceki son operasyon varsayılır. Red + şartlı parçalar sayılır. */
+  const hataKaynaklari = e => { const k = e.kalite, d = kaliteDagilim(k), l = [];
+    const ekleH = (h, v) => { if(!v) return; if(h && h.belirsiz) l.push({ makine:'belli değil', kisi:'belli değil', v });
+      else if(h && h.makine) l.push({ makine: String(h.makine).split(' · ')[0], kisi: h.operatorName||h.operatorUsername||'—', v });
+      else { const p = kaliteOncekiOp(e); l.push({ makine: p ? String(p.makine||'').split(' · ')[0] : 'bilinmiyor', kisi: p ? (p.operatorName||p.operatorUsername) : 'bilinmiyor', v }); } };
+    ekleH(k.redHataOp, d.red); ekleH(k.sartliHataOp, d.sartli); return l; };
+  const kaynak = alan => { const g = {}; liste.forEach(e=>hataKaynaklari(e).forEach(h=>{ const x = g[h[alan]] || (g[h[alan]] = { ad:h[alan], v:0, n:0 }); x.v += h.v; x.n += 1; })); return Object.values(g).sort((p,q)=>q.v-p.v); };
+  const kaynakMakine = kaynak('makine'), kaynakKisi = kaynak('kisi');
   const nereye = [['Revizyon','revizyon','var(--accent)'],['K-stok','kstok','var(--warn)'],['Yarı mamul deposu','yariMamul','var(--tadilat-info)'],['Hurda','hurda','var(--danger)'],['Karar bekliyor','bekliyor','var(--text-subtle)']]
     .map(([ad,k,renk])=>({ ad, v: oz[k], renk })).filter(x=>x.v>0);
   const cumleler = [
@@ -1111,7 +1118,7 @@ function analizKaliteHtml(){
     oz.red ? `Red parçalar: ${nereye.map(x=>`${x.ad==='K-stok'?x.ad:x.ad.toLocaleLowerCase('tr-TR')} ${rtFmt(x.v)}`).join(', ')}.` : 'Bu dönemde red verilen parça yok.',
     oz.ilkKabulOran!=null ? `İlk kontrolde kabul oranı <b>${agYuzde(oz.ilkKabulOran)}</b>.` : '',
     neden[0] ? `En sık neden <b>${esc(neden[0].ad)}</b> (${rtFmt(neden[0].v)} parça).` : '',
-    kaynakMakine[0] && kaynakMakine[0].ad!=='bilinmiyor' ? `Red parçalar en çok <b>${esc(kaynakMakine[0].ad)}</b> makinesinden gelmiş (${rtFmt(kaynakMakine[0].v)} parça).` : '',
+    kaynakMakine[0] && !['bilinmiyor','belli değil'].includes(kaynakMakine[0].ad) ? `Hataların en çok oluştuğu operasyon <b>${esc(kaynakMakine[0].ad)}</b> (${rtFmt(kaynakMakine[0].v)} parça)${kaynakKisi[0] && !['bilinmiyor','belli değil'].includes(kaynakKisi[0].ad) ? `; en çok <b>${esc(kaynakKisi[0].ad)}</b> (${rtFmt(kaynakKisi[0].v)} parça)` : ''}.` : '',
   ];
   const satirlar = sorunlu.slice().sort((p,q)=>(q.endTs||0)-(p.endTs||0)).slice(0, 60);
   return `${bas}
@@ -1124,11 +1131,11 @@ function analizKaliteHtml(){
   <div class="rt-izgara">
     <div class="rt-kutu"><div class="rt-kutu-bas"><h4>Red parçalar nereye</h4><span>parça</span></div>${kaliteCubuklar(nereye, 'var(--danger)')}</div>
     <div class="rt-kutu"><div class="rt-kutu-bas"><h4>Neden</h4><span>red + şartlı · parça</span></div>${kaliteCubuklar(neden, 'var(--danger)')}</div>
-    <div class="rt-kutu"><div class="rt-kutu-bas"><h4>Red geldiği makine</h4><span>FKK'dan önceki son operasyon</span></div>${kaliteCubuklar(kaynakMakine, 'var(--warn)')}</div>
-    <div class="rt-kutu"><div class="rt-kutu-bas"><h4>Red geldiği operatör</h4><span>FKK'dan önceki son operasyon</span></div>${kaliteCubuklar(kaynakKisi, 'var(--warn)')}</div>
+    <div class="rt-kutu"><div class="rt-kutu-bas"><h4>Hatanın oluştuğu operasyon</h4><span>red + şartlı · parça</span></div>${kaliteCubuklar(kaynakMakine, 'var(--warn)')}</div>
+    <div class="rt-kutu"><div class="rt-kutu-bas"><h4>Hatayı yapan operatör</h4><span>red + şartlı · parça</span></div>${kaliteCubuklar(kaynakKisi, 'var(--warn)')}</div>
   </div>
   ${sorunlu.length ? `<div class="rt-kutu rt-liste"><div class="rt-liste-bas"><div><h4>Red ve şartlı kabuller</h4><span>${rtFmt(sorunlu.length)} kayıt${sorunlu.length>satirlar.length?` · son ${satirlar.length}`:''}</span></div></div>
-    <div class="table-wrap"><table class="rt-tablo rt-tablo-liste"><thead><tr><th>Tarih</th><th>İş emri</th><th>Mamul</th><th>Sonuç</th><th>Dağılım</th><th>Neden</th><th class="rt-dar-gizle">Açıklama</th><th>Geldiği yer</th></tr></thead><tbody>
+    <div class="table-wrap"><table class="rt-tablo rt-tablo-liste"><thead><tr><th>Tarih</th><th>İş emri</th><th>Mamul</th><th>Sonuç</th><th>Dağılım</th><th>Neden</th><th class="rt-dar-gizle">Açıklama</th><th>Hata</th></tr></thead><tbody>
     ${satirlar.map(e=>{ const k=e.kalite, p=kaliteOncekiOp(e); return `<tr class="rt-tablo-sabit">
       <td class="mono" style="white-space:nowrap">${fmtDT(e.endTs)}${(k.kontrolNo||1)>1?`<div class="rt-silik">${k.kontrolNo}. kontrol</div>`:''}</td>
       <td><div class="mono">${esc(e.talepNo||'—')}</div><div class="mono rt-silik">${esc(usTabanKod(e.isEmriNo))}</div></td>
@@ -1136,8 +1143,8 @@ function analizKaliteHtml(){
       <td>${kaliteRozet(e)}</td>
       <td style="font-size:12px">${esc(kaliteOzetMetni(k))}${k.geriMakine?`<div class="rt-silik">revizyon → ${esc(String(k.geriMakine).split(' · ')[0])}</div>`:''}</td>
       <td style="font-size:12px">${esc([k.redNeden, k.sartliNeden && k.sartliNeden!==k.redNeden ? k.sartliNeden : null].filter(Boolean).join(' / ')||'—')}</td>
-      <td class="rt-dar-gizle rt-kes" style="max-width:200px" title="${esc(k.aciklama||'')}">${esc(k.aciklama||'—')}</td>
-      <td>${p ? `<span class="mono">${esc(String(p.makine||'').split(' · ')[0])}</span> <span class="rt-silik">${esc(p.operatorName||p.operatorUsername||'')}</span>` : '<span class="rt-silik">—</span>'}</td>
+      <td class="rt-dar-gizle rt-kes" style="max-width:200px" title="${esc(kaliteAciklamaMetni(k))}">${esc(kaliteAciklamaMetni(k)||'—')}</td>
+      <td>${(k.redHataOp||k.sartliHataOp) ? [k.redHataOp, k.sartliHataOp].filter(Boolean).map(h=>esc(kaliteHataMetni(h))).join('<br>') : p ? `<span class="mono">${esc(String(p.makine||'').split(' · ')[0])}</span> <span class="rt-silik">${esc(p.operatorName||p.operatorUsername||'')} (önceki op.)</span>` : '<span class="rt-silik">—</span>'}</td>
     </tr>`; }).join('')}
     </tbody></table></div></div>` : ''}`;
 }
