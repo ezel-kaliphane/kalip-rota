@@ -3733,11 +3733,14 @@ function renderAdmin(){
   } else if(view==='completed'){
     const birlesmeGroups = computeBirlesmeGroups();
     body = `<div class="completed-wrap">
-      ${birlesmeGroups.length>0 ? `<div style="display:flex;gap:8px;margin-bottom:14px">
+      <div style="display:flex;gap:8px;margin-bottom:14px">
         <button class="tab-btn ${completedViewMode==='tumu'?'active':''}" style="flex:1" onclick="setCompletedViewMode('tumu')">Tüm Rotalar</button>
-        <button class="tab-btn ${completedViewMode==='birlesik'?'active':''}" style="flex:1" onclick="setCompletedViewMode('birlesik')">🔗 Çelik + Karbür Birleşimi</button>
-      </div>` : ''}`;
-    if(completedViewMode==='birlesik' && birlesmeGroups.length>0){
+        <button class="tab-btn ${completedViewMode==='bom'?'active':''}" style="flex:1" onclick="setCompletedViewMode('bom')">BOM + Rota</button>
+        ${birlesmeGroups.length>0 ? `<button class="tab-btn ${completedViewMode==='birlesik'?'active':''}" style="flex:1" onclick="setCompletedViewMode('birlesik')">🔗 Çelik + Karbür Birleşimi</button>` : ''}
+      </div>`;
+    if(completedViewMode==='bom'){
+      body += renderTamamlananBomRota() + (routeModal ? renderRouteModal() : '');
+    } else if(completedViewMode==='birlesik' && birlesmeGroups.length>0){
       body += `<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px">${birlesmeGroups.length} eşleşme · _ZARF (Çelik) ve _ELMAS (Karbür) aynı İş Emri No altında eşleştirilip shrink-fit birleşme anı gösterilir.</div>`;
       birlesmeGroups.forEach(g=>{
         const branch = (route, running, label) => {

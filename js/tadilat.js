@@ -753,7 +753,7 @@ function raporSayfaGit(n){
   requestAnimationFrame(()=>{ const t=document.querySelector('.rapor-tablo-bas'); if(t) t.scrollIntoView({block:'start'}); });
 }
 let completedSearch = '';
-let completedViewMode = 'tumu'; // 'tumu' | 'birlesik'
+let completedViewMode = 'tumu'; // 'tumu' | 'bom' | 'birlesik'
 function setCompletedViewMode(v){ completedViewMode = v; render(); }
 let analizFrom = dateKey(Date.now());
 let analizTo = analizFrom;

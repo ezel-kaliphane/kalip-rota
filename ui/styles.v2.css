@@ -1532,3 +1532,28 @@ button.mb-istek-no{border-color:var(--warn-border)}
   .kal-hata-adim{min-height:50px;padding:5px 9px}
   .kal-karar-btn{min-height:44px;padding:6px 10px}
 }
+/* Tamamlanan Kodlar → BOM + Rota (06.10.2026) */
+.bom-kpi-sira{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:10px}
+.bom-kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:left;cursor:pointer;color:var(--text);font:inherit}
+.bom-kpi.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.bom-kpi-deger{font-size:22px;font-weight:700;line-height:1.1}
+.bom-kpi-etiket{font-size:12px;color:var(--text-muted);margin-top:2px}
+.bom-kpi-alt{font-size:11px;color:var(--text-muted)}
+.bom-kaynak-not{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:11.5px;color:var(--text-muted);margin-bottom:12px}
+.bom-kaynak-not i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.bom-kart.bom-eksik{border-left-color:var(--warn)}
+.bom-govde{margin-top:8px;display:grid;gap:4px}
+.bom-satir{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;font-size:12.5px;align-items:baseline}
+.bom-et{color:var(--text-muted)}
+.bom-deger{min-width:0;overflow-wrap:anywhere}
+.bom-ikincil{color:var(--text-muted)}
+.bom-yok{color:var(--warn)}
+.bom-bilesen{font-size:11px;font-weight:600;color:var(--accent)}
+.bom-kaynak{font-size:10.5px;border:1px solid;border-radius:999px;padding:0 7px;margin-left:4px;white-space:nowrap}
+.bom-rota{display:inline-flex;gap:5px}
+.bom-rota .route-chip{padding:2px 7px;font-size:11.5px}
+.bom-rota .route-chip.bom-bitti{background:var(--success);border-color:var(--success);color:#fff}
+@media (max-width:720px){
+  .bom-kpi-sira{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .bom-satir{grid-template-columns:1fr;gap:0}
+}
