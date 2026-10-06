@@ -1514,3 +1514,10 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .kal-karar-btn small{font-size:11px;color:var(--text-muted)}
 .kal-karar-btn.on{border-color:var(--accent);background:var(--accent-dim)}
 .kal-karar-btn.on b{color:var(--accent)}
+/* Kalite pencereleri: kutular satırı doldursun (06.10.2026 geri bildirim) */
+.kal-hata{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:6px}
+.kal-hata-adim{width:100%;min-height:58px;justify-content:center}
+.kal-hata-adim.belirsiz{align-items:center}
+.kal-textarea{display:block;width:100%;box-sizing:border-box;min-height:78px;resize:vertical;margin:0;line-height:1.45;padding:10px 12px}
+.modal-box .kal-satir .kal-sayi,.durus-modal-list .kal-satir .kal-sayi{width:110px}
+.modal-box input[list],.durus-modal-list input[list]{width:100%;box-sizing:border-box}

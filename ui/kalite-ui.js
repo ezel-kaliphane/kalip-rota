@@ -59,13 +59,13 @@ function renderKaliteModal(){
 
         ${S ? `<div class="kal-blok sartli"><div class="kal-blok-bas">Şartlı kabul nedeni <small>→ K-stok teslim</small></div>${kaliteNedenSecici('sartliNeden', m.sartliNeden, 'kaliteYaz')}
           <div class="kal-blok-bas" style="margin-top:10px">Açıklama ve notlar <small>zorunlu</small></div>
-          <textarea rows="2" placeholder="ör. Ø12 h7 ölçüsü 12,02 — montajda sorun çıkarmaz, müşteri onayıyla kullanılacak" oninput="kaliteModal.sartliAciklama=this.value">${esc(m.sartliAciklama)}</textarea>
+          <textarea class="kal-textarea" rows="3" placeholder="ör. Ø12 h7 ölçüsü 12,02 — montajda sorun çıkarmaz, müşteri onayıyla kullanılacak" oninput="kaliteModal.sartliAciklama=this.value">${esc(m.sartliAciklama)}</textarea>
           <div class="kal-blok-bas" style="margin-top:10px">Hatanın oluştuğu operasyon <small>geçmiş rota</small></div>${kaliteHataSecici(adimlar, m.sartliHata, 'sartliHata')}</div>` : ''}
 
         ${R ? `<div class="kal-blok red">
           <div class="kal-blok-bas">Red nedeni</div>${kaliteNedenSecici('redNeden', m.redNeden, 'kaliteYaz')}
           <div class="kal-blok-bas" style="margin-top:10px">Açıklama <small>isteğe bağlı</small></div>
-          <textarea rows="2" placeholder="ör. delik Ø6,6 olması gerekirken Ø6,9 işlenmiş" oninput="kaliteModal.redAciklama=this.value">${esc(m.redAciklama)}</textarea>
+          <textarea class="kal-textarea" rows="3" placeholder="ör. delik Ø6,6 olması gerekirken Ø6,9 işlenmiş" oninput="kaliteModal.redAciklama=this.value">${esc(m.redAciklama)}</textarea>
           <div class="kal-blok-bas" style="margin-top:10px">Hatanın oluştuğu operasyon <small>geçmiş rota</small></div>${kaliteHataSecici(adimlar, m.redHata, 'redHata')}
           <div class="kal-blok-bas" style="margin-top:12px">Red ${R} parça ne olacak? <small>dağıtılan ${kararTop} / ${R}</small></div>
           ${KALITE_RED_KARAR.map(([k,ad,ipucu])=>`<div class="kal-karar">
@@ -97,7 +97,7 @@ function renderKaliteGrupModal(){
         <div class="kal-sonuclar">${btn('onay','Onay','var(--success)')}${btn('sartli','Şartlı kabul','var(--warn)')}${btn('red','Red','var(--danger)')}</div>
         ${m.grupSonuc==='red' ? `<div class="kal-not">Grupta red parçalar "karar sonra" olarak kaydedilir; Şef / SuperAdmin İş Yoğunluğu'ndan her iş emri için ayrı karar verir. Parça parça dağılım gerekiyorsa iş emirlerini tek tek bitir.</div>` : ''}
         ${m.grupSonuc && m.grupSonuc!=='onay' ? `<div class="kal-blok"><div class="kal-blok-bas">Neden</div>${kaliteNedenSecici('neden', m.neden, 'kaliteYaz')}</div>
-          <div class="field" style="margin-top:10px"><label>Açıklama${m.grupSonuc==='sartli'?' (zorunlu)':' (isteğe bağlı)'}</label><textarea rows="2" oninput="kaliteModal.aciklama=this.value">${esc(m.aciklama)}</textarea></div>` : ''}
+          <div class="field" style="margin-top:10px"><label>Açıklama${m.grupSonuc==='sartli'?' (zorunlu)':' (isteğe bağlı)'}</label><textarea class="kal-textarea" rows="3" oninput="kaliteModal.aciklama=this.value">${esc(m.aciklama)}</textarea></div>` : ''}
       </div>
       <div class="durus-modal-footer"><button class="durus-modal-footer-btn" ${m.grupSonuc?'':'disabled'} onclick="kaliteOnayla()">Kaydet ve Bitir</button></div>
     </div>
@@ -213,7 +213,7 @@ function renderUygModal(){
       <input list="uyg-neden" placeholder="Listeden seç ya da yaz" value="${esc(m.neden)}" onchange="uygYaz('neden', this.value.trim())">
       <datalist id="uyg-neden">${kaliteNedenleri().map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist>
       <div class="kal-blok-bas" style="margin-top:10px">Açıklama <small>isteğe bağlı</small></div>
-      <textarea rows="2" placeholder="ör. UST02'de fark edildi, delik 0,2 mm büyük" oninput="uygModal.aciklama=this.value">${esc(m.aciklama)}</textarea>
+      <textarea class="kal-textarea" rows="3" placeholder="ör. UST02'de fark edildi, delik 0,2 mm büyük" oninput="uygModal.aciklama=this.value">${esc(m.aciklama)}</textarea>
       <div class="kal-blok-bas" style="margin-top:10px">Hatanın oluştuğu operasyon <small>geçmiş rota</small></div>
       ${hataSec(m.hata)}
       <div class="kal-blok-bas" style="margin-top:12px">Ne yapıldı?</div>
