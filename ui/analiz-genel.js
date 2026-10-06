@@ -1066,11 +1066,11 @@ function analizAyrimHtml(){
   </div>` : ''}`;
 }
 /* ---------- KALİTE (FİNAL KONTROL) — 06.10.2026 ----------
-   FKK'da iş bitirilirken kaydedilen sonuç (entries/{id}/kalite, bkz. js/operations.js). Dönem
-   FKK kaydının bitişine göre. Red/şartlı parçanın "geldiği yer" = aynı iş emrinin FKK'dan ÖNCEKİ
-   son operasyonu (makine + operatör) — kalite sorununun kaynağını görmek için. Sayılar parça
-   bazında (sorunlu adet), iş emri sayısı ayrıca. */
-function kaliteKayitlari(bas, son){ return entriesArray().filter(e=>e.kalite && e.kalite.sonuc && e.endTs>=bas && e.endTs<son); }
+   FKK'da kaydedilen adet dağılımı (entries/{id}/kalite, bkz. js/kalite.js). Dönem FKK kaydının
+   bitişine göre. Sorunlu parçanın "geldiği yer" = aynı iş emrinin FKK'dan ÖNCEKİ son operasyonu.
+   İlk kontrolde kabul = 1. kontrol kayıtlarında (onay + şartlı) / kontrol edilen — revizyonla dönüp
+   sonradan kabul edilen parça bu orana girmez. */
+function kaliteKayitlari(bas, son){ return entriesArray().filter(e=>e.kalite && e.kalite.dagilim && e.endTs>=bas && e.endTs<son); }
 function kaliteOncekiOp(e){
   const ops = usGruplar()[usTabanKod(e.isEmriNo)] || [];
   const t = String(e.talepNo||'').trim();
@@ -1078,11 +1078,11 @@ function kaliteOncekiOp(e){
     .sort((a,b)=>(b.endTs||0)-(a.endTs||0))[0] || null;
 }
 function kaliteOzet(liste){
-  const o = { isEmri: liste.length, parca:0, onay:0, sartli:0, red:0, sartliParca:0, redParca:0 };
-  liste.forEach(e=>{ const k=e.kalite, kontrol=Number(k.kontrolAdet)||Number(e.adet)||0, s=Number(k.sorunluAdet)||0;
-    o.parca += kontrol; o[k.sonuc] = (o[k.sonuc]||0)+1;
-    if(k.sonuc==='red') o.redParca += s; if(k.sonuc==='sartli') o.sartliParca += s; });
-  o.redOran = o.parca ? o.redParca/o.parca*100 : null;
+  const o = { isEmri: liste.length, kontrol:0, onay:0, sartli:0, red:0, revizyon:0, kstok:0, yariMamul:0, hurda:0, bekliyor:0, ilkKontrol:0, ilkKabul:0 };
+  liste.forEach(e=>{ const k = e.kalite, d = kaliteDagilim(k), K = kaliteSayi(k.kontrolAdet);
+    o.kontrol += K; ['onay','sartli','red','revizyon','kstok','yariMamul','hurda','bekliyor'].forEach(x=>o[x]+=d[x]);
+    if((k.kontrolNo||1)===1){ o.ilkKontrol += K; o.ilkKabul += d.onay + d.sartli; } });
+  o.ilkKabulOran = o.ilkKontrol ? o.ilkKabul/o.ilkKontrol*100 : null;
   return o;
 }
 function kaliteCubuklar(gruplar, renk){
@@ -1090,49 +1090,54 @@ function kaliteCubuklar(gruplar, renk){
   const max = Math.max(1, ...gruplar.map(g=>g.v));
   return `<div class="rt-cubuklar">${gruplar.slice(0,8).map(g=>`<div class="rt-cubuk" style="cursor:default">
     <span class="rt-cubuk-ad">${esc(g.ad)}</span>
-    <span class="rt-cubuk-iz"><span style="width:${Math.max(1.5,g.v/max*100).toFixed(1)}%;background:${renk}"></span></span>
-    <span class="rt-cubuk-d"><b class="mono">${rtFmt(g.v)}</b><small>${g.n} kez</small></span></div>`).join('')}</div>`;
+    <span class="rt-cubuk-iz"><span style="width:${Math.max(1.5,g.v/max*100).toFixed(1)}%;background:${g.renk||renk}"></span></span>
+    <span class="rt-cubuk-d"><b class="mono">${rtFmt(g.v)}</b><small>${g.n!=null?g.n+' kez':'parça'}</small></span></div>`).join('')}</div>`;
 }
 function analizKaliteHtml(){
   const a = rtAralik(), on = rtOncekiAralik(a), onAd = rtOncekiAd(a,on);
   const liste = kaliteKayitlari(a.bas, a.son), oz = kaliteOzet(liste), ozOn = kaliteOzet(kaliteKayitlari(on.bas, on.son));
-  const bas = agBolumBas('ag-kalite','Kalite','Final Kalite Kontrol sonuçları · 6 Ekim 2026\'dan itibaren kaydediliyor');
-  if(!liste.length) return `${bas}${agYorum(['Bu dönemde kalite sonucu kaydedilmedi. Kayıt 6 Ekim 2026\'da başladı: FKK\'da iş bitirilirken Onay, Şartlı kabul ya da Red seçiliyor.'])}`;
-  const sorunlu = liste.filter(e=>e.kalite.sonuc!=='onay');
-  const grupla = fn => { const g = {}; sorunlu.forEach(e=>{ const k = fn(e) || '—'; const x = g[k] || (g[k] = { ad:k, v:0, n:0 }); x.v += Number(e.kalite.sorunluAdet)||0; x.n += 1; }); return Object.values(g).sort((p,q)=>q.v-p.v || q.n-p.n); };
-  const neden = grupla(e=>e.kalite.neden);
-  const kaynakMakine = grupla(e=>{ const p = kaliteOncekiOp(e); return p ? String(p.makine||'').split(' · ')[0] : 'bilinmiyor'; });
-  const kaynakKisi = grupla(e=>{ const p = kaliteOncekiOp(e); return p ? (p.operatorName||p.operatorUsername) : 'bilinmiyor'; });
+  const bas = agBolumBas('ag-kalite','Kalite','Final Kalite Kontrol · 6 Ekim 2026\'dan itibaren kaydediliyor');
+  if(!liste.length) return `${bas}${agYorum(['Bu dönemde kalite sonucu kaydedilmedi. Kayıt 6 Ekim 2026\'da başladı: FKK\'da iş bitirilirken kontrol edilen adet onay, şartlı kabul ve red olarak dağıtılıyor.'])}`;
+  const sorunlu = liste.filter(e=>{ const d = kaliteDagilim(e.kalite); return d.red || d.sartli; });
+  const nedenG = {}; sorunlu.forEach(e=>{ const k=e.kalite, d=kaliteDagilim(k);
+    [[k.redNeden, d.red],[k.sartliNeden, d.sartli]].forEach(([n,v])=>{ if(!v) return; const x = nedenG[n||'—'] || (nedenG[n||'—'] = { ad:n||'—', v:0, n:0 }); x.v += v; x.n += 1; }); });
+  const neden = Object.values(nedenG).sort((p,q)=>q.v-p.v);
+  const kaynak = fn => { const g = {}; liste.forEach(e=>{ const d = kaliteDagilim(e.kalite); if(!d.red) return; const p = kaliteOncekiOp(e); const k = p ? fn(p) : 'bilinmiyor'; const x = g[k] || (g[k] = { ad:k, v:0, n:0 }); x.v += d.red; x.n += 1; }); return Object.values(g).sort((p,q)=>q.v-p.v); };
+  const kaynakMakine = kaynak(p=>String(p.makine||'').split(' · ')[0]), kaynakKisi = kaynak(p=>p.operatorName||p.operatorUsername);
+  const nereye = [['Revizyon','revizyon','var(--accent)'],['K-stok','kstok','var(--warn)'],['Yarı mamul deposu','yariMamul','var(--tadilat-info)'],['Hurda','hurda','var(--danger)'],['Karar bekliyor','bekliyor','var(--text-subtle)']]
+    .map(([ad,k,renk])=>({ ad, v: oz[k], renk })).filter(x=>x.v>0);
   const cumleler = [
-    `FKK'da <b>${rtFmt(oz.isEmri)} iş emri</b>, <b>${rtFmt(oz.parca)} parça</b> kontrol edildi: onay ${rtFmt(oz.onay)}, şartlı kabul ${rtFmt(oz.sartli)}, red ${rtFmt(oz.red)} iş emri.`,
-    oz.redParca ? `Red parça <b>${rtFmt(oz.redParca)}</b>; red oranı <b>${agYuzde(oz.redOran)}</b>.` : 'Bu dönemde red verilen parça yok.',
+    `FKK'da <b>${rtFmt(oz.isEmri)} kayıt</b>, <b>${rtFmt(oz.kontrol)} parça</b> kontrol edildi: onay ${rtFmt(oz.onay)}, şartlı kabul ${rtFmt(oz.sartli)}, red ${rtFmt(oz.red)} parça.`,
+    oz.red ? `Red parçalar: ${nereye.map(x=>`${x.ad==='K-stok'?x.ad:x.ad.toLocaleLowerCase('tr-TR')} ${rtFmt(x.v)}`).join(', ')}.` : 'Bu dönemde red verilen parça yok.',
+    oz.ilkKabulOran!=null ? `İlk kontrolde kabul oranı <b>${agYuzde(oz.ilkKabulOran)}</b>.` : '',
     neden[0] ? `En sık neden <b>${esc(neden[0].ad)}</b> (${rtFmt(neden[0].v)} parça).` : '',
-    kaynakMakine[0] && kaynakMakine[0].ad!=='bilinmiyor' ? `Sorunlu parçalar en çok <b>${esc(kaynakMakine[0].ad)}</b> makinesinden gelmiş (${rtFmt(kaynakMakine[0].v)} parça).` : '',
+    kaynakMakine[0] && kaynakMakine[0].ad!=='bilinmiyor' ? `Red parçalar en çok <b>${esc(kaynakMakine[0].ad)}</b> makinesinden gelmiş (${rtFmt(kaynakMakine[0].v)} parça).` : '',
   ];
   const satirlar = sorunlu.slice().sort((p,q)=>(q.endTs||0)-(p.endTs||0)).slice(0, 60);
   return `${bas}
   ${agYorum(cumleler)}
   <div class="rt-kpiler">
-    ${rtKpi('Kontrol edilen parça', rtFmt(oz.parca), rtFark(oz.parca, ozOn.parca, { onAd }), `${rtFmt(oz.isEmri)} iş emri`)}
-    ${rtKpi('Red oranı', oz.redOran==null?'—':agYuzde(oz.redOran), (oz.redOran!=null && ozOn.redOran!=null) ? rtFark(oz.redOran, ozOn.redOran, { iyi:'azalis', onAd, puan:true, bicim:v=>agYuzde(v) }) : '', `${rtFmt(oz.redParca)} red parça`)}
-    ${rtKpi('Şartlı kabul', rtFmt(oz.sartliParca)+' parça', '', `${rtFmt(oz.sartli)} iş emri`)}
+    ${rtKpi('Kontrol edilen parça', rtFmt(oz.kontrol), rtFark(oz.kontrol, ozOn.kontrol, { onAd }), `${rtFmt(oz.isEmri)} FKK kaydı`)}
+    ${rtKpi('İlk kontrolde kabul', oz.ilkKabulOran==null?'—':agYuzde(oz.ilkKabulOran), (oz.ilkKabulOran!=null && ozOn.ilkKabulOran!=null) ? rtFark(oz.ilkKabulOran, ozOn.ilkKabulOran, { iyi:'artis', onAd, puan:true, bicim:v=>agYuzde(v) }) : '', 'onay + şartlı, revizyon dönüşleri hariç')}
+    ${rtKpi('Hurda', rtFmt(oz.hurda)+' parça', (ozOn.isEmri ? rtFark(oz.hurda, ozOn.hurda, { iyi:'azalis', onAd }) : ''), `red ${rtFmt(oz.red)} · yarı mamul ${rtFmt(oz.yariMamul)}`)}
   </div>
   <div class="rt-izgara">
-    <div class="rt-kutu"><div class="rt-kutu-bas"><h4>Neden</h4><span>sorunlu parça · red + şartlı</span></div>${kaliteCubuklar(neden, 'var(--danger)')}</div>
-    <div class="rt-kutu"><div class="rt-kutu-bas"><h4>Geldiği makine</h4><span>FKK'dan önceki son operasyon</span></div>${kaliteCubuklar(kaynakMakine, 'var(--warn)')}</div>
-    <div class="rt-kutu"><div class="rt-kutu-bas"><h4>Geldiği operatör</h4><span>FKK'dan önceki son operasyon</span></div>${kaliteCubuklar(kaynakKisi, 'var(--warn)')}</div>
+    <div class="rt-kutu"><div class="rt-kutu-bas"><h4>Red parçalar nereye</h4><span>parça</span></div>${kaliteCubuklar(nereye, 'var(--danger)')}</div>
+    <div class="rt-kutu"><div class="rt-kutu-bas"><h4>Neden</h4><span>red + şartlı · parça</span></div>${kaliteCubuklar(neden, 'var(--danger)')}</div>
+    <div class="rt-kutu"><div class="rt-kutu-bas"><h4>Red geldiği makine</h4><span>FKK'dan önceki son operasyon</span></div>${kaliteCubuklar(kaynakMakine, 'var(--warn)')}</div>
+    <div class="rt-kutu"><div class="rt-kutu-bas"><h4>Red geldiği operatör</h4><span>FKK'dan önceki son operasyon</span></div>${kaliteCubuklar(kaynakKisi, 'var(--warn)')}</div>
   </div>
   ${sorunlu.length ? `<div class="rt-kutu rt-liste"><div class="rt-liste-bas"><div><h4>Red ve şartlı kabuller</h4><span>${rtFmt(sorunlu.length)} kayıt${sorunlu.length>satirlar.length?` · son ${satirlar.length}`:''}</span></div></div>
-    <div class="table-wrap"><table class="rt-tablo rt-tablo-liste"><thead><tr><th>Tarih</th><th>İş emri</th><th>Mamul</th><th>Sonuç</th><th>Neden</th><th class="rt-dar-gizle">Açıklama</th><th>Geldiği yer</th><th class="rt-dar-gizle">Sonra</th></tr></thead><tbody>
+    <div class="table-wrap"><table class="rt-tablo rt-tablo-liste"><thead><tr><th>Tarih</th><th>İş emri</th><th>Mamul</th><th>Sonuç</th><th>Dağılım</th><th>Neden</th><th class="rt-dar-gizle">Açıklama</th><th>Geldiği yer</th></tr></thead><tbody>
     ${satirlar.map(e=>{ const k=e.kalite, p=kaliteOncekiOp(e); return `<tr class="rt-tablo-sabit">
-      <td class="mono" style="white-space:nowrap">${fmtDT(e.endTs)}</td>
+      <td class="mono" style="white-space:nowrap">${fmtDT(e.endTs)}${(k.kontrolNo||1)>1?`<div class="rt-silik">${k.kontrolNo}. kontrol</div>`:''}</td>
       <td><div class="mono">${esc(e.talepNo||'—')}</div><div class="mono rt-silik">${esc(usTabanKod(e.isEmriNo))}</div></td>
-      <td class="rt-kes" style="max-width:220px" title="${esc(usMamulAdi(e))}">${esc(usMamulAdi(e)||'—')}</td>
+      <td class="rt-kes" style="max-width:200px" title="${esc(usMamulAdi(e))}">${esc(usMamulAdi(e)||'—')}</td>
       <td>${kaliteRozet(e)}</td>
-      <td>${esc(k.neden||'—')}</td>
-      <td class="rt-dar-gizle rt-kes" style="max-width:220px" title="${esc(k.aciklama||'')}">${esc(k.aciklama||'—')}</td>
+      <td style="font-size:12px">${esc(kaliteOzetMetni(k))}${k.geriMakine?`<div class="rt-silik">revizyon → ${esc(String(k.geriMakine).split(' · ')[0])}</div>`:''}</td>
+      <td style="font-size:12px">${esc([k.redNeden, k.sartliNeden && k.sartliNeden!==k.redNeden ? k.sartliNeden : null].filter(Boolean).join(' / ')||'—')}</td>
+      <td class="rt-dar-gizle rt-kes" style="max-width:200px" title="${esc(k.aciklama||'')}">${esc(k.aciklama||'—')}</td>
       <td>${p ? `<span class="mono">${esc(String(p.makine||'').split(' · ')[0])}</span> <span class="rt-silik">${esc(p.operatorName||p.operatorUsername||'')}</span>` : '<span class="rt-silik">—</span>'}</td>
-      <td class="rt-dar-gizle mono">${k.sonuc==='red' ? esc(String(e.sonrakiMakine||'—').split(' · ')[0]) : '<span class="rt-silik">kapandı</span>'}</td>
     </tr>`; }).join('')}
     </tbody></table></div></div>` : ''}`;
 }

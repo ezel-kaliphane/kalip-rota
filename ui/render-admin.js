@@ -995,7 +995,10 @@ const STOK_BOLUMLERI = [
   /* Malzeme Bekleyenler (29.09.2026): sef malzemeligi bulamayinca is emri buraya
      dusuyor. Yetki Hammadde ile ayni (canManageStock = Sef + SuperAdmin) cunku
      isaretlemeyi sef yapiyor. */
-  { key:'bekleyen', ikon:'clock',  label:'Malzeme Bekleyenler', alt:'stok yok, is emri parkta', gor:()=>canManageStock() }
+  { key:'bekleyen', ikon:'clock',  label:'Malzeme Bekleyenler', alt:'stok yok, is emri parkta', gor:()=>canManageStock() },
+  /* Yarı mamul deposu (06.10.2026): FKK'da red verilip başka yerde işlenerek kullanılabilecek
+     parçalar kendiliğinden buraya düşer (js/kalite.js). */
+  { key:'yarimamul', ikon:'katman', label:'Yarı Mamul', alt:'FKK red · başka işte kullanılabilir', gor:()=>canManageStock() }
 ];
 
 /* ---- Bölümler: her modülde aynı fiiller, aynı sırada ----
@@ -1712,6 +1715,7 @@ function renderStokScreen(){
   else if(stokSubView==='karbur') icerik = renderKarburScreen();
   else if(stokSubView==='malzeme') icerik = `<div class="settings-wrap">${renderMalzemeStokScreen()}</div>`;
   else if(stokSubView==='bekleyen') icerik = renderMalzemeBekleyen();
+  else if(stokSubView==='yarimamul') icerik = renderYariMamul();
   else                             icerik = '';
 
   return `<div class="stok-govde">${topHeader}${ray}<div class="stok-icerik">${bolumSatiri}${icerik}</div></div>`;
@@ -1930,9 +1934,13 @@ function iyVeri(){
   const malzemeRow = mb.length>0 ? { label:'Malzeme Bekliyor', isMalzeme:true, isEmriSayisi: mb.length, istekYok: mbIstekYok,
     toplamAdet: mb.reduce((s,x)=>s+(Number(x.ieMiktar)||0), 0), kayitlar: mb } : null;
   const makineRows = rows;
+  /* FKK'da "karar sonra" bırakılan red parçalar (bkz. js/kalite.js) — Şef/SuperAdmin buradan karar verir. */
+  const kk = (typeof kaliteKararBekleyenler==='function') ? kaliteKararBekleyenler() : [];
+  const kaliteRow = kk.length ? { label:'Kalite Kararı Bekliyor', isKalite:true, isEmriSayisi: kk.length,
+    toplamAdet: kk.reduce((s,e)=>s+kaliteDagilim(e.kalite).bekliyor, 0), kayitlar: kk } : null;
 
   return {
-    rows: malzemeRow ? [malzemeRow, ...makineRows] : makineRows,
+    rows: [...(malzemeRow?[malzemeRow]:[]), ...(kaliteRow?[kaliteRow]:[]), ...makineRows],
     malzemeSayi: mb.length, malzemeIstekYok: mbIstekYok,
     malzemeTalepSet: new Set(mb.map(x=>String(x.talepNo||'').trim().toUpperCase()).filter(Boolean)),
     toplamIsEmri: digerBekleyenler.length + presCiftleri.length,
@@ -1955,7 +1963,7 @@ const iyAd  = l => String(l||'').split(' · ').slice(1).join(' · ');
 // zaten çözülecek; o zamana kadar bilinçli olarak mutlak sayıda kalıyor.
 const iyRenk = n => n>=5 ? 'var(--danger)' : n>=3 ? 'var(--accent)' : 'var(--success)';
 /* Malzeme satırı: içinde istek no'su girilmemiş tek bir kayıt bile varsa kırmızı, hepsinin varsa sarı. */
-const iySatirRenk = r => r.isMalzeme ? (r.istekYok>0 ? 'var(--danger)' : 'var(--warn)') : r.label==='Belirsiz' ? 'var(--danger)' : iyRenk(r.isEmriSayisi);
+const iySatirRenk = r => r.isKalite ? 'var(--danger)' : r.isMalzeme ? (r.istekYok>0 ? 'var(--danger)' : 'var(--warn)') : r.label==='Belirsiz' ? 'var(--danger)' : iyRenk(r.isEmriSayisi);
 
 /* --- ORTAK PARÇALAR ----------------------------------------------------- */
 function iyKpiHtml(v){
@@ -1977,6 +1985,8 @@ function iyKpiHtml(v){
 // Bir kaydın son durumuna göre kısa özet + renk — arama sonucu kartlarında kullanılıyor.
 function iyDurumOzeti(last){
   const makine = esc(last.makine||'—');
+  if(last.status==='tamamlandi' && last.kalite && typeof kaliteDagilim==='function' && kaliteDagilim(last.kalite).bekliyor>0 && !last.sonOperasyon && !last.sonrakiMakine)
+    return { renk:'var(--danger)', metin:'FKK red — kalite kararı bekliyor', detay:`${kaliteDagilim(last.kalite).bekliyor} parça · ${esc(last.kalite.redNeden||'')}` };
   if(last.status==='devam') return { renk:'var(--accent)', metin:`Şu an ${makine}'de işleniyor`, detay:`${esc(last.operatorName||last.operatorUsername||'')} · ${fmtDT(last.startTs)}'de başladı` };
   if(last.status==='duruş') return { renk:'var(--warn)', metin:`${makine}'de duraklatılmış`, detay:esc(last.duruşNedeni||'') };
   if(last.status==='tamamlandi' && last.sonOperasyon) return { renk:'var(--success)', metin:'Rota tamamlandı', detay:`${makine}'de bitti · ${fmtDT(last.endTs)}` };
@@ -2035,7 +2045,7 @@ function renderIyGecmisModal(){
               <div style="font-size:12.5px;margin-top:6px">${esc(e.operatorName||e.operatorUsername||'—')}${e.finishedByUsername && e.finishedByUsername!==e.operatorUsername ? ` · Bitiren: ${esc(e.finishedByName||e.finishedByUsername)}` : ''}</div>
               <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${fmtDT(e.startTs)} → ${e.endTs?fmtDT(e.endTs):'—'} · ${sureTxt}${e.adet?` · Adet: ${esc(e.adet)}`:''}</div>
               ${e.status==='duruş' && e.duruşNedeni ? `<div style="font-size:12px;color:var(--warn);margin-top:4px">Duruş: "${esc(e.duruşNedeni)}"</div>` : ''}
-              ${e.kalite && e.kalite.sonuc!=='onay' ? `<div style="font-size:12px;color:${e.kalite.sonuc==='red'?'var(--danger)':'var(--warn)'};margin-top:4px">${esc(KALITE_SONUC_AD[e.kalite.sonuc]||'')}: ${esc(e.kalite.neden||'')}${e.kalite.aciklama?` — ${esc(e.kalite.aciklama)}`:''} · ${esc(e.kalite.name||'')}</div>` : ''}
+              ${e.kalite ? `<div style="font-size:12px;color:${kaliteDagilim(e.kalite).red?'var(--danger)':kaliteDagilim(e.kalite).sartli?'var(--warn)':'var(--success)'};margin-top:4px">Kalite: ${esc(kaliteOzetMetni(e.kalite))}${e.kalite.redNeden?` · red: ${esc(e.kalite.redNeden)}`:''}${e.kalite.sartliNeden?` · şartlı: ${esc(e.kalite.sartliNeden)}`:''}${e.kalite.aciklama?` — ${esc(e.kalite.aciklama)}`:''} · ${esc(e.kalite.name||'')}</div>` : ''}
               ${e.sonrakiMakine ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">${ico('chevronRight',11)} Sıradaki: ${esc(e.sonrakiMakine)}</div>` : ''}
             </div>`;
           }).join('')}
@@ -2116,8 +2126,8 @@ function iyListeHtml(v){
         <button class="iy-head" onclick="toggleIsYogunluguDetay('${escJs(r.label)}')">
           <span style="display:flex;align-items:center;justify-content:space-between;gap:10px">
             <span style="display:flex;align-items:baseline;gap:9px;min-width:0;flex-wrap:wrap">
-              <span class="mono" style="font-size:13px;font-weight:700;color:${belirsiz||r.isMalzeme?renk:'var(--accent)'};white-space:nowrap">${esc(iyKod(r.label))}</span>
-              <span style="font-size:11.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(iyAd(r.label) || (belirsiz?'sıradaki makinesi işaretlenmemiş':r.isMalzeme?'stok yok, iş emri parkta':''))}</span>
+              <span class="mono" style="font-size:13px;font-weight:700;color:${belirsiz||r.isMalzeme||r.isKalite?renk:'var(--accent)'};white-space:nowrap">${esc(iyKod(r.label))}</span>
+              <span style="font-size:11.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(iyAd(r.label) || (belirsiz?'sıradaki makinesi işaretlenmemiş':r.isMalzeme?'stok yok, iş emri parkta':r.isKalite?'FKK red — Şef / SuperAdmin kararı':''))}</span>
               ${r.isMalzeme ? `<span class="matrix-tag" style="--sb:${r.istekYok>0?'var(--danger)':'var(--warn)'}">${r.istekYok>0 ? `${r.istekYok} istek no yok` : 'istek no’lar girildi'}</span>` : ''}
               ${r.isPres ? `<span class="matrix-tag" style="--sb:var(--tadilat-info)">Çift eşleşme</span>` : ''}
             </span>
@@ -2127,10 +2137,10 @@ function iyListeHtml(v){
               <span style="color:var(--text-muted)">${acik?ico('chevronUp',14):ico('chevronDown',14)}</span>
             </span>
           </span>
-          <span class="iy-bar"><span style="width:${Math.round(r.isEmriSayisi/v.enYuksek*100)}%${r.isMalzeme?';background:'+renk:''}"></span></span>
+          <span class="iy-bar"><span style="width:${Math.round(r.isEmriSayisi/v.enYuksek*100)}%${r.isMalzeme||r.isKalite?';background:'+renk:''}"></span></span>
         </button>
         ${acik ? `<div class="iy-detay">
-          ${r.isPres ? iyPresDetayHtml(r) : r.isMalzeme ? iyMalzemeDetayHtml(r) : r.isEmriler.map(e=>`<div class="iy-detay-row">
+          ${r.isPres ? iyPresDetayHtml(r) : r.isMalzeme ? iyMalzemeDetayHtml(r) : r.isKalite ? kaliteKararDetayHtml(r) : r.isEmriler.map(e=>`<div class="iy-detay-row">
             <span><span class="mono" style="color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline dotted" onclick="openIyGecmisModal('${escJs(e.isEmriNo)}')">${esc(e.talepNo||e.isEmriNo)}</span>${v.malzemeTalepSet.has(String(e.talepNo||'').trim().toUpperCase()) ? ` <span class="iy-mb-etiket" title="Bu iş emri Malzeme Bekleyenler'de">malzeme bekliyor</span>` : ''}</span>
             <span style="color:var(--text-muted)">${esc(e.makine||'—')}</span>
             <span class="mono sag">${esc(e.adet||'—')}</span>
@@ -2158,8 +2168,8 @@ function iyMalzemeDetayHtml(r){
 
 /* --- GÖRÜNÜM: ÖZET — atölye ustası, az bilgi ----------------------- */
 function iyOzetHtml(v){
-  const top = v.rows.filter(r=>r.label!=='Belirsiz' && !r.isMalzeme).slice(0,5);
-  const enCokAdet = v.rows.filter(r=>!r.isPres && !r.isMalzeme && r.label!=='Belirsiz').slice().sort((a,b)=>b.toplamAdet-a.toplamAdet)[0];
+  const top = v.rows.filter(r=>r.label!=='Belirsiz' && !r.isMalzeme && !r.isKalite).slice(0,5);
+  const enCokAdet = v.rows.filter(r=>!r.isPres && !r.isMalzeme && !r.isKalite && r.label!=='Belirsiz').slice().sort((a,b)=>b.toplamAdet-a.toplamAdet)[0];
   const bosMakine = (typeof allMachines==='function')
     ? allMachines().filter(m=>!v.rows.some(r=>iyKod(r.label)===m.code)).length
     : null;
@@ -2198,7 +2208,7 @@ function iyHaftaHtml(v){
   const gunler = Array.from({length:6}, (_,i)=>{ const d = new Date(pzt); d.setDate(d.getDate()+i); return d; });
   const sinir = gunler.map(d=>d.getTime());
 
-  const satirlar = v.rows.filter(r=>!r.isPres && !r.isMalzeme).map(r=>{
+  const satirlar = v.rows.filter(r=>!r.isPres && !r.isMalzeme && !r.isKalite).map(r=>{
     const cells = sinir.map(gs=>r.isEmriler.filter(e=>e.endTs>=gs && e.endTs<gs+86400000).length);
     return { label:r.label, cells, toplam:r.isEmriSayisi };
   });
@@ -2249,8 +2259,8 @@ function iyPanoHtml(v, tamEkran){
   const kolon = (liste) => liste.map(r=>`
     <div style="display:grid;grid-template-columns:${S.kol};align-items:center;gap:16px;padding:${S.pad};border-top:1px solid var(--panel-alt)">
       <div style="display:flex;align-items:baseline;gap:9px;min-width:0">
-        <span class="mono" style="flex:0 0 auto;font-size:${S.kod}px;font-weight:700;color:${r.label==='Belirsiz'||r.isMalzeme?iySatirRenk(r):'var(--accent)'};white-space:nowrap">${esc(iyKod(r.label))}</span>
-        <span style="flex:1;min-width:0;font-size:${S.ad}px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.isMalzeme ? (r.istekYok>0 ? `${r.istekYok} istek no yok` : 'istek no girildi') : iyAd(r.label))}</span>
+        <span class="mono" style="flex:0 0 auto;font-size:${S.kod}px;font-weight:700;color:${r.label==='Belirsiz'||r.isMalzeme||r.isKalite?iySatirRenk(r):'var(--accent)'};white-space:nowrap">${esc(iyKod(r.label))}</span>
+        <span style="flex:1;min-width:0;font-size:${S.ad}px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.isMalzeme ? (r.istekYok>0 ? `${r.istekYok} istek no yok` : 'istek no girildi') : r.isKalite ? `${r.toplamAdet} red parça` : iyAd(r.label))}</span>
       </div>
       <div style="height:${S.bar}px;border-radius:4px;background:var(--panel);overflow:hidden"><div style="height:100%;width:${Math.round(r.isEmriSayisi/v.enYuksek*100)}%;background:${iySatirRenk(r)};border-radius:4px"></div></div>
       <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:6px;white-space:nowrap">
@@ -3325,7 +3335,7 @@ function renderAdmin(){
     ${uzunDevamEdenModalOpen ? renderUzunDevamEdenModal() : ''}
     ${messagesModalOpen ? renderMessagesModal() : ''}
     ${myPushHistoryModalOpen ? renderMyPushHistoryModal() : ''}
-    ${yeniHammaddeModalHtml()}${hammaddeDuzeltModalHtml()}`;
+    ${yeniHammaddeModalHtml()}${hammaddeDuzeltModalHtml()}${renderKaliteKararModal()}${renderYmCikisModal()}`;
 
   let body = '';
   if(view==='adminSettings' && !session.isAdmin){ view = 'report'; }

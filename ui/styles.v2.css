@@ -1477,3 +1477,25 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .kal-rozet.onay{color:var(--success);background:color-mix(in srgb, var(--success) 15%, transparent)}
 .kal-rozet.sartli{color:var(--warn-text);background:color-mix(in srgb, var(--warn) 18%, transparent)}
 .kal-rozet.red{color:var(--danger-text);background:color-mix(in srgb, var(--danger) 15%, transparent)}
+/* Final Kalite Kontrol v2 (06.10.2026) */
+.kal-satir{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.kal-satir label{font-size:13px;font-weight:600;color:var(--text-muted)}
+.kal-satir .kal-sayi{width:90px}
+.kal-hepsi{width:auto;padding:8px 12px;margin-left:auto}
+.kal-sayi{width:100%;text-align:center;font-size:18px;font-weight:700;margin:0;border-color:color-mix(in srgb, var(--kc, var(--border)) 60%, var(--border))}
+.kal-dagilim{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kal-dagilim>div{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700}
+.kal-toplam{font-size:12px;margin:8px 2px 10px}
+.kal-toplam.tamam{color:var(--success)} .kal-toplam.eksik{color:var(--danger-text)}
+.kal-blok{border:1px solid var(--border);border-radius:var(--r-lg);padding:10px 12px;margin-bottom:10px}
+.kal-blok.red{border-color:var(--danger-border);background:color-mix(in srgb, var(--danger) 6%, transparent)}
+.kal-blok.sartli{border-color:var(--warn-border);background:color-mix(in srgb, var(--warn) 6%, transparent)}
+.kal-blok-bas{font-size:12.5px;font-weight:700;margin-bottom:6px;display:flex;justify-content:space-between;gap:8px}
+.kal-blok-bas small{font-weight:500;color:var(--text-muted)}
+.kal-karar{display:grid;grid-template-columns:1fr 80px;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--border)}
+.kal-karar b{display:block;font-size:13px} .kal-karar small{font-size:11px;color:var(--text-muted)}
+.kal-karar .kal-sayi{font-size:16px}
+.kal-rota{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.kal-rota-adim{border:1px solid var(--border);background:var(--panel-alt);color:var(--text);border-radius:8px;padding:7px 10px;font-family:var(--ff-mono);font-weight:700;cursor:pointer;min-height:40px}
+.kal-rota-adim small{color:var(--text-muted);font-weight:500;margin-right:3px}
+.kal-rota-adim.on{border-color:var(--accent);background:var(--accent-dim);color:var(--accent)}

@@ -1,0 +1,179 @@
+/* ===================== FİNAL KALİTE KONTROL — EKRANLAR (06.10.2026) =====================
+   Mantık: js/kalite.js. Burada: FKK "Bitir" penceresi (adet dağılımı + red kararı), "karar sonra"
+   penceresi, yarı mamul deposu (Stok Takibi → Yarı Mamul) ve İş Yoğunluğu'ndaki karar satırı. */
+
+function kaliteSayiKutu(id, deger, onchange, renk){
+  return `<input id="${id}" class="kal-sayi mono" inputmode="numeric" style="${renk?`--kc:${renk}`:''}" value="${esc(deger||'')}" placeholder="0"
+    oninput="this.value=this.value.replace(/\\D/g,'')" onchange="${onchange}">`;
+}
+/* Revizyon: geri gideceği operasyon — önce iş emrinin geçmiş rotası, sonra tüm makineler. */
+function kaliteGeriMakineSecici(rota, secili, yazFn){
+  const tum = allMachines().map(m=>`${m.code} · ${m.name}`).filter(l=>!kaliteMakinesiMi(l));
+  return `<div class="kal-rota">${rota.length ? rota.map((l,i)=>`<button type="button" class="kal-rota-adim ${secili===l?'on':''}" onclick="${yazFn}('geriMakine','${escJs(l)}')"><small>${i+1}</small> ${esc(String(l).split(' · ')[0])}</button>`).join('<span class="route-arrow">→</span>') : '<span style="font-size:12px;color:var(--text-muted)">Bu iş emrinin geçmiş rotası bulunamadı.</span>'}</div>
+    <select style="margin-top:6px" onchange="${yazFn}('geriMakine', this.value)">
+      <option value="">${rota.length ? '— ya da başka bir makine —' : '— makine seç —'}</option>
+      ${tum.map(l=>`<option value="${esc(l)}" ${secili===l && !rota.includes(l)?'selected':''}>${esc(l)}</option>`).join('')}
+    </select>`;
+}
+function kaliteNedenSecici(alan, secili, yazFn){
+  const l = [...kaliteNedenleri(), 'Diğer'];
+  return `<select onchange="${yazFn}('${alan}', this.value)"><option value="">— neden seç —</option>${l.map(n=>`<option value="${esc(n)}" ${secili===n?'selected':''}>${esc(n)}</option>`).join('')}</select>`;
+}
+
+function renderKaliteModal(){
+  const m = kaliteModal; if(!m) return '';
+  if(m.groupId) return renderKaliteGrupModal();
+  const e = STATE.entries[m.id] || {};
+  const K = kaliteSayi(m.kontrol), O = kaliteSayi(m.onay), S = kaliteSayi(m.sartli), R = kaliteSayi(m.red);
+  const top = O+S+R, kararTop = ['revizyon','kstok','yariMamul','hurda','bekliyor'].reduce((t,x)=>t+kaliteSayi(m[x]),0);
+  const rota = R && kaliteSayi(m.revizyon) ? kaliteGecmisRota({ ...e, id:m.id }) : [];
+  return `<div class="durus-modal-overlay" onclick="if(event.target===this) kaliteModalKapat()">
+    <div class="durus-modal-panel">
+      <div class="durus-modal-handle" style="cursor:pointer" onclick="kaliteModalKapat()" title="Kapat"></div>
+      <div class="durus-modal-header">
+        <div><div class="durus-modal-title">Final Kalite Kontrol</div>
+          <div class="durus-modal-sub">${esc(e.talepNo||e.isEmriNo||'')}${e.adet?` · ${esc(e.adet)} adet`:''}${m.kontrolNo>1?` · <b style="color:var(--warn)">${m.kontrolNo}. kontrol (revizyon dönüşü)</b>`:''}</div></div>
+        <button class="icon-btn" onclick="kaliteModalKapat()">${ico('x',16)}</button>
+      </div>
+      <div class="durus-modal-list">
+        <div class="kal-satir">
+          <label for="kal-k">Kontrol edilen</label>
+          ${kaliteSayiKutu('kal-k', m.kontrol, 'kaliteKontrolYaz(this.value)')}
+          <button type="button" class="btn-ghost kal-hepsi" onclick="kaliteHepsiOnay()">Hepsi onay</button>
+        </div>
+        <div class="kal-dagilim">
+          <div><span style="color:var(--success)">Onay</span>${kaliteSayiKutu('kal-o', m.onay, "kaliteYaz('onay',this.value)", 'var(--success)')}</div>
+          <div><span style="color:var(--warn)">Şartlı kabul</span>${kaliteSayiKutu('kal-s', m.sartli, "kaliteSorunluYaz('sartli',this.value)", 'var(--warn)')}</div>
+          <div><span style="color:var(--danger)">Red</span>${kaliteSayiKutu('kal-r', m.red, "kaliteSorunluYaz('red',this.value)", 'var(--danger)')}</div>
+        </div>
+        <div class="kal-toplam ${top===K && K>0?'tamam':'eksik'}">Onay + Şartlı + Red = <b>${top}</b> / ${K}${top!==K?' — eşit olmalı':''}</div>
+
+        ${S ? `<div class="kal-blok sartli"><div class="kal-blok-bas">Şartlı kabul nedeni <small>→ K-stok teslim</small></div>${kaliteNedenSecici('sartliNeden', m.sartliNeden, 'kaliteYaz')}</div>` : ''}
+
+        ${R ? `<div class="kal-blok red">
+          <div class="kal-blok-bas">Red nedeni</div>${kaliteNedenSecici('redNeden', m.redNeden, 'kaliteYaz')}
+          <div class="kal-blok-bas" style="margin-top:12px">Red ${R} parça ne olacak? <small>dağıtılan ${kararTop} / ${R}</small></div>
+          ${KALITE_RED_KARAR.map(([k,ad,ipucu])=>`<div class="kal-karar">
+            <div><b>${esc(ad)}</b><small>${esc(ipucu)}</small></div>${kaliteSayiKutu('kal-'+k, m[k], `kaliteYaz('${k}',this.value)`)}</div>`).join('')}
+          ${kaliteSayi(m.revizyon) ? `<div class="kal-blok-bas" style="margin-top:10px">Geri gideceği operasyon <small>geçmiş rota</small></div>${kaliteGeriMakineSecici(rota, m.geriMakine, 'kaliteYaz')}` : ''}
+          ${kaliteSayi(m.yariMamul) ? `<div class="kal-blok-bas" style="margin-top:10px">Nerede kullanılabilir? <small>isteğe bağlı</small></div>
+            <input placeholder="ör. M8 kalıbında delik büyütülerek" value="${esc(m.kullanimNotu)}" oninput="kaliteModal.kullanimNotu=this.value">` : ''}
+        </div>` : ''}
+
+        <div class="field" style="margin-top:10px"><label for="kal-ac">Açıklama${(m.sartliNeden==='Diğer'||m.redNeden==='Diğer')?' (zorunlu)':' (isteğe bağlı)'}</label>
+          <input id="kal-ac" placeholder="ör. Ø12 h7 ölçüsü 12,04 çıktı" value="${esc(m.aciklama)}" oninput="kaliteModal.aciklama=this.value"></div>
+      </div>
+      <div class="durus-modal-footer">
+        <button class="durus-modal-footer-btn" onclick="kaliteOnayla()">${R && kaliteSayi(m.revizyon) ? 'Kaydet — revizyona gönder' : R && kaliteSayi(m.bekliyor) ? 'Kaydet — karar bekliyor' : 'Kaydet ve Bitir'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function renderKaliteGrupModal(){
+  const m = kaliteModal, uyeler = groupMembersOf(m.groupId);
+  const btn = (k, ad, renk) => `<button type="button" class="kal-sonuc ${m.grupSonuc===k?'on':''}" style="--kc:${renk}" onclick="kaliteYaz('grupSonuc','${k}')">${ad}</button>`;
+  return `<div class="durus-modal-overlay" onclick="if(event.target===this) kaliteModalKapat()">
+    <div class="durus-modal-panel">
+      <div class="durus-modal-handle" style="cursor:pointer" onclick="kaliteModalKapat()" title="Kapat"></div>
+      <div class="durus-modal-header">
+        <div><div class="durus-modal-title">Final Kalite Kontrol</div><div class="durus-modal-sub">${uyeler.length} iş emri birlikte — sonuç her birine kendi adediyle yazılır</div></div>
+        <button class="icon-btn" onclick="kaliteModalKapat()">${ico('x',16)}</button>
+      </div>
+      <div class="durus-modal-list">
+        <div class="kal-sonuclar">${btn('onay','Onay','var(--success)')}${btn('sartli','Şartlı kabul','var(--warn)')}${btn('red','Red','var(--danger)')}</div>
+        ${m.grupSonuc==='red' ? `<div class="kal-not">Grupta red parçalar "karar sonra" olarak kaydedilir; Şef / SuperAdmin İş Yoğunluğu'ndan her iş emri için ayrı karar verir. Parça parça dağılım gerekiyorsa iş emirlerini tek tek bitir.</div>` : ''}
+        ${m.grupSonuc && m.grupSonuc!=='onay' ? `<div class="kal-blok"><div class="kal-blok-bas">Neden</div>${kaliteNedenSecici('neden', m.neden, 'kaliteYaz')}</div>
+          <div class="field" style="margin-top:10px"><label>Açıklama${m.neden==='Diğer'?' (zorunlu)':' (isteğe bağlı)'}</label><input value="${esc(m.aciklama)}" oninput="kaliteModal.aciklama=this.value"></div>` : ''}
+      </div>
+      <div class="durus-modal-footer"><button class="durus-modal-footer-btn" ${m.grupSonuc?'':'disabled'} onclick="kaliteOnayla()">Kaydet ve Bitir</button></div>
+    </div>
+  </div>`;
+}
+
+/* "Karar sonra" penceresi (yönetici ekranı). */
+function renderKaliteKararModal(){
+  const m = kaliteKararModal; if(!m) return '';
+  const e = STATE.entries[m.id]; if(!e || !e.kalite){ kaliteKararModal = null; return ''; }
+  const k = e.kalite, d = kaliteDagilim(k), n = d.bekliyor;
+  const top = ['revizyon','kstok','yariMamul','hurda'].reduce((t,x)=>t+kaliteSayi(m[x]),0);
+  const rota = kaliteSayi(m.revizyon) ? kaliteGecmisRota({ ...e, id:m.id }) : [];
+  return `<div class="modal-overlay" onclick="if(event.target===this)kaliteKararKapat()">
+    <div class="modal-box" style="max-width:520px;padding:20px">
+      <div class="sec-h" style="margin-top:0">Red kararı — ${esc(e.talepNo||e.isEmriNo||'')}</div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin:-6px 0 12px">${esc((typeof usMamulAdi==='function' && usMamulAdi(e))||'')}<br>
+        FKK ${fmtDT(k.ts||e.endTs)} · ${esc(k.name||'')} · red nedeni <b>${esc(k.redNeden||'—')}</b>${k.aciklama?` — ${esc(k.aciklama)}`:''}<br>
+        Karar bekleyen <b>${n} parça</b> · dağıtılan ${top} / ${n}</div>
+      ${KALITE_RED_KARAR.filter(([x])=>x!=='bekliyor').map(([x,ad,ipucu])=>`<div class="kal-karar"><div><b>${esc(ad)}</b><small>${esc(ipucu)}</small></div>${kaliteSayiKutu('kk-'+x, m[x], `kaliteKararYaz('${x}',this.value)`)}</div>`).join('')}
+      ${kaliteSayi(m.revizyon) ? `<div class="kal-blok-bas" style="margin-top:10px">Geri gideceği operasyon <small>geçmiş rota</small></div>${kaliteGeriMakineSecici(rota, m.geriMakine, 'kaliteKararYaz')}` : ''}
+      ${kaliteSayi(m.yariMamul) ? `<div class="field" style="margin-top:10px"><label>Nerede kullanılabilir? (isteğe bağlı)</label><input placeholder="ör. M8 kalıbında delik büyütülerek" value="${esc(m.kullanimNotu)}" oninput="kaliteKararModal.kullanimNotu=this.value"></div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn-primary" style="flex:1" ${m.busy?'disabled':''} onclick="kaliteKararKaydet()">${m.busy?'Kaydediliyor…':'Kararı Kaydet'}</button>
+        <button class="btn-ghost" onclick="kaliteKararKapat()">Vazgeç</button>
+      </div>
+    </div></div>`;
+}
+/* İş Yoğunluğu → "Kalite Kararı Bekliyor" satırının detayı. */
+function kaliteKararDetayHtml(r){
+  return r.kayitlar.map(e=>{ const k = e.kalite, d = kaliteDagilim(k);
+    return `<div class="iy-detay-row iy-mb-satir yok">
+      <span><span class="mono" style="font-weight:700">${esc(e.talepNo||e.isEmriNo||'—')}</span><span class="mono" style="display:block;font-size:10.5px;color:var(--text-subtle)">${esc(String(e.isEmriNo||'').replace(/_(ZARF|ELMAS)$/,''))}</span></span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc((typeof usMamulAdi==='function' && usMamulAdi(e))||'')}">${esc((typeof usMamulAdi==='function' && usMamulAdi(e))||'—')}</span>
+      <span><b>${d.bekliyor}</b> parça · ${esc(k.redNeden||'—')}</span>
+      <span style="color:var(--text-muted)">${fmtDT(k.ts||e.endTs)}</span>
+      <span class="sag">${canManageStock() ? `<button class="btn-primary" style="width:auto;padding:6px 12px" onclick="kaliteKararAc('${escJs(e.id)}')">Karar ver</button>` : ''}</span>
+    </div>`; }).join('');
+}
+
+/* ---------- Stok Takibi → Yarı Mamul ---------- */
+let ymGecmisAcik = false;
+function renderYariMamul(){
+  const l = yariMamulKayitlari(), stokta = l.filter(x=>x.kalan>0);
+  const cikanlar = l.flatMap(x=>x.cikislar.map(c=>({ ...c, e:x.e }))).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const toplam = stokta.reduce((t,x)=>t+x.kalan,0);
+  const gun = ts => Math.max(0, Math.floor((Date.now()-(ts||Date.now()))/86400000));
+  return `<div class="settings-wrap" style="max-width:none">
+    <div class="notice" style="--nc:var(--accent);margin-bottom:14px"><div class="notice-sub">Final Kalite Kontrol'de red verilip <b>başka yerde işlenerek kullanılabilir</b> denen parçalar buraya kendiliğinden girer (ör. M6 kalıbında delik büyük işlendi → M8 kalıbında delik büyütülerek kullanılabilir). İleride o iş gelince buradan kullanılır.</div></div>
+    <div class="stok-genel-kpi" style="padding:0 0 14px;grid-template-columns:repeat(3,1fr)">
+      <div class="sgk-card"><div class="sgk-num">${toplam}</div><div class="sgk-label">Depodaki parça</div></div>
+      <div class="sgk-card"><div class="sgk-num">${stokta.length}</div><div class="sgk-label">Kalem (iş emri)</div></div>
+      <div class="sgk-card"><div class="sgk-num">${stokta.length ? gun(stokta[0].girisTs) : 0}</div><div class="sgk-label">En eski bekleyen (gün)</div></div>
+    </div>
+    ${stokta.length ? `<div class="sg-table-wrap"><table><thead><tr><th>Giriş</th><th>Bekleme</th><th>İş emri</th><th>Mamul</th><th style="text-align:right">Adet</th><th>Red nedeni</th><th>Nerede kullanılabilir</th><th></th></tr></thead><tbody>
+      ${stokta.map(x=>{ const e=x.e, k=e.kalite, g=gun(x.girisTs); return `<tr>
+        <td class="mono" style="white-space:nowrap">${fmtDT(x.girisTs)}</td>
+        <td style="color:${g>=90?'var(--danger)':g>=30?'var(--warn)':'var(--text-muted)'}">${g} gün</td>
+        <td><div class="mono">${esc(e.talepNo||'—')}</div><div class="mono" style="font-size:10.5px;color:var(--text-subtle)">${esc(String(e.isEmriNo||'').replace(/_(ZARF|ELMAS)$/,''))}</div></td>
+        <td>${esc((typeof usMamulAdi==='function' && usMamulAdi(e))||'—')}</td>
+        <td class="mono" style="text-align:right"><b>${x.kalan}</b>${x.cikan?` <span style="color:var(--text-muted)">/ ${x.giren}</span>`:''}</td>
+        <td>${esc(k.redNeden||'—')}${k.aciklama?`<div style="font-size:11px;color:var(--text-muted)">${esc(k.aciklama)}</div>`:''}</td>
+        <td>${esc(k.kullanimNotu||'—')}</td>
+        <td style="white-space:nowrap">${canManageStock()?`<button class="btn-ghost" style="width:auto;padding:5px 10px" onclick="ymCikisAc('${escJs(e.id)}','kullanim')">Kullan</button>
+          <button class="btn-ghost" style="width:auto;padding:5px 10px;color:var(--danger)" onclick="ymCikisAc('${escJs(e.id)}','hurda')">Hurda</button>`:''}</td>
+      </tr>`; }).join('')}
+    </tbody></table></div>` : `<div class="notice" style="--nc:var(--success)"><div class="notice-title">Yarı mamul deposu boş</div><div class="notice-sub">FKK'da red parçalar için "Yarı mamul deposu" seçilince burada görünür.</div></div>`}
+    <button class="btn-ghost" style="width:auto;padding:8px 14px;margin-top:14px" onclick="ymGecmisAcik=!ymGecmisAcik; render()">${ymGecmisAcik?'Çıkışları gizle':`Çıkışlar (${cikanlar.length})`}</button>
+    ${ymGecmisAcik ? `<div class="sg-table-wrap" style="margin-top:10px"><table><thead><tr><th>Tarih</th><th>Tür</th><th>Kaynak iş emri</th><th style="text-align:right">Adet</th><th>Kullanılan iş emri</th><th>Açıklama</th><th>Kim</th></tr></thead><tbody>
+      ${cikanlar.length ? cikanlar.map(c=>`<tr><td class="mono">${fmtDT(c.ts)}</td><td>${c.tur==='hurda'?'<span style="color:var(--danger)">Hurda</span>':'Kullanım'}</td>
+        <td class="mono">${esc(c.e.talepNo||c.e.isEmriNo||'—')}</td><td class="mono" style="text-align:right">${kaliteSayi(c.adet)}</td>
+        <td class="mono">${esc(c.isEmri||'—')}</td><td>${esc(c.aciklama||'—')}</td><td style="color:var(--text-muted)">${esc(c.name||c.username||'')}</td></tr>`).join('')
+        : `<tr><td colspan="7" style="color:var(--text-muted);padding:14px">Henüz çıkış yok.</td></tr>`}
+    </tbody></table></div>` : ''}
+  </div>`;
+}
+function renderYmCikisModal(){
+  const m = ymCikisModal; if(!m) return '';
+  const x = yariMamulKayitlari().find(r=>r.e.id===m.id); if(!x){ ymCikisModal = null; return ''; }
+  const hurda = m.tur==='hurda';
+  return `<div class="modal-overlay" onclick="if(event.target===this)ymCikisKapat()">
+    <div class="modal-box" style="max-width:420px;padding:20px">
+      <div class="sec-h" style="margin-top:0">${hurda?'Hurdaya ayır':'Yarı mamulü kullan'} — ${esc(x.e.talepNo||x.e.isEmriNo||'')}</div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin:-6px 0 12px">${esc((typeof usMamulAdi==='function' && usMamulAdi(x.e))||'')} · depoda ${x.kalan} parça${x.e.kalite.kullanimNotu?`<br>Not: ${esc(x.e.kalite.kullanimNotu)}`:''}</div>
+      <div class="field"><label>Adet</label><input inputmode="numeric" value="${esc(m.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); ymCikisModal.adet=this.value"></div>
+      ${hurda ? '' : `<div class="field"><label>Kullanıldığı iş emri (isteğe bağlı)</label><input class="mono" placeholder="ör. 2610050011" value="${esc(m.isEmri)}" oninput="ymCikisModal.isEmri=this.value"></div>`}
+      <div class="field"><label>Açıklama (isteğe bağlı)</label><input placeholder="${hurda?'ör. delik büyütülünce çatladı':'ör. delik Ø6,8\'e büyütüldü'}" value="${esc(m.aciklama)}" oninput="ymCikisModal.aciklama=this.value"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-primary" style="flex:1${hurda?';background:var(--danger)':''}" ${m.busy?'disabled':''} onclick="ymCikisKaydet()">${m.busy?'Kaydediliyor…':hurda?'Hurdaya ayır':'Depodan çıkar'}</button>
+        <button class="btn-ghost" onclick="ymCikisKapat()">Vazgeç</button>
+      </div>
+    </div></div>`;
+}
