@@ -2009,6 +2009,7 @@ function iyAramaSonucKartHtml(grp){
     <div style="margin-top:8px;font-size:13.5px;font-weight:600;color:${durum.renk}">${durum.metin}</div>
     ${durum.detay ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${durum.detay}</div>` : ''}
     <div class="route-chain" style="margin-top:10px">${chain.map((c,i)=>`<span class="route-chip">${esc(c)}</span>${i<chain.length-1?'<span class="route-arrow">→</span>':''}`).join('')}</div>
+    ${canManageStock() && typeof uygModalAc==='function' ? `<button class="btn-ghost" style="width:auto;padding:7px 12px;margin-top:10px;color:var(--danger);border-color:var(--danger-border)" onclick="uygModalAc('${escJs(grp.last.id)}')">${ico('alert',13)} Uygunsuzluk bildir</button>` : ''}
   </div>`;
 }
 // İş emri no'ya tıklayınca açılan "geçmiş" penceresi — isEmriNo'nun TÜM kayıtlarını kronolojik
