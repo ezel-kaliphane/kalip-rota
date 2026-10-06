@@ -112,15 +112,17 @@ function renderKaliteKararModal(){
   const top = ['revizyon','kstok','yariMamul','hurda'].reduce((t,x)=>t+kaliteSayi(m[x]),0);
   const rota = kaliteSayi(m.revizyon) ? kaliteGecmisRota({ ...e, id:m.id }) : [];
   return `<div class="modal-overlay" onclick="if(event.target===this)kaliteKararKapat()">
-    <div class="modal-box" style="max-width:520px;padding:20px">
-      <div class="sec-h" style="margin-top:0">Red kararı — ${esc(e.talepNo||e.isEmriNo||'')}</div>
+    <div class="modal-box kal-modal" style="max-width:520px">
+      <div class="kal-modal-bas"><div class="sec-h" style="margin-top:0">Red kararı — ${esc(e.talepNo||e.isEmriNo||'')}</div></div>
+      <div class="kal-modal-govde">
       <div style="font-size:12.5px;color:var(--text-muted);margin:-6px 0 12px">${esc((typeof usMamulAdi==='function' && usMamulAdi(e))||'')}<br>
         FKK ${fmtDT(k.ts||e.endTs)} · ${esc(k.name||'')} · red nedeni <b>${esc(k.redNeden||'—')}</b>${kaliteAciklamaMetni(k)?` — ${esc(kaliteAciklamaMetni(k))}`:''}${k.redHataOp?`<br>Hata: ${esc(kaliteHataMetni(k.redHataOp))}`:''}<br>
         Karar bekleyen <b>${n} parça</b> · dağıtılan ${top} / ${n}</div>
       ${KALITE_RED_KARAR.filter(([x])=>x!=='bekliyor').map(([x,ad,ipucu])=>`<div class="kal-karar"><div><b>${esc(ad)}</b><small>${esc(ipucu)}</small></div>${kaliteSayiKutu('kk-'+x, m[x], `kaliteKararYaz('${x}',this.value)`)}</div>`).join('')}
       ${kaliteSayi(m.revizyon) ? `<div class="kal-blok-bas" style="margin-top:10px">Geri gideceği operasyon <small>geçmiş rota</small></div>${kaliteGeriMakineSecici(rota, m.geriMakine, 'kaliteKararYaz')}` : ''}
       ${kaliteSayi(m.yariMamul) ? `<div class="field" style="margin-top:10px"><label>Nerede kullanılabilir? (isteğe bağlı)</label><input placeholder="ör. M8 kalıbında delik büyütülerek" value="${esc(m.kullanimNotu)}" oninput="kaliteKararModal.kullanimNotu=this.value"></div>` : ''}
-      <div style="display:flex;gap:8px;margin-top:12px">
+      </div>
+      <div class="kal-modal-alt">
         <button class="btn-primary" style="flex:1" ${m.busy?'disabled':''} onclick="kaliteKararKaydet()">${m.busy?'Kaydediliyor…':'Kararı Kaydet'}</button>
         <button class="btn-ghost" onclick="kaliteKararKapat()">Vazgeç</button>
       </div>
@@ -181,7 +183,7 @@ function renderYmCikisModal(){
   const x = yariMamulKayitlari().find(r=>r.key===m.key); if(!x){ ymCikisModal = null; return ''; }
   const hurda = m.tur==='hurda';
   return `<div class="modal-overlay" onclick="if(event.target===this)ymCikisKapat()">
-    <div class="modal-box" style="max-width:420px;padding:20px">
+    <div class="modal-box" style="max-width:420px;padding:20px;overflow-y:auto">
       <div class="sec-h" style="margin-top:0">${hurda?'Hurdaya ayır':'Yarı mamulü kullan'} — ${esc(x.e.talepNo||x.e.isEmriNo||'')}</div>
       <div style="font-size:12.5px;color:var(--text-muted);margin:-6px 0 12px">${esc((typeof usMamulAdi==='function' && usMamulAdi(x.e))||'')} · depoda ${x.kalan} parça${x.kullanimNotu?`<br>Not: ${esc(x.kullanimNotu)}`:''}</div>
       <div class="field"><label>Adet</label><input inputmode="numeric" value="${esc(m.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); ymCikisModal.adet=this.value"></div>
@@ -205,9 +207,10 @@ function renderUygModal(){
       <small>${i+1}</small><b class="mono">${esc(String(o.makine||'').split(' · ')[0])}</b><span>${esc(o.operatorName||o.operatorUsername||'')}</span><em>${fmtDT(o.endTs||o.startTs).split(' ')[0]}</em></button>`).join('')}
     <button type="button" class="kal-hata-adim belirsiz ${secili===KALITE_HATA_BELIRSIZ?'on':''}" onclick="uygYaz('hata','${KALITE_HATA_BELIRSIZ}')"><b>Belli değil</b></button></div>`;
   return `<div class="modal-overlay" onclick="if(event.target===this)uygKapat()">
-    <div class="modal-box" style="max-width:560px;padding:20px">
-      <div class="sec-h" style="margin-top:0">Uygunsuzluk bildir — ${esc(e.talepNo||e.isEmriNo||'')}</div>
-      <div style="font-size:12.5px;color:var(--text-muted);margin:-6px 0 12px">Final Kalite Kontrol'e gelmeden fark edilen hata. ${esc((typeof usMamulAdi==='function' && usMamulAdi(e))||'')}</div>
+    <div class="modal-box kal-modal" style="max-width:560px">
+      <div class="kal-modal-bas"><div class="sec-h" style="margin-top:0">Uygunsuzluk bildir — ${esc(e.talepNo||e.isEmriNo||'')}</div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin:-6px 0 0">Final Kalite Kontrol'e gelmeden fark edilen hata. ${esc((typeof usMamulAdi==='function' && usMamulAdi(e))||'')}</div></div>
+      <div class="kal-modal-govde">
       <div class="kal-satir"><label>Hatalı adet</label><input class="kal-sayi mono" inputmode="numeric" value="${esc(m.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); uygModal.adet=this.value"></div>
       <div class="kal-blok-bas">Neden</div>
       <input list="uyg-neden" placeholder="Listeden seç ya da yaz" value="${esc(m.neden)}" onchange="uygYaz('neden', this.value.trim())">
@@ -220,7 +223,8 @@ function renderUygModal(){
       <div class="kal-karar-secim">${UYG_KARAR.map(([k,ad,ipucu])=>`<button type="button" class="kal-karar-btn ${m.karar===k?'on':''}" onclick="uygYaz('karar','${k}')"><b>${esc(ad)}</b><small>${esc(ipucu)}</small></button>`).join('')}</div>
       ${m.karar==='revizyon' ? `<div class="kal-blok-bas" style="margin-top:10px">Geri gideceği operasyon</div>${kaliteGeriMakineSecici(rota, m.geriMakine, 'uygYaz')}` : ''}
       ${m.karar==='yariMamul' ? `<div class="field" style="margin-top:10px"><label>Nerede kullanılabilir? (isteğe bağlı)</label><input placeholder="ör. M8 kalıbında delik büyütülerek" value="${esc(m.kullanimNotu)}" oninput="uygModal.kullanimNotu=this.value"></div>` : ''}
-      <div style="display:flex;gap:8px;margin-top:14px">
+      </div>
+      <div class="kal-modal-alt">
         <button class="btn-primary" style="flex:1" ${m.busy?'disabled':''} onclick="uygKaydet()">${m.busy?'Kaydediliyor…':'Kaydet'}</button>
         <button class="btn-ghost" onclick="uygKapat()">Vazgeç</button>
       </div>

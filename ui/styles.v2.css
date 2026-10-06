@@ -1521,3 +1521,14 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .kal-textarea{display:block;width:100%;box-sizing:border-box;min-height:78px;resize:vertical;margin:0;line-height:1.45;padding:10px 12px}
 .modal-box .kal-satir .kal-sayi,.durus-modal-list .kal-satir .kal-sayi{width:110px}
 .modal-box input[list],.durus-modal-list input[list]{width:100%;box-sizing:border-box}
+/* Kalite pencereleri: laptop yüksekliğinde de Kaydet görünsün — orta kısım kayar, alt şerit sabit (06.10.2026) */
+.kal-modal{max-height:calc(100dvh - 24px);padding:0}
+.kal-modal-bas{padding:18px 20px 10px;flex:none;border-bottom:1px solid var(--border)}
+.kal-modal-govde{flex:1;min-height:0;overflow-y:auto;padding:12px 20px 14px;overscroll-behavior:contain}
+.kal-modal-alt{flex:none;display:flex;gap:8px;padding:12px 20px 16px;border-top:1px solid var(--border);background:var(--panel)}
+.kal-modal-alt .btn-ghost{width:auto}
+@media (max-height:760px){
+  .kal-textarea{min-height:58px}
+  .kal-hata-adim{min-height:50px;padding:5px 9px}
+  .kal-karar-btn{min-height:44px;padding:6px 10px}
+}
