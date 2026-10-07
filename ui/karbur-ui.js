@@ -83,7 +83,14 @@ function renderKarburPlan(){
      KAYDET bölümü). Toplam üzerinden bakılır: aynı kalem birden fazla satırda geçebiliyor. */
   const eksikler = showPlan ? karburPlanEksikleri(plan) : [];
 
-  let html = `<div class="card" style="margin-bottom:14px">
+  let html = (karburDuzeltilenPlan || karburDuzeltmeOf) ? `<div class="card" style="margin-bottom:14px;border-color:var(--warn);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px">✎ <b>${esc(karburDuzeltilenPlan || karburDuzeltmeOf)}</b> ${karburDuzeltilenPlan
+        ? 'düzeltiliyor — yanlış satırı sil ya da değiştir, HESAPLA, sonra <b>DÜZELT VE KAYDET</b>: eski plan otomatik geri alınır, bu hâl yeni plan olarak kaydedilir.'
+        : 'geri alındı; yeni hâli henüz kaydedilmedi — HESAPLA ve KAYDET.'}</span>
+      <div style="flex:1"></div>
+      ${karburDuzeltilenPlan ? `<button type="button" class="btn-ghost" style="padding:3px 10px;font-size:11.5px" onclick="karburDuzeltVazgec()">Vazgeç</button>` : ''}
+    </div>` : '';
+  html += `<div class="card" style="margin-bottom:14px">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px">İş emirleri — gerekli parçalar</div>
     ${renderKarburRowsTable()}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px">
@@ -144,7 +151,7 @@ function renderKarburPlan(){
       ${canManageKarbur()
         ? `<button type="button" class="btn-primary" ${(karburBusy||eksikler.length)?'disabled':''}
              ${eksikler.length?'title="Stok yetersiz — yukarıdaki listeye bak"':''}
-             onclick="karburPlanKaydet()">${karburBusy?'Kaydediliyor…':(eksikler.length?'KAYDEDİLEMEZ — stok yetersiz':'KAYDET')}</button>`
+             onclick="karburPlanKaydet()">${karburBusy?'Kaydediliyor…':(eksikler.length?'KAYDEDİLEMEZ — stok yetersiz':(karburDuzeltilenPlan?'DÜZELT VE KAYDET':'KAYDET'))}</button>`
         : ''}
     </div>
   </div>`;
@@ -740,7 +747,11 @@ function renderKarburGecmis(){
   const iePlanlari = {};
   tumGruplar.filter(g => !g.iptal).forEach(g => g.ieler.forEach(n => { (iePlanlari[n] = iePlanlari[n] || new Set()).add(g.planNo); }));
   const yerineGecen = {};
-  tumGruplar.forEach(g => { if(g.girdi && g.girdi.kaynakPlanNo) yerineGecen[g.girdi.kaynakPlanNo] = g.planNo; });
+  const duzeltilen = {};
+  tumGruplar.forEach(g => {
+    if(g.girdi && g.girdi.duzeltmeOf) duzeltilen[g.girdi.duzeltmeOf] = g.planNo;
+    else if(g.girdi && g.girdi.kaynakPlanNo) yerineGecen[g.girdi.kaynakPlanNo] = g.planNo;
+  });
 
   let html = `<div class="card" style="margin-bottom:14px">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -769,8 +780,10 @@ function renderKarburGecmis(){
         <b style="font-size:13px;cursor:pointer;user-select:none;${g.iptal?'opacity:.7':''}" onclick="karburGecmisToggle('${escJs(g.planNo)}')" title="Aç / kapat"><span style="display:inline-block;width:14px;color:var(--text-muted)">${acik?'▾':'▸'}</span><span style="${g.iptal?'text-decoration:line-through':''}">${esc(g.planNo)}</span></b>
         ${g.iptal ? `<span class="chip" style="pointer-events:none;border-color:var(--danger);color:var(--danger);font-size:10.5px">GERİ ALINDI</span>` : ''}
         <span style="font-size:11.5px;color:var(--text-muted)">${karburTarih(g.ts)} · ${esc(g.kim || '—')}</span>
-        ${yerineGecen[g.planNo] ? `<span style="font-size:11px;color:var(--text-muted)">⟳ yeniden yüklenip <b>${esc(yerineGecen[g.planNo])}</b> olarak kaydedildi</span>` : ''}
-        ${g.girdi && g.girdi.kaynakPlanNo ? `<span style="font-size:11px;color:var(--text-muted)">⟳ ${esc(g.girdi.kaynakPlanNo)} planından yüklendi</span>` : ''}
+        ${duzeltilen[g.planNo] ? `<span style="font-size:11px;color:var(--warn)">✎ <b>${esc(duzeltilen[g.planNo])}</b> ile düzeltildi</span>`
+          : yerineGecen[g.planNo] ? `<span style="font-size:11px;color:var(--text-muted)">⟳ yeniden yüklenip <b>${esc(yerineGecen[g.planNo])}</b> olarak kaydedildi</span>` : ''}
+        ${g.girdi && g.girdi.duzeltmeOf ? `<span style="font-size:11px;color:var(--warn)">✎ ${esc(g.girdi.duzeltmeOf)} düzeltmesi</span>`
+          : g.girdi && g.girdi.kaynakPlanNo ? `<span style="font-size:11px;color:var(--text-muted)">⟳ ${esc(g.girdi.kaynakPlanNo)} planından yüklendi</span>` : ''}
         <div style="flex:1"></div>
         <span style="font-size:11.5px;${g.iptal?'opacity:.6':''}">${[
           cubukToplam ? cubukToplam + ' çubuk' : '',
@@ -782,6 +795,8 @@ function renderKarburGecmis(){
         ${(()=>{ const ie = [...new Set(g.tahsis.concat(g.fire).map(h=>h.isEmriNo).filter(Boolean))];
           if(!ie.length || g.iptal) return ''; /* geri alınan planda EDM sayacı anlamsız — kesim yerine geçen planla yapılır */ const kesilen = ie.filter(n=>{ const d = karburEdmDurumu(n, g.ts); return d && d.durum==='kesildi'; }).length;
           return `<span class="chip" style="pointer-events:none;font-size:10.5px;border-color:${kesilen===ie.length?'var(--success)':'var(--warn)'};color:${kesilen===ie.length?'var(--success)':'var(--warn)'}" title="Tel erozyonda (TE01/TE02) kesimi yapılan iş emri">EDM ${kesilen}/${ie.length} kesildi</span>`; })()}
+        ${(canManageKarbur() && !g.iptal) ? `<button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px;border-color:var(--warn);color:var(--warn)" ${karburBusy?'disabled':''}
+          onclick="karburPlanDuzelt('${escJs(g.planNo)}')" title="Planı Kesim Planı ekranında aç, yanlış satırı düzelt — kaydedince eski plan otomatik geri alınır, doğru satırlar korunur">✎ Düzelt</button>` : ''}
         ${canManageKarbur() ? `<button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" ${karburBusy?'disabled':''}
           onclick="karburPlanYukle('${escJs(g.planNo)}')" title="Bu planın satırlarını Kesim Planı ekranına yükle — yeni plan olarak tekrar kaydedebilirsin">⟳ Yeniden yükle</button>` : ''}
         <button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" onclick="karburGecmisRaporYazdir('${escJs(g.planNo)}')" title="Bu planın kesim raporunu aç / yazdır">🖨 Kesim raporu</button>
@@ -790,7 +805,7 @@ function renderKarburGecmis(){
           title="Bu planın stok düşümlerini ve iş emri tüketimini geri al">↩ Geri al</button>` : ''}
       </div>
       ${cakisanIe ? `<div style="font-size:12px;color:var(--danger);background:color-mix(in srgb, var(--danger) 10%, transparent);border-radius:6px;padding:6px 9px;margin:-2px 0 8px">
-        ⚠ Bu plandaki ${cakisanIe} iş emrine <b>${cakisanPlanlar.map(esc).join(', ')}</b> planında da çıkış yapılmış — iki plan da geçerli, stok iki kez düşülmüş. Yanlış olanı ↩ Geri al.</div>` : ''}
+        ⚠ Bu plandaki ${cakisanIe} iş emrine <b>${cakisanPlanlar.map(esc).join(', ')}</b> planında da çıkış yapılmış — iki plan da geçerli, stok iki kez düşülmüş. Yalnız bazı satırlar yanlışsa <b>✎ Düzelt</b> (doğru satırlar korunur); planın tamamı yanlışsa ↩ Geri al.</div>` : ''}
       <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:11.5px">
         <span style="color:var(--text-muted)">İş emirleri:</span>
         <span class="mono" style="${g.iptal?'opacity:.6':''}">${g.ieler.length ? g.ieler.slice(0, 10).map(esc).join(', ') + (g.ieler.length > 10 ? ` <span style="color:var(--text-muted)">+${g.ieler.length - 10}</span>` : '') : '—'}</span>

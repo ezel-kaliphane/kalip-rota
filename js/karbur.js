@@ -59,6 +59,8 @@ let karburHareketler = [];
 let karburSubView = 'plan';          // plan | stok | giris | excel | gecmis
 let karburRows = [];                 // kesim planı giriş satırları
 let karburYuklenenPlan = null;       // "yeniden yükle" ile ekrana alınan plan — yeni plan kaydına kaynak olarak yazılır
+let karburDuzeltilenPlan = null;     // "✎ Düzelt" ile açılan plan — KAYDET önce bunu geri alır, sonra yeni hâli kaydeder
+let karburDuzeltmeOf = null;         // geri alması yapılmış, yeni hâli henüz kaydedilmemiş düzeltmenin kaynağı
 let karburPay = KARBUR_PAY_VARSAYILAN;
 let karburBasePlan = null;           // fire seçimi öncesi ilk plan (ÖNCE/SONRA karşılaştırması)
 let karburAssigns = {};              // parçaKey -> fireId
@@ -471,7 +473,7 @@ function karburSetAdetRowSel(i, f, v){ if(!karburAdetRows[i]) return; karburAdet
 function karburSetPay(v){ const n = karburNum(v); if(n >= 0) karburPay = n; karburResetPlan(); }
 function karburResetPlan(){ karburBasePlan = null; karburAssigns = {}; karburRodPick = {}; karburSaveSummary = null; karburEksikUyari = null; karburPlanNo = null; }
 function karburHesapla(){ karburResetPlan(); karburPlanNo = karburYeniPlanNo(); karburBasePlan = karburComputePlan(); render(); }
-function karburPlanTemizle(){ karburRows = []; karburAdetRows = []; karburYuklenenPlan = null; karburResetPlan(); render(); }
+function karburPlanTemizle(){ karburRows = []; karburAdetRows = []; karburYuklenenPlan = null; karburDuzeltilenPlan = null; karburDuzeltmeOf = null; karburResetPlan(); render(); }
 function karburSetRodPick(key, kod){ karburRodPick[key] = kod; karburSaveSummary = null; karburEksikUyari = null; render(); }
 function karburOpenPicker(key){ karburPickerFor = key; render(); }
 function karburClosePicker(){ karburPickerFor = null; render(); }
@@ -609,7 +611,26 @@ function karburEksikListesi(hazirlik, stokMap, fireMap){
 
 /* Ekranın kullandığı hâli — yerel kopyalarla, ağ trafiği yok. */
 function karburPlanEksikleri(plan){
+  if(karburDuzeltilenPlan){
+    const s = karburDuzeltmeSanalStok(karburDuzeltilenPlan);
+    return karburEksikListesi(karburCikisHazirla(plan), s.stok, s.fire);
+  }
   return karburEksikListesi(karburCikisHazirla(plan), karburStok, karburFire);
+}
+/* Düzeltilen plan geri alınınca stok/havuz nasıl olur — yalnız ekrandaki kontrol için, yazmaz. */
+function karburDuzeltmeSanalStok(planNo){
+  const stok = {}, fire = {};
+  Object.entries(karburStok || {}).forEach(([id, v]) => { stok[id] = { ...v }; });
+  Object.entries(karburFire || {}).forEach(([id, v]) => { fire[id] = { ...v }; });
+  (karburHareketler || []).filter(h => h.planNo === planNo && h.tip !== 'iptal' && !h.iptalTs).forEach(h => {
+    const adet = Number(h.adet) || 0;
+    if(h.tip === 'fire_uretim'){ if(fire[h.fireId]) fire[h.fireId].adet = (Number(fire[h.fireId].adet) || 0) - adet; }
+    else if(adet < 0){
+      if(h.katalogId){ stok[h.katalogId] = stok[h.katalogId] || { adet: 0 }; stok[h.katalogId].adet = (Number(stok[h.katalogId].adet) || 0) - adet; }
+      else if(h.fireId && fire[h.fireId]) fire[h.fireId].adet = (Number(fire[h.fireId].adet) || 0) - adet;
+    }
+  });
+  return { stok, fire };
 }
 
 /* MÜKERRER ÇIKIŞ UYARISI (07.10.2026, kullanıcı isteği): "yeniden yükle dediğimde aynı işlere
@@ -619,6 +640,7 @@ function karburPlanEksikleri(plan){
    onay istenir; onaylanırsa kayıt normal devam eder. */
 function karburPlanKaydet(mukerrerOnayli){
   if(!canManageKarbur() || karburBusy) return;
+  if(karburDuzeltilenPlan){ karburDuzeltmeUygula(); return; }
   if(mukerrerOnayli !== true){
     const bazlar = [...new Set(karburCikisHazirla(karburComputePlan()).hareketler
       .filter(h => h.isEmriNo).map(h => karburBaseIsEmri(h.isEmriNo)).filter(Boolean))];
@@ -632,7 +654,7 @@ function karburPlanKaydet(mukerrerOnayli){
             const satir = onceki.slice(0, 12).map(([b, o]) => '• ' + b + ' — ' + [Number(o.parca) ? o.parca + ' parça' : '', Number(o.mm) ? karburFmt(o.mm) + ' mm' : ''].filter(Boolean).join(', ') + (o.sonPlanNo ? ' (' + o.sonPlanNo + ')' : '')).join('\n');
             const mesaj = 'DİKKAT — bu iş emirlerine daha önce karbür çıkışı yapılmış (' + onceki.length + '/' + bazlar.length + '):\n\n' + satir
               + (onceki.length > 12 ? '\n… +' + (onceki.length - 12) + ' iş emri daha' : '')
-              + '\n\nAynı işe ikinci kez çıkış stokta kaymaya yol açar. Yanlış çıkışı düzeltiyorsan önce eski planı Geçmiş\'ten ↩ Geri al.'
+              + '\n\nAynı işe ikinci kez çıkış stokta kaymaya yol açar. Yanlış çıkışı düzeltiyorsan bu planı kaydetme — Geçmiş\'te eski planda ✎ Düzelt kullan.'
               + '\n\nYine de kaydedilsin mi?';
             if(!confirm(mesaj)){ render(); return; }
           }
@@ -817,7 +839,7 @@ function karburPlanKaydet(mukerrerOnayli){
       Object.keys(ozetEk).forEach(base => { delete karburOzetCache[base]; });
       karburReceteYaz(receteGozlem);
       karburPlanGirdisiYaz(planNo, planGirdisi, now);
-      karburYuklenenPlan = null;
+      karburYuklenenPlan = null; karburDuzeltmeOf = null;
       /* Yazan cihaz kendi yazdığını görsün — yerel kopyalar tazelenir */
       ensureKarburStokLoaded(() => safeRender(), true);
       ensureKarburFireLoaded(() => safeRender(), true);
@@ -912,11 +934,22 @@ function karburPlanIptalVazgec(){ karburIptalOnay = null; render(); }
 function karburPlanIptalIste(planNo){
   if(!canManageKarbur() || karburIptalYukleniyor || karburBusy) return;
   karburIptalYukleniyor = true; karburIptalOnay = null; render();
-  DB.ref('karburHareketleri').orderByChild('planNo').equalTo(planNo).once('value').then(snap => {
+  karburIptalHazirla(planNo).then(onay => {
     karburIptalYukleniyor = false;
+    karburIptalOnay = onay;
+    render();
+  }).catch(err => {
+    karburIptalYukleniyor = false;
+    toast((err && err.message) || 'Plan okunamadı');
+    render();
+  });
+}
+/* Planın hareketlerini TAZE okur, geri almada ne yapılacağını çıkarır — yazmaz. */
+function karburIptalHazirla(planNo){
+  return DB.ref('karburHareketleri').orderByChild('planNo').equalTo(planNo).once('value').then(snap => {
     const kayitlar = Object.entries(snap.val() || {}).map(([id, x]) => ({ id, ...x }));
-    if(!kayitlar.length){ toast('Bu plana ait hareket bulunamadı'); render(); return; }
-    if(kayitlar.some(h => h.iptalTs || h.tip === 'iptal')){ toast('Bu plan zaten geri alınmış'); render(); return; }
+    if(!kayitlar.length) throw new Error('Bu plana ait hareket bulunamadı');
+    if(kayitlar.some(h => h.iptalTs || h.tip === 'iptal')) throw new Error('Bu plan zaten geri alınmış');
 
     const stokEkle = {};   // katalogId -> iade edilecek adet
     const fireEkle = {};   // fireId    -> iade edilecek adet (planın TÜKETTİĞİ fire)
@@ -944,27 +977,22 @@ function karburPlanIptalIste(planNo){
 
     const cubukVar = kayitlar.some(h => h.tip === 'kesim');
     const uretimVar = kayitlar.some(h => h.tip === 'fire_uretim');
-    karburIptalOnay = { planNo, kayitlar, stokEkle, fireEkle, fireDus, ozetDus,
+    return { planNo, kayitlar, stokEkle, fireEkle, fireDus, ozetDus,
       /* Eski plan: kesim yapılmış ama artıkların nereye gittiği kayıtlı değil. */
       uyari: (cubukVar && !uretimVar) ? 'artik-bilinmiyor' : null };
-    render();
-  }).catch(err => {
-    karburIptalYukleniyor = false;
-    toast('Plan okunamadı: ' + ((err && err.message) || 'hata'));
-    render();
   });
 }
 
 function karburPlanIptalUygula(){
   const o = karburIptalOnay;
-  if(!o || !canManageKarbur() || karburBusy) return;
+  if(!o || !canManageKarbur() || karburBusy) return Promise.resolve(false);
   karburBusy = true; render();
   const now = Date.now();
   const hareketler = [];
 
   /* 1) Önce havuzdan düşülecekler — tek başarısız olabilecek adım. Planın ürettiği artık bu
         arada başka bir işte kullanılmışsa havuzda yok; o zaman hiçbir şey yapılmadan durulur. */
-  karburStokDus({}, o.fireDus).then(dusResults => {
+  return karburStokDus({}, o.fireDus).then(dusResults => {
     dusResults.forEach(r => {
       hareketler.push({ tip: 'iptal', fireId: r.id, kod: karburFireKodu(karburFireById(r.id) || {}),
         adet: -r.miktar, oncekiAdet: r.sonraki + r.miktar, sonrakiAdet: r.sonraki,
@@ -1038,11 +1066,67 @@ function karburPlanIptalUygula(){
     loadKarburHareketleri(200);
     toast(planNo + ' geri alındı');
     render();
+    return true;
   }).catch(err => {
     karburBusy = false;
     ensureKarburStokLoaded(() => safeRender(), true);
     ensureKarburFireLoaded(() => safeRender(), true);
     toast('Geri alınamadı: ' + ((err && err.message) || 'hata'));
+    render();
+    return false;
+  });
+}
+
+/* ==================== PLANI DÜZELT (07.10.2026, kullanıcı isteği) ====================
+   "Yanlış bir iş olduğunda düzeltmek problemli": geri alma planın TAMAMINI siliyor, doğru
+   satırlar da gidiyordu (5SWP'de 8 iş emrinin 2'si gerçekti). Düzelt = plan Kesim Planı
+   ekranına açılır, kullanıcı yanlış satırı siler/değiştirir, KAYDET tek adımda: (1) eski plan
+   bildiğimiz geri alma ile geri alınır, (2) stok taze okunur, (3) ekrandaki hâl yeni plan olarak
+   normal KAYDET yolundan kaydedilir (mükerrer uyarısı dahil — eski planın tüketimi artık
+   silindiği için yalnız BAŞKA planlardaki çakışmalar uyarılır). Yeni planın girdisinde
+   duzeltmeOf = eski plan; Geçmiş ikisini birbirine bağlı gösterir.
+   Atomik değil: geri alma olur da kayıt olmazsa (stok değişmiş, kullanıcı vazgeçti) satırlar
+   ekranda kalır ve uyarılır — sonraki KAYDET yine düzeltme olarak bağlanır. */
+function karburPlanDuzelt(planNo){
+  if(!canManageKarbur() || karburBusy){ return; }
+  if((karburHareketler || []).some(h => h.planNo === planNo && (h.iptalTs || h.tip === 'iptal'))){ toast('Bu plan geri alınmış — düzeltilecek bir şey yok'); return; }
+  const k = karburPlanSatirlariniKur(planNo);
+  if(!k.satirlar.length && !k.adetSatirlar.length){ toast('Bu plandan satır çıkarılamadı'); return; }
+  if((karburRows.length || karburAdetRows.length) && !confirm('Kesim Planı ekranındaki mevcut satırlar silinip ' + planNo + ' düzeltme için açılsın mı?')) return;
+  karburRows = k.satirlar.map(r => ({ isEmri:r.isEmri||'', disCap:r.disCap||'', delik:r.delik||'', kalite:r.kalite||'', boy:r.boy||'', adet:r.adet||'' }));
+  karburAdetRows = k.adetSatirlar.map(r => ({ isEmri:r.isEmri||'', katalogId:r.katalogId||'', adet:r.adet||'' }));
+  if(k.pay != null && karburNum(k.pay) >= 0) karburPay = karburNum(k.pay);
+  karburYuklenenPlan = planNo; karburDuzeltilenPlan = planNo; karburDuzeltmeOf = null;
+  karburResetPlan(); karburSubView = 'plan';
+  toast(planNo + ' düzeltme için açıldı' + (k.tam ? '' : ' (eski plan: kayıtlardan kuruldu, kontrol et)') + (k.atlanan ? ' · ' + k.atlanan + ' kayıt çıkarılamadı' : ''));
+  render();
+}
+function karburDuzeltVazgec(){ karburDuzeltilenPlan = null; karburYuklenenPlan = null; karburDuzeltmeOf = null; render(); }
+function karburDuzeltmeUygula(){
+  const eski = karburDuzeltilenPlan;
+  if(!eski || karburBusy) return;
+  const plan = karburComputePlan(), t = karburPlanTotals(plan);
+  const bos = !t.kesimsiz && !t.cubuk && !t.adetToplam && !Object.keys(karburAssigns).length;
+  if(!confirm(eski + ' DÜZELTİLECEK:\n\n1) ' + eski + ' geri alınır — stok iade edilir, iş emri tüketimleri silinir.\n2) '
+      + (bos ? 'Ekranda kaydedilecek çıkış yok — yalnız geri alma yapılır.' : 'Ekrandaki hâl yeni plan olarak kaydedilir.') + '\n\nDevam edilsin mi?')) return;
+  karburBusy = true; render();
+  karburIptalHazirla(eski).then(onay => {
+    karburBusy = false;
+    karburIptalOnay = onay;
+    return karburPlanIptalUygula();
+  }).then(ok => {
+    if(!ok) return;                                   // geri alma olmadı — hiçbir şey değişmedi, düzeltme modunda kalınır
+    karburDuzeltilenPlan = null; karburDuzeltmeOf = eski;
+    if(bos){ karburYuklenenPlan = null; karburDuzeltmeOf = null; render(); return; }
+    return Promise.all([DB.ref('karburStok').once('value'), DB.ref('karburFire').once('value')]).then(s => {
+      karburStok = s[0].val() || {}; karburFire = s[1].val() || {};
+      karburPlanKaydet();
+      /* Kayıt olmazsa (stok, vazgeçme) satırlar ekranda — kullanıcı neyin olduğunu bilsin */
+      setTimeout(() => { if(karburDuzeltmeOf === eski && !karburBusy) toast(eski + ' geri alındı; yeni hâli henüz KAYDEDİLMEDİ — satırlar ekranda, KAYDET ile kaydet'); }, 4000);
+    });
+  }).catch(err => {
+    karburBusy = false;
+    toast('Düzeltilemedi: ' + ((err && err.message) || 'hata'));
     render();
   });
 }
@@ -1581,12 +1665,13 @@ function karburPlanGirdisi(){
       .filter(r => r.isEmri || r.disCap || r.boy || r.adet),
     adetSatirlar: karburAdetRows.map(r => ({ isEmri: String(r.isEmri||'').trim(), katalogId: r.katalogId||'', adet: r.adet||'' })).filter(r => r.katalogId),
     pay: karburPay,
-    kaynakPlanNo: karburYuklenenPlan || null
+    kaynakPlanNo: karburYuklenenPlan || null,
+    duzeltmeOf: karburDuzeltmeOf || null
   };
 }
 function karburPlanGirdisiYaz(planNo, g, ts){
   if(!planNo || !g || (!g.satirlar.length && !g.adetSatirlar.length)) return;
-  DB.ref('karburHareketleri').push({ tip:'plan', planNo, ts: ts || Date.now(), satirlar: g.satirlar, adetSatirlar: g.adetSatirlar, pay: g.pay, kaynakPlanNo: g.kaynakPlanNo || null,
+  DB.ref('karburHareketleri').push({ tip:'plan', planNo, ts: ts || Date.now(), satirlar: g.satirlar, adetSatirlar: g.adetSatirlar, pay: g.pay, kaynakPlanNo: g.kaynakPlanNo || null, duzeltmeOf: g.duzeltmeOf || null,
     operatorUsername: session.username, operatorName: session.displayName || session.username })
     .catch(err => console.warn('Plan girdisi yazılamadı:', err));
 }
@@ -1605,7 +1690,10 @@ function karburPlanSatirlariniKur(planNo){
         const boy = Math.round((karburNum(m[2]) - KARBUR_PAY_VARSAYILAN) * 100) / 100;
         satirlar.push({ isEmri: isEmri(h.isEmriNo), disCap: String(it.disCap), delik: it.delik||'', kalite: it.kalite||'', boy: karburFmt(boy), adet: m[1] });
       }
-      if(!bulundu) atlanan++;
+      if(!bulundu){
+        if(Number(h.mm) > 0) satirlar.push({ isEmri: isEmri(h.isEmriNo), disCap: String(it.disCap), delik: it.delik||'', kalite: it.kalite||'', boy: karburFmt(Math.max(0, Number(h.mm) - KARBUR_PAY_VARSAYILAN)), adet: '1' });
+        else atlanan++;
+      }
     } else if(h.tip === 'kesimsiz' && it){
       satirlar.push({ isEmri: isEmri(h.isEmriNo), disCap: String(it.disCap), delik: it.delik||'', kalite: it.kalite||'', boy: karburFmt(h.boy), adet: String(Math.abs(Number(h.parca||h.adet)||0)) });
     } else if(h.tip === 'adet_cikis' && h.katalogId){
@@ -1614,7 +1702,10 @@ function karburPlanSatirlariniKur(planNo){
       const f = karburFire[h.fireId];
       if(f) satirlar.push({ isEmri: isEmri(h.isEmriNo), disCap: String(f.disCap), delik: f.delik||'', kalite: f.kalite||'', boy: karburFmt(h.boy), adet:'1' });
       else atlanan++;
-    } else if(h.tip === 'kesim' && h.isEmriNo && h.oncekiAdet == null){ atlanan++; } // ilk sürüm: parça detayı yok
+    } else if(h.tip === 'kesim' && h.isEmriNo && h.oncekiAdet == null){   // ilk sürüm: parça detayı yok — toplam mm tek parça sayılır
+      if(it && Number(h.mm) > 0) satirlar.push({ isEmri: isEmri(h.isEmriNo), disCap: String(it.disCap), delik: it.delik||'', kalite: it.kalite||'', boy: karburFmt(Math.max(0, Number(h.mm) - KARBUR_PAY_VARSAYILAN)), adet: '1' });
+      else atlanan++;
+    }
   });
   return { satirlar, adetSatirlar, pay: null, tam: false, atlanan };
 }
@@ -1624,7 +1715,7 @@ function karburPlanYukle(planNo){
   if(!k.satirlar.length && !k.adetSatirlar.length){ toast('Bu plandan satır çıkarılamadı'); return; }
   /* Geçerli (geri alınmamış) planı yeniden yükleyip kaydetmek aynı iş emirlerine ikinci çıkış demek */
   const gecerli = !(karburHareketler || []).some(h => h.planNo === planNo && (h.iptalTs || h.tip === 'iptal'));
-  if(gecerli && !confirm(planNo + ' hâlâ GEÇERLİ — stoktan düşülmüş durumda.\n\nYeniden yükleyip kaydedersen aynı iş emirlerine İKİNCİ KEZ karbür çıkışı yapılır, stok kayar. Yanlış çıkışı düzeltiyorsan önce bu planı ↩ Geri al, sonra yeniden yükle.\n\nYine de yüklensin mi?')) return;
+  if(gecerli && !confirm(planNo + ' hâlâ GEÇERLİ — stoktan düşülmüş durumda.\n\nYeniden yükleyip kaydedersen aynı iş emirlerine İKİNCİ KEZ karbür çıkışı yapılır, stok kayar. Yanlış çıkışı düzeltiyorsan Yeniden yükle yerine ✎ Düzelt kullan.\n\nYine de yüklensin mi?')) return;
   if((karburRows.length || karburAdetRows.length) && !confirm('Kesim Planı ekranındaki mevcut satırlar silinip ' + planNo + ' yüklensin mi?')) return;
   karburRows = k.satirlar.map(r => ({ isEmri:r.isEmri||'', disCap:r.disCap||'', delik:r.delik||'', kalite:r.kalite||'', boy:r.boy||'', adet:r.adet||'' }));
   karburAdetRows = k.adetSatirlar.map(r => ({ isEmri:r.isEmri||'', katalogId:r.katalogId||'', adet:r.adet||'' }));
