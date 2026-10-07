@@ -1548,7 +1548,15 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .bom-deger{min-width:0;overflow-wrap:anywhere}
 .bom-ikincil{color:var(--text-muted)}
 .bom-yok{color:var(--warn)}
-.bom-bilesen{font-size:11px;font-weight:600;color:var(--accent)}
+.bom-dal-bas{margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:700;color:var(--accent)}
+.bom-dal-bas span{font-family:inherit;font-weight:400;color:var(--text-muted);margin-left:4px}
+.bom-rota-bas{padding-top:0;margin-top:4px}
+.bom-rota2{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.bom-dallar{display:grid;gap:6px}
+.bom-dal{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.bom-dal .route-chip{padding:2px 7px;font-size:11.5px}
+.bom-dal-ad{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--text-muted);min-width:50px}
+.bom-birles{align-self:stretch;width:10px;margin:11px 0;border:2px solid var(--text-muted);border-left:0;border-radius:0 8px 8px 0;opacity:.6}
 .bom-kaynak{font-size:10.5px;border:1px solid;border-radius:999px;padding:0 7px;margin-left:4px;white-space:nowrap}
 .bom-rota{display:inline-flex;gap:5px}
 .bom-rota .route-chip{padding:2px 7px;font-size:11.5px}
