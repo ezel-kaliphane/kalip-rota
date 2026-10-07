@@ -697,6 +697,15 @@ function karburAdetHucre(h){
 }
 function karburTarih(ts){ return ts ? new Date(ts).toLocaleString('tr-TR') : '—'; }
 
+/* Geçmiş sadeleştirme (07.10.2026, kullanıcı: "her şeyi gösteriyor ama geri aldığım plan hâlâ
+   orada, yeniden yüklediğim eski plan da duruyor"): plan kartları KAPALI gelir (özet satırı + iş
+   emirleri), detay tıklayınca açılır; geri alınan planlar varsayılan gizli. Aynı iş emrine birden
+   fazla GEÇERLİ plan çıkış yapmışsa kartta kırmızı uyarı; yeniden yüklenip kaydedilen planın
+   yerine geçeni yazılır (kaynakPlanNo). */
+let karburGecmisAcik = {}, karburGecmisIptalGoster = false;
+function karburGecmisToggle(planNo){ karburGecmisAcik[planNo] = !karburGecmisAcik[planNo]; render(); }
+function karburGecmisIptalToggle(){ karburGecmisIptalGoster = !karburGecmisIptalGoster; render(); }
+
 function renderKarburGecmis(){
   const hepsi = karburHareketler || [];
   const planli = hepsi.filter(h => h.planNo);
@@ -722,17 +731,29 @@ function renderKarburGecmis(){
     else if(h.tip === 'fire_kullanim') g.fire.push(h);
     else g.stok.push(h);
   });
-  const grupListe = Object.values(gruplar).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const tumGruplar = Object.values(gruplar).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const iptalSayisi = tumGruplar.filter(g => g.iptal).length;
+  const grupListe = karburGecmisIptalGoster ? tumGruplar : tumGruplar.filter(g => !g.iptal);
+  // İş emri -> o işe çıkış yapan GEÇERLİ planlar (mükerrer uyarısı için)
+  const ieBaz = n => String(n || '').replace(/_ELMAS$/i, '');
+  tumGruplar.forEach(g => { g.ieler = [...new Set(g.tahsis.concat(g.fire).concat(g.stok).map(h => ieBaz(h.isEmriNo)).filter(Boolean))]; });
+  const iePlanlari = {};
+  tumGruplar.filter(g => !g.iptal).forEach(g => g.ieler.forEach(n => { (iePlanlari[n] = iePlanlari[n] || new Set()).add(g.planNo); }));
+  const yerineGecen = {};
+  tumGruplar.forEach(g => { if(g.girdi && g.girdi.kaynakPlanNo) yerineGecen[g.girdi.kaynakPlanNo] = g.planNo; });
 
   let html = `<div class="card" style="margin-bottom:14px">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
       <div style="font-size:13px;font-weight:600">Kesim planları</div>
       <button type="button" class="btn-ghost" style="padding:2px 8px;font-size:11px" onclick="loadKarburHareketleri(200)">↻ Yenile</button>
       <span style="font-size:11px;color:var(--text-muted)">son ${hepsi.length} hareket okundu — tüm hareketler hiç toplu indirilmez</span>
+      <div style="flex:1"></div>
+      ${iptalSayisi ? `<label style="font-size:11.5px;color:var(--text-muted);display:flex;align-items:center;gap:5px;cursor:pointer">
+        <input type="checkbox" ${karburGecmisIptalGoster ? 'checked' : ''} onchange="karburGecmisIptalToggle()"> Geri alınanları göster (${iptalSayisi})</label>` : ''}
     </div>`;
 
   if(!grupListe.length){
-    html += `<div style="font-size:12.5px;color:var(--text-muted)">Kayıtlı plan yok — <b>↻ Yenile</b> ile okumayı tetikle.</div>`;
+    html += `<div style="font-size:12.5px;color:var(--text-muted)">${iptalSayisi ? 'Geçerli plan yok — geri alınanlar gizli.' : 'Kayıtlı plan yok — <b>↻ Yenile</b> ile okumayı tetikle.'}</div>`;
   }
 
   grupListe.forEach(g => {
@@ -740,31 +761,45 @@ function renderKarburGecmis(){
     const mmToplam = g.tahsis.concat(g.fire).reduce((a, h) => a + (Number(h.mm) || 0), 0);
     const parcaToplam = g.tahsis.concat(g.fire).reduce((a, h) => a + (Number(h.parca) || 0), 0);
     const artikToplam = g.artik.reduce((a, h) => a + (Number(h.adet) || 0), 0);
+    const acik = !!karburGecmisAcik[g.planNo] || !!(karburIptalOnay && karburIptalOnay.planNo === g.planNo);
+    const cakisanPlanlar = g.iptal ? [] : [...new Set(g.ieler.flatMap(n => [...(iePlanlari[n] || [])]))].filter(p => p !== g.planNo);
+    const cakisanIe = g.iptal ? 0 : g.ieler.filter(n => (iePlanlari[n] || new Set()).size > 1).length;
     html += `<div style="border:1px solid ${g.iptal?'var(--danger)':'var(--border)'};border-radius:9px;padding:10px 12px;margin-bottom:10px;background:var(--panel-alt)">
       <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px">
         <b style="font-size:13px;${g.iptal?'text-decoration:line-through;opacity:.7':''}">${esc(g.planNo)}</b>
         ${g.iptal ? `<span class="chip" style="pointer-events:none;border-color:var(--danger);color:var(--danger);font-size:10.5px">GERİ ALINDI</span>` : ''}
         <span style="font-size:11.5px;color:var(--text-muted)">${karburTarih(g.ts)} · ${esc(g.kim || '—')}</span>
+        ${yerineGecen[g.planNo] ? `<span style="font-size:11px;color:var(--text-muted)">⟳ yeniden yüklenip <b>${esc(yerineGecen[g.planNo])}</b> olarak kaydedildi</span>` : ''}
+        ${g.girdi && g.girdi.kaynakPlanNo ? `<span style="font-size:11px;color:var(--text-muted)">⟳ ${esc(g.girdi.kaynakPlanNo)} planından yüklendi</span>` : ''}
         <div style="flex:1"></div>
         <span style="font-size:11.5px;${g.iptal?'opacity:.6':''}">${[
           cubukToplam ? cubukToplam + ' çubuk' : '',
           parcaToplam ? parcaToplam + ' parça' : '',
           mmToplam ? karburFmt(mmToplam) + ' mm' : '',
           artikToplam ? artikToplam + ' artık' : '',
-          g.tahsis.length + ' iş emri'
+          g.ieler.length + ' iş emri'
         ].filter(Boolean).join(' · ')}</span>
         ${(()=>{ const ie = [...new Set(g.tahsis.concat(g.fire).map(h=>h.isEmriNo).filter(Boolean))];
           if(!ie.length) return ''; const kesilen = ie.filter(n=>{ const d = karburEdmDurumu(n, g.ts); return d && d.durum==='kesildi'; }).length;
           return `<span class="chip" style="pointer-events:none;font-size:10.5px;border-color:${kesilen===ie.length?'var(--success)':'var(--warn)'};color:${kesilen===ie.length?'var(--success)':'var(--warn)'}" title="Tel erozyonda (TE01/TE02) kesimi yapılan iş emri">EDM ${kesilen}/${ie.length} kesildi</span>`; })()}
         ${canManageKarbur() ? `<button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" ${karburBusy?'disabled':''}
-          onclick="karburPlanYukle('${escJs(g.planNo)}')" title="Bu planın satırlarını Kesim Planı ekranına yükle — yeni plan olarak tekrar kaydedebilirsin">⟳ Yeniden yükle</button>` : ''}
+          onclick="karburPlanYukle('${escJs(g.planNo)}')" title="Bu planın satırlarını Kesim Planı ekranına yükle — yeni plan olarak tekrar kaydedebilirsin">⟳ Yeniden yükle</button>` : ''}
         <button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" onclick="karburGecmisRaporYazdir('${escJs(g.planNo)}')" title="Bu planın kesim raporunu aç / yazdır">🖨 Kesim raporu</button>
         ${(canManageKarbur() && !g.iptal) ? `<button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px"
           ${(karburBusy||karburIptalYukleniyor)?'disabled':''} onclick="karburPlanIptalIste('${esc(g.planNo)}')"
           title="Bu planın stok düşümlerini ve iş emri tüketimini geri al">↩ Geri al</button>` : ''}
       </div>
+      ${cakisanIe ? `<div style="font-size:12px;color:var(--danger);background:color-mix(in srgb, var(--danger) 10%, transparent);border-radius:6px;padding:6px 9px;margin:-2px 0 8px">
+        ⚠ Bu plandaki ${cakisanIe} iş emrine <b>${cakisanPlanlar.map(esc).join(', ')}</b> planında da çıkış yapılmış — iki plan da geçerli, stok iki kez düşülmüş. Yanlış olanı ↩ Geri al.</div>` : ''}
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:11.5px">
+        <span style="color:var(--text-muted)">İş emirleri:</span>
+        <span class="mono" style="${g.iptal?'opacity:.6':''}">${g.ieler.length ? g.ieler.slice(0, 10).map(esc).join(', ') + (g.ieler.length > 10 ? ` <span style="color:var(--text-muted)">+${g.ieler.length - 10}</span>` : '') : '—'}</span>
+        <div style="flex:1"></div>
+        <button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" onclick="karburGecmisToggle('${escJs(g.planNo)}')">${acik ? 'Detayı gizle ▴' : 'Detay ▾'}</button>
+      </div>
       ${(karburIptalOnay && karburIptalOnay.planNo === g.planNo) ? renderKarburIptalOnay() : ''}`;
 
+    if(!acik){ html += `</div>`; return; }
     if(g.stok.length){
       html += `<div style="font-size:11px;color:var(--text-muted);margin:6px 0 3px">Stok etkisi</div>
         <table class="tbl"><tbody>

@@ -58,6 +58,7 @@ let karburKatalogReady = false, karburStokReady = false, karburFireReady = false
 let karburHareketler = [];
 let karburSubView = 'plan';          // plan | stok | giris | excel | gecmis
 let karburRows = [];                 // kesim planı giriş satırları
+let karburYuklenenPlan = null;       // "yeniden yükle" ile ekrana alınan plan — yeni plan kaydına kaynak olarak yazılır
 let karburPay = KARBUR_PAY_VARSAYILAN;
 let karburBasePlan = null;           // fire seçimi öncesi ilk plan (ÖNCE/SONRA karşılaştırması)
 let karburAssigns = {};              // parçaKey -> fireId
@@ -470,7 +471,7 @@ function karburSetAdetRowSel(i, f, v){ if(!karburAdetRows[i]) return; karburAdet
 function karburSetPay(v){ const n = karburNum(v); if(n >= 0) karburPay = n; karburResetPlan(); }
 function karburResetPlan(){ karburBasePlan = null; karburAssigns = {}; karburRodPick = {}; karburSaveSummary = null; karburEksikUyari = null; karburPlanNo = null; }
 function karburHesapla(){ karburResetPlan(); karburPlanNo = karburYeniPlanNo(); karburBasePlan = karburComputePlan(); render(); }
-function karburPlanTemizle(){ karburRows = []; karburAdetRows = []; karburResetPlan(); render(); }
+function karburPlanTemizle(){ karburRows = []; karburAdetRows = []; karburYuklenenPlan = null; karburResetPlan(); render(); }
 function karburSetRodPick(key, kod){ karburRodPick[key] = kod; karburSaveSummary = null; karburEksikUyari = null; render(); }
 function karburOpenPicker(key){ karburPickerFor = key; render(); }
 function karburClosePicker(){ karburPickerFor = null; render(); }
@@ -611,8 +612,35 @@ function karburPlanEksikleri(plan){
   return karburEksikListesi(karburCikisHazirla(plan), karburStok, karburFire);
 }
 
-function karburPlanKaydet(){
+/* MÜKERRER ÇIKIŞ UYARISI (07.10.2026, kullanıcı isteği): "yeniden yükle dediğimde aynı işlere
+   tekrar karbür çıkabildim, stokta kaymalar olur — kesin kural koyma ama uyarı koy". Kayıttan önce
+   plandaki iş emirlerinin karburIsEmriOzet'i TAZE okunur (iş emri başına tek küçük okuma; geri alınan
+   planlar özetten düşülmüş olduğu için yalnız geçerli çıkışlar görünür). Varsa liste gösterilip
+   onay istenir; onaylanırsa kayıt normal devam eder. */
+function karburPlanKaydet(mukerrerOnayli){
   if(!canManageKarbur() || karburBusy) return;
+  if(mukerrerOnayli !== true){
+    const bazlar = [...new Set(karburCikisHazirla(karburComputePlan()).hareketler
+      .filter(h => h.isEmriNo).map(h => karburBaseIsEmri(h.isEmriNo)).filter(Boolean))];
+    if(bazlar.length){
+      karburBusy = true; render();
+      Promise.all(bazlar.map(b => DB.ref('karburIsEmriOzet/' + b).once('value').then(s => [b, s.val()]).catch(() => [b, null])))
+        .then(liste => {
+          karburBusy = false;
+          const onceki = liste.filter(([b, o]) => o && ((Number(o.mm) || 0) > 0 || (Number(o.parca) || 0) > 0));
+          if(onceki.length){
+            const satir = onceki.slice(0, 12).map(([b, o]) => '• ' + b + ' — ' + [Number(o.parca) ? o.parca + ' parça' : '', Number(o.mm) ? karburFmt(o.mm) + ' mm' : ''].filter(Boolean).join(', ') + (o.sonPlanNo ? ' (' + o.sonPlanNo + ')' : '')).join('\n');
+            const mesaj = 'DİKKAT — bu iş emirlerine daha önce karbür çıkışı yapılmış (' + onceki.length + '/' + bazlar.length + '):\n\n' + satir
+              + (onceki.length > 12 ? '\n… +' + (onceki.length - 12) + ' iş emri daha' : '')
+              + '\n\nAynı işe ikinci kez çıkış stokta kaymaya yol açar. Yanlış çıkışı düzeltiyorsan önce eski planı Geçmiş\'ten ↩ Geri al.'
+              + '\n\nYine de kaydedilsin mi?';
+            if(!confirm(mesaj)){ render(); return; }
+          }
+          karburPlanKaydet(true);
+        });
+      return;
+    }
+  }
   const plan = karburComputePlan();
   const t = karburPlanTotals(plan);
   if(!t.kesimsiz && !t.cubuk && !t.adetToplam && !Object.keys(karburAssigns).length){ toast('Kaydedilecek çıkış yok'); return; }
@@ -789,6 +817,7 @@ function karburPlanKaydet(){
       Object.keys(ozetEk).forEach(base => { delete karburOzetCache[base]; });
       karburReceteYaz(receteGozlem);
       karburPlanGirdisiYaz(planNo, planGirdisi, now);
+      karburYuklenenPlan = null;
       /* Yazan cihaz kendi yazdığını görsün — yerel kopyalar tazelenir */
       ensureKarburStokLoaded(() => safeRender(), true);
       ensureKarburFireLoaded(() => safeRender(), true);
@@ -1551,12 +1580,13 @@ function karburPlanGirdisi(){
     satirlar: karburRows.map(r => ({ isEmri: String(r.isEmri||'').trim(), disCap: r.disCap||'', delik: r.delik||'', kalite: r.kalite||'', boy: r.boy||'', adet: r.adet||'' }))
       .filter(r => r.isEmri || r.disCap || r.boy || r.adet),
     adetSatirlar: karburAdetRows.map(r => ({ isEmri: String(r.isEmri||'').trim(), katalogId: r.katalogId||'', adet: r.adet||'' })).filter(r => r.katalogId),
-    pay: karburPay
+    pay: karburPay,
+    kaynakPlanNo: karburYuklenenPlan || null
   };
 }
 function karburPlanGirdisiYaz(planNo, g, ts){
   if(!planNo || !g || (!g.satirlar.length && !g.adetSatirlar.length)) return;
-  DB.ref('karburHareketleri').push({ tip:'plan', planNo, ts: ts || Date.now(), satirlar: g.satirlar, adetSatirlar: g.adetSatirlar, pay: g.pay,
+  DB.ref('karburHareketleri').push({ tip:'plan', planNo, ts: ts || Date.now(), satirlar: g.satirlar, adetSatirlar: g.adetSatirlar, pay: g.pay, kaynakPlanNo: g.kaynakPlanNo || null,
     operatorUsername: session.username, operatorName: session.displayName || session.username })
     .catch(err => console.warn('Plan girdisi yazılamadı:', err));
 }
@@ -1592,9 +1622,13 @@ function karburPlanYukle(planNo){
   if(!canManageKarbur()){ toast('Bu işlem için karbür yetkisi gerekli'); return; }
   const k = karburPlanSatirlariniKur(planNo);
   if(!k.satirlar.length && !k.adetSatirlar.length){ toast('Bu plandan satır çıkarılamadı'); return; }
+  /* Geçerli (geri alınmamış) planı yeniden yükleyip kaydetmek aynı iş emirlerine ikinci çıkış demek */
+  const gecerli = !(karburHareketler || []).some(h => h.planNo === planNo && (h.iptalTs || h.tip === 'iptal'));
+  if(gecerli && !confirm(planNo + ' hâlâ GEÇERLİ — stoktan düşülmüş durumda.\n\nYeniden yükleyip kaydedersen aynı iş emirlerine İKİNCİ KEZ karbür çıkışı yapılır, stok kayar. Yanlış çıkışı düzeltiyorsan önce bu planı ↩ Geri al, sonra yeniden yükle.\n\nYine de yüklensin mi?')) return;
   if((karburRows.length || karburAdetRows.length) && !confirm('Kesim Planı ekranındaki mevcut satırlar silinip ' + planNo + ' yüklensin mi?')) return;
   karburRows = k.satirlar.map(r => ({ isEmri:r.isEmri||'', disCap:r.disCap||'', delik:r.delik||'', kalite:r.kalite||'', boy:r.boy||'', adet:r.adet||'' }));
   karburAdetRows = k.adetSatirlar.map(r => ({ isEmri:r.isEmri||'', katalogId:r.katalogId||'', adet:r.adet||'' }));
+  karburYuklenenPlan = planNo;
   if(k.pay != null && karburNum(k.pay) >= 0) karburPay = karburNum(k.pay);
   karburResetPlan(); karburSubView = 'plan';
   toast(planNo + ' yüklendi — ' + (karburRows.length + karburAdetRows.length) + ' satır' + (k.tam ? '' : ' (eski plan: kayıtlardan kuruldu, kontrol et)') + (k.atlanan ? ' · ' + k.atlanan + ' kayıt çıkarılamadı' : '') + '. HESAPLA ile yeni plan olarak kaydedebilirsin.');
