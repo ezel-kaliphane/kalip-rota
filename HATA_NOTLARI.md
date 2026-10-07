@@ -5,6 +5,45 @@ hatayı ikinci kez yazmamak. En yeni üstte.
 
 ---
 
+## 2026-10-07 — Seçilen hammadde stoktan düşülmüyordu (iki ayrı sebep)
+
+**Belirti.** Tamamlanan Kodlar → BOM + Rota ekranında 366 tamamlanan iş emrinin yalnız
+%14'ünde BOM vardı; stok çıkışıyla kaydedilmiş hammadde 3 iş emriydi.
+
+**Sebep 1 — telefon formu.** Telefonda yeni iş formu iki adımlı (`isPhone()` → twoStep):
+hammadde 1. adımda seçiliyor, BAŞLAT 2. adımda. `baslat()` seçimi
+`document.getElementById('nf-stok-item')?.value||''` ile okuyordu — 2. adımda o kutu DOM'da
+yok, değer boş geliyor, seçilen hammadde **sessizce** düşülmüyordu. Seçim `newForm.stockItemId`
+içinde duruyordu; sadece okunmuyordu. Düzeltme: DOM yoksa `newForm`'dan oku (`??`).
+
+**Sebep 2 — "ilk operasyon" yanlış anahtarla.** `isFirstOperationFor(isEmriNo)` U koduna
+bakıyordu. Aynı CANIAS kodu ikinci kez üretime girince (yeni talep no) eski işin kayıtları
+bulunuyor, hammadde kutusu hiç çıkmıyordu. Düzeltme: talep no ile bakılıyor; birleşme (eksiz
+U kodu) dalları olan iş emrinde ilk operasyon sayılmıyor.
+
+**Ders.** Çok adımlı formda bir adımın alanını başka adımda `getElementById` ile okumak
+sessiz veri kaybıdır — form durumu tek kaynaktan (`newForm`) okunmalı. "İlk mi" gibi
+kontrollerin anahtarı (U kodu mu, iş emri mi) işin kimliğiyle aynı olmalı. Oranı düşük
+çıkan bir rapor çoğu zaman veri girişindeki bir hatanın ilk izidir: önce kaydın neden
+yazılmadığına bak.
+
+---
+
+## 2026-10-07 — Yama betiği dosyaya kaçak CR soktu (karbur-ui.js "metin değil")
+
+**Belirti.** `git ls-files --eol` → `ui/karbur-ui.js` `i/-text`; sonraki diff'ler dosyanın
+tamamını değişmiş gösterdi. Canlıda görünür etkisi yoktu.
+
+**Sebep.** Python yama betiğinde aranan metin önce `replace("\n", nl)` ile CRLF'ye çevrildi,
+sonra yeni metin bu ÇEVRİLMİŞ metinden türetilip bir kez daha aynı dönüşümden geçirildi →
+satır sonu `CR CR LF` oldu. Tek kaçak CR dosyayı git gözünde ikili yaptı. (Bu notu yazarken
+de aynısı oldu: heredoc içindeki kaçış dizileri gerçek CR'ye dönüştü — not dosyası yeniden
+HEAD'den kuruldu.)
+
+**Ders.** Satır sonu dönüşümü bir metne yalnız bir kez uygulanır; dönüştürülmüş metinden
+yeni metin türetme. Kaçış dizisi içeren metni kabuk heredoc'u ile değil dosyadan (raw string)
+ver. Commit'ten önce `git ls-files --eol` bakmak (zaten kural) ikisini de yakaladı.
+
 ## 2026-09-21 — Bayat çalışma kopyası: neredeyse geri alınan iki düzeltme
 
 **Belirti.** Yoktu — canlıya çıkmadı. İş Yoğunluğu yaması çalıştırılırken bir assert
