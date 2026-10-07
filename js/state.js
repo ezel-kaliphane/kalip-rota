@@ -337,6 +337,9 @@ function lotsArray(item){ return Object.entries(item.lots||{}).map(([id,v])=>({i
    tüketildi. */
 function isFirstOperationFor(isEmriNo, talepNo){
   if(!isEmriNo) return true;
+  /* Test kodu (DENEME) her seferinde ilk operasyon sayılır — denemeler birikince hammadde kutusu
+     kayboluyordu; kullanıcı isteği 07.10.2026. */
+  if(baseIsEmriNo(isEmriNo) === TEST_ISEMRI_NO) return true;
   const t = String(talepNo || '').trim().toUpperCase();
   if(!t) return !entriesArray().some(e => e.isEmriNo === isEmriNo);
   const ie = String(isEmriNo).toUpperCase(), base = baseIsEmriNo(ie), anaMi = base === ie;
