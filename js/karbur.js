@@ -611,26 +611,7 @@ function karburEksikListesi(hazirlik, stokMap, fireMap){
 
 /* Ekranın kullandığı hâli — yerel kopyalarla, ağ trafiği yok. */
 function karburPlanEksikleri(plan){
-  if(karburDuzeltilenPlan){
-    const s = karburDuzeltmeSanalStok(karburDuzeltilenPlan);
-    return karburEksikListesi(karburCikisHazirla(plan), s.stok, s.fire);
-  }
   return karburEksikListesi(karburCikisHazirla(plan), karburStok, karburFire);
-}
-/* Düzeltilen plan geri alınınca stok/havuz nasıl olur — yalnız ekrandaki kontrol için, yazmaz. */
-function karburDuzeltmeSanalStok(planNo){
-  const stok = {}, fire = {};
-  Object.entries(karburStok || {}).forEach(([id, v]) => { stok[id] = { ...v }; });
-  Object.entries(karburFire || {}).forEach(([id, v]) => { fire[id] = { ...v }; });
-  (karburHareketler || []).filter(h => h.planNo === planNo && h.tip !== 'iptal' && !h.iptalTs).forEach(h => {
-    const adet = Number(h.adet) || 0;
-    if(h.tip === 'fire_uretim'){ if(fire[h.fireId]) fire[h.fireId].adet = (Number(fire[h.fireId].adet) || 0) - adet; }
-    else if(adet < 0){
-      if(h.katalogId){ stok[h.katalogId] = stok[h.katalogId] || { adet: 0 }; stok[h.katalogId].adet = (Number(stok[h.katalogId].adet) || 0) - adet; }
-      else if(h.fireId && fire[h.fireId]) fire[h.fireId].adet = (Number(fire[h.fireId].adet) || 0) - adet;
-    }
-  });
-  return { stok, fire };
 }
 
 /* MÜKERRER ÇIKIŞ UYARISI (07.10.2026, kullanıcı isteği): "yeniden yükle dediğimde aynı işlere
@@ -1080,13 +1061,14 @@ function karburPlanIptalUygula(){
 /* ==================== PLANI DÜZELT (07.10.2026, kullanıcı isteği) ====================
    "Yanlış bir iş olduğunda düzeltmek problemli": geri alma planın TAMAMINI siliyor, doğru
    satırlar da gidiyordu (5SWP'de 8 iş emrinin 2'si gerçekti). Düzelt = plan Kesim Planı
-   ekranına açılır, kullanıcı yanlış satırı siler/değiştirir, KAYDET tek adımda: (1) eski plan
-   bildiğimiz geri alma ile geri alınır, (2) stok taze okunur, (3) ekrandaki hâl yeni plan olarak
-   normal KAYDET yolundan kaydedilir (mükerrer uyarısı dahil — eski planın tüketimi artık
-   silindiği için yalnız BAŞKA planlardaki çakışmalar uyarılır). Yeni planın girdisinde
-   duzeltmeOf = eski plan; Geçmiş ikisini birbirine bağlı gösterir.
-   Atomik değil: geri alma olur da kayıt olmazsa (stok değişmiş, kullanıcı vazgeçti) satırlar
-   ekranda kalır ve uyarılır — sonraki KAYDET yine düzeltme olarak bağlanır. */
+   ekranına açılır, kullanıcı yanlış satırı siler/değiştirir, "GERİ AL VE YENİDEN HESAPLA":
+   (1) eski plan bildiğimiz geri alma ile geri alınır, (2) stok taze okunur, (3) satırlar GÜNCEL
+   stokla yeniden hesaplanır. Kullanıcı planı görür (yazdırabilir) ve normal KAYDET'e basar —
+   mükerrer uyarısı dahil; eski planın tüketimi silindiği için yalnız BAŞKA planlar uyarılır.
+   Kendiliğinden kaydetmiyoruz: geri almadan önce ekrandaki plan eski planın tükettiği stok
+   olmadan hesaplanmıştı; iade sonrası kesimsiz/çubuk/fire seçimi değişebilir ve yazdırılan kâğıt
+   ile kayıt ayrışırdı (hata taraması 07.10.2026). Yeni planın girdisinde duzeltmeOf = eski plan;
+   Geçmiş ikisini birbirine bağlı gösterir. */
 function karburPlanDuzelt(planNo){
   if(!canManageKarbur() || karburBusy){ return; }
   if((karburHareketler || []).some(h => h.planNo === planNo && (h.iptalTs || h.tip === 'iptal'))){ toast('Bu plan geri alınmış — düzeltilecek bir şey yok'); return; }
@@ -1105,27 +1087,29 @@ function karburDuzeltVazgec(){ karburDuzeltilenPlan = null; karburYuklenenPlan =
 function karburDuzeltmeUygula(){
   const eski = karburDuzeltilenPlan;
   if(!eski || karburBusy) return;
-  const plan = karburComputePlan(), t = karburPlanTotals(plan);
-  const bos = !t.kesimsiz && !t.cubuk && !t.adetToplam && !Object.keys(karburAssigns).length;
-  if(!confirm(eski + ' DÜZELTİLECEK:\n\n1) ' + eski + ' geri alınır — stok iade edilir, iş emri tüketimleri silinir.\n2) '
-      + (bos ? 'Ekranda kaydedilecek çıkış yok — yalnız geri alma yapılır.' : 'Ekrandaki hâl yeni plan olarak kaydedilir.') + '\n\nDevam edilsin mi?')) return;
+  const satirVar = !!(karburRows.length || karburAdetRows.length);
+  if(!confirm(eski + ' GERİ ALINACAK:\n\nStok iade edilir, iş emri tüketimleri silinir.\n'
+      + (satirVar ? 'Ardından ekrandaki satırlar GÜNCEL stokla yeniden hesaplanır — planı kontrol edip KAYDET ile yeni plan olarak kaydedersin.'
+                  : 'Ekranda satır yok — yalnız geri alma yapılır.') + '\n\nDevam edilsin mi?')) return;
   karburBusy = true; render();
   karburIptalHazirla(eski).then(onay => {
     karburBusy = false;
     karburIptalOnay = onay;
     return karburPlanIptalUygula();
   }).then(ok => {
-    if(!ok) return;                                   // geri alma olmadı — hiçbir şey değişmedi, düzeltme modunda kalınır
-    karburDuzeltilenPlan = null; karburDuzeltmeOf = eski;
-    if(bos){ karburYuklenenPlan = null; karburDuzeltmeOf = null; render(); return; }
+    if(!ok){ karburIptalOnay = null; render(); return; }   // geri alma olmadı — hiçbir şey değişmedi, düzeltme modunda kalınır
+    karburDuzeltilenPlan = null; karburDuzeltmeOf = satirVar ? eski : null;
+    if(!satirVar){ karburYuklenenPlan = null; render(); return; }
+    karburBusy = true; render();
     return Promise.all([DB.ref('karburStok').once('value'), DB.ref('karburFire').once('value')]).then(s => {
       karburStok = s[0].val() || {}; karburFire = s[1].val() || {};
-      karburPlanKaydet();
-      /* Kayıt olmazsa (stok, vazgeçme) satırlar ekranda — kullanıcı neyin olduğunu bilsin */
-      setTimeout(() => { if(karburDuzeltmeOf === eski && !karburBusy) toast(eski + ' geri alındı; yeni hâli henüz KAYDEDİLMEDİ — satırlar ekranda, KAYDET ile kaydet'); }, 4000);
+      karburStokReady = true; karburFireReady = true;
+      karburBusy = false;
+      karburHesapla();
+      toast(eski + ' geri alındı — plan güncel stokla yeniden hesaplandı. Kontrol et, KAYDET ile kaydet.');
     });
   }).catch(err => {
-    karburBusy = false;
+    karburBusy = false; karburIptalOnay = null;
     toast('Düzeltilemedi: ' + ((err && err.message) || 'hata'));
     render();
   });

@@ -28,7 +28,7 @@ function bomRotaYukle(zorla){
   bomRotaVeri.yukleniyor = true; bomRotaVeri.hata = null;
   if(typeof ensureMalzemeBekleyenLoaded === 'function') ensureMalzemeBekleyenLoaded();
   if(typeof ensureHammaddeReceteLoaded === 'function') ensureHammaddeReceteLoaded(() => safeRender(), !!zorla);
-  const oku = yol => DB.ref(yol).once('value').then(s => s.val() || {}).catch(err => { bomRotaVeri.hata = (err && err.message) || 'okuma hatası'; return {}; });
+  const oku = yol => DB.ref(yol).once('value').then(s => s.val() || {}).catch(err => { bomRotaVeri.hata = (err && err.message) || 'okuma hatası'; return null; });
   Promise.all([oku('stockHareketleri'), oku('karburHareketleri')]).then(([stok, karbur]) => {
     bomRotaVeri = { stok, karbur, yukleniyor: false, hata: bomRotaVeri.hata, ts: Date.now() };
     _bomRotaCache = null;
@@ -145,7 +145,7 @@ function bomRotaListesi(){
       hammadde = { kaynak: 'stok', ad: kl.map(k => k.isim || k.kod).join(' + '), boy: kl.map(k => bomSayi(k.miktar) + ' ' + k.birim).join(' + ') };
     }
     if(!hammadde){
-      const m = (talep && mbTalep[talep]) || mbIe[uKodu] || null;
+      const m = talep ? (mbTalep[talep] || null) : (mbIe[uKodu] || null);   // talep varsa başka iş emrinin kaydı alınmasın
       if(m) hammadde = { kaynak: 'bekleyen', ad: m.hammaddeKod, boy: m.gerekenMiktar ? bomSayi(m.gerekenMiktar) + ' ' + (m.birim || '') : '' };
     }
     if(!hammadde) hammadde = operatorMalz(dalli ? zarf : ana);
@@ -211,8 +211,8 @@ function bomRotaHtml(x){
 
 function renderTamamlananBomRota(){
   bomRotaYukle(false);
-  if(!bomRotaVeri.stok || !bomRotaVeri.karbur){
-    return `<div style="text-align:center;color:var(--text-muted);padding:40px 0">${bomRotaVeri.hata ? 'Okunamadı: ' + esc(bomRotaVeri.hata) : 'Stok ve karbür hareketleri okunuyor…'}</div>`;
+  if(!bomRotaVeri.stok || !bomRotaVeri.karbur || bomRotaVeri.hata){
+    return `<div style="text-align:center;color:var(--text-muted);padding:40px 0">${bomRotaVeri.hata ? 'Stok/karbür hareketleri okunamadı: ' + esc(bomRotaVeri.hata) + ' — <button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" onclick="bomRotaYenile()">↻ Yeniden dene</button>' : 'Stok ve karbür hareketleri okunuyor…'}</div>`;
   }
   const tum = bomRotaListesi();
   const tamN = tum.filter(x => x.bomVar).length, karN = tum.filter(x => x.karbur).length;

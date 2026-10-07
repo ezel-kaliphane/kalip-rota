@@ -81,14 +81,17 @@ function renderKarburPlan(){
   const fireSecili = Object.keys(karburAssigns).length;
   /* Stok yetmeyen kalem varsa KAYDET kapalı — kayıt stoğu eksiye düşüremez (bkz. js/karbur.js
      KAYDET bölümü). Toplam üzerinden bakılır: aynı kalem birden fazla satırda geçebiliyor. */
-  const eksikler = showPlan ? karburPlanEksikleri(plan) : [];
+  /* Düzeltme modunda (eski plan henüz geri alınmadı) stok kontrolü anlamsız: plan geri almadan
+     sonra güncel stokla yeniden hesaplanacak — düğme kilitlenmesin. */
+  const eksikler = (showPlan && !karburDuzeltilenPlan) ? karburPlanEksikleri(plan) : [];
 
   let html = (karburDuzeltilenPlan || karburDuzeltmeOf) ? `<div class="card" style="margin-bottom:14px;border-color:var(--warn);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="font-size:13px">✎ <b>${esc(karburDuzeltilenPlan || karburDuzeltmeOf)}</b> ${karburDuzeltilenPlan
-        ? 'düzeltiliyor — yanlış satırı sil ya da değiştir, HESAPLA, sonra <b>DÜZELT VE KAYDET</b>: eski plan otomatik geri alınır, bu hâl yeni plan olarak kaydedilir.'
-        : 'geri alındı; yeni hâli henüz kaydedilmedi — HESAPLA ve KAYDET.'}</span>
+        ? 'düzeltiliyor — 1) yanlış satırı sil ya da değiştir, 2) <b>Geri al ve yeniden hesapla</b>, 3) planı kontrol et ve <b>KAYDET</b>.'
+        : 'geri alındı — aşağıdaki plan güncel stokla hesaplandı; kontrol et ve <b>KAYDET</b> (yeni plan, düzeltme olarak bağlanır).'}</span>
       <div style="flex:1"></div>
-      ${karburDuzeltilenPlan ? `<button type="button" class="btn-ghost" style="padding:3px 10px;font-size:11.5px" onclick="karburDuzeltVazgec()">Vazgeç</button>` : ''}
+      ${karburDuzeltilenPlan ? `<button type="button" class="btn-primary" style="padding:4px 12px;font-size:12px" ${karburBusy?'disabled':''} onclick="karburDuzeltmeUygula()">${karburBusy?'Geri alınıyor…':'↩ Geri al ve yeniden hesapla'}</button>
+        <button type="button" class="btn-ghost" style="padding:3px 10px;font-size:11.5px" onclick="karburDuzeltVazgec()">Vazgeç</button>` : ''}
     </div>` : '';
   html += `<div class="card" style="margin-bottom:14px">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px">İş emirleri — gerekli parçalar</div>
@@ -151,7 +154,7 @@ function renderKarburPlan(){
       ${canManageKarbur()
         ? `<button type="button" class="btn-primary" ${(karburBusy||eksikler.length)?'disabled':''}
              ${eksikler.length?'title="Stok yetersiz — yukarıdaki listeye bak"':''}
-             onclick="karburPlanKaydet()">${karburBusy?'Kaydediliyor…':(eksikler.length?'KAYDEDİLEMEZ — stok yetersiz':(karburDuzeltilenPlan?'DÜZELT VE KAYDET':'KAYDET'))}</button>`
+             onclick="karburPlanKaydet()">${karburBusy?'Kaydediliyor…':(eksikler.length?'KAYDEDİLEMEZ — stok yetersiz':(karburDuzeltilenPlan?'↩ GERİ AL VE YENİDEN HESAPLA':'KAYDET'))}</button>`
         : ''}
     </div>
   </div>`;
