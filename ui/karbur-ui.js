@@ -702,7 +702,7 @@ function karburTarih(ts){ return ts ? new Date(ts).toLocaleString('tr-TR') : '�
    emirleri), detay tıklayınca açılır; geri alınan planlar varsayılan gizli. Aynı iş emrine birden
    fazla GEÇERLİ plan çıkış yapmışsa kartta kırmızı uyarı; yeniden yüklenip kaydedilen planın
    yerine geçeni yazılır (kaynakPlanNo). */
-let karburGecmisAcik = {}, karburGecmisIptalGoster = false;
+let karburGecmisAcik = {}, karburGecmisIptalGoster = true; // kullanıcı: geri alınanlar görünsün, yeter ki kapalı gelsin
 function karburGecmisToggle(planNo){ karburGecmisAcik[planNo] = !karburGecmisAcik[planNo]; render(); }
 function karburGecmisIptalToggle(){ karburGecmisIptalGoster = !karburGecmisIptalGoster; render(); }
 
@@ -766,7 +766,7 @@ function renderKarburGecmis(){
     const cakisanIe = g.iptal ? 0 : g.ieler.filter(n => (iePlanlari[n] || new Set()).size > 1).length;
     html += `<div style="border:1px solid ${g.iptal?'var(--danger)':'var(--border)'};border-radius:9px;padding:10px 12px;margin-bottom:10px;background:var(--panel-alt)">
       <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px">
-        <b style="font-size:13px;${g.iptal?'text-decoration:line-through;opacity:.7':''}">${esc(g.planNo)}</b>
+        <b style="font-size:13px;cursor:pointer;user-select:none;${g.iptal?'opacity:.7':''}" onclick="karburGecmisToggle('${escJs(g.planNo)}')" title="Aç / kapat"><span style="display:inline-block;width:14px;color:var(--text-muted)">${acik?'▾':'▸'}</span><span style="${g.iptal?'text-decoration:line-through':''}">${esc(g.planNo)}</span></b>
         ${g.iptal ? `<span class="chip" style="pointer-events:none;border-color:var(--danger);color:var(--danger);font-size:10.5px">GERİ ALINDI</span>` : ''}
         <span style="font-size:11.5px;color:var(--text-muted)">${karburTarih(g.ts)} · ${esc(g.kim || '—')}</span>
         ${yerineGecen[g.planNo] ? `<span style="font-size:11px;color:var(--text-muted)">⟳ yeniden yüklenip <b>${esc(yerineGecen[g.planNo])}</b> olarak kaydedildi</span>` : ''}
