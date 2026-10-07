@@ -1058,21 +1058,55 @@ function entryStatusKind(e){ return e.status==='devam' ? 'calisiyor' : e.status=
 // NOT: Eski bottomStripHtml() (altta sabit "aktif iş şeridi") kaldırıldı — yerini sürüklenebilir
 // aktif iş baloncuğu aldı, bkz. js/bubble.js. Baloncuk #app'ten bağımsız kendi kalıcı köküne
 // (#bubble-root) çizildiği için artık bottomNavHtml()'in döndürdüğü HTML'in parçası değil.
-function bottomNavHtml(){
+/* OPERATÖR MENÜSÜ (07.10.2026, kullanıcı: "admine yaptığın menüyü beğendim, bunlara da yap") —
+   yöneticideki gibi altta en fazla 4 ana sekme + "Menü"; Menü'de kalan bölümler, bildirimler,
+   mesajlar, tema ve Çıkış. 7 sekme küçük telefonda sıkışıyordu. Ana sekmeler sabit sırada:
+   Makineler, Geçmiş, Yeni, Tadilat (yetkiye göre eksilenin yerine sıradaki geçer). */
+let opMenuAcik = false;
+function opNavOgeleri(){
   const isImalat = getUserAtolyeler(session.username).includes('imalat');
   const hasFason = !!(STATE.operators[session.username]||{}).fasonYetkisi;
-  const tadBek = tadilatBekleyenlerCombined(session.username).length;
-  const fasBek = hasFason ? fasonBekleyenCount() : 0;
-  const item = (v,icoHtml,label,badge) => `<button class="bn-item ${view===v?'active':''}" onclick="setView('${v}')"><span class="bn-ico">${icoHtml}</span><span class="bn-lbl">${label}</span>${badge>0?`<span class="bn-badge">${badge}</span>`:''}</button>`;
-  return `<nav class="bottom-nav">
-    ${item('list',ico('factory',26),'Makineler',0)}
-    ${item('gecmis',ico('history',26),'Geçmiş',0)}
-    ${isImalat ? item('new',ico('plus',26),'Yeni',0) : ''}
-    ${item('tadilat',ico('wrench',26),'Tadilat',tadBek)}
-    ${hasFason ? item('fason',ico('box',26),'Fason',fasBek) : ''}
-    ${toolStokEnabled() && canSeeToolStok() ? `<button class="bn-item ${view==='takimStok'?'active':''}" onclick="setView('takimStok')"><span class="bn-ico" style="font-size:20px">🔧</span><span class="bn-lbl">Takım</span></button>` : ''}
-    ${item('settings',ico('gear',26),'Ayarlar',0)}
-  </nav>`;
+  const l = [
+    { v:'list', ico:ico('factory',26), label:'Makineler', badge:0 },
+    { v:'gecmis', ico:ico('history',26), label:'Geçmiş', badge:0 },
+    isImalat ? { v:'new', ico:ico('plus',26), label:'Yeni', badge:0 } : null,
+    { v:'tadilat', ico:ico('wrench',26), label:'Tadilat', badge:tadilatBekleyenlerCombined(session.username).length },
+    hasFason ? { v:'fason', ico:ico('box',26), label:'Fason', badge:fasonBekleyenCount() } : null,
+    (toolStokEnabled() && canSeeToolStok()) ? { v:'takimStok', ico:'<span style="font-size:20px">🔧</span>', label:'Takım Dolabı', badge:0 } : null,
+    { v:'settings', ico:ico('gear',26), label:'Ayarlar', badge:0 }
+  ];
+  return l.filter(Boolean);
+}
+function bottomNavHtml(){
+  const ogeler = opNavOgeleri();
+  const item = n => `<button class="bn-item ${view===n.v&&!opMenuAcik?'active':''}" onclick="opMenuAcik=false; setView('${n.v}')"><span class="bn-ico">${n.ico}</span><span class="bn-lbl">${n.label}</span>${n.badge>0?`<span class="bn-badge">${n.badge}</span>`:''}</button>`;
+  if(ogeler.length <= 5) return `<nav class="bottom-nav">${ogeler.map(item).join('')}</nav>`;
+  const birincil = ogeler.slice(0, 4), diger = ogeler.slice(4);
+  const menuBadge = diger.reduce((s,n)=>s+(n.badge||0),0) + (unreadPushCount()||0) + (canViewMessages() ? unreadMessageCount()||0 : 0);
+  const menuAktif = opMenuAcik || diger.some(n=>n.v===view);
+  return `<nav class="bottom-nav">${birincil.map(item).join('')}
+    <button class="bn-item ${menuAktif?'active':''}" aria-expanded="${opMenuAcik?'true':'false'}" onclick="opMenuAcik=!opMenuAcik; render()"><span class="bn-ico">${ico('menu',26)}</span><span class="bn-lbl">Menü</span>${menuBadge>0?`<span class="bn-badge">${menuBadge}</span>`:''}</button>
+  </nav>${opMenuHtml(diger)}`;
+}
+function opMenuHtml(diger){
+  if(!opMenuAcik) return '';
+  const rozet = b => b>0 ? `<span class="bn-badge" style="top:6px;right:8px">${b}</span>` : '';
+  const kutu = (aktif, tikla, icoHtml, label, badge) => `<button class="admin-menu-oge ${aktif?'active':''}" style="position:relative" onclick="opMenuAcik=false; ${tikla}">${icoHtml}<span>${label}</span>${rozet(badge)}</button>`;
+  const push = unreadPushCount()||0, msg = canViewMessages() ? (unreadMessageCount()||0) : 0;
+  const tema = resolvedTheme()==='dark';
+  return `<div class="op-menu-perde" onclick="if(event.target===this){opMenuAcik=false; render();}">
+    <div class="op-menu-sheet" role="dialog" aria-label="Menü">
+      <div class="admin-menu-kisi"><div style="font-weight:700;font-size:14px">${esc(session.displayName||'')}</div><div style="font-size:12px;color:var(--text-muted)">${esc(session.username)}</div></div>
+      <div class="admin-menu-izgara">
+        ${diger.map(n=>kutu(view===n.v, `setView('${n.v}')`, n.ico, n.label, n.badge)).join('')}
+        ${kutu(false, 'openMyPushHistoryModal()', `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`, 'Bildirimlerim', push)}
+        ${canViewMessages() ? kutu(false, 'openMessagesModal()', `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M2 6l10 7 10-7"></path></svg>`, 'Mesajlar', msg) : ''}
+        ${kutu(false, 'openSendMessage()', `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`, 'Öneri gönder', 0)}
+        ${kutu(false, 'toggleTheme()', `<span style="font-size:20px">${tema?'☀️':'🌙'}</span>`, tema?'Açık tema':'Koyu tema', 0)}
+      </div>
+      <button class="btn-ghost admin-menu-cikis" onclick="opMenuAcik=false; doLogout()">${ico('logout',16)} Çıkış Yap</button>
+    </div>
+  </div>`;
 }
 
 /* Hammadde arama sonuçları (01.10.2026) — Kod ile Giriş'teki sonuç listesinin küçük hâli:

@@ -1017,7 +1017,9 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
   .card{padding:16px 18px;border-radius:16px;margin-bottom:14px}
   .card-id{font-size:17px}
   .op-foot{font-size:12.5px}
-  .header{padding:14px 18px}
+  /* padding kısaltması üstteki güvenli alan (saat/çentik) telafisini SİLİYORDU — operatör
+     başlığı her telefonda saatin altına giriyordu (07.10.2026). Üst değer env() ile korunur. */
+  .header{padding:calc(14px + env(safe-area-inset-top)) 18px 14px}
   .field{margin-bottom:16px}
   .field label{font-size:12px}
   .btn-primary,.btn-start{padding:16px 0;font-size:16px;border-radius:14px}
@@ -1586,3 +1588,9 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .rota-kutu.palet{font-size:11.5px;padding:4px 8px;flex-direction:column;align-items:flex-start;gap:0}
 .rota-kutu-ad{font-family:inherit;font-weight:400;font-size:9.5px;color:var(--text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:system-ui,sans-serif}
 @media (max-height:760px){ .rota-palet-liste{max-height:110px} }
+/* Operatör Menü sayfası (07.10.2026) — yöneticideki admin-menu-* kutularını kullanır */
+.op-menu-perde{display:none}
+@media (max-width:768px){
+  .op-menu-perde{display:block;position:fixed;inset:0;z-index:390;background:#00000073}
+  .op-menu-sheet{position:absolute;left:0;right:0;bottom:calc(86px + env(safe-area-inset-bottom));max-height:calc(100dvh - 86px - env(safe-area-inset-bottom) - env(safe-area-inset-top) - 16px);overflow-y:auto;overscroll-behavior:contain;background:var(--panel);border:1px solid var(--border);border-bottom:none;border-radius:18px 18px 0 0;padding:16px 16px 14px;box-shadow:var(--e2)}
+}
