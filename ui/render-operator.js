@@ -259,7 +259,7 @@ function renderOperator(){
               lines.push(`<div style="font-size:11.5px;color:var(--danger)">⛔ Tamamlanmamış: ${esc(msg)} — birleştirme başlatılamaz</div>`);
             }
           }
-          return lines.length ? `<div style="margin:-8px 0 12px 2px;display:flex;flex-direction:column;gap:3px">${lines.join('')}</div>` : '';
+          return lines.length ? `<div style="margin:8px 0 14px 2px;display:flex;flex-direction:column;gap:3px">${lines.join('')}</div>` : '';
         })()}
         ${(() => {
           if(!stockEnabled() || !newForm.isEmriNo) return '';
