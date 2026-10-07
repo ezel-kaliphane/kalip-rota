@@ -714,8 +714,8 @@ function renderKarburGecmis(){
   /* planNo -> { ts, stok:[], tahsis:[], fire:[], artik:[], iptalKayitlari:[] } */
   const gruplar = {};
   planli.forEach(h => {
-    const g = (gruplar[h.planNo] = gruplar[h.planNo] || { planNo:h.planNo, ts:h.ts, kim:h.operatorName || h.operatorUsername, stok:[], tahsis:[], fire:[], artik:[], iptalKayitlari:[] });
-    g.ts = Math.max(g.ts || 0, h.ts || 0);
+    const g = (gruplar[h.planNo] = gruplar[h.planNo] || { planNo:h.planNo, ts:0, kim:h.operatorName || h.operatorUsername, stok:[], tahsis:[], fire:[], artik:[], iptalKayitlari:[] });
+    if(h.tip !== 'iptal') g.ts = Math.max(g.ts || 0, h.ts || 0); // sıra planın kendi tarihiyle — geri alınınca en üste fırlamasın
     /* Eski biçimli kayıt: tip 'kesim' ama iş emrine bağlı ve stok izi (oncekiAdet) yok —
        ilk sürümde çubuk tüketimi ile tahsis aynı satırda yazılıyordu. Tahsis gibi gösteriyoruz
        ki geçmiş anlamlı okunsun; veriye dokunmuyoruz. */
@@ -780,7 +780,7 @@ function renderKarburGecmis(){
           g.ieler.length + ' iş emri'
         ].filter(Boolean).join(' · ')}</span>
         ${(()=>{ const ie = [...new Set(g.tahsis.concat(g.fire).map(h=>h.isEmriNo).filter(Boolean))];
-          if(!ie.length) return ''; const kesilen = ie.filter(n=>{ const d = karburEdmDurumu(n, g.ts); return d && d.durum==='kesildi'; }).length;
+          if(!ie.length || g.iptal) return ''; /* geri alınan planda EDM sayacı anlamsız — kesim yerine geçen planla yapılır */ const kesilen = ie.filter(n=>{ const d = karburEdmDurumu(n, g.ts); return d && d.durum==='kesildi'; }).length;
           return `<span class="chip" style="pointer-events:none;font-size:10.5px;border-color:${kesilen===ie.length?'var(--success)':'var(--warn)'};color:${kesilen===ie.length?'var(--success)':'var(--warn)'}" title="Tel erozyonda (TE01/TE02) kesimi yapılan iş emri">EDM ${kesilen}/${ie.length} kesildi</span>`; })()}
         ${canManageKarbur() ? `<button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" ${karburBusy?'disabled':''}
           onclick="karburPlanYukle('${escJs(g.planNo)}')" title="Bu planın satırlarını Kesim Planı ekranına yükle — yeni plan olarak tekrar kaydedebilirsin">⟳ Yeniden yükle</button>` : ''}
@@ -823,7 +823,7 @@ function renderKarburGecmis(){
           <td style="font-size:11px;color:var(--text-muted)">${h._eski
             ? 'parça detayı kaydedilmemiş (mm doğru)'
             : esc(h.aciklama || '')}</td>
-          <td style="font-size:11px">${karburEdmHucre(h.isEmriNo, g.ts)}</td></tr>`).join('')}
+          <td style="font-size:11px">${g.iptal ? '<span style="color:var(--text-muted)">— (plan geri alındı)</span>' : karburEdmHucre(h.isEmriNo, g.ts)}</td></tr>`).join('')}
         </tbody></table>`;
     }
     if(g.artik.length){
