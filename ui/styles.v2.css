@@ -1565,3 +1565,24 @@ button.mb-istek-no{border-color:var(--warn-border)}
   .bom-kpi-sira{grid-template-columns:repeat(2,minmax(0,1fr))}
   .bom-satir{grid-template-columns:1fr;gap:0}
 }
+/* Standart rota düzenleyici — sürükle-bırak kutular (07.10.2026) */
+.rota-dal{border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:8px;background:var(--panel-alt)}
+.rota-dal.aktif{border-color:var(--accent)}
+.rota-dal-ad{font-size:11px;color:var(--text-muted);margin-bottom:6px;font-family:'JetBrains Mono',monospace}
+.rota-serit{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-height:34px}
+.rota-kutu{display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--panel);font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12.5px;cursor:grab;user-select:none;touch-action:manipulation}
+.rota-kutu:active{cursor:grabbing}
+.rota-kutu.secili{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim, rgba(56,189,248,.25));color:var(--accent)}
+.rota-kutu.bilinmiyor{border-color:var(--danger)}
+.rota-kutu-no{font-size:10px;font-weight:600;color:var(--text-muted);min-width:12px}
+.rota-kutu-sil{border:none;background:transparent;color:var(--text-muted);font-size:15px;line-height:1;padding:0 2px;cursor:pointer}
+.rota-kutu-sil:hover{color:var(--danger)}
+.rota-bosluk{display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:28px;padding:0 3px;border:1px dashed transparent;border-radius:6px;color:var(--text-muted);font-size:11px;cursor:pointer;opacity:.55}
+.rota-bosluk.son{padding:0 8px;border-color:var(--border);opacity:.8}
+.rota-bosluk:hover,.rota-bosluk.hazir{border-color:var(--accent);color:var(--accent);opacity:1}
+.rota-bosluk.ust{border-color:var(--accent);background:var(--accent-dim, rgba(56,189,248,.18));color:var(--accent);opacity:1;min-width:34px}
+.rota-palet{border-top:1px dashed var(--border);padding-top:8px;margin-top:4px}
+.rota-palet-liste{display:flex;flex-wrap:wrap;gap:5px;max-height:150px;overflow-y:auto;padding:2px}
+.rota-kutu.palet{font-size:11.5px;padding:4px 8px;flex-direction:column;align-items:flex-start;gap:0}
+.rota-kutu-ad{font-family:inherit;font-weight:400;font-size:9.5px;color:var(--text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:system-ui,sans-serif}
+@media (max-height:760px){ .rota-palet-liste{max-height:110px} }

@@ -304,8 +304,20 @@ function renderBomDuzenleModal(){
   const kkListe = karburKatalogArray().map(k => `<option value="${esc(k.kod)}">${esc((k.kullanim || 'kesim') === 'kesim' ? 'çubuk · kesilir' : 'adet')}</option>`).join('');
   const hmIt = d.hammaddeId ? stockItems[d.hammaddeId] : null;
   const birim = hmIt ? (hmIt.birim || (hmIt.tur === 'boy' ? 'mm' : 'adet')) : '';
-  const rotaAlan = (k, et, ipucu) => `<div class="field" style="margin-bottom:8px"><label>${et}</label>
-      <input class="mono" value="${esc(d.rota[k])}" placeholder="${ipucu}" oninput="bomDuzenle.rota.${k}=this.value" list="bom-makine-listesi"></div>`;
+  const adlar = {}; allMachines().forEach(m => { adlar[m.code] = m.name; });
+  const sec = d.secili;
+  const bosluk = (k, pos, son) => `<span class="rota-bosluk ${sec ? 'hazir' : ''} ${son ? 'son' : ''}" title="${sec ? 'Buraya yerleştir' : 'Kutuyu buraya sürükle'}"
+      ondragover="event.preventDefault(); this.classList.add('ust')" ondragleave="this.classList.remove('ust')"
+      ondrop="rotaEdDrop(event,'${k}',${pos})" onclick="rotaEdBosluk('${k}',${pos})">${son ? '+ buraya' : '+'}</span>`;
+  const rotaAlan = (k, et) => {
+    const l = d.rota[k];
+    return `<div class="rota-dal ${d.aktifDal === k ? 'aktif' : ''}" onclick="if(event.target===this){bomDuzenle.aktifDal='${k}'; rotaEdYenile();}">
+      <div class="rota-dal-ad">${et}</div>
+      <div class="rota-serit">${l.map((c, i) => `${bosluk(k, i)}<span class="rota-kutu ${sec && sec.tip === 'tasi' && sec.dal === k && sec.i === i ? 'secili' : ''} ${adlar[c] ? '' : 'bilinmiyor'}"
+          draggable="true" ondragstart="rotaEdDragStart(event,'tasi:${k}:${i}')" onclick="rotaEdSec({tip:'tasi',dal:'${k}',i:${i}})" title="${esc(adlar[c] || 'Makine listesinde yok')} — sürükle ya da dokunup yerini seç">
+          <span class="rota-kutu-no">${i + 1}</span>${esc(c)}<button type="button" class="rota-kutu-sil" title="Çıkar" onclick="event.stopPropagation(); rotaEdSil('${k}',${i})">×</button></span>`).join('')}${bosluk(k, l.length, true)}</div>
+    </div>`;
+  };
   return `<div class="modal-overlay" onclick="if(event.target===this) bomDuzenleKapat()">
     <div class="modal-box kal-modal" style="max-width:620px">
       <div class="kal-modal-bas">
@@ -315,7 +327,6 @@ function renderBomDuzenleModal(){
       <div class="kal-modal-govde">
         <datalist id="bom-hm-listesi">${hmListe}</datalist>
         <datalist id="bom-karbur-listesi">${kkListe}</datalist>
-        <datalist id="bom-makine-listesi">${allMachines().map(m => `<option value="${esc(m.code)}">${esc(m.name)}</option>`).join('')}</datalist>
 
         <div class="bom-dal-bas" style="margin-top:0">${d.dalZarf || !d.dalElmas ? (d.dalZarf ? '_ZARF <span>çelik hammadde</span>' : 'Hammadde <span>çelik</span>') : 'Hammadde <span>çelik (yoksa boş bırak)</span>'}</div>
         <div style="display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:8px;margin-top:6px">
@@ -336,12 +347,24 @@ function renderBomDuzenleModal(){
         <button type="button" class="btn-ghost" style="margin-top:8px;padding:4px 10px;font-size:12px" onclick="bomDuzenleKarburEkle()">+ Karbür satırı</button>
         <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Çubuktan kesilen karbürde parça boyu (testere payı hariç), hazır adet kalemlerde yalnız adet. Kesim Planı'nda bu CANIAS kodlu iş emri yazılınca satırlar bundan dolar.</div>
 
-        <div class="bom-dal-bas">Rota <span>makine kodları sırayla — ok, boşluk ya da virgülle ayır</span></div>
+        <div class="bom-dal-bas">Rota <span>kutuları sürükle-bırak · ya da dokun, sonra yerine dokun</span></div>
         <div style="margin-top:6px">
-          ${(d.dalElmas || d.rota.elmas) ? rotaAlan('elmas', '_ELMAS dalı', 'ör. MDT01 → TE02 → UT03') : ''}
-          ${(d.dalZarf || d.rota.zarf) ? rotaAlan('zarf', '_ZARF dalı', 'ör. TES01 → UT03 → FII01') : ''}
-          ${rotaAlan('ana', (d.dalZarf || d.dalElmas) ? 'Birleşme sonrası (U kodu)' : 'Rota', 'ör. P01 → F02 → UT03 → FKK')}
-          <div style="font-size:11px;color:var(--text-muted)">Rota sonunda <b>Bitti</b> kendiliğinden eklenir. ${(d.dalZarf || d.dalElmas) ? 'Dalın son makinesinden sonra birleşme (ana rotanın ilk makinesi) önerilir.' : ''}</div>
+          ${(d.dalElmas || d.rota.elmas.length) ? rotaAlan('elmas', '_ELMAS dalı') : ''}
+          ${(d.dalZarf || d.rota.zarf.length) ? rotaAlan('zarf', '_ZARF dalı') : ''}
+          ${rotaAlan('ana', (d.dalZarf || d.dalElmas || d.rota.zarf.length || d.rota.elmas.length) ? 'Birleşme sonrası (U kodu) → Bitti' : 'Rota → Bitti')}
+          ${(!d.dalZarf && !d.rota.zarf.length) || (!d.dalElmas && !d.rota.elmas.length) ? `<div style="display:flex;gap:6px;margin:2px 0 8px">
+            ${!d.dalElmas && !d.rota.elmas.length ? `<button type="button" class="btn-ghost" style="padding:3px 9px;font-size:11px" onclick="rotaEdDalEkle('elmas')">+ _ELMAS dalı</button>` : ''}
+            ${!d.dalZarf && !d.rota.zarf.length ? `<button type="button" class="btn-ghost" style="padding:3px 9px;font-size:11px" onclick="rotaEdDalEkle('zarf')">+ _ZARF dalı</button>` : ''}</div>` : ''}
+          <div class="rota-palet">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="font-size:11.5px;color:var(--text-muted);white-space:nowrap">Makineler — sürükle ya da çift tıkla (seçili dalın sonuna)</span>
+              <input placeholder="Ara… ör. UT" oninput="rotaEdFiltre(this.value)" style="flex:1;min-width:0;padding:4px 8px;font-size:12px;margin:0">
+            </div>
+            <div class="rota-palet-liste">${allMachines().map(m => `<span class="rota-kutu palet ${sec && sec.tip === 'yeni' && sec.kod === m.code ? 'secili' : ''}" data-ara="${esc((m.code + ' ' + m.name).toLocaleUpperCase('tr'))}"
+                draggable="true" ondragstart="rotaEdDragStart(event,'yeni:${escJs(m.code)}')" onclick="rotaEdSec({tip:'yeni',kod:'${escJs(m.code)}'})" ondblclick="rotaEdSonaEkle('${escJs(m.code)}')" title="${esc(m.name)}">${esc(m.code)}<span class="rota-kutu-ad">${esc(m.name)}</span></span>`).join('')}</div>
+          </div>
+          ${sec ? `<div style="font-size:11.5px;color:var(--accent);margin-top:6px">Seçili: <b>${esc(sec.tip === 'yeni' ? sec.kod : d.rota[sec.dal][sec.i])}</b> — şimdi rotada gitmesini istediğin <b>+</b> boşluğa dokun. <a href="#" onclick="event.preventDefault(); bomDuzenle.secili=null; rotaEdYenile()">vazgeç</a></div>` : ''}
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px">${(d.dalZarf || d.dalElmas) ? 'Dalın son makinesinden sonra birleşme (ana rotanın ilk makinesi) önerilir. ' : ''}Kırmızı kenarlı kutu makine listesinde olmayan koddur.</div>
         </div>
       </div>
       <div class="kal-modal-alt">

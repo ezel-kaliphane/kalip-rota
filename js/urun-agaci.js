@@ -18,9 +18,6 @@ function urunStandardi(uKodu){
   const r = (typeof hammaddeRecete !== 'undefined' && hammaddeRecete) ? hammaddeRecete[String(uKodu || '').toUpperCase()] : null;
   return (r && r.standart) ? r : null;
 }
-function urunRotaParse(metin){
-  return String(metin || '').toUpperCase().split(/[\s,;>→]+/).map(s => s.trim()).filter(Boolean);
-}
 
 /* ---------- Sıradaki operasyon önerisi ----------
    Bitirilen kaydın dalındaki (ANA/_ZARF/_ELMAS) standart rotada şu makinenin yeri bulunur:
@@ -122,10 +119,11 @@ function bomDuzenleAc(uKodu){
     birimBasina: Number(rc.birimBasina) > 0 ? String(Math.round(rc.birimBasina * 1000) / 1000).replace('.', ',') : '',
     karbur: karbur.length ? karbur : [],
     rota: {
-      elmas: (rota.elmas || x.zElmas || []).join(' → '),
-      zarf:  (rota.zarf  || x.zZarf  || []).join(' → '),
-      ana:   (rota.ana   || x.zAna   || []).join(' → ')
+      elmas: (rota.elmas || x.zElmas || []).slice(),
+      zarf:  (rota.zarf  || x.zZarf  || []).slice(),
+      ana:   (rota.ana   || x.zAna   || []).slice()
     },
+    secili: null, aktifDal: 'ana',
     standartVar: !!std.standart, std: std.standart || null, busy: false
   };
   render();
@@ -137,6 +135,70 @@ function bomDuzenleHammaddeYaz(v){
   const it = stockItemsArray().find(s => hammaddeGosterimAdi(s) === v || s.kod === v);
   d.hammaddeId = it ? it.id : '';
 }
+/* ---------- Rota düzenleyici: kutular (07.10.2026, kullanıcı: "elle yazmak zor, kutular olsun
+   sürükleyip bıraksın, arasına ya da nereye isterse") ----------
+   Fareyle: kutuyu sürükleyip iki kutunun arasındaki boşluğa bırak; alttaki makine listesinden
+   sürükleyip istediğin yere bırak. Dokunmatikte / tıklayarak: kutuya ya da listedeki makineye
+   dokun (seçilir), sonra gitmesini istediğin boşluğa dokun. Listedeki makineye çift tıklamak
+   onu seçili dalın sonuna ekler. × kutuyu çıkarır. */
+function rotaEdYenile(){
+  const g = document.querySelector('.kal-modal-govde'), y = g ? g.scrollTop : 0;
+  render();
+  const g2 = document.querySelector('.kal-modal-govde'); if(g2) g2.scrollTop = y;
+}
+function rotaEdYerlestir(kaynak, dal, pos){
+  const d = bomDuzenle; if(!d || !kaynak) return;
+  const hedef = d.rota[dal]; if(!hedef) return;
+  if(kaynak.tip === 'tasi'){
+    const liste = d.rota[kaynak.dal]; const kod = liste[kaynak.i]; if(kod == null) return;
+    liste.splice(kaynak.i, 1);
+    if(kaynak.dal === dal && kaynak.i < pos) pos--;
+    hedef.splice(pos, 0, kod);
+  } else if(kaynak.tip === 'yeni' && kaynak.kod){
+    hedef.splice(pos, 0, kaynak.kod);
+  }
+  d.secili = null; d.aktifDal = dal;
+  rotaEdYenile();
+}
+function rotaEdDragStart(ev, veri){ try{ ev.dataTransfer.setData('text/plain', veri); ev.dataTransfer.effectAllowed = 'move'; }catch(e){} }
+function rotaEdKaynak(veri){
+  const p = String(veri || '').split(':');
+  if(p[0] === 'tasi') return { tip: 'tasi', dal: p[1], i: Number(p[2]) };
+  if(p[0] === 'yeni') return { tip: 'yeni', kod: p.slice(1).join(':') };
+  return null;
+}
+function rotaEdDrop(ev, dal, pos){
+  ev.preventDefault();
+  let veri = ''; try{ veri = ev.dataTransfer.getData('text/plain'); }catch(e){}
+  rotaEdYerlestir(rotaEdKaynak(veri), dal, pos);
+}
+function rotaEdBosluk(dal, pos){
+  const d = bomDuzenle; if(!d) return;
+  if(!d.secili){ d.aktifDal = dal; toast('Önce bir kutuya ya da alttaki listeden bir makineye dokun, sonra buraya'); rotaEdYenile(); return; }
+  rotaEdYerlestir(d.secili, dal, pos);
+}
+function rotaEdSec(kaynak){
+  const d = bomDuzenle; if(!d) return;
+  const ayni = d.secili && JSON.stringify(d.secili) === JSON.stringify(kaynak);
+  d.secili = ayni ? null : kaynak;
+  if(kaynak.tip === 'tasi') d.aktifDal = kaynak.dal;
+  rotaEdYenile();
+}
+function rotaEdSonaEkle(kod){
+  const d = bomDuzenle; if(!d) return;
+  const dal = d.rota[d.aktifDal] ? d.aktifDal : 'ana';
+  d.rota[dal].push(kod); d.secili = null;
+  rotaEdYenile();
+}
+function rotaEdSil(dal, i){ const d = bomDuzenle; if(!d) return; d.rota[dal].splice(i, 1); d.secili = null; rotaEdYenile(); }
+function rotaEdDalEkle(dal){ const d = bomDuzenle; if(!d) return; if(dal === 'zarf') d.dalZarf = true; else d.dalElmas = true; d.aktifDal = dal; rotaEdYenile(); }
+function rotaEdFiltre(v){
+  const q = String(v || '').trim().toLocaleUpperCase('tr');
+  document.querySelectorAll('.rota-palet .rota-kutu').forEach(el => {
+    el.style.display = (!q || (el.getAttribute('data-ara') || '').includes(q)) ? '' : 'none';
+  });
+}
+
 function bomDuzenleKarburEkle(){ if(bomDuzenle){ bomDuzenle.karbur.push({ kod: '', boy: '', adet: '1' }); bomDuzenle.dalElmas = true; render(); } }
 function bomDuzenleKarburSil(i){ if(bomDuzenle){ bomDuzenle.karbur.splice(i, 1); render(); } }
 
@@ -167,7 +229,7 @@ function bomDuzenleKaydet(){
     }
   }
   // Rota
-  const rota = { elmas: urunRotaParse(d.rota.elmas), zarf: urunRotaParse(d.rota.zarf), ana: urunRotaParse(d.rota.ana) };
+  const rota = { elmas: d.rota.elmas.slice(), zarf: d.rota.zarf.slice(), ana: d.rota.ana.slice() };
   const bilinen = new Set(allMachineCodes());
   const bilinmeyen = [...new Set([].concat(rota.elmas, rota.zarf, rota.ana).filter(c => !bilinen.has(c)))];
   if(bilinmeyen.length && !confirm('Makine listesinde olmayan kod(lar): ' + bilinmeyen.join(', ') + '\n\nYine de kaydedilsin mi?')) return;
