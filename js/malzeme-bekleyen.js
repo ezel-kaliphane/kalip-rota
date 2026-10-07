@@ -198,7 +198,7 @@ function malzemeBekleyenEkle(veri, bitti){
      birimBasina = gereken / iş emri miktarı; iş emri miktarı bilinmiyorsa oran
      hesaplanamaz, o zaman yalnızca hammadde eşlemesi saklanır (miktar 0). */
   const mamul = String(kayit.mamulKodu||'').trim().toUpperCase();
-  if(mamul && kayit.hammaddeId){
+  if(mamul && kayit.hammaddeId && !(hammaddeRecete[mamul] || {}).standart){   // Şef/SuperAdmin standardı varsa reçete ona dokunmaz (bkz. js/urun-agaci.js)
     const eski = hammaddeRecete[mamul] || {};
     const birimBasina = kayit.ieMiktar>0 ? (kayit.gerekenMiktar / kayit.ieMiktar) : 0;
     const yeniRecete = {

@@ -183,11 +183,20 @@ function baslat(){
         }
       }
     }
+    /* İlk operasyonda hammadde seçilmemişse uyar (engel değil — 07.10.2026 kararı). Karbür dalı hariç. */
+    if(stockEnabled() && stockConsumableOptions().length){
+      const eksik = items.filter(it => {
+        if(it.stockItemId || it.bilesen === 'ELMAS') return false;
+        const r = resolveTrackingCode(it.talepNoRaw, it.bilesen);
+        return isFirstOperationFor(r.isEmriNo, r.talepNo);
+      });
+      if(eksik.length && !confirm('İlk operasyon — hammadde seçilmedi: ' + eksik.map(it=>it.talepNoRaw).join(', ') + '\n\nHammadde kullanılmıyorsa Tamam ile başlat; kullanılıyorsa İptal deyip listeden seç.')) return;
+    }
     const groupId = uid();
     items.forEach(it=>{
       const id = uid();
       const { isEmriNo, talepNo } = resolveTrackingCode(it.talepNoRaw, it.bilesen);
-      const wasFirst = isFirstOperationFor(isEmriNo);
+      const wasFirst = isFirstOperationFor(isEmriNo, talepNo);
       const entry = { isEmriNo, talepNo, makine, malzemeCinsi, capBoy, adet: it.adet, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startedByUsername:session.username, startedByName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0, excludedMs:0, groupId };
       const pendingParti = findPendingParti(isEmriNo);
       if(pendingParti){ entry.partiRootId = pendingParti.partiRootId; entry.parentEntryId = pendingParti.id; }
@@ -230,22 +239,25 @@ function baslat(){
   const machineBusy = !isFasonMachine(makine) && !isParalelMachine(makine) && entriesArray().some(e => e.makine === makine && e.status === 'devam');
   if(machineBusy){ toast('Bu makinede zaten aktif bir iş var. Önce o iş bitirilmeli ya da duraklatılmalı.'); return; }
   const { isEmriNo, talepNo } = resolveTrackingCode(isEmriNoRaw, bilesenSel);
-  const wasFirst = isFirstOperationFor(isEmriNo);
+  const wasFirst = isFirstOperationFor(isEmriNo, talepNo);
   let stockItemIdSel = '', stockLotIdSel = null, stockMiktarSel = 0;
   if(stockEnabled() && wasFirst){
-    const rawVal = document.getElementById('nf-stok-item')?.value||'';
+    /* Telefonda form iki adımlı: hammadde 1. adımda seçiliyor, BAŞLAT 2. adımda — kutu artık DOM'da
+       yok. Önceden burada boş okunuyor ve seçilen hammadde stoktan HİÇ düşülmüyordu (07.10.2026). */
+    const rawVal = document.getElementById('nf-stok-item')?.value ?? newForm.stockItemId ?? '';
     if(rawVal){
       const [selItemId, selLotId] = rawVal.split('::');
       stockItemIdSel = selItemId; stockLotIdSel = selLotId||null;
       const stItem = stockItems[stockItemIdSel];
       const isManual = stockLotIdSel || (stItem && stItem.mode==='manuel');
       if(isManual){
-        stockMiktarSel = Number(document.getElementById('nf-stok-miktar')?.value||0);
+        stockMiktarSel = Number(document.getElementById('nf-stok-miktar')?.value ?? newForm.stockMiktar ?? 0) || 0;
         if(stockMiktarSel<=0){ toast(stockLotIdSel ? 'Kesilen boyu girin' : 'Kullanılan hammadde miktarını girin'); return; }
       } else {
         stockMiktarSel = Number(adet)||0;
       }
-    }
+    } else if(bilesenSel !== 'ELMAS' && stockConsumableOptions().length
+        && !confirm('İlk operasyon — hammadde seçilmedi.\n\nHammadde kullanılmıyorsa Tamam ile başlat; kullanılıyorsa İptal deyip listeden seç.')) return;
   }
   const id = uid();
   const entry = { isEmriNo, talepNo, makine, malzemeCinsi, capBoy, adet, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startedByUsername:session.username, startedByName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0, excludedMs:0 };
@@ -274,7 +286,7 @@ function bitir(id){
   if(!e.sonOperasyon){
     nextOpPendingId = id;
     nextOpPendingGroupId = null;
-    nextOpMachineSel = '';
+    nextOpMachineSel = (typeof nextOpRotaOnerisi === 'function' && nextOpRotaOnerisi()) || '';   // standart rotada sıradaki (öneri)
     render();
     return;
   }
@@ -440,11 +452,13 @@ function nextOpOptionsListHtml(){
       <span class="durus-option-name" style="${isActive?'color:var(--accent)':''}">${esc(m.code)} · ${esc(m.name)}</span>
     </button><button type="button" class="nextop-yildiz ${f?'on':''}" aria-pressed="${f}" title="${f?'Favorilerden çıkar':'Favorilere ekle'}" aria-label="${f?'Favorilerden çıkar':'Favorilere ekle'}" onclick="makineFavoriToggle('${m.code}')">${ico('star',22)}</button></div>`;
   };
-  const tum = allMachines();
+  const oneri = (typeof nextOpRotaOnerisi === 'function') ? nextOpRotaOnerisi() : null;
+  const tum = allMachines().filter(m => m.code !== oneri);
+  const oneriM = oneri ? allMachines().find(m => m.code === oneri) : null;
   const favoriler = tum.filter(m=>fav.has(m.code)), digerleri = tum.filter(m=>!fav.has(m.code));
-  const cards = favoriler.length
+  const cards = (oneriM ? `<div class="durus-option-divider">★ ROTADA SIRADAKİ · standart</div>${kart(oneriM)}` : '') + (favoriler.length
     ? `<div class="durus-option-divider">FAVORİLER</div>${favoriler.map(kart).join('')}<div class="durus-option-divider">TÜM MAKİNELER</div>${digerleri.map(kart).join('')}`
-    : `<div class="nextop-ipucu">${ico('star',14)} Sık gönderdiğin makinelerin yanındaki yıldıza dokun — en üste gelir.</div>${digerleri.map(kart).join('')}`;
+    : `<div class="nextop-ipucu">${ico('star',14)} Sık gönderdiğin makinelerin yanındaki yıldıza dokun — en üste gelir.</div>${digerleri.map(kart).join('')}`);
   const isBelirsiz = nextOpMachineSel===NEXT_OP_BELIRSIZ;
   return `${cards}
     <div class="durus-option-divider">DİĞER</div>
@@ -627,7 +641,7 @@ function bitirGrup(groupId){
   if(members.some(e=>!e.sonOperasyon)){
     nextOpPendingGroupId = groupId;
     nextOpPendingId = null;
-    nextOpMachineSel = '';
+    nextOpMachineSel = (typeof nextOpRotaOnerisi === 'function' && nextOpRotaOnerisi()) || '';   // grubun hepsi aynı öneriyi veriyorsa
     render();
     return;
   }

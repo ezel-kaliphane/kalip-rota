@@ -1,5 +1,7 @@
 /* ===================== RENDER: OPERATÖR ANA UYGULAMA ===================== */
 function renderOperator(){
+  /* Standart BOM/rota (hammaddeRecete) — ilk operasyon hammadde önerisi ve sıradaki makine önerisi için; tek seferlik küçük okuma */
+  if(typeof ensureHammaddeReceteLoaded === 'function' && !hammaddeReceteReady) ensureHammaddeReceteLoaded(() => safeRender());
   if(view==='new' && !getUserAtolyeler(session.username).includes('imalat')){ view = 'tadilat'; }
   const detailEntry = activeDetailId ? entriesArray().find(e=>e.id===activeDetailId && (e.status==='devam'||e.status==='duruş')) : null;
   if(detailEntry) return renderLockScreen(detailEntry);
@@ -201,14 +203,16 @@ function renderOperator(){
           ${it.isEmriNo ? (cInfo ? `<div style="font-size:11.5px;color:var(--success);margin:4px 0 0 2px">${ico('check',14)} ${esc(cInfo.malzemeKodu||'')}${cInfo.malzemeKodu&&cInfo.malzemeAdi?' · ':''}${esc(cInfo.malzemeAdi||'')}</div>` : (Object.keys(STATE.validIsEmri||{}).length>0 ? `<div style="font-size:11.5px;color:var(--warn);margin:4px 0 0 2px">${ico('alert',14)} Bu talep no listede bulunamadı</div>` : '')) : ''}
           ${(() => {
             if(!stockEnabled() || !it.isEmriNo) return '';
-            const { isEmriNo: prevCode } = resolveTrackingCode(it.isEmriNo, it.bilesen);
-            if(!isFirstOperationFor(prevCode)) return '';
+            const { isEmriNo: prevCode, talepNo: prevTalep } = resolveTrackingCode(it.isEmriNo, it.bilesen);
+            if(!isFirstOperationFor(prevCode, prevTalep)) return '';
             const opts = stockConsumableOptions();
             if(opts.length===0) return '';
+            if(typeof urunHammaddeOnSecim === 'function') urunHammaddeOnSecim(it, prevCode, prevTalep + '|' + prevCode);
             const selOpt = stockOptionByValue(it.stockItemId);
             const isManualInput = selOpt && (selOpt.tur==='boy' || selOpt.mode==='manuel');
             return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:6px">
-              <div style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${ico('box',14)} İlk Operasyon — Hammadde (opsiyonel)</div>
+              <div style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${ico('box',14)} İlk Operasyon — Hammadde</div>
+              ${typeof urunHammaddeIpucuHtml === 'function' ? urunHammaddeIpucuHtml(prevCode) : ''}
               ${opHammaddeAramaHtml(it.stokAra, opts, 'nf-coklu-stok-ara-'+i, `newForm.cokluItems[${i}].stokAra=this.value; render()`, v=>`newForm.cokluItems[${i}].stockItemId='${escJs(v)}'; newForm.cokluItems[${i}].stokAra=''; render()`, 'op:'+i)}
               <div style="display:flex;gap:6px;margin-bottom:${isManualInput?'6px':'0'}">
                 <select id="nf-coklu-stok-${i}" onchange="newForm.cokluItems[${i}].stockItemId=this.value; render()" style="flex:1;margin-bottom:0">
@@ -259,14 +263,16 @@ function renderOperator(){
         })()}
         ${(() => {
           if(!stockEnabled() || !newForm.isEmriNo) return '';
-          const { isEmriNo: previewCode } = resolveTrackingCode(newForm.isEmriNo, newForm.bilesen);
-          if(!isFirstOperationFor(previewCode)) return '';
+          const { isEmriNo: previewCode, talepNo: previewTalep } = resolveTrackingCode(newForm.isEmriNo, newForm.bilesen);
+          if(!isFirstOperationFor(previewCode, previewTalep)) return '';
           const opts = stockConsumableOptions();
           if(opts.length===0) return '';
+          if(typeof urunHammaddeOnSecim === 'function') urunHammaddeOnSecim(newForm, previewCode, previewTalep + '|' + previewCode);
           const selOpt = stockOptionByValue(newForm.stockItemId);
           const isManualInput = selOpt && (selOpt.tur==='boy' || selOpt.mode==='manuel');
           return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
-            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${ico('box',14)} İlk Operasyon — Kullanılan Hammadde (opsiyonel)</div>
+            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${ico('box',14)} İlk Operasyon — Kullanılan Hammadde</div>
+            ${typeof urunHammaddeIpucuHtml === 'function' ? urunHammaddeIpucuHtml(previewCode) : ''}
             ${opHammaddeAramaHtml(newForm.stokAra, opts, 'nf-stok-ara', "newForm.stokAra=this.value; render()", v=>`newForm.stockItemId='${escJs(v)}'; newForm.stokAra=''; render()`, 'op')}
             <div style="display:flex;gap:6px;margin-bottom:${isManualInput?'8px':'0'}">
               <select id="nf-stok-item" onchange="newForm.stockItemId=this.value; render()" style="flex:1;margin-bottom:0">

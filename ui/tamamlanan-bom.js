@@ -149,9 +149,9 @@ function bomRotaListesi(){
       if(m) hammadde = { kaynak: 'bekleyen', ad: m.hammaddeKod, boy: m.gerekenMiktar ? bomSayi(m.gerekenMiktar) + ' ' + (m.birim || '') : '' };
     }
     if(!hammadde) hammadde = operatorMalz(dalli ? zarf : ana);
+    const rc = (hammaddeRecete || {})[uKodu] || null;
     if(!hammadde && (zarf.length || !dalli)){
-      const rc = (hammaddeRecete || {})[uKodu];
-      if(rc && rc.hammaddeKod) hammadde = { kaynak: 'recete', ad: rc.hammaddeKod, boy: (Number(rc.birimBasina) > 0 && adet > 0) ? '≈ ' + bomSayi(rc.birimBasina * adet) + ' ' + (rc.birim || '') : '' };
+      if(rc && rc.hammaddeKod) hammadde = { kaynak: rc.standart ? 'standart' : 'recete', ad: rc.hammaddeKod, boy: (Number(rc.birimBasina) > 0 && adet > 0) ? '≈ ' + bomSayi(rc.birimBasina * adet) + ' ' + (rc.birim || '') : '' };
     }
 
     // Karbür (_ELMAS ya da dalsız iş)
@@ -175,12 +175,20 @@ function bomRotaListesi(){
       const o = operatorMalz(elmas);
       if(o) karbur = { ...o, kodlar: [], mm: 0 };
     }
+    /* Standart karbür (Şef/SuperAdmin tanımı) — bu iş emrine ait çıkış kaydı yoksa */
+    if(!karbur && (elmas.length || !dalli) && rc && rc.standart && rc.karbur && Array.isArray(rc.karbur.satirlar) && rc.karbur.satirlar.length){
+      const ss = rc.karbur.satirlar;
+      const kodlar = [...new Set(ss.map(s => s.kod).filter(Boolean))];
+      karbur = { kaynak: 'standart', kodlar, ad: kodlar.join(' + ') || '—', mm: 0,
+        boy: ss.map(s => (kodlar.length > 1 ? s.kod + ': ' : '') + (s.tip === 'kesim' ? `${s.adet} × ${bomSayi(s.boy)} mm` : `${s.adet} adet`)).join(' · ') };
+    }
 
     const bomVar = dalli
       ? ((!zarf.length || !!hammadde) && (!elmas.length || !!karbur))
       : !!(hammadde || karbur);
     const mamulAdi = (typeof usMamulAdi === 'function' ? usMamulAdi(ilk) : '') || '';
-    return { ...grp, dalli, adet, hammadde, karbur, bomVar, mamulAdi,
+    const std = (rc && rc.standart) ? rc : null;
+    return { ...grp, dalli, adet, hammadde, karbur, bomVar, mamulAdi, std,
       zAna: bomRotaZinciri(ana), zZarf: bomRotaZinciri(zarf), zElmas: bomRotaZinciri(elmas) };
   });
   _bomRotaCache = liste; _bomRotaCacheAnahtar = anahtar;
@@ -192,7 +200,8 @@ const BOM_KAYNAK = {
   bekleyen: { ad: 'malzeme kaydı',   renk: 'var(--accent)',     ipucu: 'Malzeme bekleyenlerde bu iş emri için seçilen hammadde ve gereken miktar' },
   operator: { ad: 'operatör girişi', renk: 'var(--warn)',       ipucu: 'İş başlatılırken yazılan malzeme cinsi ve çap×boy (serbest metin)' },
   recete:   { ad: 'reçeteden',       renk: 'var(--text-muted)', ipucu: 'Mamulün hammadde reçetesi — bu iş emrine ait kayıt yok, miktar tahmini' },
-  karbur:   { ad: 'karbür çıkışı',   renk: 'var(--success)',    ipucu: 'Karbür kesim planından bu iş emrine yapılan çıkış (testere payı dahil boy)' }
+  karbur:   { ad: 'karbür çıkışı',   renk: 'var(--success)',    ipucu: 'Karbür kesim planından bu iş emrine yapılan çıkış (testere payı dahil boy)' },
+  standart: { ad: 'standart',        renk: 'var(--accent)',     ipucu: 'Şef/SuperAdmin\'in bu CANIAS kodu için tanımladığı standart — bu iş emrine ait gerçek kayıt yok' }
 };
 
 /* Rota: dallar (üstte _ELMAS, altta _ZARF) → preste birleşme → U kodunun operasyonları → Bitti */
@@ -209,6 +218,18 @@ function bomRotaHtml(x){
     </div>`;
 }
 
+function bomRotaFiltreli(){
+  const q = (completedSearch || '').trim().toLocaleLowerCase('tr');
+  return bomRotaListesi().filter(x => {
+    if(bomRotaFiltre === 'tam' && !x.bomVar) return false;
+    if(bomRotaFiltre === 'eksik' && x.bomVar) return false;
+    if(bomRotaFiltre === 'karburlu' && !x.karbur) return false;
+    if(!q) return true;
+    const metin = [x.uKodu, x.talep, x.mamulAdi, x.hammadde && x.hammadde.ad, x.karbur && x.karbur.ad, x.zElmas.join(' '), x.zZarf.join(' '), x.zAna.join(' ')].filter(Boolean).join(' ').toLocaleLowerCase('tr');
+    return metin.includes(q);
+  });
+}
+
 function renderTamamlananBomRota(){
   bomRotaYukle(false);
   if(!bomRotaVeri.stok || !bomRotaVeri.karbur || bomRotaVeri.hata){
@@ -219,15 +240,7 @@ function renderTamamlananBomRota(){
   const kaynakSay = {}; tum.forEach(x => { if(x.hammadde) kaynakSay[x.hammadde.kaynak] = (kaynakSay[x.hammadde.kaynak] || 0) + 1; });
   const yuzde = tum.length ? Math.round(tamN * 100 / tum.length) : 0;
 
-  const q = (completedSearch || '').trim().toLocaleLowerCase('tr');
-  const liste = tum.filter(x => {
-    if(bomRotaFiltre === 'tam' && !x.bomVar) return false;
-    if(bomRotaFiltre === 'eksik' && x.bomVar) return false;
-    if(bomRotaFiltre === 'karburlu' && !x.karbur) return false;
-    if(!q) return true;
-    const metin = [x.uKodu, x.talep, x.mamulAdi, x.hammadde && x.hammadde.ad, x.karbur && x.karbur.ad, x.zElmas.join(' '), x.zZarf.join(' '), x.zAna.join(' ')].filter(Boolean).join(' ').toLocaleLowerCase('tr');
-    return metin.includes(q);
-  });
+  const liste = bomRotaFiltreli();
 
   const kpi = (deger, etiket, alt, f) => `<button type="button" class="bom-kpi ${bomRotaFiltre === f ? 'active' : ''}" onclick="setBomRotaFiltre('${f}')">
       <div class="bom-kpi-deger">${deger}</div><div class="bom-kpi-etiket">${etiket}</div>${alt ? `<div class="bom-kpi-alt">${alt}</div>` : ''}</button>`;
@@ -237,8 +250,9 @@ function renderTamamlananBomRota(){
       ${kpi(tum.length - tamN, 'BOM eksik', 'yalnız rota var', 'eksik')}
       ${kpi(karN, 'Karbür kullanılan', '', 'karburlu')}
     </div>
-    <div class="bom-kaynak-not">Hammadde kaynağı: ${['stok', 'bekleyen', 'operator', 'recete'].map(k => `<span title="${esc(BOM_KAYNAK[k].ipucu)}"><i style="background:${BOM_KAYNAK[k].renk}"></i>${BOM_KAYNAK[k].ad} ${kaynakSay[k] || 0}</span>`).join('')}
-      <button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px;margin-left:auto" onclick="bomRotaYenile()" title="Stok ve karbür hareketlerini yeniden oku">↻ Yenile</button></div>
+    <div class="bom-kaynak-not">Hammadde kaynağı: ${['stok', 'bekleyen', 'operator', 'standart', 'recete'].map(k => `<span title="${esc(BOM_KAYNAK[k].ipucu)}"><i style="background:${BOM_KAYNAK[k].renk}"></i>${BOM_KAYNAK[k].ad} ${kaynakSay[k] || 0}</span>`).join('')}
+      <button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px;margin-left:auto" onclick="bomRotaExcelIndir()" title="Ekrandaki listeyi (filtre ve aramayla) Excel'de açılan CSV olarak indir">⬇ Excel</button>
+      <button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" onclick="bomRotaYenile()" title="Stok ve karbür hareketlerini yeniden oku">↻ Yenile</button></div>
     <input id="completed-search-input" class="filter-input completed-search" placeholder="İş emri / CANIAS kodu / hammadde / karbür / makine ara…" value="${esc(completedSearch)}" oninput="setCompletedSearch(this.value)">
     <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px">${liste.length} iş emri${liste.length > bomRotaLimit ? ` · ilk ${bomRotaLimit} gösteriliyor` : ''}</div>`;
   if(!liste.length) h += `<div style="text-align:center;color:var(--text-muted);padding:40px 0">Bu filtrede kayıt yok.</div>`;
@@ -261,16 +275,79 @@ function renderTamamlananBomRota(){
     }
     h += `<div class="completed-card bom-kart ${x.bomVar ? '' : 'bom-eksik'}" onclick="openRouteDetail('${escJs(x.uKodu)}', ${x.finishedAt})">
       <div class="completed-header">
-        <span class="completed-meta">${x.bomVar ? `<b style="color:var(--success)">${ico('check', 12)} BOM + rota</b>` : '<b style="color:var(--warn)">BOM eksik</b>'} · Tamamlandı: ${fmtDT(x.finishedAt)}${x.adet ? ` · ${x.adet} adet` : ''}</span>
+        <span class="completed-meta">${x.bomVar ? `<b style="color:var(--success)">${ico('check', 12)} BOM + rota</b>` : '<b style="color:var(--warn)">BOM eksik</b>'} · Tamamlandı: ${fmtDT(x.finishedAt)}${x.adet ? ` · ${x.adet} adet` : ''}${x.std ? ` · <span style="color:var(--accent)" title="${esc('Standart: ' + (x.std.standart.byName || '') + ' · ' + fmtDT(x.std.standart.ts))}">★ standart tanımlı</span>` : ''}</span>
+        ${canEditUrunAgaci() ? `<button type="button" class="btn-ghost" style="padding:2px 10px;font-size:11px" onclick="event.stopPropagation(); bomDuzenleAc('${escJs(x.uKodu)}')" title="Bu CANIAS kodunun standart BOM ve rotasını düzenle — aynı kodlu yeni işlerde öneri olarak gelir">✎ ${x.std ? 'Standardı düzenle' : 'BOM / rota tanımla'}</button>` : ''}
       </div>
       <div class="bom-govde">
         ${satir('CANIAS kodu', `<span class="mono"><b>${esc(x.uKodu)}</b></span>${x.talep ? ` <span class="mono bom-ikincil">· İş emri ${esc(x.talep)}</span>` : ''}${x.mamulAdi ? ` <span class="bom-ikincil">· ${esc(x.mamulAdi)}</span>` : ''}`)}
         ${malz}
         <div class="bom-dal-bas bom-rota-bas"></div>
         ${satir('Rota', bomRotaHtml(x))}
+        ${(() => { /* Standart rota gerçekleşenden farklıysa altında gösterilir */
+          const r = x.std && x.std.rota; if(!r) return '';
+          const s = { zElmas: r.elmas || [], zZarf: r.zarf || [], zAna: r.ana || [] };
+          const ayni = ['zElmas', 'zZarf', 'zAna'].every(k => s[k].join('|') === x[k].join('|'));
+          return ayni ? satir('', '<span class="bom-ikincil" style="color:var(--accent)">★ standart rotayla aynı</span>') : satir('Standart rota', bomRotaHtml(s));
+        })()}
       </div>
     </div>`;
   });
   if(liste.length > bomRotaLimit) h += `<div style="text-align:center;margin:8px 0 20px"><button type="button" class="btn-ghost" onclick="bomRotaDahaFazla()">Daha fazla göster (${liste.length - bomRotaLimit} kaldı)</button></div>`;
-  return h;
+  return h + (bomDuzenle ? renderBomDuzenleModal() : '');
+}
+
+/* Standart BOM + rota düzenleme penceresi — yalnız Şef / SuperAdmin (canEditUrunAgaci) */
+function renderBomDuzenleModal(){
+  const d = bomDuzenle;
+  if(!d || !canEditUrunAgaci()) return '';
+  const hmListe = stockItemsArray().map(s => `<option value="${esc(hammaddeGosterimAdi(s))}">`).join('');
+  const kkListe = karburKatalogArray().map(k => `<option value="${esc(k.kod)}">${esc((k.kullanim || 'kesim') === 'kesim' ? 'çubuk · kesilir' : 'adet')}</option>`).join('');
+  const hmIt = d.hammaddeId ? stockItems[d.hammaddeId] : null;
+  const birim = hmIt ? (hmIt.birim || (hmIt.tur === 'boy' ? 'mm' : 'adet')) : '';
+  const rotaAlan = (k, et, ipucu) => `<div class="field" style="margin-bottom:8px"><label>${et}</label>
+      <input class="mono" value="${esc(d.rota[k])}" placeholder="${ipucu}" oninput="bomDuzenle.rota.${k}=this.value" list="bom-makine-listesi"></div>`;
+  return `<div class="modal-overlay" onclick="if(event.target===this) bomDuzenleKapat()">
+    <div class="modal-box kal-modal" style="max-width:620px">
+      <div class="kal-modal-bas">
+        <div class="sec-h" style="margin-top:0">Standart BOM + rota — <span class="mono">${esc(d.uKodu)}</span></div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:-4px">${esc(d.mamulAdi || '')}${d.talep ? ' · örnek iş emri ' + esc(d.talep) : ''}. Bu CANIAS kodunun <b>standardı</b> olarak kaydedilir: aynı kodlu yeni işte ilk operasyonda hammadde, sıradaki operasyonda makine öneri olarak gelir. Gerçekleşen kayıtlar değişmez.${d.std ? `<br>Son tanım: ${esc(d.std.byName || d.std.by || '')} · ${fmtDT(d.std.ts)}` : ''}</div>
+      </div>
+      <div class="kal-modal-govde">
+        <datalist id="bom-hm-listesi">${hmListe}</datalist>
+        <datalist id="bom-karbur-listesi">${kkListe}</datalist>
+        <datalist id="bom-makine-listesi">${allMachines().map(m => `<option value="${esc(m.code)}">${esc(m.name)}</option>`).join('')}</datalist>
+
+        <div class="bom-dal-bas" style="margin-top:0">${d.dalZarf || !d.dalElmas ? (d.dalZarf ? '_ZARF <span>çelik hammadde</span>' : 'Hammadde <span>çelik</span>') : 'Hammadde <span>çelik (yoksa boş bırak)</span>'}</div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:8px;margin-top:6px">
+          <div class="field" style="margin-bottom:0"><label>Hammadde (stok kalemi)</label>
+            <input value="${esc(d.hammadde)}" list="bom-hm-listesi" placeholder="Yazmaya başla… ör. 2344 Ø36" oninput="bomDuzenleHammaddeYaz(this.value)" onchange="bomDuzenleHammaddeYaz(this.value); render()"></div>
+          <div class="field" style="margin-bottom:0"><label>Parça başı ${birim ? '(' + esc(birim) + ')' : 'miktar'}</label>
+            <input inputmode="decimal" value="${esc(d.birimBasina)}" placeholder="${birim === 'mm' ? 'ör. 62' : 'ör. 1'}" oninput="bomDuzenle.birimBasina=this.value"></div>
+        </div>
+        ${d.hammadde && !d.hammaddeId ? `<div style="font-size:11.5px;color:var(--warn);margin-top:4px">Listede bulunamadı — açılan listeden seç</div>` : ''}
+
+        <div class="bom-dal-bas">${d.dalElmas ? '_ELMAS <span>karbür</span>' : 'Karbür <span>varsa</span>'}</div>
+        ${d.karbur.map((k, i) => `<div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 80px 34px;gap:8px;margin-top:6px;align-items:end">
+            <div class="field" style="margin-bottom:0"><label>${i ? '' : 'Karbür kodu'}</label><input class="mono" value="${esc(k.kod)}" list="bom-karbur-listesi" placeholder="ör. C28XH156X3XVA90" oninput="bomDuzenle.karbur[${i}].kod=this.value"></div>
+            <div class="field" style="margin-bottom:0"><label>${i ? '' : 'Parça boyu (mm)'}</label><input inputmode="decimal" value="${esc(k.boy)}" placeholder="kesilecekse" oninput="bomDuzenle.karbur[${i}].boy=this.value"></div>
+            <div class="field" style="margin-bottom:0"><label>${i ? '' : 'Adet'}</label><input inputmode="numeric" value="${esc(k.adet)}" oninput="bomDuzenle.karbur[${i}].adet=this.value"></div>
+            <button type="button" class="btn-ghost" style="padding:8px 0" title="Satırı sil" onclick="bomDuzenleKarburSil(${i})">${ico('trash', 13)}</button>
+          </div>`).join('')}
+        <button type="button" class="btn-ghost" style="margin-top:8px;padding:4px 10px;font-size:12px" onclick="bomDuzenleKarburEkle()">+ Karbür satırı</button>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Çubuktan kesilen karbürde parça boyu (testere payı hariç), hazır adet kalemlerde yalnız adet. Kesim Planı'nda bu CANIAS kodlu iş emri yazılınca satırlar bundan dolar.</div>
+
+        <div class="bom-dal-bas">Rota <span>makine kodları sırayla — ok, boşluk ya da virgülle ayır</span></div>
+        <div style="margin-top:6px">
+          ${(d.dalElmas || d.rota.elmas) ? rotaAlan('elmas', '_ELMAS dalı', 'ör. MDT01 → TE02 → UT03') : ''}
+          ${(d.dalZarf || d.rota.zarf) ? rotaAlan('zarf', '_ZARF dalı', 'ör. TES01 → UT03 → FII01') : ''}
+          ${rotaAlan('ana', (d.dalZarf || d.dalElmas) ? 'Birleşme sonrası (U kodu)' : 'Rota', 'ör. P01 → F02 → UT03 → FKK')}
+          <div style="font-size:11px;color:var(--text-muted)">Rota sonunda <b>Bitti</b> kendiliğinden eklenir. ${(d.dalZarf || d.dalElmas) ? 'Dalın son makinesinden sonra birleşme (ana rotanın ilk makinesi) önerilir.' : ''}</div>
+        </div>
+      </div>
+      <div class="kal-modal-alt">
+        <button class="btn-primary" style="flex:1" ${d.busy ? 'disabled' : ''} onclick="bomDuzenleKaydet()">${d.busy ? 'Kaydediliyor…' : 'Standart olarak kaydet'}</button>
+        <button class="btn-ghost" onclick="bomDuzenleKapat()">Vazgeç</button>
+      </div>
+    </div>
+  </div>`;
 }

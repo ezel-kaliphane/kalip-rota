@@ -1597,6 +1597,7 @@ function karburReceteYaz(g){
       birimBasina: o.ieMiktar > 0 ? Math.round(s.adet / o.ieMiktar * 10000) / 10000 : 0 }));
     if(!satirlar.length) return;
     const eski = ((typeof hammaddeRecete !== 'undefined' && hammaddeRecete[m]) || {}).karbur || {};
+    if(eski.standart) return;   // Şef/SuperAdmin standardı — gözlem onu ezmez (bkz. js/urun-agaci.js)
     const k = { satirlar, ieMiktar: o.ieMiktar, sonIsEmri: o.isEmri,
       gozlemSayisi: (Number(eski.gozlemSayisi) || 0) + 1, sonTs: now, sonKullanan: session.username };
     updates['hammaddeRecete/' + m + '/karbur'] = k;

@@ -331,9 +331,19 @@ function stockItemsArray(){ return Object.entries(stockItems).map(([id,v])=>({id
 function lotsArray(item){ return Object.entries(item.lots||{}).map(([id,v])=>({id, ...v})).sort((a,b)=>(b.boy||0)-(a.boy||0)); }
 // Bir isEmriNo için daha önce hiç kayıt açılmamışsa "ilk operasyon"dur — hammadde tüketimi
 // sadece bu noktada sorulur, rotanın sonraki adımlarında tekrar sorulmaz.
-function isFirstOperationFor(isEmriNo){
+/* talepNo verilirse (07.10.2026): yalnız AYNI iş emrinin kayıtlarına bakılır — önceden U koduna
+   bakıldığı için aynı CANIAS kodu ikinci kez üretime girdiğinde hammadde kutusu hiç çıkmıyordu.
+   Birleşme (eksiz U kodu) dalları olan bir iş emrinde ilk operasyon sayılmaz: malzeme dallarda
+   tüketildi. */
+function isFirstOperationFor(isEmriNo, talepNo){
   if(!isEmriNo) return true;
-  return !entriesArray().some(e => e.isEmriNo === isEmriNo);
+  const t = String(talepNo || '').trim().toUpperCase();
+  if(!t) return !entriesArray().some(e => e.isEmriNo === isEmriNo);
+  const ie = String(isEmriNo).toUpperCase(), base = baseIsEmriNo(ie), anaMi = base === ie;
+  return !entriesArray().some(e => {
+    if(String(e.talepNo || '').trim().toUpperCase() !== t) return false;
+    return e.isEmriNo === isEmriNo || (anaMi && baseIsEmriNo(e.isEmriNo) === base);
+  });
 }
 /* ===================== KISMİ AKTARIM (FAZ 5 / MADDE 7) =====================
    Bir iş emrinin, mevcut operasyonu tam bitmeden ELİNDEKİ HAZIR ADEDİ bir sonraki operasyona
