@@ -994,6 +994,7 @@ const ICONS = {
   elmas:'<path d="M12 3l9 9-9 9-9-9z"/>',
   katman:'<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/>',
   send:'<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>',
+  cuzdan:'<path d="M20 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h15v12H5a2 2 0 0 1-2-2V5"/><path d="M16 13h.01"/>',
 };
 function ico(name, size){
   const p = ICONS[name]; if(!p) return '';

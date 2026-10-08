@@ -2930,6 +2930,7 @@ const EKRAN_BASLIKLARI = {
   matrix:       { ustu:'Canlı Panel', baslik:'Makine Matrisi' },
   completed:    { ustu:'Canlı Panel', baslik:'Tamamlanan Kodlar' },
   isYogunlugu:  { baslik:'İş Yoğunluğu' },
+  maliyetAnaliz:{ baslik:'Maliyet Analizi', alt:()=>({ buay:'bu ay', '3ay':'son 3 ay', buyil:'bu yıl', tumu:'tüm kayıtlar' }[typeof maliyetAnalizDonem!=='undefined' ? maliyetAnalizDonem : 'buyil']) + ' · tamamlanan iş emirleri' },
   /* Tahtada başlığın altında seçili aralık ve canlı göstergesi var ("21 Eylül 2026 · canlı"). */
   analiz:       { baslik:'Analiz', alt:()=>{
                     if(analizRole==='yonetici') return rtAralik().etiket;
@@ -3230,6 +3231,7 @@ function adminNavOgeleri(){
   if(isAdminTabVisible('isYogunlugu')) o.push({ key:'isYogunlugu', label:'İş Yoğunluğu', ikon:'box', aktif: view==='isYogunlugu', tikla:"setView('isYogunlugu')" });
   if(sefKaliteAnalizi()) o.push({ key:'analiz', label:'Kalite', ikon:'chart', aktif: view==='analiz', tikla:"analizRole='kalite'; setView('analiz')" }); // Şef: yalnız Analiz → Kalite
   else if(!(session.isSef || session.isUretimSef) && isAdminTabVisible('analiz')) o.push({ key:'analiz', label:'Analiz', ikon:'chart', aktif: view==='analiz', tikla:"setView('analiz')" });
+  if(typeof canSeeMaliyet === 'function' && canSeeMaliyet()) o.push({ key:'maliyet', label:'Maliyet', ikon:'cuzdan', aktif: view==='maliyetAnaliz', tikla:"setView('maliyetAnaliz')" }); // yalnız adminler (08.10.2026)
   if(canCreateTadilat() && isAdminTabVisible('tadilat')) o.push({ key:'tadilat', label:'Tadilat', ikon:'wrench', aktif: view==='tadilatYonetim', tikla:"setView('tadilatYonetim')" });
   if(stokErisimVar()) o.push({ key:'stok', label:'Stok', ikon:'box', aktif: view==='stokYonetim', tikla:"setView('stokYonetim')" });
   if(session.isAdmin){
@@ -3812,6 +3814,8 @@ function renderAdmin(){
       body += `${routeModal ? renderRouteModal() : ''}`;
     }
     body += `</div>`;
+  } else if(view==='maliyetAnaliz'){
+    body = renderMaliyetAnalizi();
   } else if(view==='isYogunlugu'){
     body = renderIsYogunlugu();
   } else if(view==='analiz'){

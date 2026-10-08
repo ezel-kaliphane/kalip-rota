@@ -238,7 +238,7 @@ function maliyetHesapla(x){
     const amort = (g && mlSayi(g.amortDeger) > 0 && mlSayi(g.amortYil) > 0 && mlSayi(g.amortSaat) > 0)
       ? dk * mlSayi(g.amortDeger) / (mlSayi(g.amortYil) * mlSayi(g.amortSaat) * 60) : 0;
     const dal = bilesenOfCode(e.isEmriNo) || 'ANA';
-    ops.push({ kod, grup: g ? g.ad : null, dk, iscilik, elektrik, amort, operator: e.operatorName || e.operatorUsername || '', dal, pay, kisiUcret: kisi > 0 });
+    ops.push({ kod, grup: g ? g.ad : null, dk, iscilik, elektrik, amort, operator: e.operatorName || e.operatorUsername || '', dal, pay, kisiUcret: kisi > 0, duzeltme: !!e.duzeltme });
     if(g && !(dkUcret > 0)) eksik.push(g.ad + ': dakika ücreti girilmemiş');
   });
   const grupsuz = [...new Set(ops.filter(o => !o.grup).map(o => o.kod))];
