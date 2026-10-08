@@ -21,11 +21,12 @@ const ML_KALEMLER = [
 ];
 function mlKalemTutar(m, k){ return k === 'celik' ? m.celik.tutar : k === 'karbur' ? m.karbur.tutar : k === 'isil' ? m.isil.tutar : (m[k] || 0); }
 
-function renderMaliyetAnalizi(){
-  if(!canSeeMaliyet()) return `<div class="analiz-wrap"><div class="set-card">Bu ekran yalnız adminler için.</div></div>`;
+/* Analiz → Maliyet sekmesinin içeriği (08.10.2026: sol menüden Analiz'in içine taşındı) */
+function renderMaliyetAnaliziIcerik(){
+  if(!canSeeMaliyet()) return `<div class="set-card">Bu bölüm yalnız adminler için.</div>`;
   maliyetYukle(); bomRotaYukle(false);
   const d = maliyetDurum;
-  const kutu = ic => `<div class="analiz-wrap"><div class="set-card" style="max-width:560px">${ic}</div></div>`;
+  const kutu = ic => `<div class="set-card" style="max-width:560px">${ic}</div>`;
   if(!d.okundu || !bomRotaVeri.stok || !bomRotaVeri.karbur) return kutu('<div style="color:var(--text-muted)">Okunuyor…</div>');
   if(d.hata) return kutu(`Okunamadı: ${esc(mlHataMetni({ message:d.hata }))}`);
   if(!d.blob) return kutu(`Maliyet henüz kurulmadı. ${canEditMaliyet() ? '<button class="btn-ghost" style="width:auto;padding:4px 10px" onclick="settingsSubTab=\'maliyet\'; setView(\'adminSettings\')">Ayarlar → Maliyet Parametreleri</button>' : 'SuperAdmin kurmalı.'}`);
@@ -36,7 +37,7 @@ function renderMaliyetAnalizi(){
   const kayit = bomRotaListesi().filter(x => x.finishedAt >= bas).map(x => ({ x, m: maliyetHesapla(x) })).filter(r => r.m);
   const donemAd = { buay:'Bu ay', '3ay':'Son 3 ayda', buyil:'Bu yıl', tumu:'Kayıtlı dönemde' }[maliyetAnalizDonem];
   const cip = (k, et) => `<button class="chip ${maliyetAnalizDonem === k ? 'active' : ''}" onclick="setMaliyetAnalizDonem('${k}')">${et}</button>`;
-  let h = `<div class="analiz-wrap">
+  let h = `<div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${cip('buay','Bu ay')}${cip('3ay','Son 3 ay')}${cip('buyil','Bu yıl')}${cip('tumu','Tümü')}</div>`;
   if(!kayit.length) return h + `<div class="set-card">${donemAd} tamamlanan iş emri yok.</div></div>`;
 

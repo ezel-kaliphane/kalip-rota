@@ -430,6 +430,7 @@ function setAdminTabPermission(username, key, val){
 const ANALIZ_VIEW_DEFS = [
   { key:'yonetici', label:'Genel' },
   { key:'kalite', label:'Kalite' }, // 06.10.2026: FKK + proses içi hatalar, personel karnesi (ui/analiz-genel.js analizKaliteHtml)
+  { key:'maliyet', label:'Maliyet' }, // 08.10.2026: yalnız adminler (canSeeMaliyet) — ui/maliyet-analiz.js
   { key:'sef', label:'Atölye Şefi' },
   { key:'kisi', label:'Kişi Bazlı' },
   { key:'operator', label:'Operatör Analizi' },
@@ -440,6 +441,7 @@ const ANALIZ_VIEW_DEFS = [
 function sefKaliteAnalizi(){ return !!(session && session.isSef && !session.isSuperAdmin); }
 function isAnalizViewVisible(key){
   if(!session) return false;
+  if(key==='maliyet' && !(typeof canSeeMaliyet==='function' && canSeeMaliyet())) return false; // Şef / Üretim Şefi görmez
   if(session.isSuperAdmin) return true;
   if(sefKaliteAnalizi()) return key==='kalite';
   if(!isAdminTabVisible('analiz')) return false;
