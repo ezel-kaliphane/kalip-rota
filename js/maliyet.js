@@ -242,7 +242,9 @@ function maliyetHesapla(x){
     if(g && !(dkUcret > 0)) eksik.push(g.ad + ': dakika ücreti girilmemiş');
   });
   const grupsuz = [...new Set(ops.filter(o => !o.grup).map(o => o.kod))];
-  const toplamDk = ops.reduce((s, o) => s + o.dk, 0);
+  /* Sarf ve gösterilen toplam dakika yalnız ücretlendirilen gruplardan: fason ısıl işlem (FII01) süresi
+     fasonda geçen beklemedir — maliyeti yalnız kg × kg fiyatı; FKK'nın ücreti yok (kullanıcı, 08.10.2026). */
+  const toplamDk = ops.reduce((s, o) => s + (o.grup ? o.dk : 0), 0);
   const iscilik = ops.reduce((s, o) => s + o.iscilik, 0);
   const elektrik = ops.reduce((s, o) => s + o.elektrik, 0);
   const amort = ops.reduce((s, o) => s + o.amort, 0);
@@ -319,7 +321,7 @@ function maliyetHesapla(x){
   const birim = (saglam || adet) ? toplam / (saglam || adet) : null;
   const sonuc = { toplam, birim, adet, hurda, saglam, hurdaPayi: birim && hurda ? birim * hurda : 0, kur, toplamDk,
     iscilik, elektrik, amort, sarf, genelGider, celik, karbur, isil, ops, grupsuz, eksik:[...new Set(eksik)],
-    yontem: P.genel.iscilikYontemi, genelGiderYuzde: mlSayi(P.genel.genelGiderYuzde) };
+    yontem: P.genel.iscilikYontemi, genelGiderYuzde: mlSayi(P.genel.genelGiderYuzde), isilMak };
   _maliyetOnbellek[anahtar] = sonuc;
   return sonuc;
 }

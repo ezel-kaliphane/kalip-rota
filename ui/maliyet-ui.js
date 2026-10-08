@@ -299,7 +299,7 @@ function renderMaliyetDokum(){
         </tbody></table>
         <div class="bom-dal-bas">Operasyonlar</div>
         <table class="tbl" style="font-size:12px"><thead><tr><th>Makine</th><th>Grup</th><th>Dal</th><th style="text-align:right">Net dk</th><th style="text-align:right">İşçilik</th><th style="text-align:right">Elektrik</th><th style="text-align:right">Amort.</th><th>Operatör</th></tr></thead><tbody>
-          ${m.ops.map(o => `<tr><td class="mono">${esc(o.kod)}</td><td>${o.grup ? esc(o.grup) : '<span style="color:var(--text-muted)">grupsuz</span>'}</td><td>${esc(o.dal === 'ANA' ? '' : '_' + o.dal)}</td>
+          ${m.ops.map(o => `<tr><td class="mono">${esc(o.kod)}</td><td>${o.grup ? esc(o.grup) : `<span style="color:var(--text-muted)">${o.kod === 'FKK' ? 'kalite — ücretsiz' : (m.isilMak || []).includes(o.kod) ? 'fason ısıl işlem — kg ile' : 'grupsuz — ücretsiz'}</span>`}</td><td>${esc(o.dal === 'ANA' ? '' : '_' + o.dal)}</td>
             <td style="text-align:right">${mlFmt(o.dk, 0)}${o.pay > 1 ? ` <span style="color:var(--text-muted)" title="Çoklu iş emri: süre ${o.pay} iş emrine bölündü">÷${o.pay}</span>` : ''}</td>
             <td style="text-align:right">${mlTL(o.iscilik)}${o.kisiUcret ? ' <span title="kişi ücreti">👤</span>' : ''}</td><td style="text-align:right">${mlTL(o.elektrik)}</td><td style="text-align:right">${mlTL(o.amort)}</td><td>${esc(o.operator)}</td></tr>`).join('')}
         </tbody></table>
