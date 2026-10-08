@@ -126,9 +126,16 @@ async function maliyetKaydet(p, yeniSifre){
   await mlAnahtarSakla(key, salt);
 }
 function maliyetSonParam(){ const s = maliyetDurum.veri && maliyetDurum.veri.surumler; return (s && s.length) ? s[s.length - 1].p : null; }
-/* İş emrinin bittiği anda geçerli sürüm; o tarihten önce hiç sürüm yoksa ilk sürüm. */
+/* İş emrinin bittiği anda geçerli sürüm; o tarihten önce hiç sürüm yoksa ilk DOLU sürüm.
+   Boş sürümler (şifre belirlenirken oluşan, ücret/fiyat girilmemiş kayıt) atlanır — yoksa kurulumdan
+   önce biten tüm iş emirleri 0 ₺ çıkıyordu (08.10.2026). */
+function mlSurumDolu(p){
+  return !!p && ((p.gruplar || []).some(g => Number(g.dk) > 0) || (p.celik || []).some(c => Number(c.fiyat) > 0) || (p.karbur || []).some(c => Number(c.fiyat) > 0));
+}
 function maliyetParam(ts){
-  const s = maliyetDurum.veri && maliyetDurum.veri.surumler; if(!s || !s.length) return null;
+  const tum = maliyetDurum.veri && maliyetDurum.veri.surumler; if(!tum || !tum.length) return null;
+  const dolu = tum.filter(v => mlSurumDolu(v.p));
+  const s = dolu.length ? dolu : tum;
   let sec = s[0]; for(const v of s){ if(v.ts <= (ts || Date.now())) sec = v; }
   return sec.p;
 }
