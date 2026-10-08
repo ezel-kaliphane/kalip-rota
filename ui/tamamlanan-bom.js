@@ -131,27 +131,33 @@ function bomRotaListesi(){
     const ilk = ana[0] || zarf[0] || elmas[0] || {};
     const adet = Number(ilk.adet) || 0;
 
-    // Çelik hammadde (_ZARF ya da dalsız iş)
-    let hammadde = null;
+    // Çelik hammadde (_ZARF ya da dalsız iş). hmRaw: maliyet hesabı için ham kalem/miktar (js/maliyet.js)
+    let hammadde = null, hmRaw = null;
     const sh = (talep && stokTalep[talep]) || (!talep && stokIe[uKodu]) || null;
     if(sh){
       const kalem = {};
       sh.forEach(h => {
         const k = h.itemId || h.itemKod;
-        const o = (kalem[k] = kalem[k] || { kod: h.itemKod || '', isim: h.itemIsim || '', miktar: 0, birim: h.birim || '' });
+        const o = (kalem[k] = kalem[k] || { itemId: h.itemId || '', kod: h.itemKod || '', isim: h.itemIsim || '', miktar: 0, birim: h.birim || '' });
         o.miktar += Math.abs(Number(h.miktar) || 0);
       });
       const kl = Object.values(kalem);
       hammadde = { kaynak: 'stok', ad: kl.map(k => k.isim || k.kod).join(' + '), boy: kl.map(k => bomSayi(k.miktar) + ' ' + k.birim).join(' + ') };
+      hmRaw = { kaynak: 'stok', kalemler: kl };
     }
     if(!hammadde){
       const m = talep ? (mbTalep[talep] || null) : (mbIe[uKodu] || null);   // talep varsa başka iş emrinin kaydı alınmasın
-      if(m) hammadde = { kaynak: 'bekleyen', ad: m.hammaddeKod, boy: m.gerekenMiktar ? bomSayi(m.gerekenMiktar) + ' ' + (m.birim || '') : '' };
+      if(m){ hammadde = { kaynak: 'bekleyen', ad: m.hammaddeKod, boy: m.gerekenMiktar ? bomSayi(m.gerekenMiktar) + ' ' + (m.birim || '') : '' };
+        hmRaw = { kaynak: 'bekleyen', kalemler: [{ itemId: m.hammaddeId, kod: m.hammaddeKod, miktar: Number(m.gerekenMiktar) || 0, birim: m.birim || '' }] }; }
     }
-    if(!hammadde) hammadde = operatorMalz(dalli ? zarf : ana);
+    if(!hammadde){
+      hammadde = operatorMalz(dalli ? zarf : ana);
+      if(hammadde){ const e = (dalli ? zarf : ana).find(z => z.malzemeCinsi || z.capBoy) || {}; hmRaw = { kaynak: 'operator', cins: e.malzemeCinsi || '', capBoy: e.capBoy || '' }; }
+    }
     const rc = (hammaddeRecete || {})[uKodu] || null;
     if(!hammadde && (zarf.length || !dalli)){
-      if(rc && rc.hammaddeKod) hammadde = { kaynak: rc.standart ? 'standart' : 'recete', ad: rc.hammaddeKod, boy: (Number(rc.birimBasina) > 0 && adet > 0) ? '≈ ' + bomSayi(rc.birimBasina * adet) + ' ' + (rc.birim || '') : '' };
+      if(rc && rc.hammaddeKod){ hammadde = { kaynak: rc.standart ? 'standart' : 'recete', ad: rc.hammaddeKod, boy: (Number(rc.birimBasina) > 0 && adet > 0) ? '≈ ' + bomSayi(rc.birimBasina * adet) + ' ' + (rc.birim || '') : '' };
+        hmRaw = { kaynak: hammadde.kaynak, kalemler: (Number(rc.birimBasina) > 0 && adet > 0) ? [{ itemId: rc.hammaddeId, kod: rc.hammaddeKod, miktar: rc.birimBasina * adet, birim: rc.birim || '' }] : [] }; }
     }
 
     // Karbür (_ELMAS ya da dalsız iş)
@@ -188,7 +194,13 @@ function bomRotaListesi(){
       : !!(hammadde || karbur);
     const mamulAdi = (typeof usMamulAdi === 'function' ? usMamulAdi(ilk) : '') || '';
     const std = (rc && rc.standart) ? rc : null;
-    return { ...grp, dalli, adet, hammadde, karbur, bomVar, mamulAdi, std,
+    /* Maliyet için ham karbür hareketleri; yoksa standart karbür satırları hareket gibi (mm = boy × adet) */
+    let karburRaw = hs.slice();
+    if(!karburRaw.length && karbur && karbur.kaynak === 'standart' && rc && rc.karbur){
+      karburRaw = (rc.karbur.satirlar || []).map(s => ({ katalogId: s.katalogId, kod: s.kod, mm: s.tip === 'kesim' ? (Number(s.boy) || 0) * (Number(s.adet) || 0) : 0,
+        boy: s.tip === 'kesim' ? 0 : ((karburKatalog[s.katalogId] || {}).boy || 0), parca: s.adet }));
+    }
+    return { ...grp, dalli, adet, hammadde, karbur, bomVar, mamulAdi, std, hmRaw, karburRaw,
       zAna: bomRotaZinciri(ana), zZarf: bomRotaZinciri(zarf), zElmas: bomRotaZinciri(elmas) };
   });
   _bomRotaCache = liste; _bomRotaCacheAnahtar = anahtar;
@@ -289,11 +301,13 @@ function renderTamamlananBomRota(){
           const ayni = ['zElmas', 'zZarf', 'zAna'].every(k => s[k].join('|') === x[k].join('|'));
           return ayni ? satir('', '<span class="bom-ikincil" style="color:var(--accent)">★ standart rotayla aynı</span>') : satir('Standart rota', bomRotaHtml(s));
         })()}
+        ${typeof maliyetKartHtml === 'function' ? maliyetKartHtml(x) : ''}
       </div>
     </div>`;
   });
   if(liste.length > bomRotaLimit) h += `<div style="text-align:center;margin:8px 0 20px"><button type="button" class="btn-ghost" onclick="bomRotaDahaFazla()">Daha fazla göster (${liste.length - bomRotaLimit} kaldı)</button></div>`;
-  return h + (bomDuzenle ? renderBomDuzenleModal() : '');
+  return h + (bomDuzenle ? renderBomDuzenleModal() : '')
+    + (typeof renderMaliyetDokum === 'function' ? renderMaliyetDokum() + renderMaliyetSifreModal() : '');
 }
 
 /* Standart BOM + rota düzenleme penceresi — yalnız Şef / SuperAdmin (canEditUrunAgaci) */

@@ -200,6 +200,11 @@
       ".write": false,
       ".indexOn": ["sonTs"],
       "$isEmriNo": { ".write": true }
+    },
+    "maliyet": {
+      ".read": true,
+      ".write": false,
+      "sifreli": { ".write": true }
     }
   }
 }

@@ -2866,7 +2866,11 @@ function renderAyarlarMenu(){
     sa && ayarSatiri({ etiket:'Bildirim Gönder', alt:'Seçtiğin kişilere anlık bildirim', hedef:'bildirimGonder' }),
   ]);
 
-  return `<div class="ayar-menu">${g1}${g2}${g3}${g4}${g5}</div>`;
+  /* Maliyet (08.10.2026): yalnız adminler (Şef/Üretim Şefi hariç) görür, SuperAdmin düzenler */
+  const gM = (typeof canSeeMaliyet === 'function' && canSeeMaliyet()) ? grup('Maliyet', [
+    ayarSatiri({ etiket:'Maliyet Parametreleri', alt:'Dakika ücretleri, amortisman, çelik / karbür / ısıl işlem fiyatları, kur — şifreli', hedef:'maliyet' })
+  ]) : '';
+  return `<div class="ayar-menu">${g1}${g2}${gM}${g3}${g4}${g5}</div>`;
 }
 
 /* Üst bardaki ekran başlığı — tahtalarda (Admin-Tadilat, Admin-Matris, Admin-Ayarlar) üst bar
@@ -3353,10 +3357,10 @@ function renderAdmin(){
      Taninmayan her deger menuye donuyor. Rol zorlamalari bunun USTUNE calisiyor, sirasi onemli. */
   const AYAR_ALT_SEKMELERI = ['menu','access','makineAyarlari','addMachine','bolumKurallari',
     'tabErisimi','resimBul','uyarilar','bildirimlerim','bildirimGonder','durusReasons','kaliteNedenleri',
-    'tadilatSablonlari','takimStok','karbur','stok'];
+    'tadilatSablonlari','takimStok','karbur','stok','maliyet'];
   if(view==='adminSettings' && AYAR_ALT_SEKMELERI.indexOf(settingsSubTab)===-1){ settingsSubTab = 'menu'; }
   if(session.isSef && view==='adminSettings' && settingsSubTab!=='menu' && settingsSubTab!=='stok' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'menu'; }
-  if(session.isAdmin && !session.isSef && !session.isSuperAdmin && view==='adminSettings' && settingsSubTab!=='menu' && settingsSubTab!=='bildirimlerim' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'bildirimlerim'; } // düz Yönetici: sadece kendi bildirimini (ve izin verilmişse Bildirim Ayarları'nı) yönetebilir
+  if(session.isAdmin && !session.isSef && !session.isSuperAdmin && view==='adminSettings' && settingsSubTab!=='menu' && settingsSubTab!=='bildirimlerim' && settingsSubTab!=='maliyet' && !(settingsSubTab==='uyarilar' && canManageBildirimAyarlari())){ settingsSubTab = 'bildirimlerim'; } // düz Yönetici: sadece kendi bildirimini (ve izin verilmişse Bildirim Ayarları'nı) yönetebilir
   if(view==='adminSettings'){
     body = `<div class="settings-wrap">
       ${settingsSubTab==='menu' ? renderAyarlarMenu() : `<button class="btn-ghost" style="margin-bottom:14px" onclick="setSettingsSubTab('menu')"><span style="display:inline-flex;transform:rotate(180deg)">${ico('chevronRight',14)}</span> Tüm ayarlar</button>`}`;
@@ -3718,6 +3722,8 @@ function renderAdmin(){
       body += renderToolStokAdminSettings();
     } else if(settingsSubTab==='karbur'){
       body += renderKarburAdminSettings();
+    } else if(settingsSubTab==='maliyet'){
+      body += renderMaliyetAyarlari();
     } else if(settingsSubTab==='stok'){
       body += renderMalzemeStokAyarlar();
     }
