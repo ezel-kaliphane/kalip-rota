@@ -144,6 +144,15 @@ function renderMaliyetAyarlari(){
       <input id="ml-yeni-2" type="password" autocomplete="new-password" placeholder="Yeni şifre (tekrar)" style="max-width:200px">
       <button class="btn-ghost" style="width:auto;padding:6px 12px" onclick="mlSifreDegistir()">Değiştir</button></div></details>` : ''}`);
 
+  /* Değerler boşken (ilk kurulum) içe aktarma en üstte, gözden kaçmasın */
+  const bos = !(f.celik || []).some(c => mlSayi(c.fiyat) > 0) && !(f.gruplar || []).some(g => mlSayi(g.dk) > 0);
+  if(sa && bos) h += `<div class="set-card" style="border-color:var(--accent)">
+      <div class="set-sec" style="margin:0 0 6px">Başlangıç değerleri</div>
+      <div style="font-size:13px;margin-bottom:10px">Dakika ücretleri, çelik / karbür / ısıl işlem türleri ve fiyatları Excel'inizden (<b>Kalıp maliyet çalışması.xlsm</b>) hazırlandı:
+        <span class="mono">Masaüstü / maliyet çalışması / maliyet-baslangic.json</span>. Dosyayı seçin, değerler aşağıya dolar; kontrol edip <b>Kaydet</b> deyin.</div>
+      <label class="btn-primary" style="width:auto;display:inline-flex;padding:9px 18px;cursor:pointer">⬆ maliyet-baslangic.json seç<input type="file" accept=".json,application/json" style="display:none" onchange="mlJsonIceAktar(this)"></label>
+    </div>`;
+
   // Kur
   const k = maliyetKur(Date.now(), f);
   h += kart('Döviz kuru', `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -170,7 +179,7 @@ function renderMaliyetAyarlari(){
     ${f.gruplar.map((g, i) => {
       const am = mlSayi(g.amortDeger) > 0 && mlSayi(g.amortYil) > 0 && mlSayi(g.amortSaat) > 0 ? mlSayi(g.amortDeger) / (mlSayi(g.amortYil) * mlSayi(g.amortSaat) * 60) : 0;
       return `<tr>
-        <td>${inp('gruplar.' + i + '.ad', g.ad, 140)}</td>
+        <td>${inp('gruplar.' + i + '.ad', g.ad, 140, 'grup adı')}</td>
         <td><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">${(g.makineler || []).map(m => `<span class="ml-cip">${esc(m)}${sa ? `<button onclick="mlMakineCikar(${i},'${escJs(m)}')" title="Çıkar">×</button>` : ''}</span>`).join('')}
           ${sa ? `<select class="ml-inp" style="width:70px" onchange="mlMakineEkle(${i}, this.value)"><option value="">+</option>${allMachines().filter(m => !(g.makineler || []).includes(m.code)).map(m => `<option value="${esc(m.code)}">${esc(m.code)} · ${esc(m.name)}${atanmis.has(m.code) ? ' (başka grupta)' : ''}</option>`).join('')}</select>` : ''}</div></td>
         <td>${inp('gruplar.' + i + '.dk', g.dk, 70, '0', 'decimal')}
@@ -193,7 +202,7 @@ function renderMaliyetAyarlari(){
   // Çelik
   const isilSec = (yol, val) => sel(yol, val || '', [['','—']].concat((f.isil || []).map(t => [t.tur, t.tur])));
   h += kart('Çelik (hammadde)', `<table class="tbl ml-tablo"><thead><tr><th>Tür</th><th>kg fiyatı</th><th>Para</th><th>Yoğunluk g/cm³</th><th>Isıl işlem türü (fason)</th><th></th></tr></thead><tbody>
-    ${(f.celik || []).map((c, i) => `<tr><td>${inp('celik.' + i + '.tur', c.tur, 100, '2344')}</td><td>${inp('celik.' + i + '.fiyat', c.fiyat, 70, '', 'decimal')}</td><td>${paraSec('celik.' + i + '.para', c.para)}</td>
+    ${(f.celik || []).map((c, i) => `<tr><td>${inp('celik.' + i + '.tur', c.tur, 100, 'ör. 2344')}</td><td>${inp('celik.' + i + '.fiyat', c.fiyat, 70, '', 'decimal')}</td><td>${paraSec('celik.' + i + '.para', c.para)}</td>
       <td>${inp('celik.' + i + '.yogunluk', c.yogunluk, 60, '7,85', 'decimal')}</td><td>${isilSec('celik.' + i + '.isil', c.isil)}</td>
       <td>${sa ? `<button class="btn-ghost" style="width:auto;padding:3px 8px" onclick="mlSatirSil('celik',${i})">${ico('trash', 12)}</button>` : ''}</td></tr>`).join('')}</tbody></table>
     ${sa ? `<button class="btn-ghost" style="width:auto;padding:5px 12px;margin-top:8px" onclick="mlSatirEkle('celik')">+ Çelik türü</button>` : ''}`,
@@ -201,14 +210,14 @@ function renderMaliyetAyarlari(){
 
   // Karbür
   h += kart('Karbür', `<table class="tbl ml-tablo"><thead><tr><th>Kalite</th><th>kg fiyatı</th><th>Para</th><th>Yoğunluk g/cm³</th><th></th></tr></thead><tbody>
-    ${(f.karbur || []).map((c, i) => `<tr><td>${inp('karbur.' + i + '.kalite', c.kalite, 90, 'VA90')}</td><td>${inp('karbur.' + i + '.fiyat', c.fiyat, 70, '', 'decimal')}</td><td>${paraSec('karbur.' + i + '.para', c.para)}</td>
+    ${(f.karbur || []).map((c, i) => `<tr><td>${inp('karbur.' + i + '.kalite', c.kalite, 90, 'ör. VA90')}</td><td>${inp('karbur.' + i + '.fiyat', c.fiyat, 70, '', 'decimal')}</td><td>${paraSec('karbur.' + i + '.para', c.para)}</td>
       <td>${inp('karbur.' + i + '.yogunluk', c.yogunluk, 60, '13,4', 'decimal')}</td><td>${sa ? `<button class="btn-ghost" style="width:auto;padding:3px 8px" onclick="mlSatirSil('karbur',${i})">${ico('trash', 12)}</button>` : ''}</td></tr>`).join('')}</tbody></table>
     ${sa ? `<button class="btn-ghost" style="width:auto;padding:5px 12px;margin-top:8px" onclick="mlSatirEkle('karbur')">+ Kalite</button>` : ''}`,
     'Ağırlık karbür çıkışlarından: (dış çap² − delik²) × kesilen boy (testere payı dahil) × yoğunluk.');
 
   // Isıl işlem
   h += kart('Isıl işlem (fason)', `<table class="tbl ml-tablo"><thead><tr><th>Tür</th><th>kg fiyatı</th><th>Para</th><th></th></tr></thead><tbody>
-    ${(f.isil || []).map((c, i) => `<tr><td>${inp('isil.' + i + '.tur', c.tur, 170, 'Islah')}</td><td>${inp('isil.' + i + '.fiyat', c.fiyat, 70, '', 'decimal')}</td><td>${paraSec('isil.' + i + '.para', c.para)}</td>
+    ${(f.isil || []).map((c, i) => `<tr><td>${inp('isil.' + i + '.tur', c.tur, 170, 'tür adı yaz')}</td><td>${inp('isil.' + i + '.fiyat', c.fiyat, 70, '', 'decimal')}</td><td>${paraSec('isil.' + i + '.para', c.para)}</td>
       <td>${sa ? `<button class="btn-ghost" style="width:auto;padding:3px 8px" onclick="mlSatirSil('isil',${i})">${ico('trash', 12)}</button>` : ''}</td></tr>`).join('')}</tbody></table>
     ${sa ? `<button class="btn-ghost" style="width:auto;padding:5px 12px;margin-top:8px" onclick="mlSatirEkle('isil')">+ Tür</button>` : ''}`,
     'Rotada fason ısıl işlem makinesi varsa: çelik kg × çelik türüne bağlı ısıl işlem fiyatı.');

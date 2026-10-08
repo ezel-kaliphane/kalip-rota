@@ -1604,3 +1604,4 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .ml-cip button{border:none;background:none;color:var(--text-muted);cursor:pointer;padding:0 3px;font-size:13px}
 .ml-yrd summary{font-size:11px;color:var(--accent);cursor:pointer;margin-top:3px}
 .ml-yrd[open]{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+.ml-inp::placeholder{color:var(--text-muted);opacity:.55;font-style:italic}
