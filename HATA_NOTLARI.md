@@ -5,6 +5,16 @@ hatayı ikinci kez yazmamak. En yeni üstte.
 
 ---
 
+## 2026-10-12 — Aylık kapanış şifrelenirken "Maximum call stack size exceeded" (canlıya çıkmadan yakalandı)
+
+**Belirti.** Önizleme testinde bir ayı (187 iş emri, ~440 KB) kapatırken şifreli metne çevirme çöktü.
+
+**Sebep.** `btoa(String.fromCharCode(...new Uint8Array(buf)))` — spread her baytı ayrı argüman
+yapar; yüz binlerce argüman yığını taşırır. Küçük parametre kaydında (birkaç KB) hiç görünmemişti.
+
+**Ders.** Büyük ikili veride spread/apply ile tek seferde dönüştürme yapma; parça parça (32 KB)
+dönüştür. Veri boyutu büyüyecek bir yolu, gerçek boyutlu veriyle dene. (Ek olarak gzip eklendi: 443 → 46 KB.)
+
 ## 2026-10-12 — Toplu sipariş "malzemeBekleyen/undefined" kaydı yazdı
 
 **Belirti.** Önizlemede toplu istek no girildi; iş emirlerine istek no yazılmadı, sipariş "0 iş emri ·
