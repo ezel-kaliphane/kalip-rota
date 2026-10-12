@@ -204,7 +204,8 @@
     "maliyet": {
       ".read": true,
       ".write": false,
-      "sifreli": { ".write": true }
+      "sifreli": { ".write": true },
+      "kapanis": { "$ay": { ".write": true } }
     }
   }
 }

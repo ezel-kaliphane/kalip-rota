@@ -106,7 +106,7 @@ function renderMaliyetAnaliziIcerik(){
         if(k === buAyK) fark = '<span class="rt-silik">devam ediyor</span>';
         else if(onc){ const Ac = R[tekPara].ay[k], Oc = R[tekPara].ay[onc], o = Ac.toplam / Ac.n, oo = Oc.toplam / Oc.n, f = o - oo, y = oo ? Math.abs(f / oo * 100) : 0;
           fark = Math.abs(f) < (tekPara === 'TRY' ? 1 : 0.05) ? 'değişmedi' : `${f > 0 ? '+' : '−'}${mlParaYaz(Math.abs(f), tekPara)} <small>(%${Math.round(y)} ${f > 0 ? 'artış' : 'azalış'})</small>`; }
-        return `<tr class="rt-tablo-sabit"><td>${A.ad}</td><td class="r mono">${A.n}</td><td class="r mono">${U(r => r.ay[k].toplam)}</td><td class="r mono">${U(r => r.ay[k].toplam / r.ay[k].n)}</td><td class="r mono">${U(r => r.ay[k].iscilik)}</td><td class="r mono">${U(r => r.ay[k].malzeme)}</td><td>${fark}</td></tr>`;
+        return `<tr class="rt-tablo-sabit"><td>${A.ad}${maliyetAyKapali(k) ? ' <span title="Kapalı ay — rakamlar sabit">🔒</span>' : ''}</td><td class="r mono">${A.n}</td><td class="r mono">${U(r => r.ay[k].toplam)}</td><td class="r mono">${U(r => r.ay[k].toplam / r.ay[k].n)}</td><td class="r mono">${U(r => r.ay[k].iscilik)}</td><td class="r mono">${U(r => r.ay[k].malzeme)}</td><td>${fark}</td></tr>`;
       }).join('')}
     </tbody></table></div>`;
   }
@@ -142,6 +142,25 @@ function renderMaliyetAnaliziIcerik(){
       <td class="r mono">${mlP(m.toplam, m.kur)}${m.eksik.length ? ` <span style="color:var(--warn)" title="${esc(m.eksik.join('\n'))}">⚠</span>` : ''}</td><td class="r mono">${m.birim != null ? mlP(m.birim, m.kur) : '—'}</td>
       <td><button class="btn-ghost" style="width:auto;padding:2px 9px;font-size:11px" onclick="maliyetDokumAc('${escJs(x.talep || x.uKodu)}')">Döküm</button></td></tr>`).join('')}
   </tbody></table></div>`;
+
+  // Aylık kapanış
+  {
+    const tumAy = {}; bomRotaListesi().forEach(x => { const a = mlAyAnahtar(x.finishedAt); tumAy[a] = (tumAy[a] || 0) + 1; });
+    Object.keys(maliyetKapanis.meta || {}).forEach(a => { if(!(a in tumAy)) tumAy[a] = 0; });
+    const buAyK = mlAyAnahtar(Date.now());
+    const aylarK = Object.keys(tumAy).sort().reverse();
+    h += agBolumBas('ml-kapanis', 'Aylık kapanış', 'kapalı ayın rakamları sabittir');
+    h += agYorum(['Biten bir ay kapatılınca o ayın her iş emrinin maliyeti o günkü hâliyle sabitlenir; sonradan değişen ücret, fiyat, kur, kural ya da kayıt düzeltmesi kapalı ayı etkilemez. Hata bulunursa ay yeniden açılıp düzeltilir ve tekrar kapatılır.']);
+    h += `<div class="table-wrap"><table class="rt-tablo"><thead><tr><th>Ay</th><th class="r">İş emri</th><th>Durum</th><th>Son işlem</th><th></th></tr></thead><tbody>
+      ${aylarK.map(a => { const m = maliyetKapanis.meta[a] || {}, kapali = m.durum === 'kapali', son = (m.gecmis || []).slice(-1)[0];
+        const durum = kapali ? `<span style="color:var(--success)">🔒 Kapalı</span>${maliyetKapanis.veri[a] ? '' : ' <span style="color:var(--warn)" title="Bu cihazda açılamadı">(okunamadı)</span>'}` : a >= buAyK ? '<span class="rt-silik">devam ediyor</span>' : (m.durum === 'acik' ? '<span style="color:var(--warn)">Yeniden açıldı</span>' : 'Açık');
+        const dugme = !canEditMaliyet() || a >= buAyK ? '' : kapali
+          ? `<button class="btn-ghost" style="width:auto;padding:2px 10px;font-size:11px" onclick="maliyetAyAc('${a}')">Yeniden aç</button>`
+          : `<button class="btn-primary" style="width:auto;padding:3px 12px;font-size:11.5px" onclick="maliyetAyKapat('${a}')">Kapat</button>`;
+        return `<tr class="rt-tablo-sabit"><td>${mlAyAdi(a)}</td><td class="r mono">${kapali && m.n != null ? m.n : tumAy[a]}</td><td>${durum}</td>
+          <td class="rt-silik">${son ? (son.tip === 'kapat' ? 'kapatıldı' : 'açıldı') + ' · ' + fmtDT(son.ts) + ' · ' + esc(son.byName || son.by || '') : '—'}</td><td style="text-align:right">${dugme}</td></tr>`; }).join('')}
+    </tbody></table></div>`;
+  }
 
   // Eksik veri
   const en = Object.entries(eksikNeden).sort((a, b) => b[1] - a[1]);

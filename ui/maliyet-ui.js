@@ -81,8 +81,10 @@ async function mlSifirla(){
   const a = (document.getElementById('ml-sifirla-1') || {}).value || '', b = (document.getElementById('ml-sifirla-2') || {}).value || '';
   if(a.length < 8){ toast('Şifre en az 8 karakter olmalı'); return; }
   if(a !== b){ toast('Şifreler aynı değil'); return; }
-  if(!confirm('Kayıtlı bütün maliyet parametreleri ve sürümleri SİLİNECEK, yeni şifreyle boş başlanacak.' + String.fromCharCode(10,10) + 'Devam edilsin mi?')) return;
+  if(!confirm('Kayıtlı bütün maliyet parametreleri, sürümleri ve AYLIK KAPANIŞ kayıtları SİLİNECEK (eski şifreyle şifreliler, açılamaz), yeni şifreyle boş başlanacak.' + String.fromCharCode(10,10) + 'Devam edilsin mi?')) return;
   try{
+    for(const ay of Object.keys(maliyetKapanis.meta || {})) await DB.ref('maliyet/kapanis/' + ay).remove();
+    maliyetKapanis = { okundu:false, yukleniyor:false, hata:null, meta:{}, veri:{} };
     maliyetKilitle(); maliyetDurum.blob = null; maliyetDurum.veri = null; maliyetDurum.key = null;
     maliyetForm = null; mlFormHazirla(true);
     await maliyetKaydet(mlNormalize(maliyetForm), a);
@@ -285,6 +287,7 @@ function maliyetKartHtml(x){
     if(!m) deger = '<span class="bom-ikincil">parametre yok</span>';
     else deger = `<b>${mlP(m.toplam, m.kur)}</b>${m.birim != null ? ` <span class="bom-ikincil">· adet başı</span> <b>${mlP(m.birim, m.kur)}</b>` : ''}
       ${m.hurda ? ` <span class="bom-ikincil">· ${m.hurda} hurda dahil</span>` : ''}
+      ${m.kilitli ? ` <span class="bom-ikincil" title="Ay kapanışında sabitlendi: ${esc(fmtDT(m.kapanisTs))} · ${esc(m.kapanisBy || '')}">🔒 sabit</span>` : ''}
       ${m.eksik.length ? ` <span style="color:var(--warn)" title="${esc(m.eksik.join('\n'))}">⚠ ${m.eksik.length} eksik</span>` : ''}
       <button type="button" class="btn-ghost" style="padding:2px 10px;font-size:11px;margin-left:6px" onclick="event.stopPropagation(); maliyetDokumAc('${escJs(x.talep || x.uKodu)}')">Döküm</button>`;
   }
@@ -303,6 +306,7 @@ function renderMaliyetDokum(){
   return `<div class="modal-overlay" onclick="if(event.target===this){maliyetDokum=null; render();}">
     <div class="modal-box kal-modal" style="max-width:720px">
       <div class="kal-modal-bas"><div class="sec-h" style="margin-top:0">Maliyet — <span class="mono">${esc(x.uKodu)}</span>${x.talep ? ' · iş emri ' + esc(x.talep) : ''}</div>
+        ${m.kilitli ? `<div style="font-size:12px;color:var(--accent);margin:-2px 0 6px">🔒 ${esc(mlAyAdi(mlAyAnahtar(x.finishedAt)))} kapanışında sabitlendi (${esc(fmtDT(m.kapanisTs))} · ${esc(m.kapanisBy || '')}) — sonraki değişiklikler bu rakamı etkilemez</div>` : ''}
         <div style="font-size:12px;color:var(--text-muted);margin-top:-4px">${esc(x.mamulAdi || '')} · bitiş ${fmtDT(x.finishedAt)} · kur 1 $ = ${mlFmt(m.kur.usd, 2)} ₺, 1 € = ${mlFmt(m.kur.eur, 2)} ₺ (${m.kur.kaynak === 'ECB' ? 'ECB ' + esc(m.kur.tarih) : 'elle'})</div></div>
       <div class="kal-modal-govde">
         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">

@@ -50,7 +50,8 @@ function canEditMaliyet(){ return !!(session && session.isSuperAdmin); }
 
 /* ---------- Şifreleme ---------- */
 const ML_ITER = 250000;
-const mlB64e = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+/* Parça parça: büyük veride (aylık kapanış) tek seferde ...spread yığın taşırıyordu */
+const mlB64e = buf => { const u = new Uint8Array(buf); let s = ''; for(let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
 const mlB64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 async function mlAnahtarTuret(sifre, saltB64){
   const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(sifre), 'PBKDF2', false, ['deriveKey']);
@@ -64,14 +65,22 @@ async function mlAnahtarOku(saltB64){
   if(!raw) return null;
   try{ return await crypto.subtle.importKey('raw', mlB64d(raw), { name:'AES-GCM' }, true, ['encrypt','decrypt']); }catch(e){ return null; }
 }
+/* z:1 → şifrelemeden önce gzip (aylık kapanış ~440 KB → birkaç on KB). Tarayıcı desteklemiyorsa düz. */
+async function mlGzip(bytes, ac){
+  const akis = new Blob([bytes]).stream().pipeThrough(ac ? new DecompressionStream('gzip') : new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(akis).arrayBuffer());
+}
 async function mlCoz(blob, key){
-  const pt = await crypto.subtle.decrypt({ name:'AES-GCM', iv:mlB64d(blob.iv) }, key, mlB64d(blob.ct));
+  let pt = new Uint8Array(await crypto.subtle.decrypt({ name:'AES-GCM', iv:mlB64d(blob.iv) }, key, mlB64d(blob.ct)));
+  if(blob.z) pt = await mlGzip(pt, true);
   return JSON.parse(new TextDecoder().decode(pt));
 }
-async function mlSifrele(veri, key){
+async function mlSifrele(veri, key, sikistir){
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(veri)));
-  return { iv: mlB64e(iv), ct: mlB64e(ct) };
+  let duz = new TextEncoder().encode(JSON.stringify(veri)), z = 0;
+  if(sikistir && typeof CompressionStream === 'function'){ duz = await mlGzip(duz, false); z = 1; }
+  const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, duz);
+  return { iv: mlB64e(iv), ct: mlB64e(ct), z };
 }
 
 /* ---------- Durum ---------- */
@@ -90,6 +99,7 @@ function maliyetYukle(zorla){
       if(key){ try{ maliyetDurum.veri = await mlCoz(maliyetDurum.blob, key); maliyetDurum.key = key; }catch(e){ maliyetDurum.veri = null; } }
     }
     maliyetDurum.yukleniyor = false; _maliyetOnbellek = {};
+    maliyetKapanisYukle(true);
     safeRender();
   }).catch(err => {
     maliyetDurum.yukleniyor = false; maliyetDurum.okundu = true;
@@ -103,12 +113,14 @@ async function maliyetKilitAc(sifre){
     const key = await mlAnahtarTuret(sifre, b.salt);
     maliyetDurum.veri = await mlCoz(b, key); maliyetDurum.key = key;
     await mlAnahtarSakla(key, b.salt); _maliyetOnbellek = {};
+    maliyetKapanisYukle(true);
     return true;
   }catch(e){ return false; }
 }
 function maliyetKilitle(){
   try{ if(maliyetDurum.blob) localStorage.removeItem('maliyetAnahtar:' + maliyetDurum.blob.salt); }catch(e){}
   maliyetDurum.veri = null; maliyetDurum.key = null; _maliyetOnbellek = {};
+  maliyetKapanis.veri = {};
 }
 /* Yeni sürüm kaydı. yeniSifre verilirse yeni tuz + anahtar (ilk kurulum / şifre değişikliği). */
 async function maliyetKaydet(p, yeniSifre){
@@ -124,6 +136,13 @@ async function maliyetKaydet(p, yeniSifre){
   await DB.ref('maliyet/sifreli').set(blob);
   maliyetDurum.blob = blob; maliyetDurum.key = key; maliyetDurum.veri = veri; _maliyetOnbellek = {};
   await mlAnahtarSakla(key, salt);
+  /* Şifre değişti: kapalı ayların kayıtları da yeni anahtarla yeniden şifrelenir (yoksa açılamazlardı) */
+  if(yeniSifre){
+    for(const [ay, v] of Object.entries(maliyetKapanis.veri || {})){
+      const s2 = await mlSifrele(v, key, true);
+      await DB.ref('maliyet/kapanis/' + ay).update({ iv: s2.iv, ct: s2.ct, z: s2.z });
+    }
+  }
 }
 function maliyetSonParam(){ const s = maliyetDurum.veri && maliyetDurum.veri.surumler; return (s && s.length) ? s[s.length - 1].p : null; }
 /* İş emrinin bittiği anda geçerli sürüm; o tarihten önce hiç sürüm yoksa ilk DOLU sürüm.
@@ -148,7 +167,11 @@ function maliyetKurYukle(zorla){
   if(!maliyetKurSeri){ try{ const c = JSON.parse(localStorage.getItem('maliyetKurSeri') || 'null'); if(c && c.seri) maliyetKurSeri = c; }catch(e){} }
   if(maliyetKurYukleniyor || (!zorla && maliyetKurSeri && maliyetKurSeri.cekilen === bugun)) return;
   maliyetKurYukleniyor = true;
-  const bas = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
+  /* En eski kayıttan (en çok 2023) — 400 günden eski işler doğru kuru bulamıyordu */
+  let enEski = Date.now() - 400 * 864e5;
+  try{ (typeof entriesArray === 'function' ? entriesArray() : []).forEach(e => { if(e.startTs && e.startTs < enEski) enEski = e.startTs; }); }catch(e){}
+  const bas = new Date(Math.max(enEski - 7 * 864e5, Date.parse('2023-01-01'))).toISOString().slice(0, 10);
+  if(!zorla && maliyetKurSeri && maliyetKurSeri.cekilen === bugun && maliyetKurSeri.bas && maliyetKurSeri.bas > bas) zorla = true;
   Promise.all([
     fetch(`https://api.frankfurter.dev/v1/${bas}..${bugun}?from=USD&symbols=TRY`).then(r => r.json()),
     fetch(`https://api.frankfurter.dev/v1/${bas}..${bugun}?from=EUR&symbols=TRY`).then(r => r.json())
@@ -156,7 +179,7 @@ function maliyetKurYukle(zorla){
     const seri = {};
     Object.entries(u.rates || {}).forEach(([d, r]) => { (seri[d] = seri[d] || {}).usd = r.TRY; });
     Object.entries(e.rates || {}).forEach(([d, r]) => { (seri[d] = seri[d] || {}).eur = r.TRY; });
-    maliyetKurSeri = { cekilen: bugun, seri };
+    maliyetKurSeri = { cekilen: bugun, bas, seri };
     try{ localStorage.setItem('maliyetKurSeri', JSON.stringify(maliyetKurSeri)); }catch(err){}
     maliyetKurYukleniyor = false; maliyetKurHata = null; _maliyetOnbellek = {};
     safeRender();
@@ -211,8 +234,9 @@ function mlMetinKg(capBoy, adet, yog){
 
 /* ---------- İş emri maliyeti ---------- */
 let _maliyetOnbellek = {};
-function maliyetHesapla(x){
+function maliyetHesapla(x, canli){
   if(!x || !maliyetAcik()) return null;
+  if(!canli){ const s = maliyetKapaliKayit(x); if(s) return s; }
   const anahtar = (x.talep || x.uKodu) + '|' + x.finishedAt + '|' + (x.hammadde ? x.hammadde.kaynak : '') + '|' + Object.keys(karburKatalog || {}).length;
   if(_maliyetOnbellek[anahtar]) return _maliyetOnbellek[anahtar];
   const P = maliyetParam(x.finishedAt); if(!P) return null;
@@ -357,4 +381,85 @@ function mlCevir(m, c){
 function mlParaSecici(){
   const b = (k, et) => `<button type="button" class="chip ${maliyetParaModu === k ? 'active' : ''}" onclick="event.stopPropagation(); setMaliyetParaModu('${k}')">${et}</button>`;
   return `<span class="ml-para-sec">${b('TRY','₺ TL')}${b('EUR','€ Euro')}${b('USD','$ Dolar')}${b('HEPSI','Hepsi')}</span>`;
+}
+/* ==================== AYLIK KAPANIŞ (12.10.2026, kullanıcı isteği) ====================
+   "Bugün biten kalıp bugünün parasıyla hesaplanıp kaydedilsin; ileride değişen katsayı (zam, kur)
+   tekrar hesaplatmasın." Parametreler zaten sürümlü ve kur bitiş günününki; ama hesap her açılışta
+   yeniden yapıldığından kural / standart / kayıt düzeltmesi geçmişi değiştirebiliyordu. Kapanış:
+   SuperAdmin biten bir ayı kapatır, o ayın her iş emrinin dökümü ŞİFRELİ sabitlenir
+   (maliyet/kapanis/{YYYY-MM} = { durum, ts, by, byName, n, iv, ct, gecmis:[{tip,ts,by,byName}] }).
+   Kapalı ayda kart / Döküm / Analiz hep bu kaydı gösterir. "Yeniden aç" kaydı siler (geçmiş kalır),
+   düzeltip tekrar kapatılır. Kayıt yalnız iş emri hâlâ AYNI anda bitmişse kullanılır (rota
+   yeniden açılıp başka ayda biterse canlı hesap). */
+let maliyetKapanis = { okundu:false, yukleniyor:false, hata:null, meta:{}, veri:{} };
+function mlAyAnahtar(ts){ const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function mlKayitAnahtar(x){ return String(x.talep || x.uKodu || ''); }
+function maliyetKapanisYukle(zorla){
+  if(maliyetKapanis.yukleniyor || (maliyetKapanis.okundu && !zorla)) return;
+  maliyetKapanis.yukleniyor = true;
+  DB.ref('maliyet/kapanis').once('value').then(async snap => {
+    const meta = snap.val() || {}, veri = {};
+    const key = maliyetDurum.key;
+    if(key) for(const [ay, m] of Object.entries(meta)){
+      if(m && m.durum === 'kapali' && m.ct){ try{ veri[ay] = await mlCoz(m, key); }catch(e){ console.warn('Kapanış açılamadı:', ay); } }
+    }
+    maliyetKapanis = { okundu:true, yukleniyor:false, hata:null, meta, veri };
+    _maliyetOnbellek = {}; safeRender();
+  }).catch(err => { maliyetKapanis.yukleniyor = false; maliyetKapanis.okundu = true; maliyetKapanis.hata = (err && err.message) || 'okuma hatası'; });
+}
+function maliyetAyKapali(ay){ const m = maliyetKapanis.meta[ay]; return !!(m && m.durum === 'kapali'); }
+function maliyetKapaliKayit(x){
+  const ay = mlAyAnahtar(x.finishedAt), v = maliyetKapanis.veri[ay];
+  if(!v || !maliyetAyKapali(ay)) return null;
+  const s = (v.kayitlar || {})[mlKayitAnahtar(x)];
+  if(!s || s.finishedAt !== x.finishedAt) return null;
+  const m = maliyetKapanis.meta[ay] || {};
+  return { ...s, kilitli: true, kapanisTs: m.ts, kapanisBy: m.byName || m.by };
+}
+function mlSnapshot(x, m){
+  const r = v => Math.round((Number(v) || 0) * 100) / 100;
+  return { uKodu: x.uKodu, talep: x.talep || '', mamul: x.mamulAdi || '', finishedAt: x.finishedAt,
+    adet: m.adet, hurda: m.hurda, saglam: m.saglam, toplam: r(m.toplam), birim: m.birim == null ? null : r(m.birim),
+    hurdaPayi: r(m.hurdaPayi), kur: m.kur, toplamDk: r(m.toplamDk),
+    iscilik: r(m.iscilik), elektrik: r(m.elektrik), amort: r(m.amort), sarf: r(m.sarf), genelGider: r(m.genelGider),
+    celik: { kg: m.celik.kg == null ? null : r(m.celik.kg), tutar: r(m.celik.tutar), tur: m.celik.tur || null, aciklama: m.celik.aciklama || '' },
+    karbur: { kg: r(m.karbur.kg), tutar: r(m.karbur.tutar), satir: (m.karbur.satir || []).map(s => ({ kod: s.kod, mm: r(s.mm) })) },
+    isil: { tutar: r(m.isil.tutar), aciklama: m.isil.aciklama || '' },
+    ops: m.ops.map(o => ({ kod: o.kod, grup: o.grup, dk: r(o.dk), iscilik: r(o.iscilik), elektrik: r(o.elektrik), amort: r(o.amort),
+      dal: o.dal, operator: o.operator, pay: o.pay, kisiUcret: !!o.kisiUcret, duzeltme: !!o.duzeltme })),
+    grupsuz: m.grupsuz || [], eksik: m.eksik || [], yontem: m.yontem, genelGiderYuzde: m.genelGiderYuzde, isilMak: m.isilMak || [] };
+}
+async function maliyetAyKapat(ay){
+  if(!canEditMaliyet()){ toast('Ayı yalnız SuperAdmin kapatabilir'); return; }
+  if(!maliyetDurum.key){ toast('Önce maliyet şifresini gir'); return; }
+  if(ay >= mlAyAnahtar(Date.now())){ toast('Devam eden ay kapatılamaz — ay bitince kapatın'); return; }
+  const liste = (bomRotaListesi() || []).filter(x => mlAyAnahtar(x.finishedAt) === ay);
+  if(!liste.length){ toast('Bu ayda tamamlanan iş emri yok'); return; }
+  const kayitlar = {}; let eksikli = 0;
+  liste.forEach(x => { const m = maliyetHesapla(x, true); if(!m) return; kayitlar[mlKayitAnahtar(x)] = mlSnapshot(x, m); if(m.eksik.length) eksikli++; });
+  const n = Object.keys(kayitlar).length;
+  if(!confirm(mlAyAdi(ay) + ' kapatılacak: ' + n + ' iş emrinin maliyeti bugünkü hâliyle SABİTLENİR.' + (eksikli ? String.fromCharCode(10) + eksikli + ' iş emrinde eksik kalem var; onlar da olduğu gibi sabitlenir.' : '') + String.fromCharCode(10,10) + 'Devam edilsin mi?')) return;
+  const s = await mlSifrele({ ay, kayitlar }, maliyetDurum.key, true);
+  const eski = maliyetKapanis.meta[ay] || {}, now = Date.now();
+  const gecmis = (eski.gecmis || []).concat([{ tip:'kapat', ts: now, by: session.username, byName: session.displayName || session.username, n }]).slice(-20);
+  try{
+    await DB.ref('maliyet/kapanis/' + ay).set({ durum:'kapali', ts: now, by: session.username, byName: session.displayName || session.username, n, iv: s.iv, ct: s.ct, z: s.z, gecmis });
+    toast(mlAyAdi(ay) + ' kapatıldı — ' + n + ' iş emri sabitlendi');
+    maliyetKapanisYukle(true);
+  }catch(e){ toast('Kapatılamadı: ' + mlHataMetni(e)); }
+}
+async function maliyetAyAc(ay){
+  if(!canEditMaliyet()){ toast('Ayı yalnız SuperAdmin açabilir'); return; }
+  if(!confirm(mlAyAdi(ay) + ' yeniden açılsın mı?' + String.fromCharCode(10,10) + 'Sabit kayıt silinir; o ayın maliyetleri yeniden canlı hesaplanır (bugünkü kurallar ve kayıtlarla). Düzeltip tekrar kapatabilirsiniz.')) return;
+  const eski = maliyetKapanis.meta[ay] || {}, now = Date.now();
+  const gecmis = (eski.gecmis || []).concat([{ tip:'ac', ts: now, by: session.username, byName: session.displayName || session.username }]).slice(-20);
+  try{
+    await DB.ref('maliyet/kapanis/' + ay).set({ durum:'acik', ts: now, by: session.username, byName: session.displayName || session.username, gecmis });
+    toast(mlAyAdi(ay) + ' yeniden açıldı');
+    maliyetKapanisYukle(true);
+  }catch(e){ toast('Açılamadı: ' + mlHataMetni(e)); }
+}
+function mlAyAdi(ay){
+  const [y, m] = String(ay).split('-').map(Number);
+  return ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'][m - 1] + ' ' + y;
 }
