@@ -75,6 +75,21 @@ async function mlSifreDegistir(){
   try{ await maliyetKaydet(null, a); toast('Şifre değişti — diğer cihazlarda yeni şifre girilmeli'); render(); }
   catch(e){ toast('Değiştirilemedi: ' + mlHataMetni(e)); }
 }
+/* Şifre unutulduysa (12.10.2026): şifreli kayıt açılamaz — SuperAdmin yeni şifreyle BOŞ başlatır. */
+async function mlSifirla(){
+  if(!canEditMaliyet()) return;
+  const a = (document.getElementById('ml-sifirla-1') || {}).value || '', b = (document.getElementById('ml-sifirla-2') || {}).value || '';
+  if(a.length < 8){ toast('Şifre en az 8 karakter olmalı'); return; }
+  if(a !== b){ toast('Şifreler aynı değil'); return; }
+  if(!confirm('Kayıtlı bütün maliyet parametreleri ve sürümleri SİLİNECEK, yeni şifreyle boş başlanacak.' + String.fromCharCode(10,10) + 'Devam edilsin mi?')) return;
+  try{
+    maliyetKilitle(); maliyetDurum.blob = null; maliyetDurum.veri = null; maliyetDurum.key = null;
+    maliyetForm = null; mlFormHazirla(true);
+    await maliyetKaydet(mlNormalize(maliyetForm), a);
+    toast('Sıfırlandı — üstteki kutudan maliyet-baslangic.json dosyasını yükleyip Kaydet deyin');
+  }catch(e){ toast('Sıfırlanamadı: ' + mlHataMetni(e)); maliyetYukle(true); }
+  render();
+}
 async function mlKilitAcTikla(){
   const el = document.getElementById('ml-sifre-ac'); const v = el ? el.value : '';
   if(!v){ toast('Şifreyi gir'); return; }
@@ -125,7 +140,16 @@ function renderMaliyetAyarlari(){
   }
   if(!maliyetAcik()){
     return kart('Maliyet şifresi', `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="ml-sifre-ac" type="password" autocomplete="current-password" placeholder="Maliyet şifresi" style="max-width:240px" onkeydown="if(event.key==='Enter') mlKilitAcTikla()">
-      <button class="btn-primary" style="width:auto;padding:8px 16px" onclick="mlKilitAcTikla()">Aç</button></div>`, 'Bu cihazda bir kez girilir; parametreler ve maliyetler ancak şifreyle çözülür.');
+      <button class="btn-primary" style="width:auto;padding:8px 16px" onclick="mlKilitAcTikla()">Aç</button></div>
+      ${sa ? `<details style="margin-top:14px"><summary style="cursor:pointer;font-size:12.5px;color:var(--warn)">Şifremi unuttum</summary>
+        <div style="font-size:12.5px;margin:8px 0;line-height:1.5">Şifre hiçbir yerde saklanmaz, geri getirilemez. <b>Önce</b> şifreyi belirlediğiniz bilgisayar/tarayıcıda bu ekranı açın:
+          orada "🔓 Bu cihazda açık" görünüyorsa <b>Şifreyi değiştir</b> ile yeni şifre verin — değerler korunur.<br>
+          Hiçbir cihazda açık değilse sıfırlayın: <b>kayıtlı bütün parametreler ve sürümler silinir</b>, yeni şifreyle boş başlanır; değerleri
+          <span class="mono">maliyet-baslangic.json</span> ile yeniden yüklersiniz.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><input id="ml-sifirla-1" type="password" autocomplete="new-password" placeholder="Yeni şifre (en az 8)" style="max-width:200px">
+        <input id="ml-sifirla-2" type="password" autocomplete="new-password" placeholder="Yeni şifre (tekrar)" style="max-width:200px">
+        <button class="btn-ghost" style="width:auto;padding:6px 12px;border-color:var(--danger);color:var(--danger)" onclick="mlSifirla()">Sıfırla ve yeni şifreyle başla</button></div></details>` : ''}`,
+      'Bu cihazda bir kez girilir; parametreler ve maliyetler ancak şifreyle çözülür.');
   }
   mlFormHazirla();
   const f = maliyetForm, ro = sa ? '' : 'disabled';
