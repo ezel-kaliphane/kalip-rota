@@ -348,6 +348,17 @@ function malzemeBekleyenKarsila(id){
     render();
   }).catch(err=>{ toast('Kaydedilemedi: '+((err&&err.message)||'hata')); });
 }
+/* Yanlışlıkla "Karşılandı" denen kaydı beklemeye geri döndür (12.10.2026, yalnız SuperAdmin). */
+function malzemeBekleyenGeriAc(id){
+  if(!(session && session.isSuperAdmin)){ toast('Bu işlem yalnız SuperAdmin için'); return; }
+  const kayit = malzemeBekleyen[id]; if(!kayit) return;
+  if(!confirm((kayit.isEmriNo||kayit.talepNo)+' yeniden "bekliyor" olsun mu?')) return;
+  const updates = {};
+  updates['malzemeBekleyen/'+id+'/durum'] = 'bekliyor';
+  ['karsilanmaTs','karsilayanUsername','karsilayanName'].forEach(k=>{ updates['malzemeBekleyen/'+id+'/'+k] = null; });
+  DB.ref().update(updates).then(()=>{ toast((kayit.isEmriNo||kayit.talepNo)+' yeniden bekliyor'); render(); })
+    .catch(err=>toast('Kaydedilemedi: '+((err&&err.message)||'hata')));
+}
 function malzemeBekleyenSil(id){
   if(!canManageStock()){ toast('Bu işlem için Şef ya da SuperAdmin yetkisi gerekli'); return; }
   const kayit = malzemeBekleyen[id]; if(!kayit) return;

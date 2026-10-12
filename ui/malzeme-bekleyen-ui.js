@@ -282,14 +282,16 @@ function renderMalzemeBekleyen(){
       : grupHtml}
 
     ${mbGecmisAcik ? `<div class="sec-h" style="margin-top:20px">Karşılananlar <span class="ayar-deger mono" style="margin-left:8px">${gecmis.length}</span></div>
-      <div class="sg-table-wrap"><table><thead><tr><th>İş Emri</th><th>Mamul</th><th>Hammadde</th><th>Gereken</th><th>İstek No</th><th>Bekledi</th><th>Karşılayan</th></tr></thead><tbody>
-      ${gecmis.length===0?`<tr><td colspan="7" style="color:var(--text-muted);padding:14px">Henüz karşılanan kayıt yok.</td></tr>`:gecmis.map(s=>{
+      <div class="sg-table-wrap"><table><thead><tr><th>İş Emri</th><th>Mamul</th><th>Hammadde</th><th>Gereken</th><th>İstek No</th><th>Bekledi</th><th>Karşılayan</th>${session.isSuperAdmin?'<th></th>':''}</tr></thead><tbody>
+      ${gecmis.length===0?`<tr><td colspan="8" style="color:var(--text-muted);padding:14px">Henüz karşılanan kayıt yok.</td></tr>`:gecmis.map(s=>{
         const sure = (Number(s.karsilanmaTs)||0) - (Number(s.isaretTs)||0);
         const gun = Math.max(0, Math.round(sure/86400000));
         return `<tr><td class="mono">${esc(s.isEmriNo||'—')}</td><td>${esc(s.mamulAdi||'—')}</td>
           <td class="mono">${esc(s.hammaddeKod||'—')}</td><td class="mono">${s.gerekenMiktar} ${esc(s.birim||'')}</td>
           <td class="mono">${esc(s.caniasIstekNo||'—')}</td><td>${gun} gün</td>
-          <td style="color:var(--text-muted)">${esc(s.karsilayanName||s.karsilayanUsername||'—')}</td></tr>`;
+          <td style="color:var(--text-muted)">${esc(s.karsilayanName||s.karsilayanUsername||'—')}</td>
+          ${session.isSuperAdmin?`<td style="white-space:nowrap;text-align:right"><button class="btn-ghost mb-mini" title="Yanlışlıkla kapatıldıysa yeniden beklemeye al" onclick="malzemeBekleyenGeriAc('${escJs(s.id)}')">Geri al</button>
+            <button class="del-btn" title="Kaydı sil" onclick="malzemeBekleyenSil('${escJs(s.id)}')">${ico('trash',13)}</button></td>`:''}</tr>`;
       }).join('')}
       </tbody></table></div>` : ''}
 
