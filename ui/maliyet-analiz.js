@@ -177,6 +177,37 @@ function renderMaliyetAnaliziIcerik(){
       <td><button class="btn-ghost" style="width:auto;padding:2px 9px;font-size:11px" onclick="maliyetDokumAc('${escJs(x.talep || x.uKodu)}')">Döküm</button></td></tr>`).join('')}
   </tbody></table></div>`;
 
+  // Olağandışı maliyetler (12.10.2026): veri hatası şüphesi — aynı kodda adet başı uçurum, uzun açık kalmış operasyon
+  {
+    const supheli = [];
+    /* Aynı kodda adet başı uçurum — yalnız ADETİ BENZER işler arasında (1 adet ile 10 adetin adet başı
+       zaten farklıdır, ayar süresi adede bölünür): adet oranı < 2 iken adet başı ≥ 3 kat. */
+    const kodIs = {}; kayit.forEach(r => { if(r.m.birim != null && r.m.birim > 0) (kodIs[r.x.uKodu] = kodIs[r.x.uKodu] || []).push(r); });
+    Object.values(kodIs).filter(l => l.length > 1).forEach(l => {
+      l.forEach((a, i) => l.slice(i + 1).forEach(c => {
+        const ad = Math.max(a.m.adet, c.m.adet) / Math.max(1, Math.min(a.m.adet, c.m.adet));
+        const bk = Math.max(a.m.birim, c.m.birim) / Math.min(a.m.birim, c.m.birim);
+        if(ad < 2 && bk >= 3) [a, c].forEach(r => { if(!supheli.some(s => s.r === r)) supheli.push({ r, neden: `Aynı CANIAS kodu, benzer adet (${a.m.adet} / ${c.m.adet}) ama adet başı ${Math.round(bk)} kat farklı (${mlTL(Math.min(a.m.birim, c.m.birim))} – ${mlTL(Math.max(a.m.birim, c.m.birim))}) — yanlış adet ya da yarım kayıt olabilir` }); });
+      }));
+    });
+    /* Uzun operasyon: grubun TİPİK süresine göre — dalma erozyonda 9 saat olağan (ortanca ~560 dk),
+       taşlamada değil. Eşik = en az 10 saat ve grubun ortanca operasyonunun 5 katı. */
+    const gSure = {}; kayit.forEach(r => r.m.ops.forEach(o => { if(o.grup) (gSure[o.grup] = gSure[o.grup] || []).push(o.dk); }));
+    const esik = {}; Object.entries(gSure).forEach(([g, l]) => { l.sort((a, b) => a - b); esik[g] = Math.max(600, 5 * l[Math.floor(l.length / 2)]); });
+    kayit.forEach(r => {
+      const uzun = r.m.ops.filter(o => o.grup && o.dk > esik[o.grup]);
+      if(uzun.length) supheli.push({ r, neden: uzun.map(o => `${o.kod} ${agSaat(o.dk)} net (bu grupta tipik ${agSaat(esik[o.grup] / 5)})`).join(', ') + ' — operasyon kapatılmamış olabilir, süre şişkin' });
+    });
+    if(supheli.length){
+      h += agBolumBas('ml-supheli', 'Kontrol edilmesi gerekenler', 'olağandışı maliyet — veri hatası şüphesi');
+      h += agYorum([`${new Set(supheli.map(s => s.r.x.talep || s.r.x.uKodu)).size} iş emrinin maliyeti olağandışı görünüyor. Bunlar çoğunlukla kayıt hatasıdır (yanlış adet, kapatılmamış operasyon); düzeltilirse maliyet de düzelir. Ay kapatılmadan bakılması önerilir.`]);
+      h += `<div class="table-wrap"><table class="rt-tablo"><thead><tr><th>İş emri</th><th>CANIAS kodu</th><th class="r">Adet başı</th><th>Neden</th><th></th></tr></thead><tbody>
+        ${supheli.slice(0, 30).map(({ r, neden }) => `<tr class="rt-tablo-sabit"><td class="mono">${esc(r.x.talep || '—')}</td><td class="mono">${esc(r.x.uKodu)}</td><td class="r mono">${r.m.birim != null ? mlP(r.m.birim, r.m.kur) : '—'}</td>
+          <td style="font-size:12px">${esc(neden)}</td><td><button class="btn-ghost" style="width:auto;padding:2px 9px;font-size:11px" onclick="maliyetDokumAc('${escJs(r.x.talep || r.x.uKodu)}')">Döküm</button></td></tr>`).join('')}
+      </tbody></table></div>${supheli.length > 30 ? `<div class="rt-silik" style="font-size:12px;margin-top:4px">+${supheli.length - 30} satır daha</div>` : ''}`;
+    }
+  }
+
   // Aylık kapanış
   {
     const tumAy = {}; bomRotaListesi().forEach(x => { const a = mlAyAnahtar(x.finishedAt); tumAy[a] = (tumAy[a] || 0) + 1; });
