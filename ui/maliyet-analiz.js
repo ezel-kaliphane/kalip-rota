@@ -5,6 +5,40 @@
 
 let maliyetAnalizDonem = 'buyil';   // buay | 3ay | buyil | tumu
 let maliyetAnalizTumKod = false;
+let maliyetKontrolAy = null;   // kapanış öncesi kontrol listesi açık olan ay (YYYY-MM)
+/* KAPANIŞ ÖNCESİ KONTROL (12.10.2026): ayı kapatmadan o ayın eksikleri tek yerde — hammaddesiz
+   işler (buradan hammadde girilir), fiyatı olmayan çelik/karbür türleri, ücreti girilmemiş gruplar. */
+function maliyetAyKontrol(ay){
+  const liste = bomRotaListesi().filter(x => mlAyAnahtar(x.finishedAt) === ay);
+  const hammaddesiz = [], neden = {};
+  liste.forEach(x => {
+    const m = maliyetHesapla(x, true); if(!m) return;
+    m.eksik.forEach(e => {
+      const k = e.replace(/:.*$/, ''), d = (e.match(/:\s*(.*)$/) || [])[1] || '';
+      if(/hammadde kaydı yok|Operatör girişinden ağırlık/.test(e)){ if(!hammaddesiz.includes(x)) hammaddesiz.push(x); return; }
+      const o = (neden[k] = neden[k] || { n:0, detay:new Set() }); o.n++; if(d) o.detay.add(d);
+    });
+  });
+  return { n: liste.length, hammaddesiz, neden };
+}
+function maliyetKontrolHtml(ay){
+  const k = maliyetAyKontrol(ay);
+  const ilkOp = x => (x.zarf.length ? x.zarf : x.ana)[0] || x.ana[0] || x.zarf[0];
+  const sebepler = Object.entries(k.neden).sort((a, b) => b[1].n - a[1].n);
+  if(!k.hammaddesiz.length && !sebepler.length) return `<div class="set-card" style="border-color:var(--success)">✓ ${mlAyAdi(ay)}: ${k.n} iş emrinin hepsinde maliyet tam — kapatmaya hazır.</div>`;
+  return `<div class="set-card" style="border-color:var(--warn)">
+    <div class="set-sec" style="margin:0 0 8px">Kapanış öncesi kontrol — ${mlAyAdi(ay)}</div>
+    <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px">${k.n} iş emri. Aşağıdakiler düzeltilmeden kapatılırsa o hâliyle sabitlenir.</div>
+    ${k.hammaddesiz.length ? `<div style="font-weight:600;margin:6px 0">Hammadde kaydı yok · ${k.hammaddesiz.length} iş emri <span style="font-weight:400;color:var(--text-muted);font-size:12px">— çelik maliyeti 0 sayılıyor</span></div>
+      <div class="table-wrap" style="max-height:260px;overflow-y:auto"><table class="rt-tablo"><tbody>
+      ${k.hammaddesiz.map(x => { const e = ilkOp(x); return `<tr class="rt-tablo-sabit"><td class="mono">${esc(x.talep || '—')}</td><td class="mono">${esc(x.uKodu)}</td><td class="rt-silik rt-kes">${esc(x.mamulAdi || '')}</td><td class="r">${x.adet || ''} adet</td>
+        <td style="text-align:right">${e && canManageStock() ? `<button class="btn-ghost" style="width:auto;padding:2px 9px;font-size:11px" onclick="hmGirAc('${escJs(e.id)}')">Hammadde gir</button>` : ''}</td></tr>`; }).join('')}
+      </tbody></table></div>` : ''}
+    ${sebepler.length ? `<div style="font-weight:600;margin:12px 0 6px">Diğer eksikler</div>
+      ${sebepler.map(([ad, o]) => `<div style="font-size:12.5px;margin-bottom:4px">• ${esc(ad)} — ${o.n} iş emri${o.detay.size ? ': <span class="mono">' + [...o.detay].slice(0, 8).map(esc).join(', ') + (o.detay.size > 8 ? ' …' : '') + '</span>' : ''}</div>`).join('')}
+      ${canEditMaliyet() ? `<button class="btn-ghost" style="width:auto;padding:4px 10px;margin-top:6px" onclick="settingsSubTab='maliyet'; setView('adminSettings')">Ayarlar → Maliyet Parametreleri</button>` : ''}` : ''}
+  </div>`;
+}
 function setMaliyetAnalizDonem(d){ maliyetAnalizDonem = d; render(); }
 
 function mlDonemBas(d){
@@ -154,12 +188,14 @@ function renderMaliyetAnaliziIcerik(){
     h += `<div class="table-wrap"><table class="rt-tablo"><thead><tr><th>Ay</th><th class="r">İş emri</th><th>Durum</th><th>Son işlem</th><th></th></tr></thead><tbody>
       ${aylarK.map(a => { const m = maliyetKapanis.meta[a] || {}, kapali = m.durum === 'kapali', son = (m.gecmis || []).slice(-1)[0];
         const durum = kapali ? `<span style="color:var(--success)">🔒 Kapalı</span>${maliyetKapanis.veri[a] ? '' : ' <span style="color:var(--warn)" title="Bu cihazda açılamadı">(okunamadı)</span>'}` : a >= buAyK ? '<span class="rt-silik">devam ediyor</span>' : (m.durum === 'acik' ? '<span style="color:var(--warn)">Yeniden açıldı</span>' : 'Açık');
-        const dugme = !canEditMaliyet() || a >= buAyK ? '' : kapali
+        const kontrol = !kapali && a < buAyK && tumAy[a] ? `<button class="btn-ghost" style="width:auto;padding:2px 10px;font-size:11px" onclick="maliyetKontrolAy = maliyetKontrolAy==='${a}' ? null : '${a}'; render()">${maliyetKontrolAy === a ? 'Kontrolü gizle' : 'Kontrol et'}</button> ` : '';
+        const dugme = kontrol + (!canEditMaliyet() || a >= buAyK ? '' : kapali
           ? `<button class="btn-ghost" style="width:auto;padding:2px 10px;font-size:11px" onclick="maliyetAyAc('${a}')">Yeniden aç</button>`
-          : `<button class="btn-primary" style="width:auto;padding:3px 12px;font-size:11.5px" onclick="maliyetAyKapat('${a}')">Kapat</button>`;
+          : `<button class="btn-primary" style="width:auto;padding:3px 12px;font-size:11.5px" onclick="maliyetAyKapat('${a}')">Kapat</button>`);
         return `<tr class="rt-tablo-sabit"><td>${mlAyAdi(a)}</td><td class="r mono">${kapali && m.n != null ? m.n : tumAy[a]}</td><td>${durum}</td>
-          <td class="rt-silik">${son ? (son.tip === 'kapat' ? 'kapatıldı' : 'açıldı') + ' · ' + fmtDT(son.ts) + ' · ' + esc(son.byName || son.by || '') : '—'}</td><td style="text-align:right">${dugme}</td></tr>`; }).join('')}
-    </tbody></table></div>`;
+          <td class="rt-silik">${son ? (son.tip === 'kapat' ? 'kapatıldı' : 'açıldı') + ' · ' + fmtDT(son.ts) + ' · ' + esc(son.byName || son.by || '') : '—'}</td><td style="text-align:right;white-space:nowrap">${dugme}</td></tr>`; }).join('')}
+    </tbody></table></div>
+    ${maliyetKontrolAy ? maliyetKontrolHtml(maliyetKontrolAy) : ''}`;
   }
 
   // Eksik veri
@@ -170,5 +206,5 @@ function renderMaliyetAnaliziIcerik(){
     h += `<div class="table-wrap"><table class="rt-tablo"><thead><tr><th>Sebep</th><th class="r">İş emri</th></tr></thead><tbody>
       ${en.slice(0, 12).map(([k, n]) => `<tr class="rt-tablo-sabit"><td>${esc(k)}</td><td class="r mono">${n}</td></tr>`).join('')}</tbody></table></div>`;
   }
-  return h + `</div>` + renderMaliyetDokum();
+  return h + `</div>` + renderMaliyetDokum() + (typeof renderHmGirModal === 'function' ? renderHmGirModal() : '');
 }

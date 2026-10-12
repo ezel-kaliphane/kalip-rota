@@ -80,7 +80,10 @@ function hmGirKaydet(){
   const manuel = !!lotId || it.mode === 'manuel' || it.tur === 'boy';
   const miktar = manuel ? Number(String(g.miktar || '').replace(',', '.')) : (Number(String(g.miktar || '').replace(',', '.')) || g.adet);
   if(!(miktar > 0)){ toast(lotId ? 'Kesilen boyu girin' : 'Kullanılan miktarı girin'); return; }
+  const onceki = new Set(Object.keys(stockHareketleri || {}));
   consumeStock(itemId, lotId || null, miktar, { isEmriNo: g.isEmriNo, talepNo: g.talep });
+  /* BOM + Rota / maliyet hareketleri ekran açılışında bir kez okuyor — yeni hareketi oraya da ekle */
+  if(bomRotaVeri.stok){ Object.keys(stockHareketleri || {}).filter(k => !onceki.has(k)).forEach(k => { bomRotaVeri.stok[k] = stockHareketleri[k]; }); bomRotaVeri.ts = Date.now(); }
   DB.ref().update({ ['entries/' + g.entryId + '/hammaddeGirildiTs']: Date.now(), ['entries/' + g.entryId + '/hammaddeGirenUsername']: session.username })
     .catch(() => {});
   toast((g.talep || g.isEmriNo) + ' · ' + miktar + ' ' + (opt.birim || '') + ' stoktan düşüldü');

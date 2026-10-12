@@ -438,7 +438,7 @@ async function maliyetAyKapat(ay){
   const kayitlar = {}; let eksikli = 0;
   liste.forEach(x => { const m = maliyetHesapla(x, true); if(!m) return; kayitlar[mlKayitAnahtar(x)] = mlSnapshot(x, m); if(m.eksik.length) eksikli++; });
   const n = Object.keys(kayitlar).length;
-  if(!confirm(mlAyAdi(ay) + ' kapatılacak: ' + n + ' iş emrinin maliyeti bugünkü hâliyle SABİTLENİR.' + (eksikli ? String.fromCharCode(10) + eksikli + ' iş emrinde eksik kalem var; onlar da olduğu gibi sabitlenir.' : '') + String.fromCharCode(10,10) + 'Devam edilsin mi?')) return;
+  if(!confirm(mlAyAdi(ay) + ' kapatılacak: ' + n + ' iş emrinin maliyeti bugünkü hâliyle SABİTLENİR.' + (eksikli ? String.fromCharCode(10) + eksikli + ' iş emrinde eksik kalem var; onlar da olduğu gibi sabitlenir. Önce "Kontrol et" ile bakmanız önerilir.' : '') + String.fromCharCode(10,10) + 'Devam edilsin mi?')) return;
   const s = await mlSifrele({ ay, kayitlar }, maliyetDurum.key, true);
   const eski = maliyetKapanis.meta[ay] || {}, now = Date.now();
   const gecmis = (eski.gecmis || []).concat([{ tip:'kapat', ts: now, by: session.username, byName: session.displayName || session.username, n }]).slice(-20);
