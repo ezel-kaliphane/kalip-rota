@@ -225,6 +225,62 @@ function malzemeBekleyenEkle(veri, bitti){
 /* CANIAS istek numarası İKİNCİ AŞAMA: isteği müdür açıyor, o yüzden yalnızca SuperAdmin
    girebiliyor. Şefe açılması istenirse koşul canManageStock()'a çevrilir. */
 function malzemeIstekNoYetkisi(){ return !!(session && session.isSuperAdmin); }
+/* TOPLU SİPARİŞ (12.10.2026, kullanıcı): "birden fazla iş emri için toplamın üstüne 500–1000 mm emniyet
+   payı koyup TEK sipariş açıyorum; sonra gelenler bu paydan tüketiyor, yetmezse yeni istek." Önceden
+   fazla yalnız SONRADAN işaretlenen kayıtlara bağlanıyordu; siparişten önce bekleyenlere tek tek no
+   girmek gerekiyordu. Artık istek no + miktar girilince (ya da miktar artırılınca) aynı hammaddeyi
+   bekleyen, istek no'su olmayan kayıtlar fazla yettiği kadar — en eski önce — kendiliğinden bağlanır. */
+function malzemeBosBekleyenler(hid){
+  return malzemeBekleyenAktif().filter(x=>x.hammaddeId===hid && !malzemeIstekVar(x))
+    .sort((a,b)=>(Number(a.isaretTs)||0)-(Number(b.isaretTs)||0));
+}
+function malzemeIstekKullanilan(hid, istekNo, haricId){
+  const no = String(istekNo||'').trim().toUpperCase();
+  return malzemeBekleyenAktif().filter(x=>x.hammaddeId===hid && x.id!==haricId && String(x.caniasIstekNo||'').trim().toUpperCase()===no)
+    .reduce((t,x)=>t+malzemeIhtiyac(x), 0);
+}
+function malzemeFazlayaBagla(hid, istekNo, miktar, kullanilan, haric, updates, now){
+  if(!(miktar>0)) return [];
+  const bagli = []; let k = kullanilan;
+  malzemeBosBekleyenler(hid).forEach(x=>{
+    if(haric.has(x.id)) return;
+    const ih = malzemeIhtiyac(x);
+    if(k + ih > miktar) return;
+    k += ih; bagli.push(x);
+    updates['malzemeBekleyen/'+x.id+'/caniasIstekNo'] = istekNo;
+    updates['malzemeBekleyen/'+x.id+'/istekOtomatik'] = true;
+    updates['malzemeBekleyen/'+x.id+'/istekTs'] = now;
+    updates['malzemeBekleyen/'+x.id+'/istekGirenUsername'] = session.username;
+  });
+  return bagli;
+}
+/* Hammadde başlığından toplu giriş: seçilen kayıtların hepsine istek no + sipariş miktarı. */
+function malzemeTopluIstekKaydet(hid, no, miktar, ids){
+  if(!malzemeIstekNoYetkisi()){ toast('İstek numarasını yalnızca SuperAdmin girebilir'); return false; }
+  const temiz = String(no||'').trim(), m = Number(String(miktar==null?'':miktar).replace(',','.'));
+  if(!temiz){ toast('İstek no girin'); return false; }
+  if(!ids.length){ toast('En az bir iş emri seçin'); return false; }
+  const kayitlar = ids.map(id=>malzemeBekleyen[id]).filter(Boolean);
+  const ihtiyac = kayitlar.reduce((t,x)=>t+malzemeIhtiyac(x), 0);
+  const key = malzemeIstekAnahtar(temiz, hid), var_ = malzemeIstek[key];
+  const top = m>0 ? m : (var_ && Number(var_.miktar)) || 0;
+  const onceki = malzemeIstekKullanilan(hid, temiz);
+  if(top>0 && onceki + ihtiyac > top && !confirm('Sipariş miktarı ('+top+') seçilen iş emirlerinin ihtiyacını karşılamıyor (gereken '+Math.round(onceki+ihtiyac)+').'+String.fromCharCode(10,10)+'Yine de hepsine bu istek no yazılsın mı?')) return false;
+  const now = Date.now(), it = (stockItems||{})[hid], updates = {};
+  kayitlar.forEach(x=>{
+    updates['malzemeBekleyen/'+x.id+'/caniasIstekNo'] = temiz;
+    updates['malzemeBekleyen/'+x.id+'/istekOtomatik'] = null;
+    updates['malzemeBekleyen/'+x.id+'/istekTs'] = now;
+    updates['malzemeBekleyen/'+x.id+'/istekGirenUsername'] = session.username;
+  });
+  if(!var_) updates['malzemeIstek/'+key] = { istekNo: temiz, hammaddeId: hid, hammaddeKod: it ? hammaddeEtiket(it) : (kayitlar[0].hammaddeKod||''),
+    miktar: m>0 ? m : null, birim: (it && it.birim) || kayitlar[0].birim || '', durum:'acik',
+    acanUsername: session.username, acanName: session.displayName||session.username, acilisTs: now };
+  else if(m>0 && m!==Number(var_.miktar)) updates['malzemeIstek/'+key+'/miktar'] = m;
+  DB.ref().update(updates).then(()=>{ toast('İstek '+temiz+' · '+kayitlar.length+' iş emrine yazıldı'+(top>0?' · fazla '+Math.round(top-onceki-ihtiyac)+' '+((it&&it.birim)||''):'')); render(); })
+    .catch(err=>toast('Kaydedilemedi: '+((err&&err.message)||'hata')));
+  return true;
+}
 function malzemeIstekNoKaydet(id, no, miktar){
   if(!malzemeIstekNoYetkisi()){ toast('İstek numarasını yalnızca SuperAdmin girebilir'); return; }
   const kayit = malzemeBekleyen[id]; if(!kayit) return;
@@ -249,9 +305,16 @@ function malzemeIstekNoKaydet(id, no, miktar){
       updates['malzemeIstek/'+key+'/miktar'] = m;
     }
   }
+  /* Siparişin fazlası, istek no'su olmayan diğer bekleyenlere (en eski önce) kendiliğinden bağlanır */
+  let ekBagli = [];
+  if(temiz && kayit.hammaddeId){
+    const top = m>0 ? m : Number((malzemeIstek[malzemeIstekAnahtar(temiz, kayit.hammaddeId)]||{}).miktar)||0;
+    if(top>0) ekBagli = malzemeFazlayaBagla(kayit.hammaddeId, temiz, top,
+      malzemeIstekKullanilan(kayit.hammaddeId, temiz, id) + malzemeIhtiyac(kayit), new Set([id]), updates, now);
+  }
   DB.ref().update(updates).then(()=>{
     if(!malzemeBekleyenDinleniyor) malzemeBekleyen[id] = { ...kayit, caniasIstekNo: temiz, istekGirenUsername: session.username, istekTs: now };
-    toast(temiz ? ('İstek no kaydedildi: '+temiz) : 'İstek no temizlendi');
+    toast(temiz ? ('İstek no kaydedildi: '+temiz+(ekBagli.length ? ' · '+ekBagli.length+' iş emri daha bu siparişin fazlasına bağlandı' : '')) : 'İstek no temizlendi');
     render();
   }).catch(err=>{
     /* malzemeIstek kuralı yayınlanmamışsa çok-yollu yazma bütünüyle reddedilir — istek no'nun
@@ -302,7 +365,8 @@ function malzemeIstekMiktarKaydet(istekNo, hid, miktar){
   const upd = var_ ? { ['malzemeIstek/'+key+'/miktar']: m }
     : { ['malzemeIstek/'+key]: { istekNo: String(istekNo).trim(), hammaddeId: hid, hammaddeKod: it ? hammaddeEtiket(it) : '',
         miktar: m, birim: (it && it.birim)||'', durum:'acik', acanUsername: session.username, acanName: session.displayName||session.username, acilisTs: Date.now() } };
-  DB.ref().update(upd).then(()=>{ toast('Sipariş miktarı kaydedildi: '+m); render(); })
+  const ekBagli = malzemeFazlayaBagla(hid, String(istekNo).trim(), m, malzemeIstekKullanilan(hid, istekNo), new Set(), upd, Date.now());
+  DB.ref().update(upd).then(()=>{ toast('Sipariş miktarı kaydedildi: '+m+(ekBagli.length ? ' · '+ekBagli.length+' bekleyen iş emri bu siparişe bağlandı' : '')); render(); })
     .catch(err=>toast('Kaydedilemedi: '+((err&&err.message)||'hata')+' — malzemeIstek kuralı yayınlandı mı?'));
 }
 /* Sipariş geldi (Şef + SuperAdmin). Yoldaki miktar artık stokta sayılır — stok girişinin

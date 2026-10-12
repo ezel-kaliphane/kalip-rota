@@ -8,6 +8,47 @@
 let mbYeniAcik = false;
 let mbForm = { girilen:'', talepNo:'', mamulKodu:'', mamulAdi:'', ieMiktar:'', hammaddeId:'', gerekenMiktar:'', busy:false, bulundu:null };
 let mbIstekDuzenId = null, mbIstekDeger = '', mbIstekMiktar = '';
+let mbToplu = null;   // { hid, secili:{id:true}, no, miktar } — hammadde başlığından toplu istek no (12.10.2026)
+function mbTopluAc(hid){
+  if(!malzemeIstekNoYetkisi()){ toast('İstek numarasını yalnızca SuperAdmin girebilir'); return; }
+  const bos = malzemeBosBekleyenler(hid); const secili = {}; bos.forEach(x=>{ secili[x.id] = true; });
+  mbToplu = { hid, secili, no:'', miktar:'' }; render();
+}
+function mbTopluToplam(){ return mbToplu ? malzemeBosBekleyenler(mbToplu.hid).filter(x=>mbToplu.secili[x.id]).reduce((t,x)=>t+malzemeIhtiyac(x), 0) : 0; }
+function mbTopluPay(p){ if(!mbToplu) return; mbToplu.miktar = String(Math.ceil(mbTopluToplam()) + p); render(); }
+function mbTopluKaydet(){
+  if(!mbToplu) return;
+  const ids = Object.keys(mbToplu.secili).filter(k=>mbToplu.secili[k]);
+  if(malzemeTopluIstekKaydet(mbToplu.hid, mbToplu.no, mbToplu.miktar, ids)) mbToplu = null;
+  render();
+}
+function renderMbTopluModal(){
+  if(!mbToplu) return '';
+  const it = (stockItems||{})[mbToplu.hid], b = esc((it && it.birim) || '');
+  const bos = malzemeBosBekleyenler(mbToplu.hid), top = mbTopluToplam();
+  const m = Number(String(mbToplu.miktar||'').replace(',','.')) || 0;
+  return `<div class="modal-overlay" onclick="if(event.target===this){mbToplu=null; render();}">
+    <div class="modal-box kal-modal" style="max-width:560px">
+      <div class="kal-modal-bas"><div class="sec-h" style="margin-top:0">Toplu sipariş — ${esc(it ? hammaddeEtiket(it) : '')}</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-top:-4px">İstek no'su olmayan ${bos.length} iş emri. Seçilenlerin hepsine aynı istek no yazılır; fazlası sonra gelen iş emirlerine kendiliğinden bağlanır.</div></div>
+      <div class="kal-modal-govde">
+        ${bos.map(x=>`<label style="display:flex;align-items:center;gap:10px;padding:6px 2px;border-bottom:1px solid var(--border);font-size:13px">
+          <input type="checkbox" ${mbToplu.secili[x.id]?'checked':''} onchange="mbToplu.secili['${escJs(x.id)}']=this.checked; render()">
+          <span class="mono" style="min-width:100px">${esc(x.isEmriNo||'')}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.mamulAdi||'')}</span>
+          <span class="mono">${Math.round(malzemeIhtiyac(x))} ${b}</span></label>`).join('')}
+        <div style="margin:10px 0 12px;font-size:13px">Seçilenlerin toplam ihtiyacı <b>${Math.round(top)} ${b}</b> <span style="color:var(--text-muted)">(testere payı dahil)</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field" style="margin:0"><label>İstek No</label><input placeholder="ör. 26100277" value="${esc(mbToplu.no)}" oninput="mbToplu.no=this.value"></div>
+          <div class="field" style="margin:0"><label>Sipariş miktarı (${b})</label><input inputmode="decimal" placeholder="${Math.ceil(top)}" value="${esc(mbToplu.miktar)}" oninput="mbToplu.miktar=this.value.replace(/[^0-9.,]/g,''); render()"></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center;font-size:12px;color:var(--text-muted)">Emniyet payı ekle:
+          ${[0,500,1000].map(p=>`<button class="chip" onclick="mbTopluPay(${p})">${p ? '+'+p : 'tam'} ${b}</button>`).join('')}
+          ${m>0 ? `<span style="margin-left:6px;color:${m>=top?'var(--success)':'var(--danger)'}">${m>=top ? 'fazla '+Math.round(m-top)+' '+b+' — sonraki iş emirleri bundan tüketir' : 'eksik '+Math.round(top-m)+' '+b}</span>` : ''}
+        </div>
+      </div>
+      <div class="kal-modal-alt"><button class="btn-primary" style="flex:1" onclick="mbTopluKaydet()">Kaydet</button><button class="btn-ghost" onclick="mbToplu=null; render()">Vazgeç</button></div>
+    </div></div>`;
+}
 let mbSiparisMiktarAcik = null, mbSiparisMiktarDeger = ''; // grup başlığında miktar düzenlenen sipariş anahtarı
 let mbGecmisAcik = false;
 let mbHamAra = '';
@@ -183,6 +224,8 @@ function renderMalzemeBekleyen(){
         <span class="mb-kod">${esc(etiketMetin)}</span>
         <span class="matrix-tag" style="--sb:${durum.r}">${durum.t}</span>
         <span class="mb-olcu">${g.it && g.it.isim ? esc(String(g.it.isim).slice(0,40))+' · ' : ''}Stok <b${g.stok<0?' style="color:var(--danger)"':''}>${g.stok} ${esc(birim)}</b> · Rezerve <b>${g.rezerve} ${esc(birim)}</b> · Kullanılabilir <b style="color:${g.kullanilabilir<0?'var(--danger)':'var(--success)'}">${g.kullanilabilir} ${esc(birim)}</b></span>
+        ${(()=>{ const n = malzemeIstekNoYetkisi() ? malzemeBosBekleyenler(g.hid).length : 0;
+          return n > 1 ? `<button class="btn-ghost mb-mini" style="margin-left:auto;border-color:var(--danger);color:var(--danger)" onclick="mbTopluAc('${escJs(g.hid)}')">Toplu istek no gir · ${n} iş emri</button>` : ''; })()}
       </div>
       ${mbSiparislerHtml(g)}
       ${basliklar}
@@ -251,7 +294,7 @@ function renderMalzemeBekleyen(){
       <div class="notice-sub">Şef bir mamul için hangi hammaddeyi seçtiyse kaydediliyor. Aynı mamul ikinci kez geldiğinde
       hammadde ve miktar hazır geliyor — ayrı bir reçete ekranı yok. Şu an <b>${Object.values(hammaddeRecete||{}).filter(r=>r && r.hammaddeId).length}</b> mamulün reçetesi var.</div>
     </div>
-  </div>${renderMbYeniModal()}${renderMbIstekModal()}`;
+  </div>${renderMbYeniModal()}${renderMbIstekModal()}${renderMbTopluModal()}`;
 }
 
 function renderMbYeniModal(){
@@ -342,6 +385,9 @@ function renderMbIstekModal(){
         <label for="mb-istek-mik">Sipariş miktarı (${esc(k.birim||'')})</label>
         <input id="mb-istek-mik" inputmode="decimal" placeholder="ör. 1500 — bu istekle sipariş edilen toplam" value="${esc(mbIstekMiktar)}" oninput="mbIstekMiktar=this.value.replace(/[^0-9.,]/g,'')">
         <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Aynı istek no'yu başka iş emrine yazarken boş bırakabilirsin. Fazlası yeni gelen iş emirlerine kendiliğinden bağlanır.</div>
+        ${(()=>{ const diger = malzemeBosBekleyenler(k.hammaddeId).filter(x=>x.id!==k.id); if(!diger.length) return '';
+          const t = diger.reduce((s,x)=>s+malzemeIhtiyac(x), 0) + malzemeIhtiyac(k);
+          return `<div style="font-size:12px;margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--panel-alt)">Bu hammaddeyi bekleyen, istek no'su olmayan <b>${diger.length} iş emri daha</b> var — bununla birlikte toplam ihtiyaç <b>${Math.round(t)} ${esc(k.birim||'')}</b>. Miktar yeterse onlar da bu isteğe kendiliğinden bağlanır.</div>`; })()}
       </div>
       <div style="display:flex;gap:8px;margin-top:4px">
         <button class="btn-primary" style="flex:1" onclick="mbIstekKaydet()">Kaydet</button>
