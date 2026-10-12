@@ -73,7 +73,8 @@ function renderMaliyetAnaliziIcerik(){
   const cip = (k, et) => `<button class="chip ${maliyetAnalizDonem === k ? 'active' : ''}" onclick="setMaliyetAnalizDonem('${k}')">${et}</button>`;
   let h = `<div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center">${cip('buay','Bu ay')}${cip('3ay','Son 3 ay')}${cip('buyil','Bu yıl')}${cip('tumu','Tümü')}
-      <span style="flex:1"></span>${mlParaSecici()}</div>`;
+      <span style="flex:1"></span>${onMaliyet ? '' : `<button class="btn-ghost" style="width:auto;padding:5px 12px;font-size:12px" onclick="onMaliyet={kod:'',ad:'',adet:''}; render()">Ön maliyet hesapla</button>`}${mlParaSecici()}</div>
+    ${renderOnMaliyetHtml()}`;
   if(!kayit.length) return h + `<div class="set-card">${donemAd} tamamlanan iş emri yok.</div></div>`;
 
   // Toplamlar — her para biriminde ayrı (iş emri kendi kuruyla çevrilir), sayılar/oranlar TL'den
