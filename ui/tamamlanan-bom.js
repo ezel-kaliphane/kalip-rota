@@ -263,7 +263,8 @@ function renderTamamlananBomRota(){
       ${kpi(karN, 'Karbür kullanılan', '', 'karburlu')}
     </div>
     <div class="bom-kaynak-not">Hammadde kaynağı: ${['stok', 'bekleyen', 'operator', 'standart', 'recete'].map(k => `<span title="${esc(BOM_KAYNAK[k].ipucu)}"><i style="background:${BOM_KAYNAK[k].renk}"></i>${BOM_KAYNAK[k].ad} ${kaynakSay[k] || 0}</span>`).join('')}
-      <button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px;margin-left:auto" onclick="bomRotaExcelIndir()" title="Ekrandaki listeyi (filtre ve aramayla) Excel'de açılan CSV olarak indir">⬇ Excel</button>
+      ${(typeof canSeeMaliyet === 'function' && canSeeMaliyet() && maliyetAcik()) ? `<span style="margin-left:auto">${mlParaSecici()}</span>` : ''}
+      <button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px;${(typeof canSeeMaliyet === 'function' && canSeeMaliyet() && maliyetAcik()) ? '' : 'margin-left:auto'}" onclick="bomRotaExcelIndir()" title="Ekrandaki listeyi (filtre ve aramayla) Excel'de açılan CSV olarak indir">⬇ Excel</button>
       <button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" onclick="bomRotaYenile()" title="Stok ve karbür hareketlerini yeniden oku">↻ Yenile</button></div>
     <input id="completed-search-input" class="filter-input completed-search" placeholder="İş emri / CANIAS kodu / hammadde / karbür / makine ara…" value="${esc(completedSearch)}" oninput="setCompletedSearch(this.value)">
     <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px">${liste.length} iş emri${liste.length > bomRotaLimit ? ` · ilk ${bomRotaLimit} gösteriliyor` : ''}</div>`;

@@ -38,67 +38,75 @@ function renderMaliyetAnaliziIcerik(){
   const donemAd = { buay:'Bu ay', '3ay':'Son 3 ayda', buyil:'Bu yıl', tumu:'Kayıtlı dönemde' }[maliyetAnalizDonem];
   const cip = (k, et) => `<button class="chip ${maliyetAnalizDonem === k ? 'active' : ''}" onclick="setMaliyetAnalizDonem('${k}')">${et}</button>`;
   let h = `<div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${cip('buay','Bu ay')}${cip('3ay','Son 3 ay')}${cip('buyil','Bu yıl')}${cip('tumu','Tümü')}</div>`;
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center">${cip('buay','Bu ay')}${cip('3ay','Son 3 ay')}${cip('buyil','Bu yıl')}${cip('tumu','Tümü')}
+      <span style="flex:1"></span>${mlParaSecici()}</div>`;
   if(!kayit.length) return h + `<div class="set-card">${donemAd} tamamlanan iş emri yok.</div></div>`;
 
-  // Toplamlar
-  const T = { toplam:0, adet:0, saglam:0, hurdaPayi:0, rework:0 }; ML_KALEMLER.forEach(([k]) => { T[k] = 0; });
-  const grup = {}, ay = {}, kod = {}, eksikNeden = {};
-  let eksikli = 0;
-  kayit.forEach(({ x, m }) => {
-    T.toplam += m.toplam; T.adet += m.adet; T.saglam += (m.saglam || m.adet); T.hurdaPayi += m.hurdaPayi || 0;
-    ML_KALEMLER.forEach(([k]) => { T[k] += mlKalemTutar(m, k); });
-    m.ops.forEach(o => {
-      if(o.duzeltme) T.rework += o.iscilik + o.elektrik + o.amort;
-      if(!o.grup) return;
-      const g = (grup[o.grup] = grup[o.grup] || { dk:0, tutar:0 });
-      g.dk += o.dk; g.tutar += o.iscilik + o.elektrik + o.amort;
+  // Toplamlar — her para biriminde ayrı (iş emri kendi kuruyla çevrilir), sayılar/oranlar TL'den
+  const topla = c => {
+    const T = { toplam:0, adet:0, saglam:0, hurdaPayi:0, rework:0 }; ML_KALEMLER.forEach(([k]) => { T[k] = 0; });
+    const grup = {}, ay = {}, kod = {};
+    kayit.forEach(({ x, m: m0 }) => {
+      const m = mlCevir(m0, c);
+      T.toplam += m.toplam; T.adet += m.adet; T.saglam += (m.saglam || m.adet); T.hurdaPayi += m.hurdaPayi || 0;
+      ML_KALEMLER.forEach(([k]) => { T[k] += mlKalemTutar(m, k); });
+      m.ops.forEach(o => {
+        if(o.duzeltme) T.rework += o.iscilik + o.elektrik + o.amort;
+        if(!o.grup) return;
+        const g = (grup[o.grup] = grup[o.grup] || { dk:0, tutar:0 });
+        g.dk += o.dk; g.tutar += o.iscilik + o.elektrik + o.amort;
+      });
+      const a = new Date(x.finishedAt), ak = a.getFullYear() + '-' + String(a.getMonth() + 1).padStart(2, '0');
+      const A = (ay[ak] = ay[ak] || { ad: ML_AYLAR[a.getMonth()] + ' ' + a.getFullYear(), n:0, toplam:0, iscilik:0, malzeme:0 });
+      A.n++; A.toplam += m.toplam; A.iscilik += m.iscilik; A.malzeme += m.celik.tutar + m.karbur.tutar;
+      const K = (kod[x.uKodu] = kod[x.uKodu] || { kod:x.uKodu, ad:x.mamulAdi, n:0, toplam:0, adet:0, birimler:[] });
+      K.n++; K.toplam += m.toplam; K.adet += (m.saglam || m.adet); if(m.birim != null) K.birimler.push(m.birim);
     });
-    const a = new Date(x.finishedAt), ak = a.getFullYear() + '-' + String(a.getMonth() + 1).padStart(2, '0');
-    const A = (ay[ak] = ay[ak] || { ad: ML_AYLAR[a.getMonth()] + ' ' + a.getFullYear(), n:0, toplam:0, iscilik:0, malzeme:0 });
-    A.n++; A.toplam += m.toplam; A.iscilik += m.iscilik; A.malzeme += m.celik.tutar + m.karbur.tutar;
-    const K = (kod[x.uKodu] = kod[x.uKodu] || { kod:x.uKodu, ad:x.mamulAdi, n:0, toplam:0, adet:0, birimler:[] });
-    K.n++; K.toplam += m.toplam; K.adet += (m.saglam || m.adet); if(m.birim != null) K.birimler.push(m.birim);
-    if(m.eksik.length){ eksikli++; m.eksik.forEach(e => { const k = e.replace(/:.*$/, ''); eksikNeden[k] = (eksikNeden[k] || 0) + 1; }); }
-  });
+    return { T, grup, ay, kod };
+  };
+  const R = { TRY: topla('TRY'), EUR: topla('EUR'), USD: topla('USD') };
+  const U = (fn, ic) => mlUc({ TRY: fn(R.TRY), EUR: fn(R.EUR), USD: fn(R.USD) }, ic);   // para gösterimi (ic: cümle içinde yan yana)
+  const { T, grup, ay, kod } = R.TRY;
+  const eksikNeden = {}; let eksikli = 0;
+  kayit.forEach(({ m }) => { if(m.eksik.length){ eksikli++; m.eksik.forEach(e => { const k = e.replace(/:.*$/, ''); eksikNeden[k] = (eksikNeden[k] || 0) + 1; }); } });
   const kalemler = ML_KALEMLER.map(([k, ad]) => ({ k, ad, t:T[k] })).filter(r => r.t > 0).sort((a, b) => b.t - a.t);
   const pay = v => T.toplam ? v / T.toplam * 100 : 0;
-  const ort = T.toplam / kayit.length;
   const kalite = T.hurdaPayi + T.rework;
 
   // Özet
   h += agBolumBas('ml-ozet', 'Özet', donemAd.toLocaleLowerCase('tr') + ' · ' + kayit.length + ' iş emri');
   h += agYorum([
-    `${donemAd} <b>${kayit.length}</b> iş emri tamamlandı; toplam maliyet <b>${mlTL(T.toplam)}</b>.`,
+    `${donemAd} <b>${kayit.length}</b> iş emri tamamlandı; toplam maliyet <b>${U(r => r.T.toplam, 1)}</b>.`,
     kalemler.length ? `En büyük kalem ${kalemler[0].ad.toLocaleLowerCase('tr')}, payı %${Math.round(pay(kalemler[0].t))}${kalemler[1] ? `; ardından ${kalemler[1].ad.toLocaleLowerCase('tr')} (%${Math.round(pay(kalemler[1].t))})` : ''}${kalemler[2] ? ` ve ${kalemler[2].ad.toLocaleLowerCase('tr')} (%${Math.round(pay(kalemler[2].t))})` : ''} geliyor.` : '',
-    kalite > 0 ? `Kalitesizliğin bedeli ${mlTL(kalite)}: hurdaya giden parçalar ${mlTL(T.hurdaPayi)}, düzeltme (rework) işleri ${mlTL(T.rework)}.` : 'Bu dönemde hurda ya da düzeltme işi maliyeti yok.',
+    kalite > 0 ? `Kalitesizliğin bedeli ${U(r => r.T.hurdaPayi + r.T.rework, 1)}: hurdaya giden parçalar ${U(r => r.T.hurdaPayi, 1)}, düzeltme (rework) işleri ${U(r => r.T.rework, 1)}.` : 'Bu dönemde hurda ya da düzeltme işi maliyeti yok.',
     eksikli ? `<span style="color:var(--warn)">${eksikli} iş emrinde eksik ya da tahmini kalem var (çoğunlukla hammadde kaydı) — bu iş emirlerinde maliyet olduğundan düşük çıkabilir; ayrıntı en altta.</span>` : ''
   ]);
   h += `<div class="rt-kpiler ag-kpi-buyuk">
-    ${rtKpi('Toplam maliyet', mlTL(T.toplam), '', T.saglam ? 'sağlam parça başı ' + mlTL(T.toplam / T.saglam) : '')}
-    ${rtKpi('İş emri başına', mlTL(ort), '', kayit.length + ' iş emri ortalaması')}
-    ${rtKpi('Kalitesizlik maliyeti', mlTL(kalite), '', 'hurda + düzeltme · toplamın içinde, payı %' + mlFmt(pay(kalite), 1))}
+    ${rtKpi('Toplam maliyet', U(r => r.T.toplam), '', T.saglam ? 'sağlam parça başı ' + U(r => r.T.toplam / r.T.saglam, 1) : '')}
+    ${rtKpi('İş emri başına', U(r => r.T.toplam / kayit.length), '', kayit.length + ' iş emri ortalaması')}
+    ${rtKpi('Kalitesizlik maliyeti', U(r => r.T.hurdaPayi + r.T.rework), '', 'hurda + düzeltme · toplamın içinde, payı %' + mlFmt(pay(kalite), 1))}
   </div>`;
 
   // Kalemler
   h += agBolumBas('ml-kalem', 'Maliyet kalemleri', 'toplam içindeki payları');
   h += `<div class="table-wrap"><table class="rt-tablo"><thead><tr><th>Kalem</th><th class="r">Tutar</th><th class="r">Pay</th></tr></thead><tbody>
-    ${kalemler.map(r => `<tr class="rt-tablo-sabit"><td>${r.ad}</td><td class="r mono">${mlTL(r.t)}</td><td class="r"><span class="ag-oran" style="--p:${pay(r.t).toFixed(1)}%"></span><span class="mono">%${mlFmt(pay(r.t), 1)}</span></td></tr>`).join('')}
+    ${kalemler.map(k => `<tr class="rt-tablo-sabit"><td>${k.ad}</td><td class="r mono">${U(r => r.T[k.k])}</td><td class="r"><span class="ag-oran" style="--p:${pay(k.t).toFixed(1)}%"></span><span class="mono">%${mlFmt(pay(k.t), 1)}</span></td></tr>`).join('')}
   </tbody></table></div>`;
 
   // Aylık
   const aylar = Object.keys(ay).sort();
   if(aylar.length > 1){
     const buAy = new Date(); const buAyK = buAy.getFullYear() + '-' + String(buAy.getMonth() + 1).padStart(2, '0');
+    const tekPara = maliyetParaModu === 'HEPSI' ? 'TRY' : maliyetParaModu;
     h += agBolumBas('ml-ay', 'Aylık', 'devam eden ay önceki ayla kıyaslanmaz');
     h += `<div class="table-wrap"><table class="rt-tablo"><thead><tr><th>Ay</th><th class="r">İş emri</th><th class="r">Toplam</th><th class="r">İş emri başına</th><th class="r">İşçilik</th><th class="r">Malzeme</th><th>Önceki aya göre (iş emri başına)</th></tr></thead><tbody>
       ${aylar.map((k, i) => {
-        const A = ay[k], o = A.toplam / A.n, onc = i > 0 ? ay[aylar[i - 1]] : null;
+        const A = ay[k], onc = i > 0 ? aylar[i - 1] : null;
         let fark = '';
         if(k === buAyK) fark = '<span class="rt-silik">devam ediyor</span>';
-        else if(onc){ const oo = onc.toplam / onc.n, f = o - oo, y = oo ? Math.abs(f / oo * 100) : 0;
-          fark = Math.abs(f) < 1 ? 'değişmedi' : `${f > 0 ? '+' : '−'}${mlTL(Math.abs(f))} <small>(%${Math.round(y)} ${f > 0 ? 'artış' : 'azalış'})</small>`; }
-        return `<tr class="rt-tablo-sabit"><td>${A.ad}</td><td class="r mono">${A.n}</td><td class="r mono">${mlTL(A.toplam)}</td><td class="r mono">${mlTL(o)}</td><td class="r mono">${mlTL(A.iscilik)}</td><td class="r mono">${mlTL(A.malzeme)}</td><td>${fark}</td></tr>`;
+        else if(onc){ const Ac = R[tekPara].ay[k], Oc = R[tekPara].ay[onc], o = Ac.toplam / Ac.n, oo = Oc.toplam / Oc.n, f = o - oo, y = oo ? Math.abs(f / oo * 100) : 0;
+          fark = Math.abs(f) < (tekPara === 'TRY' ? 1 : 0.05) ? 'değişmedi' : `${f > 0 ? '+' : '−'}${mlParaYaz(Math.abs(f), tekPara)} <small>(%${Math.round(y)} ${f > 0 ? 'artış' : 'azalış'})</small>`; }
+        return `<tr class="rt-tablo-sabit"><td>${A.ad}</td><td class="r mono">${A.n}</td><td class="r mono">${U(r => r.ay[k].toplam)}</td><td class="r mono">${U(r => r.ay[k].toplam / r.ay[k].n)}</td><td class="r mono">${U(r => r.ay[k].iscilik)}</td><td class="r mono">${U(r => r.ay[k].malzeme)}</td><td>${fark}</td></tr>`;
       }).join('')}
     </tbody></table></div>`;
   }
@@ -110,7 +118,7 @@ function renderMaliyetAnaliziIcerik(){
     h += agBolumBas('ml-grup', 'Makine grupları', 'işçilik + elektrik + amortisman');
     h += agYorum([`Makine zamanının en pahalı kısmı ${esc(gl[0].ad.toLocaleLowerCase('tr'))}: ${agSaat(gl[0].dk)}, payı %${Math.round(gl[0].tutar / gt * 100)}.`]);
     h += `<div class="table-wrap"><table class="rt-tablo"><thead><tr><th>Grup</th><th class="r">Süre</th><th class="r">Tutar</th><th class="r">Pay</th></tr></thead><tbody>
-      ${gl.map(g => `<tr class="rt-tablo-sabit"><td>${esc(g.ad)}</td><td class="r mono">${agSaat(g.dk)}</td><td class="r mono">${mlTL(g.tutar)}</td><td class="r"><span class="ag-oran" style="--p:${(g.tutar / gt * 100).toFixed(1)}%"></span><span class="mono">%${mlFmt(g.tutar / gt * 100, 1)}</span></td></tr>`).join('')}
+      ${gl.map(g => `<tr class="rt-tablo-sabit"><td>${esc(g.ad)}</td><td class="r mono">${agSaat(g.dk)}</td><td class="r mono">${U(r => r.grup[g.ad].tutar)}</td><td class="r"><span class="ag-oran" style="--p:${(g.tutar / gt * 100).toFixed(1)}%"></span><span class="mono">%${mlFmt(g.tutar / gt * 100, 1)}</span></td></tr>`).join('')}
     </tbody></table></div>`;
   }
 
@@ -121,9 +129,8 @@ function renderMaliyetAnaliziIcerik(){
   h += agYorum([`${kl.length} farklı CANIAS kodu üretildi${tekrar ? `; ${tekrar} tanesi bu dönemde birden fazla kez — onlarda en düşük ile en yüksek adet başı maliyet yan yana` : ''}.`]);
   const kGoster = maliyetAnalizTumKod ? kl : kl.slice(0, 15);
   h += `<div class="table-wrap"><table class="rt-tablo"><thead><tr><th>CANIAS kodu</th><th class="rt-dar-gizle">Mamul</th><th class="r">İş emri</th><th class="r">Adet</th><th class="r">Toplam</th><th class="r">Adet başı</th><th class="r">En düşük – en yüksek</th></tr></thead><tbody>
-    ${kGoster.map(k => { const mn = Math.min(...k.birimler), mx = Math.max(...k.birimler);
-      return `<tr class="rt-tablo-sabit"><td class="mono">${esc(k.kod)}</td><td class="rt-silik rt-kes rt-dar-gizle">${esc(k.ad || '')}</td><td class="r mono">${k.n}</td><td class="r mono">${rtFmt(k.adet)}</td><td class="r mono">${mlTL(k.toplam)}</td>
-        <td class="r mono">${k.adet ? mlTL(k.toplam / k.adet) : '—'}</td><td class="r mono">${k.n > 1 && k.birimler.length > 1 ? mlTL(mn) + ' – ' + mlTL(mx) : '<span class="rt-silik">—</span>'}</td></tr>`; }).join('')}
+    ${kGoster.map(k => `<tr class="rt-tablo-sabit"><td class="mono">${esc(k.kod)}</td><td class="rt-silik rt-kes rt-dar-gizle">${esc(k.ad || '')}</td><td class="r mono">${k.n}</td><td class="r mono">${rtFmt(k.adet)}</td><td class="r mono">${U(r => r.kod[k.kod].toplam)}</td>
+        <td class="r mono">${k.adet ? U(r => r.kod[k.kod].toplam / r.kod[k.kod].adet) : '—'}</td><td class="r mono">${k.n > 1 && k.birimler.length > 1 ? U(r => Math.min(...r.kod[k.kod].birimler)) + ' – ' + U(r => Math.max(...r.kod[k.kod].birimler)) : '<span class="rt-silik">—</span>'}</td></tr>`).join('')}
   </tbody></table></div>
   ${kl.length > 15 ? `<button type="button" class="ag-detay-dugme" onclick="maliyetAnalizTumKod=!maliyetAnalizTumKod; render()">${ico(maliyetAnalizTumKod ? 'chevronUp' : 'chevronDown', 14)} ${maliyetAnalizTumKod ? 'İlk 15\'i göster' : 'Tümünü göster (' + kl.length + ')'}</button>` : ''}`;
 
@@ -132,7 +139,7 @@ function renderMaliyetAnaliziIcerik(){
   h += agBolumBas('ml-pahali', 'En yüksek maliyetli iş emirleri', 'Döküm ile kalem kalem');
   h += `<div class="table-wrap"><table class="rt-tablo"><thead><tr><th>İş emri</th><th>CANIAS kodu</th><th class="rt-dar-gizle">Mamul</th><th class="r">Adet</th><th class="r">Toplam</th><th class="r">Adet başı</th><th></th></tr></thead><tbody>
     ${pahali.map(({ x, m }) => `<tr class="rt-tablo-sabit"><td class="mono">${esc(x.talep || '—')}</td><td class="mono">${esc(x.uKodu)}</td><td class="rt-silik rt-kes rt-dar-gizle">${esc(x.mamulAdi || '')}</td><td class="r mono">${m.adet}${m.hurda ? ` <span style="color:var(--warn)" title="hurda">(${m.hurda} h)</span>` : ''}</td>
-      <td class="r mono">${mlTL(m.toplam)}${m.eksik.length ? ` <span style="color:var(--warn)" title="${esc(m.eksik.join('\n'))}">⚠</span>` : ''}</td><td class="r mono">${m.birim != null ? mlTL(m.birim) : '—'}</td>
+      <td class="r mono">${mlP(m.toplam, m.kur)}${m.eksik.length ? ` <span style="color:var(--warn)" title="${esc(m.eksik.join('\n'))}">⚠</span>` : ''}</td><td class="r mono">${m.birim != null ? mlP(m.birim, m.kur) : '—'}</td>
       <td><button class="btn-ghost" style="width:auto;padding:2px 9px;font-size:11px" onclick="maliyetDokumAc('${escJs(x.talep || x.uKodu)}')">Döküm</button></td></tr>`).join('')}
   </tbody></table></div>`;
 

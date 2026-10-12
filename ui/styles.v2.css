@@ -1605,3 +1605,10 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .ml-yrd summary{font-size:11px;color:var(--accent);cursor:pointer;margin-top:3px}
 .ml-yrd[open]{display:flex;flex-direction:column;gap:4px;margin-top:4px}
 .ml-inp::placeholder{color:var(--text-muted);opacity:.55;font-style:italic}
+/* Maliyet para birimi seçici ve "Hepsi" gösterimi (12.10.2026) */
+.ml-para-sec{display:inline-flex;gap:4px;flex-wrap:wrap}
+.ml-para-sec .chip{padding:4px 10px;font-size:12px}
+.ml-uc{display:inline-flex;flex-direction:column;align-items:inherit;line-height:1.15}
+.r .ml-uc,td[style*="text-align:right"] .ml-uc{align-items:flex-end}
+.ml-uc small{font-size:.62em;font-weight:500;color:var(--text-muted);white-space:nowrap;margin-top:2px}
+.rt-kpi-v .ml-uc small{font-size:.38em}

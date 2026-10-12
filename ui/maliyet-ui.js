@@ -283,7 +283,7 @@ function maliyetKartHtml(x){
   else {
     const m = maliyetHesapla(x);
     if(!m) deger = '<span class="bom-ikincil">parametre yok</span>';
-    else deger = `<b>${mlTL(m.toplam)}</b>${m.birim != null ? ` <span class="bom-ikincil">· adet başı</span> <b>${mlTL(m.birim)}</b>${m.kur.eur ? ` <span class="bom-ikincil">(${mlFmt(m.birim / m.kur.eur, 1)} €)</span>` : ''}` : ''}
+    else deger = `<b>${mlP(m.toplam, m.kur)}</b>${m.birim != null ? ` <span class="bom-ikincil">· adet başı</span> <b>${mlP(m.birim, m.kur)}</b>` : ''}
       ${m.hurda ? ` <span class="bom-ikincil">· ${m.hurda} hurda dahil</span>` : ''}
       ${m.eksik.length ? ` <span style="color:var(--warn)" title="${esc(m.eksik.join('\n'))}">⚠ ${m.eksik.length} eksik</span>` : ''}
       <button type="button" class="btn-ghost" style="padding:2px 10px;font-size:11px;margin-left:6px" onclick="event.stopPropagation(); maliyetDokumAc('${escJs(x.talep || x.uKodu)}')">Döküm</button>`;
@@ -298,7 +298,7 @@ function renderMaliyetDokum(){
   const x = maliyetDokum; if(!x) return '';
   const m = maliyetHesapla(x);
   if(!m) return '';
-  const satir = (ad, deger, alt) => `<tr><td>${ad}</td><td style="text-align:right;white-space:nowrap"><b>${mlTL(deger)}</b></td><td style="font-size:11.5px;color:var(--text-muted)">${alt || ''}</td></tr>`;
+  const satir = (ad, deger, alt) => `<tr><td>${ad}</td><td style="text-align:right;white-space:nowrap"><b>${mlP(deger, m.kur)}</b></td><td style="font-size:11.5px;color:var(--text-muted)">${alt || ''}</td></tr>`;
   const yuzde = v => m.toplam ? ' · %' + mlFmt(v / m.toplam * 100, 0) : '';
   return `<div class="modal-overlay" onclick="if(event.target===this){maliyetDokum=null; render();}">
     <div class="modal-box kal-modal" style="max-width:720px">
@@ -306,9 +306,9 @@ function renderMaliyetDokum(){
         <div style="font-size:12px;color:var(--text-muted);margin-top:-4px">${esc(x.mamulAdi || '')} · bitiş ${fmtDT(x.finishedAt)} · kur 1 $ = ${mlFmt(m.kur.usd, 2)} ₺, 1 € = ${mlFmt(m.kur.eur, 2)} ₺ (${m.kur.kaynak === 'ECB' ? 'ECB ' + esc(m.kur.tarih) : 'elle'})</div></div>
       <div class="kal-modal-govde">
         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
-          <div><div class="bom-kpi-deger">${mlTL(m.toplam)}</div><div class="bom-kpi-etiket">toplam</div></div>
-          <div><div class="bom-kpi-deger">${m.birim != null ? mlTL(m.birim) : '—'}</div><div class="bom-kpi-etiket">adet başı (${m.saglam || m.adet} sağlam${m.hurda ? ', ' + m.hurda + ' hurda' : ''})</div></div>
-          <div><div class="bom-kpi-deger">${m.birim != null && m.kur.eur ? mlFmt(m.birim / m.kur.eur, 2) + ' €' : '—'}</div><div class="bom-kpi-etiket">adet başı €</div></div>
+          <div style="flex-basis:100%;display:flex;justify-content:flex-end">${mlParaSecici()}</div>
+          <div><div class="bom-kpi-deger">${mlP(m.toplam, m.kur)}</div><div class="bom-kpi-etiket">toplam</div></div>
+          <div><div class="bom-kpi-deger">${m.birim != null ? mlP(m.birim, m.kur) : '—'}</div><div class="bom-kpi-etiket">adet başı (${m.saglam || m.adet} sağlam${m.hurda ? ', ' + m.hurda + ' hurda' : ''})</div></div>
         </div>
         <table class="tbl"><tbody>
           ${satir('İşçilik', m.iscilik, mlFmt(m.toplamDk, 0) + ' dk · ' + (m.yontem === 'kisi' ? 'kişi bazlı' : 'bölüm ortalaması') + yuzde(m.iscilik))}
@@ -319,13 +319,13 @@ function renderMaliyetDokum(){
           ${satir('Çelik', m.celik.tutar, (m.celik.kg ? mlFmt(m.celik.kg, 2) + ' kg' : 'kg yok') + (m.celik.tur ? ' · ' + esc(m.celik.tur) : '') + (m.celik.aciklama ? ' · ' + esc(m.celik.aciklama) : '') + yuzde(m.celik.tutar))}
           ${satir('Karbür', m.karbur.tutar, (m.karbur.kg ? mlFmt(m.karbur.kg, 3) + ' kg · ' + m.karbur.satir.map(s => esc(s.kod) + ' ' + mlFmt(s.mm, 0) + ' mm').join(', ') : '—') + yuzde(m.karbur.tutar))}
           ${m.isil.tutar || m.ops.some(o => o.kod === 'FII01') ? satir('Isıl işlem (fason)', m.isil.tutar, esc(m.isil.aciklama) + yuzde(m.isil.tutar)) : ''}
-          ${m.hurda ? `<tr><td colspan="3" style="font-size:12px;color:var(--warn)">Hurda payı ≈ ${mlTL(m.hurdaPayi)} (${m.hurda} adet) — toplama dahil, adet başı sağlam parçaya bölündü</td></tr>` : ''}
+          ${m.hurda ? `<tr><td colspan="3" style="font-size:12px;color:var(--warn)">Hurda payı ≈ ${mlP(m.hurdaPayi, m.kur)} (${m.hurda} adet) — toplama dahil, adet başı sağlam parçaya bölündü</td></tr>` : ''}
         </tbody></table>
         <div class="bom-dal-bas">Operasyonlar</div>
         <table class="tbl" style="font-size:12px"><thead><tr><th>Makine</th><th>Grup</th><th>Dal</th><th style="text-align:right">Net dk</th><th style="text-align:right">İşçilik</th><th style="text-align:right">Elektrik</th><th style="text-align:right">Amort.</th><th>Operatör</th></tr></thead><tbody>
           ${m.ops.map(o => `<tr><td class="mono">${esc(o.kod)}</td><td>${o.grup ? esc(o.grup) : `<span style="color:var(--text-muted)">${o.kod === 'FKK' ? 'kalite — ücretsiz' : (m.isilMak || []).includes(o.kod) ? 'fason ısıl işlem — kg ile' : 'grupsuz — ücretsiz'}</span>`}</td><td>${esc(o.dal === 'ANA' ? '' : '_' + o.dal)}</td>
             <td style="text-align:right">${mlFmt(o.dk, 0)}${o.pay > 1 ? ` <span style="color:var(--text-muted)" title="Çoklu iş emri: süre ${o.pay} iş emrine bölündü">÷${o.pay}</span>` : ''}</td>
-            <td style="text-align:right">${mlTL(o.iscilik)}${o.kisiUcret ? ' <span title="kişi ücreti">👤</span>' : ''}</td><td style="text-align:right">${mlTL(o.elektrik)}</td><td style="text-align:right">${mlTL(o.amort)}</td><td>${esc(o.operator)}</td></tr>`).join('')}
+            <td style="text-align:right">${mlP(o.iscilik, m.kur)}${o.kisiUcret ? ' <span title="kişi ücreti">👤</span>' : ''}</td><td style="text-align:right">${mlP(o.elektrik, m.kur)}</td><td style="text-align:right">${mlP(o.amort, m.kur)}</td><td>${esc(o.operator)}</td></tr>`).join('')}
         </tbody></table>
         ${m.eksik.length ? `<div style="margin-top:10px;font-size:12px;color:var(--warn)"><b>Eksik / tahmini:</b><br>${m.eksik.map(esc).join('<br>')}</div>` : ''}
       </div>

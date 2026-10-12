@@ -327,3 +327,34 @@ function maliyetHesapla(x){
 }
 function mlFmt(n, ond){ return (Number(n) || 0).toLocaleString('tr-TR', { minimumFractionDigits: ond || 0, maximumFractionDigits: ond == null ? 0 : ond }); }
 function mlTL(n){ return mlFmt(n, (Math.abs(n) < 100 ? 2 : 0)) + ' ₺'; }
+/* ---------- Para birimi gösterimi (12.10.2026, kullanıcı: "TL, euro, dolar tutarı — hepsini aynı anda
+   da, tek tek de görmek isterim") ----------
+   Her iş emri BİTTİĞİ GÜNÜN kuruyla çevrilir (m.kur); toplamlar çevrilmiş değerlerin toplamıdır —
+   bugünkü kurla bölünmez. Seçim cihazda hatırlanır. */
+let maliyetParaModu = (()=>{ try{ return localStorage.getItem('maliyetParaModu') || 'TRY'; }catch(e){ return 'TRY'; } })();
+function setMaliyetParaModu(m){ maliyetParaModu = m; try{ localStorage.setItem('maliyetParaModu', m); }catch(e){} render(); }
+function mlParaYaz(v, c){
+  const n = Number(v) || 0, ond = Math.abs(n) < 100 ? 2 : 0;
+  return c === 'EUR' ? mlFmt(n, ond) + ' €' : c === 'USD' ? mlFmt(n, ond) + ' $' : mlTL(n);
+}
+/* vals = { TRY, EUR, USD } → seçili moda göre; "Hepsi"de TL üstte, € ve $ altında küçük */
+function mlUc(vals, satirIci){
+  if(maliyetParaModu === 'HEPSI' && satirIci) return `${mlParaYaz(vals.TRY, 'TRY')} <span style="font-weight:400;color:var(--text-muted)">(${mlParaYaz(vals.EUR, 'EUR')} · ${mlParaYaz(vals.USD, 'USD')})</span>`;
+  if(maliyetParaModu === 'HEPSI') return `<span class="ml-uc">${mlParaYaz(vals.TRY, 'TRY')}<small>${mlParaYaz(vals.EUR, 'EUR')} · ${mlParaYaz(vals.USD, 'USD')}</small></span>`;
+  return mlParaYaz(vals[maliyetParaModu] != null ? vals[maliyetParaModu] : vals.TRY, maliyetParaModu);
+}
+function mlKurla(tl, kur){ return { TRY: tl, EUR: kur && kur.eur ? tl / kur.eur : 0, USD: kur && kur.usd ? tl / kur.usd : 0 }; }
+function mlP(tl, kur){ return mlUc(mlKurla(tl, kur)); }
+/* Bir iş emri sonucunun para alanlarını c birimine çevirir (analizde toplamak için) */
+function mlCevir(m, c){
+  if(c === 'TRY') return m;
+  const r = c === 'EUR' ? m.kur.eur : m.kur.usd, f = v => r ? (Number(v) || 0) / r : 0;
+  return { ...m, toplam:f(m.toplam), birim: m.birim == null ? null : f(m.birim), hurdaPayi:f(m.hurdaPayi),
+    iscilik:f(m.iscilik), elektrik:f(m.elektrik), amort:f(m.amort), sarf:f(m.sarf), genelGider:f(m.genelGider),
+    celik:{ ...m.celik, tutar:f(m.celik.tutar) }, karbur:{ ...m.karbur, tutar:f(m.karbur.tutar) }, isil:{ ...m.isil, tutar:f(m.isil.tutar) },
+    ops: m.ops.map(o => ({ ...o, iscilik:f(o.iscilik), elektrik:f(o.elektrik), amort:f(o.amort) })) };
+}
+function mlParaSecici(){
+  const b = (k, et) => `<button type="button" class="chip ${maliyetParaModu === k ? 'active' : ''}" onclick="event.stopPropagation(); setMaliyetParaModu('${k}')">${et}</button>`;
+  return `<span class="ml-para-sec">${b('TRY','₺ TL')}${b('EUR','€ Euro')}${b('USD','$ Dolar')}${b('HEPSI','Hepsi')}</span>`;
+}
