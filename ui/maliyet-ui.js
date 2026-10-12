@@ -53,7 +53,7 @@ function mlNormalize(f){
 }
 async function mlFormKaydet(){
   if(!canEditMaliyet() || !maliyetForm) return;
-  try{ await maliyetKaydet(mlNormalize(maliyetForm)); toast('Maliyet parametreleri kaydedildi (yeni sürüm)'); mlFormHazirla(true); render(); }
+  try{ await maliyetKaydet(mlNormalize(maliyetForm)); if(typeof fasonIsilTurleriEsitle === 'function') fasonIsilTurleriEsitle(maliyetSonParam()); toast('Maliyet parametreleri kaydedildi (yeni sürüm)'); mlFormHazirla(true); render(); }
   catch(e){ toast('Kaydedilemedi: ' + mlHataMetni(e)); }
 }
 function mlHataMetni(e){

@@ -283,6 +283,7 @@ function baslat(){
 function bitir(id){
   const e = STATE.entries[id] || {};
   if(kaliteMakinesiMi(e.makine)){ kaliteModalAc(id, null); return; } // Final Kalite Kontrol: önce sonuç
+  if(typeof fasonIsilMakinesiMi==='function' && fasonIsilMakinesiMi(e.makine) && !fasonIsilGecildi.has(id) && fasonIsilModalAc(id, null)) return; // fason ısıl işlem: önce tür
   if(!e.sonOperasyon){
     nextOpPendingId = id;
     nextOpPendingGroupId = null;
@@ -638,6 +639,7 @@ function bitirGrup(groupId){
   const members = groupMembersOf(groupId);
   if(members.length===0) return;
   if(members.some(e=>kaliteMakinesiMi(e.makine))){ kaliteModalAc(null, groupId); return; }
+  if(typeof fasonIsilMakinesiMi==='function' && members.some(e=>fasonIsilMakinesiMi(e.makine)) && !fasonIsilGecildi.has('g:'+groupId) && fasonIsilModalAc(null, groupId)) return;
   if(members.some(e=>!e.sonOperasyon)){
     nextOpPendingGroupId = groupId;
     nextOpPendingId = null;

@@ -100,6 +100,7 @@ function maliyetYukle(zorla){
     }
     maliyetDurum.yukleniyor = false; _maliyetOnbellek = {};
     maliyetKapanisYukle(true);
+    if(typeof fasonIsilTurleriEsitle === 'function') fasonIsilTurleriEsitle(maliyetSonParam());
     safeRender();
   }).catch(err => {
     maliyetDurum.yukleniyor = false; maliyetDurum.okundu = true;
@@ -262,7 +263,7 @@ function maliyetHesapla(x, canli){
     const amort = (g && mlSayi(g.amortDeger) > 0 && mlSayi(g.amortYil) > 0 && mlSayi(g.amortSaat) > 0)
       ? dk * mlSayi(g.amortDeger) / (mlSayi(g.amortYil) * mlSayi(g.amortSaat) * 60) : 0;
     const dal = bilesenOfCode(e.isEmriNo) || 'ANA';
-    ops.push({ kod, grup: g ? g.ad : null, dk, iscilik, elektrik, amort, operator: e.operatorName || e.operatorUsername || '', dal, pay, kisiUcret: kisi > 0, duzeltme: !!e.duzeltme });
+    ops.push({ kod, grup: g ? g.ad : null, dk, iscilik, elektrik, amort, operator: e.operatorName || e.operatorUsername || '', dal, pay, kisiUcret: kisi > 0, duzeltme: !!e.duzeltme, isilTur: Array.isArray(e.fasonIsilTur) ? e.fasonIsilTur : (e.fasonIsilTur ? Object.values(e.fasonIsilTur) : null) });
     if(g && !(dkUcret > 0)) eksik.push(g.ad + ': dakika ücreti girilmemiş');
   });
   const grupsuz = [...new Set(ops.filter(o => !o.grup).map(o => o.kod))];
@@ -325,11 +326,22 @@ function maliyetHesapla(x, canli){
   // Isıl işlem (fason): rotada FII01 vb.
   const isil = { tutar:0, aciklama:'' };
   const isilMak = (P.genel.isilMakineler || ['FII01']);
-  if(ops.some(o => isilMak.includes(o.kod))){
-    const satir = celik.tur ? (P.celik || []).find(c => c.tur === celik.tur) : null;
-    const tur = satir && satir.isil ? (P.isil || []).find(i => i.tur === satir.isil) : null;
-    if(tur && celik.kg){ isil.tutar = celik.kg * mlPara(tur.fiyat, tur.para || 'TRY', kur); isil.aciklama = tur.tur + ' · ' + mlFmt(celik.kg, 2) + ' kg'; }
-    else eksik.push('Isıl işlem fiyatı bulunamadı (çelik türüne ısıl işlem türü bağla)');
+  if(ops.some(o => isilMak.includes(o.kod) || (typeof fasonIsilMakinesiMi === 'function' && fasonIsilMakinesiMi(o.kod)))){
+    /* Fason dönüşünde seçilen türler (entries.fasonIsilTur); yoksa çelik türünün varsayılanı */
+    const secilen = [...new Set(ops.flatMap(o => o.isilTur || []))];
+    let turler = secilen.map(t => (P.isil || []).find(i => i.tur === t)).filter(Boolean);
+    if(secilen.length && turler.length < secilen.length) eksik.push('Isıl işlem türünün fiyatı yok: ' + secilen.filter(t => !(P.isil || []).some(i => i.tur === t)).join(', '));
+    if(!secilen.length){
+      const satir = celik.tur ? (P.celik || []).find(c => c.tur === celik.tur) : null;
+      const tur = satir && satir.isil ? (P.isil || []).find(i => i.tur === satir.isil) : null;
+      if(tur) turler = [tur];
+    }
+    if(turler.length && celik.kg){
+      isil.tutar = turler.reduce((s, t) => s + celik.kg * mlPara(t.fiyat, t.para || 'TRY', kur), 0);
+      isil.aciklama = turler.map(t => t.tur).join(' + ') + ' · ' + mlFmt(celik.kg, 2) + ' kg' + (secilen.length ? ' · fason dönüşünde seçildi' : ' · çelik türünün varsayılanı');
+    }
+    else if(!turler.length) eksik.push('Isıl işlem fiyatı bulunamadı (çelik türüne ısıl işlem türü bağla)');
+    else eksik.push('Isıl işlem için çelik kg yok');
   }
 
   // Hurda (dahil): FKK kararı + proses içi uygunsuzluklar

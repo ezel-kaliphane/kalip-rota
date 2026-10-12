@@ -843,7 +843,7 @@ function renderGroupScreen(groupId, groupMembers){
 
   const showNextOp = nextOpPendingGroupId===groupId || groupMembers.some(m=>m.id===nextOpPendingId);
   const showKalite = !!kaliteModal && (kaliteModal.groupId===groupId || groupMembers.some(m=>m.id===kaliteModal.id));
-  return `<div class="root-mobile theme-${resolvedTheme()}">${header}${body}${editBlock}${!anyDurus && durusOpen ? renderDurusModal() : ''}${showNextOp ? renderNextOpModal() : ''}${showKalite ? renderKaliteModal() : ''}</div>`;
+  return `<div class="root-mobile theme-${resolvedTheme()}">${header}${body}${editBlock}${!anyDurus && durusOpen ? renderDurusModal() : ''}${showNextOp ? renderNextOpModal() : ''}${showKalite ? renderKaliteModal() : ''}${typeof fasonIsilModal!=='undefined' && fasonIsilModal ? renderFasonIsilModal() : ''}</div>`;
 }
 function renderLockScreen(active){
   const header = `
@@ -922,7 +922,7 @@ function renderLockScreen(active){
       ${durusBlock}
       ${editButton}
       ${editBlock}
-    </div>${durusOpen ? renderDurusModal() : ''}${kismiAktarId ? renderKismiAktarModal() : ''}${nextOpPendingId===active.id ? renderNextOpModal() : ''}${kaliteModal && kaliteModal.id===active.id ? renderKaliteModal() : ''}</div>`;
+    </div>${durusOpen ? renderDurusModal() : ''}${kismiAktarId ? renderKismiAktarModal() : ''}${nextOpPendingId===active.id ? renderNextOpModal() : ''}${kaliteModal && kaliteModal.id===active.id ? renderKaliteModal() : ''}${typeof fasonIsilModal!=='undefined' && fasonIsilModal ? renderFasonIsilModal() : ''}</div>`;
 }
 
 /* ===================== MOBİL ALT GEZİNME (v27) =====================
