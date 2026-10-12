@@ -187,7 +187,11 @@ function renderMalzemeBekleyen(){
     const it = items[hid];
     const stok = hammaddeStokSayi(it);
     const rezerve = satirlar.reduce((t,s)=>t+malzemeIhtiyac(s), 0); // testere payı dahil
-    return { hid, it, stok, rezerve, kullanilabilir: stok-rezerve,
+    /* Yolda = açık (gelmemiş) siparişlerin miktarı — kullanılabilire dahil (12.10.2026, kullanıcı:
+       "4500 mm sipariş açık, 1742 kullanılacak; -1742 değil 2758 kalmalı"). Miktarı bilinmeyen
+       sipariş sayılmaz. Sipariş "Geldi" olunca yoldan düşer, stoğa girişle stokta görünür. */
+    const yolda = malzemeAcikIstekler(hid).reduce((t,s)=>t+(s.miktar||0), 0);
+    return { hid, it, stok, rezerve, yolda, kullanilabilir: stok+yolda-rezerve,
       satirlar: satirlar.sort((a,b)=>(Number(a.isaretTs)||0)-(Number(b.isaretTs)||0)) };
   }).sort((a,b)=> a.kullanilabilir - b.kullanilabilir);
 
@@ -215,15 +219,15 @@ function renderMalzemeBekleyen(){
   const grupHtml = grupListesi.map(g=>{
     const etiketMetin = g.it ? hammaddeEtiket(g.it) : '(kalem silinmiş)';
     const durum = !g.it ? { r:'var(--text-subtle)', t:'BİLİNMİYOR' }
-      : g.stok <= 0 ? { r:'var(--danger)', t: g.stok<0 ? 'NEGATİF' : 'STOK YOK' }
-      : g.kullanilabilir < 0 ? { r:'var(--warn)', t:'YETMİYOR' }
+      : g.kullanilabilir < 0 ? (g.stok <= 0 && !g.yolda ? { r:'var(--danger)', t: g.stok<0 ? 'NEGATİF' : 'STOK YOK' } : { r:'var(--danger)', t:'YETMİYOR' })
+      : g.stok - g.rezerve < 0 ? { r:'var(--warn)', t:'SİPARİŞTE' }
       : { r:'var(--success)', t:'STOKTA VAR' };
     const birim = (g.it && g.it.birim) || '';
     return `<div class="mb-grup">
       <div class="mb-grup-ust">
         <span class="mb-kod">${esc(etiketMetin)}</span>
         <span class="matrix-tag" style="--sb:${durum.r}">${durum.t}</span>
-        <span class="mb-olcu">${g.it && g.it.isim ? esc(String(g.it.isim).slice(0,40))+' · ' : ''}Stok <b${g.stok<0?' style="color:var(--danger)"':''}>${g.stok} ${esc(birim)}</b> · Rezerve <b>${g.rezerve} ${esc(birim)}</b> · Kullanılabilir <b style="color:${g.kullanilabilir<0?'var(--danger)':'var(--success)'}">${g.kullanilabilir} ${esc(birim)}</b></span>
+        <span class="mb-olcu">${g.it && g.it.isim ? esc(String(g.it.isim).slice(0,40))+' · ' : ''}Stok <b${g.stok<0?' style="color:var(--danger)"':''}>${g.stok} ${esc(birim)}</b>${g.yolda ? ` · Yolda <b>${g.yolda} ${esc(birim)}</b>` : ''} · Rezerve <b>${g.rezerve} ${esc(birim)}</b> · Kullanılabilir <b style="color:${g.kullanilabilir<0?'var(--danger)':'var(--success)'}">${g.kullanilabilir} ${esc(birim)}</b></span>
         ${(()=>{ const n = malzemeIstekNoYetkisi() ? malzemeBosBekleyenler(g.hid).length : 0;
           return n > 1 ? `<button class="btn-ghost mb-mini" style="margin-left:auto;border-color:var(--danger);color:var(--danger)" onclick="mbTopluAc('${escJs(g.hid)}')">Toplu istek no gir · ${n} iş emri</button>` : ''; })()}
       </div>
@@ -262,7 +266,7 @@ function renderMalzemeBekleyen(){
   return `<div class="settings-wrap" style="max-width:none">
     <div class="stok-genel-kpi" style="padding:0 0 16px;grid-template-columns:repeat(4,1fr)">
       ${kpi('clock', aktif.length, 'Bekleyen İş Emri', grupListesi.length+' farklı hammadde')}
-      ${kpi('box', eksikKalem, 'Eksik Kalem', eksikKalem>0 ? 'stoğu bekleyenleri karşılamıyor' : aktif.length===0 ? 'bekleyen iş emri yok' : 'bekleyenlerin hepsi stoktan karşılanır')}
+      ${kpi('box', eksikKalem, 'Eksik Kalem', eksikKalem>0 ? 'stok + yoldaki sipariş bekleyenleri karşılamıyor' : aktif.length===0 ? 'bekleyen iş emri yok' : 'bekleyenlerin hepsi stoktan karşılanır')}
       ${kpi('alert', istekYok, 'İstek No Girilmemiş', 'şef işaretledi, CANIAS isteği bekliyor', istekYok>0)}
       ${kpi('check', haftaKarsilanan.length, 'Bu Hafta Karşılanan', 'son 7 gün')}
     </div>

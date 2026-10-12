@@ -260,13 +260,15 @@ function malzemeTopluIstekKaydet(hid, no, miktar, ids){
   const temiz = String(no||'').trim(), m = Number(String(miktar==null?'':miktar).replace(',','.'));
   if(!temiz){ toast('İstek no girin'); return false; }
   if(!ids.length){ toast('En az bir iş emri seçin'); return false; }
-  const kayitlar = ids.map(id=>malzemeBekleyen[id]).filter(Boolean);
+  /* malzemeBekleyen ham düğüm — kayıtlarda id alanı YOK; id eklenmezse yollar 'malzemeBekleyen/undefined' olur (12.10.2026'da oldu) */
+  const kayitlar = ids.filter(id=>malzemeBekleyen[id]).map(id=>({ id, ...malzemeBekleyen[id] }));
   const ihtiyac = kayitlar.reduce((t,x)=>t+malzemeIhtiyac(x), 0);
   const key = malzemeIstekAnahtar(temiz, hid), var_ = malzemeIstek[key];
   const top = m>0 ? m : (var_ && Number(var_.miktar)) || 0;
   const onceki = malzemeIstekKullanilan(hid, temiz);
   if(top>0 && onceki + ihtiyac > top && !confirm('Sipariş miktarı ('+top+') seçilen iş emirlerinin ihtiyacını karşılamıyor (gereken '+Math.round(onceki+ihtiyac)+').'+String.fromCharCode(10,10)+'Yine de hepsine bu istek no yazılsın mı?')) return false;
   const now = Date.now(), it = (stockItems||{})[hid], updates = {};
+  if(kayitlar.some(x=>!x.id || x.id==='undefined')){ toast('Kayıt kimliği okunamadı — yazılmadı'); return false; }
   kayitlar.forEach(x=>{
     updates['malzemeBekleyen/'+x.id+'/caniasIstekNo'] = temiz;
     updates['malzemeBekleyen/'+x.id+'/istekOtomatik'] = null;

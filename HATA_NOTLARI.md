@@ -5,6 +5,20 @@ hatayı ikinci kez yazmamak. En yeni üstte.
 
 ---
 
+## 2026-10-12 — Toplu sipariş "malzemeBekleyen/undefined" kaydı yazdı
+
+**Belirti.** Önizlemede toplu istek no girildi; iş emirlerine istek no yazılmadı, sipariş "0 iş emri ·
+fazla 4500 mm" göründü; veritabanında adı `undefined` olan, yalnız istek alanlarını taşıyan bir kayıt oluştu.
+
+**Sebep.** `malzemeBekleyen` ham RTDB düğümü — kayıtların içinde `id` alanı yok (id anahtardır).
+`malzemeBekleyenArray()` id'yi ekliyor ama toplu kayıt `malzemeBekleyen[id]`'yi doğrudan aldı;
+`'malzemeBekleyen/'+x.id+'/…'` → `malzemeBekleyen/undefined/…`. Yazma engelli testte yol listesine
+bakılmadı, yalnız sayıya bakıldı.
+
+**Ders.** Ham düğümden okunan kaydı yol kurmakta kullanırken id'yi anahtardan ekle; yazma engelli
+testte yazılacak YOLLARI da kontrol et (`/undefined/` içeren yol = hata). Toplu yazmalarda yol
+kurmadan önce id'nin varlığını doğrula.
+
 ## 2026-10-07 — Seçilen hammadde stoktan düşülmüyordu (iki ayrı sebep)
 
 **Belirti.** Tamamlanan Kodlar → BOM + Rota ekranında 366 tamamlanan iş emrinin yalnız
