@@ -1155,135 +1155,57 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
   });
   const isSingleDay = fromDate===toDate;
   const dayStartMs = isSingleDay ? new Date(fromDate+'T00:00:00').getTime() : null;
-  // A3 düzeltmesi: payda artık "kayıt olan günler" değil, SEÇİLEN TARİH ARALIĞININ TAMAMI
-  // (takvim günü sayısı) × standart mesai. Eskiden bir makine ayda sadece 2 gün kullanılsa
-  // payda da sadece o 2 güne göre hesaplanıyordu — bu da az kullanılan makineleri yapay
-  // olarak "çok verimli" gösteriyordu. Not: hafta sonu/tatil ayrımı şu an yok, tüm takvim
-  // günleri sayılıyor — istenirse ileride "iş günü" (Pazar hariç vb.) mantığına geçirilebilir.
-  const rangeDayCount = Math.round((new Date(toDate+'T00:00:00').getTime() - new Date(fromDate+'T00:00:00').getTime())/86400000) + 1;
+  /* 13.10.2026 YENİDEN YAZILDI (bkz. js/verimlilik.js başındaki not): her kayıt GÜN GÜN bölünüyor,
+     duruş/Gün Sonu kendi saatleriyle düşülüyor, süre aralıkların BİRLEŞİMİ (paralel/grup bir kez).
+     Kullanılabilirlik: Pzt–Cum × 540 dk (bugün: vardiyanın geçen kısmı) + fazla mesai; hafta sonu
+     çalışma fazla mesai. Eski "fiziksel tavan" gereksiz — birleşim bir günü aşamaz; yerine kesintisiz
+     20 saati aşan net çalışma "kapatılmamış kayıt olabilir" diye işaretleniyor (entryUzunKosu). */
+  const gunler = aralikGunleri(fromDate, toDate);
+  const gunPencere = dk => { const d0 = new Date(dk+'T00:00:00').getTime(); return [d0, Math.min(d0+86400000, rangeEndMs, nowTick)]; };
+  const kullanilabilirToplamDk = gunler.reduce((t,dk)=>t+gunKullanilabilirDk(dk), 0);
 
   const byMachine = {};
   rangeEntries.forEach(e=>{
-    // dk'yi aralığın içine "kelepçeliyoruz" — kayıt aralıktan önce başlamış olsa bile
-    // (E düzeltmesiyle artık dahil ediliyor), gün grubu aralığın dışında bir tarihte
-    // oluşup kafa karıştırmasın diye fromDate'e sabitleniyor.
-    const dk = clampDateKey(dateKey(e.startTs), fromDate, toDate);
-    if(!byMachine[e.makine]) byMachine[e.makine] = { entries: [], operators: new Set(), byDay: {} };
+    if(!byMachine[e.makine]) byMachine[e.makine] = { entries: [], operators: new Set() };
     byMachine[e.makine].entries.push(e);
     byMachine[e.makine].operators.add(`${e.operatorUsername} · ${e.operatorName}`);
-    (byMachine[e.makine].byDay[dk] ||= []).push(e);
   });
 
   const overtimeList = [];
-  let anyPhysicalAnomaly = false; // en az bir makinede fiziksel imkansızlık tespit edildiyse genel bir not göstermek için
+  let anyPhysicalAnomaly = false;
   const perMachine = Object.entries(byMachine).map(([label, data])=>{
-    let workMs = 0, durusMs = 0, overtimeMs = 0;
-    // İŞ TÜRÜ AYRIMI (05.10.2026): aynı makinede hem imalat (iş emri) hem araya alınan tadilat
-    // çalışabiliyor. workMs ikisinin toplamı; tadMs bunun tadilat operasyonlarından gelen kısmı.
-    let tadMs = 0; const gunluk = {};
+    let workMs = 0, durusMs = 0, overtimeMs = 0, tadMs = 0, daysUsed = 0;
+    const gunluk = {};
     let hasPhysicalAnomaly = false;
-    Object.entries(data.byDay).forEach(([dk, dayList])=>{
-      const dStartMs = new Date(dk+'T00:00:00').getTime();
-      const cutoffMs = dStartMs + WORKDAY_END_MINUTE*60000;
-      let dayOvertimeMs = 0;
-      let dayWorkMs = 0, dayDurusMs = 0; // FİZİKSEL TAVAN düzeltmesi için bu güne ait alt toplamlar
-      let dayTadMs = 0;
-      // A1 düzeltmesi: "Çoklu İş Emri" ile aynı makinede aynı anda açılan kayıtlar (aynı
-      // groupId) HER ZAMAN birlikte duraklatılıp/bitiriliyor (bkz. duraklatGrup/devamGrup/
-      // bitirGrup) — yani fiziksel olarak makine TEK bir süre kadar meşgul olmuş, sadece
-      // raporlama için N ayrı iş emri kaydı var. Eskiden her kayıt kendi tam süresini ayrı
-      // ayrı topluyordu (3 iş emriyle 8 saat çalışan makine → 24 saat görünüyordu). Artık
-      // aynı gün+makine+groupId kombinasyonundan sadece BİR temsilci kayıt sayılıyor.
-      const seenGroupsToday = new Set();
-      dayList.forEach(e=>{
-        if(e.groupId){
-          if(seenGroupsToday.has(e.groupId)) return; // bu grup bugün bu makinede zaten sayıldı
-          seenGroupsToday.add(e.groupId);
-        }
-        // F DÜZELTMESİ: Eskiden kapanmamış (endTs olmayan) bir kayıt her zaman "şu ana kadar"
-        // (nowTick) sürmüş gibi sayılıyordu — geçmiş bir tarih aralığı seçilse bile. Artık en
-        // fazla seçilen aralığın SONUNA kadar sayılıyor.
-        // EK DÜZELTME (E ile birlikte ortaya çıkan yan etki): E artık aralıktan ÖNCE başlamış
-        // kayıtları da dahil ediyor ve bunlar clampDateKey ile aralığın ilk gününe yığılıyor.
-        // Ama başlangıcı da o günün sınırına kelepçelenmezse, haftalarca önce başlayıp hâlâ
-        // kapanmamış bir kayıt, TÜM o süreyi tek bir güne boca ediyordu (120 saat gibi imkansız
-        // rakamlar). Artık başlangıç da en erken o günün 00:00'ına kelepçeleniyor.
-        const effStartMs = Math.max(e.startTs, dStartMs);
-        const endClip = Math.min(e.endTs || nowTick, rangeEndMs);
-        const wallMs = Math.max(0, endClip - effStartMs);
-        let eDurusMs = e.duruşToplamMs || 0;
-        let eExcludedMs = e.excludedMs || 0;
-        // Şu an hâlâ duraklatılmış durumdaysa (henüz "Devam Et"e basılmadıysa), bu ANLIK
-        // bekleme süresini de canlı olarak duruş/hariç tutulan süreye ekle — yoksa devam
-        // ettirilene kadar geçen her saat yanlışlıkla "çalışma süresi" sayılıyordu.
-        if(e.status==='duruş' && e.duruşTs){
-          const liveExtra = Math.max(0, nowTick - e.duruşTs);
-          if(e.duruşNedeni===GUN_SONU_REASON) eExcludedMs += liveExtra;
-          else eDurusMs += liveExtra;
-        }
-        const eWorkMs = Math.max(0, wallMs - eDurusMs - eExcludedMs);
-        dayWorkMs += eWorkMs;
-        if(e._isTadilat) dayTadMs += eWorkMs;
-        // NOT: eDurusMs (duruş) BİLEREK güne kelepçelenmiyor — bir işin gerçekten kaç saattir
-        // duruşta olduğunu (ör. 116 saat, unutulmuş bir kayıt) olduğu gibi göstermek istiyoruz,
-        // bu doğru ve önemli bir uyarı sinyali. Aşağıdaki fiziksel tavan sadece "Çalışma"
-        // sütununu (workMs) sınırlıyor, "Duruş" sütununa dokunmuyor.
-        dayDurusMs += eDurusMs;
-        // Şu an duraklatılmış (ör. gün sonu bekleyen) bir iş "hâlâ çalışıyor" sayılıp
-        // fazla mesai üretmesin — mesai aşımı sadece fiilen devam eden işler için hesaplanır.
-        // DÜZELTME: Eskiden `endClip - Math.max(cutoffMs, e.startTs)` kullanılıyordu — bitiş ne
-        // GÜNÜN sonuna kelepçeleniyor ne de başlangıç o güne (effStartMs) sabitleniyordu. Çok
-        // günlü bir iş (ör. 3 Ağu 08:00 → 6 Ağu 09:00 fırın işi) tek bir günde 3800+ dk "fazla
-        // mesai" üretiyordu; availMs = aralık*540 + overtime olduğu için verimlilik de çöküyordu
-        // ve Mesai Analizi'nde hayalî satırlar çıkıyordu. Artık mesai penceresi SADECE bu günün
-        // 17:30–24:00 dilimiyle kesiştiği kadar sayılıyor ve o dilime denk gelen duruş/Gün Sonu
-        // süresi düşülüyor (duruştaki bir iş mesai üretmemeli — aşağıdaki eDurus/eExcluded payı).
-        const dayEndMs = Math.min(dStartMs + 86400000, rangeEndMs);
-        const otStart = Math.max(cutoffMs, effStartMs);
-        const otEnd = Math.min(endClip, dayEndMs);
-        if(otEnd > otStart){
-          const otDurusMs = entryDurusEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, otStart, otEnd), 0);
-          const otExclMs = entryExcludedEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, otStart, otEnd), 0);
-          const otMs = Math.max(0, (otEnd - otStart) - otDurusMs - otExclMs);
-          if(otMs > 0){
-            dayOvertimeMs += otMs;
-            overtimeList.push({ makine: label, operatorUsername: e.operatorUsername, operatorName: e.operatorName, isEmriNo: e.isEmriNo, overtimeMin: Math.round(otMs/60000), tarih: dk });
-          }
-        }
+    gunler.forEach(dk=>{
+      const [w0, w1] = gunPencere(dk); if(!(w1 > w0)) return;
+      const gunKayit = data.entries.filter(e=>e.startTs < w1 && (e.endTs||nowTick) > w0);
+      if(!gunKayit.length) return;
+      daysUsed++;
+      const seen = new Set(); let ara = [], tadAra = [], dDurus = 0;
+      gunKayit.forEach(e=>{
+        if(e.groupId){ if(seen.has(e.groupId)) return; seen.add(e.groupId); }   // çoklu iş emri grubu = makine bir kez meşgul
+        const a = entryNetAraliklar(e, w0, w1);
+        ara = ara.concat(a); if(e._isTadilat) tadAra = tadAra.concat(a);
+        dDurus += entryDurusPencere(e, w0, w1);
+        const ot = gunFazlaMesaiMs(dk, a);
+        if(ot >= 60000) overtimeList.push({ makine: label, operatorUsername: e.operatorUsername, operatorName: e.operatorName, isEmriNo: e.isEmriNo, overtimeMin: Math.round(ot/60000), tarih: dk });
       });
-      // FİZİKSEL TAVAN: Bir makine, bir takvim gününde GERÇEKTE GEÇEN süreden fazla "çalışmış"
-      // olamaz (ör. bugün saat 14:00'te en fazla 14 saat çalışılmış olabilir, 24 saat değil).
-      // Bu durum, aynı makinede birden fazla ESKİ AÇIK KALMIŞ (hiç kapatılmamış) kaydın hepsinin
-      // aynı güne yığılıp her birinin ayrı ayrı bu günün payından pay almasıyla oluşabiliyor —
-      // her biri tek başına makul görünse de toplamları gerçek süreyi aşabiliyor. Bunu SESSİZCE
-      // gizlemek yerine (verimlilik kırpmasında olduğu gibi) tavana çekip anomali olarak
-      // işaretliyoruz — "Çalışma" değeri gerçek dışıysa bunu görebilmen lazım.
-      const dayElapsedCapMs = Math.max(0, Math.min(nowTick, dStartMs+86400000, rangeEndMs) - dStartMs);
-      if(dayWorkMs > dayElapsedCapMs){
-        dayTadMs = dayTadMs * dayElapsedCapMs / dayWorkMs; // tavana çekilen gün: tadilat payı orantılı küçülür
-        dayWorkMs = dayElapsedCapMs;
-        hasPhysicalAnomaly = true;
-        anyPhysicalAnomaly = true;
-      }
-      workMs += dayWorkMs;
-      tadMs += dayTadMs;
-      gunluk[dk] = { workMin: dayWorkMs/60000, tadMin: dayTadMs/60000 };
-      durusMs += dayDurusMs;
-      overtimeMs += dayOvertimeMs;
+      const birlesik = araliklariBirlestir(ara);
+      const dWork = araliklarToplam(birlesik), dTad = Math.min(dWork, araliklarToplam(araliklariBirlestir(tadAra)));
+      if(gunKayit.some(entryUzunKosu)){ hasPhysicalAnomaly = true; anyPhysicalAnomaly = true; }
+      workMs += dWork; tadMs += dTad; durusMs += dDurus; overtimeMs += gunFazlaMesaiMs(dk, birlesik);
+      gunluk[dk] = { workMin: dWork/60000, tadMin: dTad/60000 };
     });
-    const availMs = rangeDayCount*WORKDAY_MINUTES*60000 + overtimeMs; // A3: artık tüm aralık × standart mesai + toplam fazla mesai
+    const availMs = kullanilabilirToplamDk*60000 + overtimeMs;
     const workMin = Math.round(workMs/60000);
     const durusMin = Math.round(durusMs/60000);
     const overtimeMin = Math.round(overtimeMs/60000);
     const availMin = Math.round(availMs/60000);
-    // A2 düzeltmesi: %100 üstü sonuç artık SESSİZCE gizlenmiyor — hâlâ ekranda "en fazla 100"
-    // gösteriliyor (yüzdelik barın taşmaması için) ama ham değer de (verimlilikRaw) saklanıyor,
-    // ekran tarafı bunu görüp %100'ü aşan makineleri KIRMIZI bir veri-anomalisi uyarısıyla
-    // işaretleyebiliyor — hatayı gizlemek yerine göstermek için.
     const verimlilikRaw = availMin>0 ? Math.round((workMin/availMin)*100) : 0;
     const verimlilik = Math.min(100, verimlilikRaw);
     const workTadilatMin = Math.min(workMin, Math.round(tadMs/60000));
-    return { label, code: label.split(' · ')[0], name: label.split(' · ')[1]||'', operators: [...data.operators], entries: data.entries, workMin, workTadilatMin, workImalatMin: workMin - workTadilatMin, gunluk, durusMin, overtimeMin, availMin, verimlilik, verimlilikRaw, verimlilikAnomali: verimlilikRaw>100, hasPhysicalAnomaly, daysUsed: Object.keys(data.byDay).length };
+    return { label, code: label.split(' · ')[0], name: label.split(' · ')[1]||'', operators: [...data.operators], entries: data.entries, workMin, workTadilatMin, workImalatMin: workMin - workTadilatMin, gunluk, durusMin, overtimeMin, availMin, verimlilik, verimlilikRaw, verimlilikAnomali: verimlilikRaw>100, hasPhysicalAnomaly, daysUsed };
   }).sort((a,b)=>b.workMin-a.workMin);
 
   const totals = perMachine.reduce((t,m)=>({
@@ -1297,93 +1219,58 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
   totals.bostaMin = Math.max(0, totals.availMin - totals.workMin - totals.durusMin);
 
   // ===== KİŞİ BAZLI, GÜN GÜN ANALİZ =====
-  // Aynı rangeEntries listesini bu sefer operatör + gün bazında gruplayıp, her gün için
-  // hangi makinelerde ne kadar çalışıldığını ayrıca çıkarıyoruz.
   const byOperator = {};
   rangeEntries.forEach(e=>{
     const opKey = e.operatorUsername || '—';
-    const dk = clampDateKey(dateKey(e.startTs), fromDate, toDate);
-    if(!byOperator[opKey]) byOperator[opKey] = { operatorUsername: e.operatorUsername, operatorName: e.operatorName, byDay: {} };
-    if(!byOperator[opKey].byDay[dk]) byOperator[opKey].byDay[dk] = { entries: [], byMachine: {} };
-    byOperator[opKey].byDay[dk].entries.push(e);
-    const mCode = String(e.makine||'').split(' · ')[0] || '—';
-    if(!byOperator[opKey].byDay[dk].byMachine[mCode]) byOperator[opKey].byDay[dk].byMachine[mCode] = { workMs:0, durusMs:0, label: e.makine };
+    (byOperator[opKey] ||= { operatorUsername: e.operatorUsername, operatorName: e.operatorName, entries: [] }).entries.push(e);
   });
 
   const perOperator = Object.values(byOperator).map(op=>{
-    let totalWorkMs=0, totalDurusMs=0, totalOvertimeMs=0, totalTadMs=0;
+    let totalWorkMs=0, totalDurusMs=0, totalOvertimeMs=0, totalTadMs=0, totalAvailMs=0, totalParalelMs=0;
     const machineSet = new Set();
-    const days = Object.entries(op.byDay).map(([dk, dayData])=>{
-      const dStartMs = new Date(dk+'T00:00:00').getTime();
-      const cutoffMs = dStartMs + WORKDAY_END_MINUTE*60000;
-      let dayWorkMs=0, dayDurusMs=0, dayOvertimeMs=0, dayTadMs=0;
-      // A1 düzeltmesi (kişi bazlı tarafta da aynı mantık): "Çoklu İş Emri" grubundaki kayıtlar
-      // hep birlikte duraklatılıp bitiriliyor, o yüzden aynı operatör+gün+groupId için sadece
-      // bir temsilci kayıt sayılıyor — yoksa aynı hata burada da süreyi katlıyordu.
-      const seenGroupsToday = new Set();
-      dayData.entries.forEach(e=>{
-        if(e.groupId){
-          if(seenGroupsToday.has(e.groupId)) return;
-          seenGroupsToday.add(e.groupId);
-        }
-        // Aynı gün-sınırı kelepçelemesi (bkz. byMachine tarafındaki aynı düzeltme) — eski,
-        // hâlâ kapanmamış kayıtların tüm geçmiş süresini tek bir güne yığmasını engelliyor.
-        const effStartMs = Math.max(e.startTs, dStartMs);
-        const endClip = Math.min(e.endTs || nowTick, rangeEndMs); // F düzeltmesi
-        const wallMs = Math.max(0, endClip - effStartMs);
-        const dayEndMs = Math.min(dStartMs + 86400000, rangeEndMs);
-        // GÜNE ORANTILI PAYLAŞIM DÜZELTMESİ: duruşToplamMs/excludedMs kaydın TÜM ömrüne ait
-        // kümülatif sayılar (ne zaman oluştuklarına dair zaman damgası yok). Eskiden bu toplam
-        // OLDUĞU GİBİ, kaydın dahil edildiği TEK güne (bugüne) yığılıyordu — kayıt günler önce
-        // başlamış, duruşu asıl geçmiş günlerde birikmiş olsa bile. Bu yüzden dünden (veya daha
-        // öncesinden) kalan, hâlâ açık duran kayıtlar bugünün özetinde "0 dk çalışma · 40+ saat
-        // duruş" gibi tek bir güne sığmayacak imkansız rakamlar üretiyordu. Artık günün payı,
-        // kaydın BİLİNEN TOPLAM süresi içindeki oranına göre bölünüyor — tek günlük kayıtlarda
-        // oran zaten %100 olduğundan davranış değişmiyor, çok günlü kayıtlarda ise her gün
-        // kendi payını alıyor.
-        const entryTotalMs = Math.max(1, endClip - e.startTs);
-        const share = wallMs / entryTotalMs;
-        let eDurusMs = Math.min(wallMs, (e.duruşToplamMs||0) * share);
-        let eExcludedMs = Math.min(Math.max(0, wallMs - eDurusMs), (e.excludedMs||0) * share);
-        if(e.status==='duruş' && e.duruşTs){
-          // Canlı (hâlâ süren) duruş/Gün Sonu bekleyişi zaten gerçek bir zaman damgasına sahip —
-          // bunu da SADECE bu günle kesişen kısmı kadar sayıyoruz (bkz. otDurus'taki aynı mantık).
-          const liveExtra = msOverlap(e.duruşTs, Math.max(0, nowTick - e.duruşTs), dStartMs, dayEndMs);
-          if(e.duruşNedeni===GUN_SONU_REASON) eExcludedMs = Math.min(Math.max(0, wallMs-eDurusMs), eExcludedMs+liveExtra);
-          else eDurusMs = Math.min(wallMs, eDurusMs+liveExtra);
-        }
-        const eWorkMs = Math.max(0, wallMs - eDurusMs - eExcludedMs);
+    const days = [];
+    gunler.forEach(dk=>{
+      const [w0, w1] = gunPencere(dk); if(!(w1 > w0)) return;
+      const gunKayit = op.entries.filter(e=>e.startTs < w1 && (e.endTs||nowTick) > w0);
+      if(!gunKayit.length) return;
+      const seen = new Set(); let ara = [], tadAra = [], durAra = [];
+      const byM = {};
+      gunKayit.forEach(e=>{
         const mCode = String(e.makine||'').split(' · ')[0] || '—';
-        dayData.byMachine[mCode].workMs += eWorkMs;
-        dayData.byMachine[mCode].durusMs += eDurusMs;
+        const m = (byM[mCode] ||= { workMs:0, durusMs:0, label: e.makine });
+        if(e.groupId){ if(seen.has(e.groupId)) return; seen.add(e.groupId); }
+        const a = entryNetAraliklar(e, w0, w1);
+        const s = Math.max(e.startTs, w0), en = Math.min(e.endTs||nowTick, w1);
+        const du = olayAraliklari(entryDurusEvents(e)).map(([x,y])=>[Math.max(x,s), Math.min(y,en)]).filter(([x,y])=>y>x);
+        ara = ara.concat(a); durAra = durAra.concat(du); if(e._isTadilat) tadAra = tadAra.concat(a);
+        m.workMs += araliklarToplam(a); m.durusMs += araliklarToplam(du);
         machineSet.add(mCode);
-        dayWorkMs += eWorkMs; dayDurusMs += eDurusMs;
-        if(e._isTadilat) dayTadMs += eWorkMs;
-        const otStart = Math.max(cutoffMs, effStartMs);
-        const otEnd = Math.min(endClip, dayEndMs);
-        if(otEnd > otStart){
-          const otDurusMs = entryDurusEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, otStart, otEnd), 0);
-          const otExclMs = entryExcludedEvents(e).reduce((s,ev)=>s+msOverlap(ev.ts, ev.sureMs, otStart, otEnd), 0);
-          const otMs = Math.max(0, (otEnd - otStart) - otDurusMs - otExclMs);
-          if(otMs>0) dayOvertimeMs += otMs;
-        }
       });
-      // FİZİKSEL TAVAN (bkz. byMachine tarafındaki aynı düzeltme): bir kişi de bir günde
-      // gerçekte geçen süreden fazla "çalışmış" olamaz — eski açık kalmış kayıtlar birikince
-      // bu sınırı aşabiliyordu, artık tavana çekilip anomali olarak işaretleniyor.
-      const dayElapsedCapMs = Math.max(0, Math.min(nowTick, dStartMs+86400000, rangeEndMs) - dStartMs);
-      const dayHasAnomaly = dayWorkMs > dayElapsedCapMs;
-      if(dayHasAnomaly){ dayTadMs = dayTadMs * dayElapsedCapMs / dayWorkMs; dayWorkMs = dayElapsedCapMs; }
-      totalWorkMs += dayWorkMs; totalDurusMs += dayDurusMs; totalOvertimeMs += dayOvertimeMs; totalTadMs += dayTadMs;
-      const machines = Object.entries(dayData.byMachine).map(([code,md])=>({ code, label: md.label, workMin: Math.round(md.workMs/60000), durusMin: Math.round(md.durusMs/60000) })).sort((a,b)=>b.workMin-a.workMin);
-      // "entries" burada AYRICA taşınıyor — Kişi Bazlı Analiz'deki günlük Gantt çizelgesi (bkz.
-      // render-admin.js) bu kişinin o gün üzerinde çalıştığı ham kayıtları (saat bazlı segment
-      // çizebilmek için) kullanıyor, machines/workMin gibi özetlenmiş sayılar yetmiyor.
-      return { tarih: dk, workMin: Math.round(dayWorkMs/60000), workTadilatMin: Math.round(dayTadMs/60000), durusMin: Math.round(dayDurusMs/60000), overtimeMin: Math.round(dayOvertimeMs/60000), kalanMin: Math.max(0, WORKDAY_MINUTES - Math.round(dayWorkMs/60000)), machines, entries: dayData.entries, hasPhysicalAnomaly: dayHasAnomaly };
-    }).sort((a,b)=>b.tarih.localeCompare(a.tarih));
+      const workU = araliklariBirlestir(ara);
+      const dWork = araliklarToplam(workU);
+      /* Operatörün duruşu: bir makine dururken diğerinde çalışıyorsa o an duruş sayılmaz */
+      const durU = araliklariBirlestir(durAra);
+      const dDurus = Math.max(0, araliklarToplam(durU) - durU.reduce((t,[x,y])=>t+araliklarKesit(workU, x, y), 0));
+      const dTad = Math.min(dWork, araliklarToplam(araliklariBirlestir(tadAra)));
+      const dOt = gunFazlaMesaiMs(dk, workU);
+      const dAvail = gunKullanilabilirDk(dk)*60000 + dOt;
+      const dParalel = Math.max(0, Object.values(byM).reduce((t,m)=>t+m.workMs, 0) - dWork);
+      const gece = gunKayit.some(entryUzunKosu);
+      totalWorkMs += dWork; totalDurusMs += dDurus; totalOvertimeMs += dOt; totalTadMs += dTad; totalAvailMs += dAvail; totalParalelMs += dParalel;
+      const machines = Object.entries(byM).map(([code,md])=>({ code, label: md.label, workMin: Math.round(md.workMs/60000), durusMin: Math.round(md.durusMs/60000) })).sort((a,b)=>b.workMin-a.workMin);
+      const workMin = Math.round(dWork/60000), availMin = Math.round(dAvail/60000);
+      days.push({ tarih: dk, workMin, workTadilatMin: Math.round(dTad/60000), durusMin: Math.round(dDurus/60000), overtimeMin: Math.round(dOt/60000),
+        availMin, verimlilik: availMin>0 ? Math.min(100, Math.round(workMin/availMin*100)) : 0, paralelMin: Math.round(dParalel/60000),
+        ilkTs: workU.length ? workU[0][0] : null, sonTs: workU.length ? workU[workU.length-1][1] : null, haftaIci: haftaIciMi(dk),
+        kalanMin: Math.max(0, gunKullanilabilirDk(dk) - workMin), machines, entries: gunKayit, hasPhysicalAnomaly: gece });
+    });
+    days.sort((a,b)=>b.tarih.localeCompare(a.tarih));
+    const workMin = Math.round(totalWorkMs/60000), availMin = Math.round(totalAvailMs/60000);
+    const verimlilikRaw = availMin>0 ? Math.round(workMin/availMin*100) : 0;
     return {
       operatorUsername: op.operatorUsername, operatorName: op.operatorName,
-      workMin: Math.round(totalWorkMs/60000), workTadilatMin: Math.round(totalTadMs/60000), durusMin: Math.round(totalDurusMs/60000), overtimeMin: Math.round(totalOvertimeMs/60000),
+      workMin, workTadilatMin: Math.round(totalTadMs/60000), durusMin: Math.round(totalDurusMs/60000), overtimeMin: Math.round(totalOvertimeMs/60000),
+      availMin, verimlilik: Math.min(100, verimlilikRaw), verimlilikRaw, paralelMin: Math.round(totalParalelMs/60000),
       machineCount: machineSet.size, daysUsed: days.length, days,
       hasPhysicalAnomaly: days.some(d=>d.hasPhysicalAnomaly)
     };

@@ -294,7 +294,7 @@ function renderAnalizKisiBazli(){
     </div>`;
   rows.forEach(op=>{
     const d0 = op.days[0];
-    const verim = (d0.workMin+d0.durusMin)>0 ? Math.round(d0.workMin/(d0.workMin+d0.durusMin)*100) : 0;
+    const verim = d0.verimlilik || 0;   // vardiyaya göre (bkz. js/verimlilik.js)
     const selected = analizKisiSecili===op.operatorUsername;
     const segs = renderGanttSegmentsHtml(d0.entries||[], dayData.dayStartMs, dayData.dayStartMs+86400000, e=>`${e.isEmriNo||e.talepNo||''} · ${e.makine||''}`);
     html += `<div style="display:flex;align-items:center;gap:12px;padding:7px 6px;margin:0 -6px 4px;border-radius:8px;cursor:pointer;background:${selected?'var(--panel-alt)':'transparent'}" onclick="selectAnalizKisi('${escJs(op.operatorUsername)}')">
@@ -356,23 +356,26 @@ function renderAnalizKisiBazli(){
    aynı şekilde kullanılıyor, ayrı bir hesap/veri modeli icat edilmedi. */
 function renderOperatorGunGunTablosu(op){
   return `<div class="table-wrap" style="padding:0"><table><thead><tr>
-      <th>Tarih</th><th>Makineler</th><th>Çalışma</th><th>Duruş</th><th>Boşta</th><th>Fazla Mesai</th><th>Kalan Mesai</th>
+      <th>Tarih</th><th>Makineler</th><th>İlk – Son</th><th>Çalışma</th><th>Duruş</th><th>Boşta</th><th>Fazla Mesai</th><th>Verim</th>
     </tr></thead><tbody>
       ${op.days.map(d=>{
         const dStartMs = new Date(d.tarih+'T00:00:00').getTime();
-        const availMin = WORKDAY_MINUTES + d.overtimeMin;
+        const availMin = d.availMin != null ? d.availMin : WORKDAY_MINUTES + d.overtimeMin;
+        const saat = ts => ts ? new Date(ts).toTimeString().slice(0,5) : '—';
+        const gec = d.haftaIci && d.ilkTs ? Math.round((d.ilkTs - (dStartMs + VARDIYA_BAS_DK*60000))/60000) : 0;
         const idleMin = Math.max(0, availMin - d.workMin - d.durusMin);
         const segs = renderGanttSegmentsHtml(d.entries||[], dStartMs, dStartMs+86400000, e=>`${e.isEmriNo||e.talepNo||''} · ${e.makine||''}`);
         return `<tr>
         <td class="mono">${esc(d.tarih)}</td>
-        <td style="font-size:12px">${d.machines.map(m=>`<span class="mono" style="color:var(--accent)">${esc(m.code)}</span> (${fmtDur(m.workMin*60000)})`).join('<br>')}</td>
-        <td>${fmtDur(d.workMin*60000)}${d.hasPhysicalAnomaly?` <span style="color:var(--danger)" title="O gün, gerçek geçen süreden fazla çalışma hesaplandı — fiziksel üst sınıra çekildi.">${ico('alert',14)}</span>`:''}</td>
+        <td style="font-size:12px">${d.machines.map(m=>`<span class="mono" style="color:var(--accent)">${esc(m.code)}</span> (${fmtDur(m.workMin*60000)})`).join('<br>')}${d.paralelMin>0?`<div style="font-size:11px;color:var(--text-muted)" title="Aynı anda birden fazla makine çalıştırdığı süre — verimlilikte bir kez sayılır">paralel ${fmtDur(d.paralelMin*60000)}</div>`:''}</td>
+        <td class="mono" style="font-size:12px;white-space:nowrap">${saat(d.ilkTs)} – ${saat(d.sonTs)}${gec>15?`<div style="font-size:11px;color:var(--warn)" title="Vardiya 08:00'de başlıyor; ilk çalışma bu kadar sonra">${gec} dk geç</div>`:''}${d.haftaIci?'':'<div style="font-size:11px;color:var(--text-muted)">hafta sonu</div>'}</td>
+        <td>${fmtDur(d.workMin*60000)}${d.hasPhysicalAnomaly?` <span style="color:var(--danger)" title="O gün 20 saatten uzun kesintisiz çalışan bir kayıt var — muhtemelen gün sonunda kapatılmamış/duraklatılmamış; o süre çalışma sayılıyor.">${ico('alert',14)}</span>`:''}</td>
         <td style="color:${d.durusMin>0?'var(--warn)':'inherit'}">${fmtDur(d.durusMin*60000)}</td>
         <td style="color:var(--text-muted)">${fmtDur(idleMin*60000)}</td>
         <td>${d.overtimeMin>0?`<span style="color:var(--danger);font-weight:600">${d.overtimeMin} dk</span>`:'—'}</td>
-        <td style="color:${d.kalanMin>0?'var(--text-muted)':'var(--success)'}">${d.kalanMin>0?fmtDur(d.kalanMin*60000):'Tamamlandı'}</td>
+        <td><span style="font-weight:700;color:${d.verimlilik>=70?'var(--success)':d.verimlilik>=40?'var(--warn)':'var(--danger)'}">%${d.verimlilik||0}</span></td>
       </tr>
-      <tr><td colspan="7" style="padding:2px 0 12px">
+      <tr><td colspan="8" style="padding:2px 0 12px">
         <div class="analiz-gantt-row" style="margin-bottom:0">
           <div class="analiz-gantt-label" style="width:0"></div>
           <div class="analiz-gantt-track">${segs}<div class="analiz-gantt-cutoff" style="left:${(WORKDAY_END_MINUTE/1440)*100}%"></div></div>
@@ -403,7 +406,7 @@ function renderAnalizOperator(){
   const fromKey = dateKey(fromDt.getTime());
   const data = computeAnalizData(fromKey, bugun, 'tumu');
   const periodLabel = { bugun:'Bugün', d7:'Son 7 gün', d30:'Son 30 gün' }[analizOperatorPeriod];
-  const verimOf = op => (op.workMin+op.durusMin)>0 ? Math.round(op.workMin/(op.workMin+op.durusMin)*100) : 0;
+  const verimOf = op => op.verimlilik || 0;   // net çalışma ÷ (hafta içi 540 dk + fazla mesai) — bkz. js/verimlilik.js
   const ranked = data.perOperator.map(op=>({ op, verim: verimOf(op) })).sort((a,b)=>b.verim-a.verim);
 
   const q = analizOperatorArama.trim().toLowerCase();
@@ -484,17 +487,17 @@ function renderAnalizOperator(){
       <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Fazla Mesai</div><div class="mono" style="font-size:24px;font-weight:700;margin-top:6px;color:${op.overtimeMin>0?'var(--danger)':'var(--text-muted)'}">${op.overtimeMin>0?fmtDur(op.overtimeMin*60000):'—'}</div></div>
       <div class="analiz-chart-box"><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Tamamlanan İş</div><div class="mono" style="font-size:24px;font-weight:700;margin-top:6px">${tamamlanan}${tadilatSayisi>0?` <span style="font-size:12px;color:var(--text-muted);font-weight:400">(${tadilatSayisi} tadilat)</span>`:''}</div></div>
     </div>
-    ${op.hasPhysicalAnomaly?`<div style="display:flex;align-items:center;gap:8px;background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--warn)">${ico('alert',14)} Bu dönemde en az bir günde gerçek geçen süreden fazla çalışma hesaplandı — muhtemelen kapatılmamış eski bir kayıt var, aşağıdaki gün gün dökümde ${ico('alert',12)} işaretli günlere bak.</div>`:''}
+    ${op.hasPhysicalAnomaly?`<div style="display:flex;align-items:center;gap:8px;background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--warn)">${ico('alert',14)} Bu dönemde 20 saatten uzun kesintisiz çalışan bir kayıt var — muhtemelen gün sonunda kapatılmamış, aşağıdaki gün gün dökümde ${ico('alert',12)} işaretli günlere bak.</div>`:''}
   `;
 
   const daysAsc = op.days.slice().sort((a,b)=>a.tarih.localeCompare(b.tarih));
   if(daysAsc.length>1){
     html += `<div class="analiz-chart-box" style="margin-bottom:14px">
       <div style="font-size:14.5px;font-weight:700;margin-bottom:2px">Günlük Verimlilik Trendi</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Çalışma / (Çalışma + Duruş) · gün bazında</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Net çalışma ÷ (vardiya 540 dk + fazla mesai) · gün bazında</div>
       <div style="display:flex;align-items:flex-end;gap:8px;height:140px;padding-top:16px;overflow-x:auto">
         ${daysAsc.map(d=>{
-          const v = (d.workMin+d.durusMin)>0 ? Math.round(d.workMin/(d.workMin+d.durusMin)*100) : 0;
+          const v = d.verimlilik || 0;
           const c = v>=70?'var(--success)':v>=40?'var(--warn)':'var(--danger)';
           const dLabel = d.tarih.slice(5).split('-').reverse().join('.');
           return `<div style="flex:0 0 34px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%" title="${esc(d.tarih)} · %${v}">
@@ -3908,7 +3911,7 @@ function renderAdmin(){
 
     // Veri kalitesi / dikkat kartları — sadece gerçekten tespit edilen anomaliler, uydurma yok.
     const anomaliler = [];
-    if(data.anyPhysicalAnomaly) anomaliler.push({ title:'Fiziksel süre anomalisi tespit edildi', body:'En az bir makine/kişi için, o günden gerçekte geçen süreden fazla çalışma hesaplandı — muhtemelen uzun süredir kapatılmamış eski bir kayıt var. Aşağıdaki detaylı tablolardaki uyarı ikonunu taşıyan satırlara bak.', color:'var(--danger)' });
+    if(data.anyPhysicalAnomaly) anomaliler.push({ title:'Kapatılmamış kayıt olabilir', body:'En az bir makine/kişi için 20 saatten uzun kesintisiz çalışan bir kayıt var — muhtemelen gün sonunda kapatılmamış ya da duraklatılmamış; o süre çalışma sayılıyor. Aşağıdaki detaylı tablolardaki uyarı ikonunu taşıyan satırlara bak.', color:'var(--danger)' });
     data.perMachine.filter(m=>m.verimlilikAnomali).forEach(m=>anomaliler.push({ title:`${m.code} — ham verimlilik %100'ü aştı`, body:`Ham hesap %${m.verimlilikRaw} çıktı, %100'e kırpıldı. Muhtemelen çakışan ya da unutulmuş açık bir kayıt var.`, color:'var(--warn)' }));
     anomaliler.push({ title:'Fason makineler analiz dışı', body:'Dış tedarikçiye gönderilen (fason) makineler kapasite hesabına girmiyor — dış süre kendi mesaimizle kıyaslanamaz.', color:'var(--gunsonu)' });
     if(anomaliler.length===1) anomaliler.unshift({ title:'Belirgin bir veri anomalisi yok', body:'Bu tarih aralığında otomatik tespit edilen bir tutarsızlık bulunmuyor.', color:'var(--success)' });
@@ -3921,7 +3924,7 @@ function renderAdmin(){
       ${analizBolumlerHtml()}
       ${agBolumBas('ag-verimlilik','Verimlilik & Duruş','makinelerin çalışma, duruş ve fazla mesaisi')}
       ${analizVerimlilikYorum(t, pareto, machineRank)}
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Standart mesai: kullanılan her gün için ${WORKDAY_MINUTES} dk (08:00~${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}) · ${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}'dan sonrası fazla mesai sayılır</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Kullanılabilir süre: aralıktaki her hafta içi gün (Pzt–Cum) ${WORKDAY_MINUTES} dk (08:00~${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}) · ${String(Math.floor(WORKDAY_END_MINUTE/60)).padStart(2,'0')}:${String(WORKDAY_END_MINUTE%60).padStart(2,'0')}'dan sonrası, 08:00 öncesi ve hafta sonu çalışma fazla mesai sayılır · süreler gün gün bölünür, duruş ve Gün Sonu kendi saatleriyle düşülür</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:14px">
         <div class="analiz-chart-box" style="border-left:3px solid ${t.verimlilik>=70?'var(--success)':t.verimlilik>=40?'var(--warn)':'var(--danger)'}">
           <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600">Verimlilik KPI</div>
@@ -3957,7 +3960,7 @@ function renderAdmin(){
           }).join('')}
         </div>
       </div>` : ''}
-      ${data.anyPhysicalAnomaly ? `<div style="display:flex;align-items:center;gap:8px;background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12.5px;color:var(--warn)">${ico('alert',14)} Bu tarih aralığında en az bir makine/kişi için, o günden gerçekte geçen süreden fazla çalışma hesaplandı (muhtemelen uzun süredir kapatılmamış eski bir kayıt var) — ilgili satırlardaki ${ico('alert',12)} ikonuna bak.</div>` : ''}
+      ${data.anyPhysicalAnomaly ? `<div style="display:flex;align-items:center;gap:8px;background:var(--warn-soft);border:1px solid var(--warn-border);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12.5px;color:var(--warn)">${ico('alert',14)} Bu tarih aralığında en az bir makine/kişi için 20 saatten uzun kesintisiz çalışan bir kayıt var (muhtemelen gün sonunda kapatılmamış) — ilgili satırlardaki ${ico('alert',12)} ikonuna bak.</div>` : ''}
       ${data.perMachine.length===0 ? '' : `
       <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:14px;margin-bottom:14px">
         <div class="analiz-chart-box">
@@ -4137,7 +4140,7 @@ function renderAdmin(){
         ${data.perMachine.map(m=>`<tr style="cursor:pointer" onclick="openMachineDetail('${escJs(m.code)}')" title="Günlük detay ve zaman çizelgesini aç">
           <td class="mono" style="color:var(--accent)">${m.code}<div style="font-size:11px;color:var(--text-muted);font-family:'Inter',sans-serif">${esc(m.name)}</div></td>
           <td style="font-size:12px">${m.operators.map(esc).join('<br>')}</td>
-          <td>${fmtDur(m.workMin*60000)}${m.hasPhysicalAnomaly?` <span style="color:var(--danger)" title="Bu makinede, o günkü gerçek geçen süreden fazla çalışma hesaplandı — muhtemelen uzun süredir kapatılmamış eski bir kayıt var. Değer fiziksel üst sınıra çekildi, ama gerçek kaynağını (unutulmuş açık iş) bulup kapatman gerekiyor.">${ico('alert',14)}</span>`:''}</td>
+          <td>${fmtDur(m.workMin*60000)}${m.hasPhysicalAnomaly?` <span style="color:var(--danger)" title="Bu makinede 20 saatten uzun kesintisiz çalışan bir kayıt var — muhtemelen kapatılmamış; o süre çalışma sayılıyor, kaydı bulup düzelt.">${ico('alert',14)}</span>`:''}</td>
           <td style="color:${m.durusMin>0?'var(--warn)':'inherit'}">${fmtDur(m.durusMin*60000)}</td>
           <td>${m.availMin} dk</td>
           <td><span style="color:${m.verimlilik>=70?'var(--success)':m.verimlilik>=40?'var(--warn)':'var(--danger)'};font-weight:700">%${m.verimlilik}</span>${m.verimlilikAnomali?` <span style="color:var(--danger)" title="Ham hesap %${m.verimlilikRaw} çıktı — veri anomalisi olabilir (ör. çakışan/hatalı kayıt), kontrol et">${ico('alert',14)}</span>`:''}</td>
@@ -4156,7 +4159,7 @@ function renderAdmin(){
         <tr style="cursor:pointer" onclick="setAnalizOperator('${escJs(op.operatorUsername)}')">
           <td style="width:20px;color:var(--text-muted)">${analizSelectedOperator===op.operatorUsername?'▾':'▸'}</td>
           <td class="mono" style="color:var(--accent)">${esc(op.operatorUsername)}<div style="font-size:11px;color:var(--text-muted);font-family:'Inter',sans-serif">${esc(op.operatorName||'')}</div></td>
-          <td>${fmtDur(op.workMin*60000)}${op.hasPhysicalAnomaly?` <span style="color:var(--danger)" title="Bu kişide, bir günde gerçek geçen süreden fazla çalışma hesaplandı — muhtemelen uzun süredir kapatılmamış eski bir kayıt var. Değer fiziksel üst sınıra çekildi, ama gerçek kaynağını (unutulmuş açık iş) bulup kapatman gerekiyor.">${ico('alert',14)}</span>`:''}</td>
+          <td>${fmtDur(op.workMin*60000)}${op.hasPhysicalAnomaly?` <span style="color:var(--danger)" title="Bu kişide 20 saatten uzun kesintisiz çalışan bir kayıt var — muhtemelen kapatılmamış; o süre çalışma sayılıyor, kaydı bulup düzelt.">${ico('alert',14)}</span>`:''}</td>
           <td style="color:${op.durusMin>0?'var(--warn)':'inherit'}">${fmtDur(op.durusMin*60000)}</td>
           <td>${op.overtimeMin>0?`<span style="color:var(--danger);font-weight:600">${op.overtimeMin} dk</span>`:'—'}</td>
           <td>${op.machineCount}</td>

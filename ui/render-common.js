@@ -593,14 +593,15 @@ function renderMachineModal(){
       <table style="margin-bottom:20px"><thead><tr><th>Tarih</th><th>Kayıt Sayısı</th><th>İş Sayısı</th><th>Net Çalışma</th><th>Duruş</th><th>Verimlilik</th></tr></thead><tbody>
       ${gunSayfaSatirlari.map(d=>{
         const dd = byDayAll[d];
-        const verim = Math.min(100, Math.round((dd.workMs/60000)/WORKDAY_MINUTES*100));
+        const hi = typeof haftaIciMi==='function' ? haftaIciMi(d) : true;   // hafta sonu = fazla mesai, 540'a bölünmez
+        const verim = hi ? Math.min(100, Math.round((dd.workMs/60000)/WORKDAY_MINUTES*100)) : null;
         return `<tr>
           <td>${d}</td>
           <td>${dd.count}</td>
           <td>${dd.jobs.size}</td>
           <td>${fmtDur(dd.workMs)}${dd.anomali?` <span style="color:var(--danger)" title="Standart mesai + makul fazla mesai payını aştığı için tavana çekildi, kontrol et">${ico('alert',14)}</span>`:''}</td>
           <td style="color:${dd.durusMs>0?'var(--warn)':'inherit'}">${dd.durusCount>0?`${dd.durusCount} kez · ${fmtDur(dd.durusMs)}`:'—'}</td>
-          <td><span style="color:${verim>=70?'var(--success)':verim>=40?'var(--warn)':'var(--danger)'};font-weight:700">%${verim}</span></td>
+          <td>${verim==null?'<span style="color:var(--text-muted)">hafta sonu</span>':`<span style="color:${verim>=70?'var(--success)':verim>=40?'var(--warn)':'var(--danger)'};font-weight:700">%${verim}</span>`}</td>
         </tr>`;
       }).join('')}
       </tbody></table>

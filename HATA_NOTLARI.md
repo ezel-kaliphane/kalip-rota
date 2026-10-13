@@ -5,6 +5,31 @@ hatayı ikinci kez yazmamak. En yeni üstte.
 
 ---
 
+## 2026-10-13 — Verimlilik: duruşa basmayan operatör %100, çok günlü kayıt tek güne, paralel makine iki kez
+
+**Belirti.** Kullanıcı: "Muhammet Kurt nasıl %100 verimlilik çıkıyor, geç geldiği günler bile var."
+Son 30 günde 19 operatörden 5'i %95+; M. Kurt 24 günün 23'ünde 08:15'ten sonra başlamış.
+
+**Sebepler.** (1) Operatör verimliliği `çalışma ÷ (çalışma + duruş)` idi — payda vardiya değil, yalnız
+kaydın kendi süresi; duruşa hiç basmayan herkes %100, geç geliş/erken çıkış/işler arası boşluk görünmez.
+(2) Kayıt yalnız BAŞLADIĞI güne yazılıyordu: Cuma açılıp Pazartesi kapanan iş Cuma'ya 1137 dk; bazı
+kişiler %129–211 (sonra "fiziksel tavan" ile 24 saate kırpılıyordu, kök sebep kalıyordu). (3) Aynı
+anda iki makine çalıştıran operatörün süresi toplanıyordu. (4) Makine paydası Pazar dahil tüm takvim
+günleri × 540. (5) Gece kendi kendine çalışan CNC/erozyonun 00:00–08:00 çalışması fazla mesai sayılmadığı
+için makine/operatör ham verimi %115'e çıkıyordu (ilk düzeltme denemesinde yakalandı).
+
+**Düzeltme (js/verimlilik.js + computeAnalizData).** Her kayıt gün gün bölünür, duruş/Gün Sonu kendi
+zaman damgalarıyla (durusLog/excludedLog) çıkarılır, süre aralıkların BİRLEŞİMİ. Kullanılabilirlik:
+Pzt–Cum × 540 (bugün: vardiyanın geçen kısmı) + fazla mesai; fazla mesai = vardiya (08:00–17:30)
+dışı + vardiya içinde 540'ı aşan + hafta sonu. Operatör = net çalışma ÷ (kayıtlı olduğu günlerin
+kullanılabilirliği + fazla mesai). Sonuç: kimse %100'ü aşmıyor; M. Kurt %49. "Fiziksel tavan" uyarısı
+yerine 20 saati aşan kesintisiz net çalışma "kapatılmamış kayıt olabilir" diye işaretleniyor.
+
+**Ders.** Oran tasarlarken paydanın neyi temsil ettiğini sor: kaydın kendi süresi kendini ölçer, vardiya
+ise kişiyi. Zaman verisini gün gün raporlarken her aralığı GÜNE BÖL; başlangıç gününe yığıp sonra tavana
+kırpmak hatayı gizler. "Çalışma" ile "insanın orada olması" aynı şey değil — paralel ve gözetimsiz
+çalışma ayrı düşünülmeli.
+
 ## 2026-10-13 — Malzeme bekleyen: çubukta rezerve adet kadar eksik (parça boyu toplam sanıldı)
 
 **Belirti.** Kullanıcı: "gerekli boy × adet toplam rezerve olmalı, hesapta hata var." 2344 Ø66 grubunda
