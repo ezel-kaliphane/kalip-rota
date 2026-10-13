@@ -113,14 +113,18 @@ function mbSecenekMetni(it){ return hammaddeGosterimAdi(it); }
 /* MALZEME TASLAĞI (13.10.2026, kullanıcı isteği): satın alma isteği açarken istek no girilmemiş
    iş emirlerini "talep no + mamul adı" olarak alt alta panoya kopyalar (ekrandaki sırayla). */
 function mbTaslakMetni(hid){
-  return malzemeBekleyenAktif().filter(x=>x.hammaddeId===hid && !malzemeIstekVar(x))
-    .sort((a,b)=>(Number(a.isaretTs)||0)-(Number(b.isaretTs)||0))
-    .map(x=>[x.talepNo||x.isEmriNo, x.mamulAdi||''].filter(Boolean).join(' ')).join('\n');
+  const l = malzemeBekleyenAktif().filter(x=>x.hammaddeId===hid && !malzemeIstekVar(x))
+    .sort((a,b)=>(Number(a.isaretTs)||0)-(Number(b.isaretTs)||0));
+  if(!l.length) return '';
+  /* Son satır: toplam ihtiyaç (parça boyu × İ.E. + testere payı) — kullanıcı: "alt satırına MM yaz" */
+  const top = Math.round(l.reduce((t,x)=>t+malzemeIhtiyac(x), 0)), birim = String(l[0].birim||'').toLocaleUpperCase('tr');
+  return l.map(x=>[x.talepNo||x.isEmriNo, x.mamulAdi||''].filter(Boolean).join(' ')).join('\n') + '\nTOPLAM GEREKLİ: ' + top + ' ' + birim;
 }
+function mbTaslakSatirSayisi(hid){ return malzemeBekleyenAktif().filter(x=>x.hammaddeId===hid && !malzemeIstekVar(x)).length; }
 function mbTaslakKopyala(hid){
   const metin = mbTaslakMetni(hid);
   if(!metin){ toast('İstek no girilmemiş iş emri yok'); return; }
-  const n = metin.split('\n').length, tamam = () => toast(n + ' satır kopyalandı — satın alma isteğine yapıştır');
+  const n = mbTaslakSatirSayisi(hid), tamam = () => toast(n + ' iş emri + toplam satırı kopyalandı — satın alma isteğine yapıştır');
   const yedek = () => {
     const t = document.createElement('textarea'); t.value = metin; t.setAttribute('readonly',''); t.style.cssText = 'position:fixed;top:-1000px;opacity:0';
     document.body.appendChild(t); t.select();
