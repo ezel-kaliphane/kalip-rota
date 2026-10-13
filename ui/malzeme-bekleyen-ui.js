@@ -68,6 +68,11 @@ function mbYeniAc(){
 }
 function mbYeniKapat(taslakSil){ mbYeniAcik = false; if(taslakSil){ mbForm = mbFormBos(); mbHamAra = ''; } render(); }
 function mbGecmisToggle(){ mbGecmisAcik = !mbGecmisAcik; render(); }
+/* 13.10.2026 (kullanıcı): Karşılananlar ayrı sekme gibi (eskiden listenin en altına ekleniyordu);
+   hammadde grupları açılır-kapanır — başlıkta yalnız kalem + durum + toplamlar, iş emirleri tıklayınca. */
+const mbAcikGruplar = new Set();
+function mbGrupToggle(hid){ if(mbAcikGruplar.has(hid)) mbAcikGruplar.delete(hid); else mbAcikGruplar.add(hid); render(); }
+function mbTumGruplar(ac, hidler){ if(ac) hidler.forEach(h=>mbAcikGruplar.add(h)); else mbAcikGruplar.clear(); render(); }
 
 /* İş emri / talep no girilince ERP listesinden mamul, varsa reçeteden hammadde ve miktar
    OTOMATİK doluyor. Şefin elle yazacağı tek şey, reçetesi olmayan mamulde hammadde seçimi. */
@@ -253,18 +258,21 @@ function renderMalzemeBekleyen(){
       : g.stok - g.rezerve < 0 ? { r:'var(--warn)', t:'SİPARİŞTE' }
       : { r:'var(--success)', t:'STOKTA VAR' };
     const birim = (g.it && g.it.birim) || '';
-    return `<div class="mb-grup">
-      <div class="mb-grup-ust">
+    const acik = mbAcikGruplar.has(g.hid);
+    return `<div class="mb-grup ${acik?'acik':'kapali'}">
+      <div class="mb-grup-ust" role="button" tabindex="0" aria-expanded="${acik}" onclick="mbGrupToggle('${escJs(g.hid)}')" onkeydown="if(event.target===this && (event.key==='Enter'||event.key===' ')){event.preventDefault(); mbGrupToggle('${escJs(g.hid)}')}" title="${acik?'İş emirlerini gizle':'İş emirlerini göster'}">
+        <span class="mb-ok">${ico(acik?'chevronUp':'chevronDown',16)}</span>
         <span class="mb-kod">${esc(etiketMetin)}</span>
+        <span class="mb-adet">${g.satirlar.length} iş emri</span>
         <span class="matrix-tag" style="--sb:${durum.r}">${durum.t}</span>
         <span class="mb-olcu">${g.it && g.it.isim ? esc(String(g.it.isim).slice(0,40))+' · ' : ''}Stok <b${g.stok<0?' style="color:var(--danger)"':''}>${g.stok} ${esc(birim)}</b>${g.yolda ? ` · Yolda <b>${g.yolda} ${esc(birim)}</b>` : ''} · Rezerve <b>${g.rezerve} ${esc(birim)}</b> · Kullanılabilir <b style="color:${g.kullanilabilir<0?'var(--danger)':'var(--success)'}">${g.kullanilabilir} ${esc(birim)}</b></span>
         ${(()=>{ const n = malzemeIstekNoYetkisi() ? malzemeBosBekleyenler(g.hid).length : 0;
           const bos = g.satirlar.filter(x=>!malzemeIstekVar(x)).length;
-          const kopya = bos ? `<button class="btn-ghost mb-mini" title="İstek no girilmemiş iş emirleri: talep no + mamul adı, alt alta — satın alma isteğine yapıştır" onclick="mbTaslakKopyala('${escJs(g.hid)}')">${ico('copy',13)} Malzeme taslağı kopyala · ${bos}</button>` : '';
-          const toplu = n > 1 ? `<button class="btn-ghost mb-mini" style="border-color:var(--danger);color:var(--danger)" onclick="mbTopluAc('${escJs(g.hid)}')">Toplu istek no gir · ${n} iş emri</button>` : '';
+          const kopya = bos ? `<button class="btn-ghost mb-mini" title="İstek no girilmemiş iş emirleri: talep no + mamul adı, alt alta — satın alma isteğine yapıştır" onclick="event.stopPropagation(); mbTaslakKopyala('${escJs(g.hid)}')">${ico('copy',13)} Malzeme taslağı kopyala · ${bos}</button>` : '';
+          const toplu = n > 1 ? `<button class="btn-ghost mb-mini" style="border-color:var(--danger);color:var(--danger)" onclick="event.stopPropagation(); mbTopluAc('${escJs(g.hid)}')">Toplu istek no gir · ${n} iş emri</button>` : '';
           return kopya || toplu ? `<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${kopya}${toplu}</span>` : ''; })()}
       </div>
-      ${mbSiparislerHtml(g)}
+      ${acik ? `${mbSiparislerHtml(g)}
       ${basliklar}
       ${g.satirlar.map(s=>{
         const bek = mbBeklemeMetni(s.isaretTs);
@@ -289,7 +297,7 @@ function renderMalzemeBekleyen(){
             <button class="del-btn" title="Kaydı sil" onclick="malzemeBekleyenSil('${escJs(s.id)}')">${ico('trash',13)}</button>`:''}
           </span>
         </div>`;
-      }).join('')}
+      }).join('')}` : ''}
     </div>`;
   }).join('');
 
@@ -306,15 +314,20 @@ function renderMalzemeBekleyen(){
 
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
       ${canManageStock()?`<button class="btn-primary" style="width:auto;padding:9px 16px" onclick="mbYeniAc()">+ Malzeme Bekliyor</button>`:''}
-      <button class="btn-ghost" style="width:auto;padding:9px 14px" onclick="mbGecmisToggle()">${mbGecmisAcik?'Geçmişi gizle':'Karşılananlar'}</button>
+      <span class="mb-sekmeler" role="tablist">
+        <button role="tab" aria-selected="${!mbGecmisAcik}" class="chip ${!mbGecmisAcik?'active':''}" onclick="mbGecmisAcik=false; render()">Bekleyenler <b>${aktif.length}</b></button>
+        <button role="tab" aria-selected="${mbGecmisAcik}" class="chip ${mbGecmisAcik?'active':''}" onclick="mbGecmisAcik=true; render()">Karşılananlar</button>
+      </span>
+      ${!mbGecmisAcik && grupListesi.length>1 ? (() => { const hepsi = grupListesi.every(g=>mbAcikGruplar.has(g.hid));
+        return `<button class="btn-ghost" style="width:auto;padding:7px 12px;margin-left:auto;font-size:12.5px" onclick="mbTumGruplar(${!hepsi}, ${esc(JSON.stringify(grupListesi.map(g=>g.hid)))})">${ico(hepsi?'chevronUp':'chevronDown',14)} ${hepsi?'Hepsini kapat':'Hepsini aç'}</button>`; })() : ''}
     </div>
 
-    ${aktif.length===0
+    ${mbGecmisAcik ? '' : aktif.length===0
       ? `<div class="notice" style="--nc:var(--success)"><div class="notice-title">Malzeme bekleyen iş emri yok</div>
          <div class="notice-sub">Şef malzemeliğe gidip aradığını bulamazsa buraya işaretler; iş emri o andan itibaren burada görünür.</div></div>`
       : grupHtml}
 
-    ${mbGecmisAcik ? `<div class="sec-h" style="margin-top:20px">Karşılananlar <span class="ayar-deger mono" style="margin-left:8px">${gecmis.length}</span></div>
+    ${mbGecmisAcik ? `<div class="sec-h" style="margin-top:4px">Karşılananlar <span class="ayar-deger mono" style="margin-left:8px">son ${gecmis.length}</span></div>
       <div class="sg-table-wrap"><table><thead><tr><th>İş Emri</th><th>Mamul</th><th>Hammadde</th><th>Gereken</th><th>İstek No</th><th>Bekledi</th><th>Karşılayan</th>${session.isSuperAdmin?'<th></th>':''}</tr></thead><tbody>
       ${gecmis.length===0?`<tr><td colspan="8" style="color:var(--text-muted);padding:14px">Henüz karşılanan kayıt yok.</td></tr>`:gecmis.map(s=>{
         const sure = (Number(s.karsilanmaTs)||0) - (Number(s.isaretTs)||0);
