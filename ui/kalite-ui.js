@@ -17,7 +17,8 @@ function kaliteGeriMakineSecici(rota, secili, yazFn){
 }
 /* Neden: listeden seç ya da elle yaz (06.10.2026 — "elle yazı yazmak isteyebilir"). */
 function kaliteNedenSecici(alan, secili, yazFn){
-  return `<input list="kal-neden-${alan}" placeholder="Listeden seç ya da yaz" value="${esc(secili||'')}" onfocus="this.select()" onchange="${yazFn}('${alan}', this.value.trim())">
+  const fav = favCiplerHtml(favoriler('kaliteNeden').map(n=>({ v:n, etiket:n, secili: secili===n, onclick:`${yazFn}('${alan}','${escJs(n)}')` })));
+  return `${fav}<div style="display:flex;gap:6px"><input list="kal-neden-${alan}" style="flex:1;margin-bottom:0" placeholder="Listeden seç ya da yaz" value="${esc(secili||'')}" onfocus="this.select()" onchange="${yazFn}('${alan}', this.value.trim())">${secili ? favYildizHtml('kaliteNeden', secili, true) : ''}</div>
     <datalist id="kal-neden-${alan}">${kaliteNedenleri().map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist>`;
 }
 /* Hatanın oluştuğu operasyon: geçmiş rotanın her adımı (makine · operatör · tarih) + "Belli değil". */
@@ -213,7 +214,8 @@ function renderUygModal(){
       <div class="kal-modal-govde">
       <div class="kal-satir"><label>Hatalı adet</label><input class="kal-sayi mono" inputmode="numeric" value="${esc(m.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); uygModal.adet=this.value"></div>
       <div class="kal-blok-bas">Neden</div>
-      <input list="uyg-neden" placeholder="Listeden seç ya da yaz" value="${esc(m.neden)}" onchange="uygYaz('neden', this.value.trim())">
+      ${favCiplerHtml(favoriler('kaliteNeden').map(n=>({ v:n, etiket:n, secili: m.neden===n, onclick:`uygYaz('neden','${escJs(n)}')` })))}
+      <div style="display:flex;gap:6px"><input list="uyg-neden" style="flex:1;margin-bottom:0" placeholder="Listeden seç ya da yaz" value="${esc(m.neden)}" onchange="uygYaz('neden', this.value.trim())">${m.neden ? favYildizHtml('kaliteNeden', m.neden, true) : ''}</div>
       <datalist id="uyg-neden">${kaliteNedenleri().map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist>
       <div class="kal-blok-bas" style="margin-top:10px">Açıklama <small>isteğe bağlı</small></div>
       <textarea class="kal-textarea" rows="3" placeholder="ör. UST02'de fark edildi, delik 0,2 mm büyük" oninput="uygModal.aciklama=this.value">${esc(m.aciklama)}</textarea>

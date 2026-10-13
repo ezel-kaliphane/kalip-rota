@@ -292,6 +292,7 @@ function renderToolStokOperator(){
 function renderToolStokScanScreen(){
   return `<div class="card" style="text-align:center;padding:30px 18px">
     <button class="btn-primary" style="font-size:16px;padding:18px;margin-bottom:18px;display:flex;align-items:center;justify-content:center;gap:8px" onclick="toolOpScanQr()">${ico('camera',20)} QR Okut</button>
+    ${(() => { const f = favoriler('takim'); return f.length ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;text-align:left">Favoriler</div>${favCiplerHtml(f.map(v => ({ v, etiket: v, onclick: `toolOpLookupByCode('${escJs(favMakineKodu(v))}')` })))}` : ''; })()}
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">veya CANİAS kodunu yaz</div>
     <div style="display:flex;gap:8px">
       <input id="tool-op-manual-code" class="mono" placeholder="ör. U0003628" value="${esc(toolOpScanCode)}" oninput="toolOpScanCode=this.value" onkeydown="if(event.key==='Enter'){ toolOpLookupByCode(this.value); }" style="flex:1;text-align:center">
@@ -310,7 +311,7 @@ function renderToolStokDetailPanel(){
   const activeEntries = myActiveEntries();
   return `<div class="card">
     <button class="btn-ghost" style="margin-bottom:14px" onclick="toolOpClearLookup()">← Yeni Arama</button>
-    <div style="font-size:17px;font-weight:700;margin-bottom:4px">${esc(it.ad)}</div>
+    <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:4px"><div style="font-size:17px;font-weight:700;flex:1">${esc(it.ad)}</div>${favYildizHtml('takim', it.canias + ' · ' + (it.ad || ''), true)}</div>
     <div class="mono" style="color:var(--text-muted);margin-bottom:14px">${esc(it.canias)}${locAd?` · ${esc(locAd)}${it.goz?` / ${esc(it.goz)}`:''}`:''}</div>
     <div style="font-size:13px;color:var(--text-muted);margin-bottom:18px">Mevcut stok: <b style="font-size:16px;color:var(--text)">${stok}</b> ${esc(it.birim||'adet')}</div>
     ${activeEntries.length>1 ? `

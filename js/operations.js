@@ -371,8 +371,14 @@ function durusOptionsListHtml(){
       </span>
     </button>`;
   };
-  return `${normal.map((r)=>optionCard(r, reasons.indexOf(r))).join('')}
-    ${special.length>0 ? `<div class="durus-option-divider">ÖZEL DURUMLAR</div>${special.map((r)=>optionCard(r, reasons.indexOf(r))).join('')}` : ''}
+  /* Favoriler (13.10.2026): yıldızlanan nedenler en üstte (bkz. js/favoriler.js) */
+  const favMi = r => typeof favoriMi==='function' && favoriMi('durus', r);
+  const satir = r => typeof favYildizHtml==='function' ? `<div class="nextop-satir">${optionCard(r, reasons.indexOf(r))}${favYildizHtml('durus', r)}</div>` : optionCard(r, reasons.indexOf(r));
+  const favs = reasons.filter(r=>r!=='Diğer' && favMi(r));
+  const ozel = special.filter(r=>!favMi(r));
+  return `${favs.length ? `<div class="durus-option-divider">FAVORİLER</div>${favs.map(satir).join('')}<div class="durus-option-divider">TÜM NEDENLER</div>` : ''}
+    ${normal.filter(r=>!favMi(r)).map(satir).join('')}
+    ${ozel.length>0 ? `<div class="durus-option-divider">ÖZEL DURUMLAR</div>${ozel.map(satir).join('')}` : ''}
     ${hasDiger ? `<button class="durus-option-card dashed" onclick="pickDurusReason(${reasons.indexOf('Diğer')})">
       <span class="durus-radio" style="${durusReasonSel==='Diğer'?'border-color:var(--warn)':''}"><span style="width:10px;height:10px;border-radius:50%;background:${durusReasonSel==='Diğer'?'var(--warn)':'transparent'}"></span></span>
       <span class="durus-option-name" style="color:var(--text-muted)">Diğer — kendin yaz</span>

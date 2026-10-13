@@ -102,11 +102,12 @@ function renderHmGirModal(){
         <div style="font-size:12.5px;color:var(--text-muted);margin-top:-4px">${esc((typeof usMamulAdi === 'function' ? usMamulAdi(e) : '') || '')} · ${g.adet || '?'} adet · ${esc(String(e.makine || '').split(' · ')[0])} · ${esc(e.operatorName || '')}${yazi ? `<br><span style="color:var(--warn)">Operatör yazdı: ${esc(yazi)}</span>` : ''}</div></div>
       <div class="kal-modal-govde">
         ${typeof urunHammaddeIpucuHtml === 'function' ? urunHammaddeIpucuHtml(g.isEmriNo) : ''}
+        ${typeof favHammaddeCipleri === 'function' ? favHammaddeCipleri(opts, g.secim, v => `hmGir.secim='${escJs(v)}'; hmGir.ara=''; render()`, q => `hmGir.ara='${escJs(q)}'; render()`) : ''}
         ${opHammaddeAramaHtml(g.ara, opts, 'hm-gir-ara', "hmGir.ara=this.value; render()", v => `hmGir.secim='${escJs(v)}'; hmGir.ara=''; render()`, 'hm')}
-        <select onchange="hmGir.secim=this.value; render()" style="margin-bottom:8px">
+        <div style="display:flex;gap:6px;margin-bottom:8px"><select onchange="hmGir.secim=this.value; render()" style="flex:1;margin-bottom:0">
           <option value="">Hammadde seç…</option>
           ${opts.map(o => `<option value="${esc(o.value)}" ${g.secim === o.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
-        </select>
+        </select>${sec && typeof favYildizHtml === 'function' ? favYildizHtml('hammadde', sec.itemId, true) : ''}</div>
         ${sec ? `<div class="field" style="margin:0"><label>${lot ? 'Kesilen boy (' + esc(sec.birim || 'mm') + ')' : 'Kullanılan miktar (' + esc(sec.birim || '') + ')'}</label>
           <input inputmode="decimal" value="${esc(g.miktar)}" placeholder="${manuel ? '' : 'boşsa adet kadar: ' + (g.adet || '?')}" oninput="hmGir.miktar=this.value.replace(/[^0-9.,]/g,'')"></div>` : ''}
         <div style="font-size:11.5px;color:var(--text-muted);margin-top:8px">Seçilen miktar stoktan düşülür, hareket bu iş emrine yazılır; maliyet de bundan hesaplanır.</div>

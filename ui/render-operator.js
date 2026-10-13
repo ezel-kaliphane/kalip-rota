@@ -105,6 +105,7 @@ function renderOperator(){
           ${secimAcik ? `
             <div style="background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
               <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Hangi makinede yapılacak?</div>
+              ${favMakineCipleri(getAllowedMachines(), '', v=>`document.getElementById('tad-al-makine-${t.id}').value='${escJs(v)}'`)}
               <input id="tad-al-makine-${t.id}" list="tadilat-makine-options" placeholder="Makine seç" value="${esc(tadilatKaynakMakine())}" style="margin-bottom:8px">
               <div style="display:flex;gap:8px">
                 <button class="btn-primary" style="flex:1" onclick="tadilatAl('${t.id}', document.getElementById('tad-al-makine-${t.id}').value)">${ico('play',14)} Başla</button>
@@ -213,12 +214,14 @@ function renderOperator(){
             return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:6px">
               <div style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${ico('box',14)} İlk Operasyon — Hammadde</div>
               ${typeof urunHammaddeIpucuHtml === 'function' ? urunHammaddeIpucuHtml(prevCode) : ''}
+              ${favHammaddeCipleri(opts, it.stockItemId, v=>`newForm.cokluItems[${i}].stockItemId='${escJs(v)}'; newForm.cokluItems[${i}].stokAra=''; render()`, q=>`newForm.cokluItems[${i}].stokAra='${escJs(q)}'; render()`)}
               ${opHammaddeAramaHtml(it.stokAra, opts, 'nf-coklu-stok-ara-'+i, `newForm.cokluItems[${i}].stokAra=this.value; render()`, v=>`newForm.cokluItems[${i}].stockItemId='${escJs(v)}'; newForm.cokluItems[${i}].stokAra=''; render()`, 'op:'+i)}
               <div style="display:flex;gap:6px;margin-bottom:${isManualInput?'6px':'0'}">
                 <select id="nf-coklu-stok-${i}" onchange="newForm.cokluItems[${i}].stockItemId=this.value; render()" style="flex:1;margin-bottom:0">
                   <option value="">Hammadde tüketilmiyor</option>
                   ${opts.map(o=>`<option value="${o.value}" ${it.stockItemId===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}
                 </select>
+                ${selOpt ? favYildizHtml('hammadde', selOpt.itemId, true) : ''}
                 <button type="button" class="btn-ghost" style="padding:8px 10px;flex-shrink:0" title="QR Okut" onclick="stockScanUygula(function(v){ newForm.cokluItems[${i}].stockItemId=v; })">${ico('camera',14)}</button>
               </div>
               ${selOpt ? (isManualInput
@@ -273,12 +276,14 @@ function renderOperator(){
           return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
             <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${ico('box',14)} İlk Operasyon — Kullanılan Hammadde</div>
             ${typeof urunHammaddeIpucuHtml === 'function' ? urunHammaddeIpucuHtml(previewCode) : ''}
+            ${favHammaddeCipleri(opts, newForm.stockItemId, v=>`newForm.stockItemId='${escJs(v)}'; newForm.stokAra=''; render()`, q=>`newForm.stokAra='${escJs(q)}'; render()`)}
             ${opHammaddeAramaHtml(newForm.stokAra, opts, 'nf-stok-ara', "newForm.stokAra=this.value; render()", v=>`newForm.stockItemId='${escJs(v)}'; newForm.stokAra=''; render()`, 'op')}
             <div style="display:flex;gap:6px;margin-bottom:${isManualInput?'8px':'0'}">
               <select id="nf-stok-item" onchange="newForm.stockItemId=this.value; render()" style="flex:1;margin-bottom:0">
                 <option value="">Hammadde tüketilmiyor</option>
                 ${opts.map(o=>`<option value="${o.value}" ${newForm.stockItemId===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}
               </select>
+              ${selOpt ? favYildizHtml('hammadde', selOpt.itemId, true) : ''}
               <button type="button" class="btn-ghost" style="padding:8px 10px;flex-shrink:0" title="QR Okut" onclick="stockScanUygula(function(v){ newForm.stockItemId=v; })">${ico('camera',14)}</button>
             </div>
             ${selOpt ? (isManualInput
@@ -288,8 +293,10 @@ function renderOperator(){
         })()}
       `}
       <div class="field"><label>Çalışılan Makine</label>
+        ${favMakineCipleri(allowed, newForm.makine, v=>`newForm.makine='${escJs(v)}'; render()`)}
         <div style="display:flex;gap:8px">
           <input id="nf-makine" list="makine-options" placeholder="Yazmaya başla… ör. TES" value="${esc(newForm.makine)}" oninput="newForm.makine=this.value" onblur="render()" onfocus="this.select()" style="flex:1">
+          ${allowed.includes(newForm.makine) ? favYildizHtml('makine', newForm.makine, true) : ''}
           <button type="button" class="btn-ghost" title="Temizle" onclick="newForm.makine=''; render(); const el=document.getElementById('nf-makine'); if(el){el.focus();}">${ico('x',14)}</button>
         </div>
         <datalist id="makine-options">${allowed.map(m=>`<option value="${esc(m)}">`).join('')}</datalist>
