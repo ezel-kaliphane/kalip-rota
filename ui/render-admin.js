@@ -1860,7 +1860,13 @@ function renderStokListeModal(){
       .sort((a,b)=> oncelik(a)-oncelik(b) || Number(a.stokSayi)-Number(b.stokSayi) || String(a.kod).localeCompare(String(b.kod)));
     const sorunlu = liste.filter(x=>x.durum!=='normal').length;
     altBilgi = `${liste.length} kalem${sorunlu?` · ${sorunlu} tanesi alt limit / negatif`:''}`;
-    govde = stokKritikTablo(liste, 'Kalem yok.');
+    /* İş emri / talep no gibi görünen arama (13.10.2026): stok kalemi değil, karbür kesim planı aranıyor olabilir */
+    const ieAra = (typeof karburIsEmriGibiMi==='function' && karburIsEmriGibiMi(stokGenelArama) && isAdminTabVisible('karbur'))
+      ? `<div class="notice" style="--nc:var(--accent);margin:0 0 14px;padding:10px 12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px"><div class="notice-title" style="margin:0">İş emri mi arıyorsun?</div>
+          <div class="notice-sub"><b class="mono">${esc(stokGenelArama.trim())}</b> hangi karbür kesim planında, ne zaman kesildi — Karbür → Hareketler'de ara.</div></div>
+          <button class="btn-primary" style="width:auto;padding:7px 14px" onclick="karburAramayaGit('${escJs(stokGenelArama.trim())}')">${ico('search',14)} Kesim planlarında ara</button></div>` : '';
+    govde = ieAra + stokKritikTablo(liste, 'Kalem yok.');
   }
   return `<div class="modal-overlay" onclick="if(event.target===this)stokListeKapat()">
     <div class="modal-box" style="max-width:1060px;width:100%;max-height:86vh;display:flex;flex-direction:column;padding:0">

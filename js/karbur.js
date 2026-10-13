@@ -253,7 +253,10 @@ function retryKarburFireLoad(){ karburFireError = null; ensureKarburFireLoaded((
 function loadKarburHareketleri(limit){
   DB.ref('karburHareketleri').orderByChild('ts').limitToLast(limit || 50).once('value').then(snap => {
     const v = snap.val() || {};
-    karburHareketler = Object.entries(v).map(([id, x]) => ({ id, ...x })).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    karburHareketler = Object.entries(v).map(([id, x]) => ({ id, ...x }));
+    /* İş emri aramasının getirdiği eski planlar (js/karbur-ara.js) yenilemede kaybolmasın */
+    if(typeof karburAramaEk !== 'undefined' && karburAramaEk.length){ const var_ = new Set(karburHareketler.map(h => h.id)); karburAramaEk.forEach(h => { if(!var_.has(h.id)) karburHareketler.push(h); }); }
+    karburHareketler.sort((a, b) => (b.ts || 0) - (a.ts || 0));
     safeRender();
   }).catch(err => { toast('Hareketler okunamadı: ' + ((err && err.message) || 'hata')); });
 }

@@ -743,10 +743,12 @@ function renderKarburGecmis(){
   });
   const tumGruplar = Object.values(gruplar).sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const iptalSayisi = tumGruplar.filter(g => g.iptal).length;
-  const grupListe = karburGecmisIptalGoster ? tumGruplar : tumGruplar.filter(g => !g.iptal);
   // İş emri -> o işe çıkış yapan GEÇERLİ planlar (mükerrer uyarısı için)
   const ieBaz = n => String(n || '').replace(/_ELMAS$/i, '');
   tumGruplar.forEach(g => { g.ieler = [...new Set(g.tahsis.concat(g.fire).concat(g.stok).map(h => ieBaz(h.isEmriNo)).filter(Boolean))]; });
+  /* İş emri araması varsa geri alınanlar dahil yalnız eşleşen planlar — g.ieler hesaplandıktan SONRA (bkz. js/karbur-ara.js) */
+  const araniyor = typeof karburPlanArama !== 'undefined' && !!karburPlanArama.q;
+  const grupListe = araniyor ? tumGruplar.filter(karburPlanEslesir) : karburGecmisIptalGoster ? tumGruplar : tumGruplar.filter(g => !g.iptal);
   const iePlanlari = {};
   tumGruplar.filter(g => !g.iptal).forEach(g => g.ieler.forEach(n => { (iePlanlari[n] = iePlanlari[n] || new Set()).add(g.planNo); }));
   const yerineGecen = {};
@@ -765,8 +767,9 @@ function renderKarburGecmis(){
       ${iptalSayisi ? `<label style="font-size:11.5px;color:var(--text-muted);display:flex;align-items:center;gap:5px;cursor:pointer">
         <input type="checkbox" ${karburGecmisIptalGoster ? 'checked' : ''} onchange="karburGecmisIptalToggle()"> Geri alınanları göster (${iptalSayisi})</label>` : ''}
     </div>`;
+  if(typeof karburPlanAramaHtml === 'function') html += karburPlanAramaHtml(grupListe);
 
-  if(!grupListe.length){
+  if(!grupListe.length && !araniyor){
     html += `<div style="font-size:12.5px;color:var(--text-muted)">${iptalSayisi ? 'Geçerli plan yok — geri alınanlar gizli.' : 'Kayıtlı plan yok — <b>↻ Yenile</b> ile okumayı tetikle.'}</div>`;
   }
 
@@ -811,7 +814,7 @@ function renderKarburGecmis(){
         ⚠ Bu plandaki ${cakisanIe} iş emrine <b>${cakisanPlanlar.map(esc).join(', ')}</b> planında da çıkış yapılmış — iki plan da geçerli, stok iki kez düşülmüş. Yalnız bazı satırlar yanlışsa <b>✎ Düzelt</b> (doğru satırlar korunur); planın tamamı yanlışsa ↩ Geri al.</div>` : ''}
       <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:11.5px">
         <span style="color:var(--text-muted)">İş emirleri:</span>
-        <span class="mono" style="${g.iptal?'opacity:.6':''}">${g.ieler.length ? g.ieler.slice(0, 10).map(esc).join(', ') + (g.ieler.length > 10 ? ` <span style="color:var(--text-muted)">+${g.ieler.length - 10}</span>` : '') : '—'}</span>
+        <span class="mono" style="${g.iptal?'opacity:.6':''}">${g.ieler.length ? (araniyor ? g.ieler.slice().sort((a, b) => karburHareketEslesir(b) - karburHareketEslesir(a)) : g.ieler).slice(0, 10).map(n => araniyor && karburHareketEslesir(n) ? `<b style="color:var(--accent)">${esc(n)}</b>` : esc(n)).join(', ') + (g.ieler.length > 10 ? ` <span style="color:var(--text-muted)">+${g.ieler.length - 10}</span>` : '') : '—'}</span>
         <div style="flex:1"></div>
         <button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" onclick="karburGecmisToggle('${escJs(g.planNo)}')">${acik ? 'Detayı gizle ▴' : 'Detay ▾'}</button>
       </div>
@@ -832,7 +835,7 @@ function renderKarburGecmis(){
         <table class="tbl"><thead><tr><th>İş Emri</th><th>Kaynak</th>
           <th style="text-align:right">Parça</th><th style="text-align:right">mm</th><th>Detay</th><th>EDM kesim</th></tr></thead><tbody>
         ${g.tahsis.concat(g.fire).sort((a,b)=>String(a.isEmriNo).localeCompare(String(b.isEmriNo)))
-          .map(h => `<tr><td>${esc(h.isEmriNo || '—')}</td>
+          .map(h => `<tr${araniyor && karburHareketEslesir(h.isEmriNo) ? ' style="background:color-mix(in srgb, var(--accent) 14%, transparent)"' : ''}><td>${esc(h.isEmriNo || '—')}</td>
           <td style="font-size:11px;color:${h._eski ? 'var(--text-muted)' : karburTipEtiket(h.tip).renk}">${h._eski
             ? 'İş emri tahsisi <span style="font-size:10px">(eski biçim)</span>'
             : esc(karburTipEtiket(h.tip).ad)}</td>
