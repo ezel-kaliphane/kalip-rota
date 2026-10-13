@@ -464,35 +464,74 @@ function stockScanUygula(setStockItemId){
     render();
   });
 }
+/* V1 (13.10.2026 — dış inceleme): stok "oku-hesapla-yaz" ile ve dört ayrı yazmayla düşülüyordu;
+   iki operatör aynı anda aynı çubuktan kesince biri kayboluyor, bağlantı koparsa stok düşüp hareket
+   yazılmayabiliyordu. Artık sunucu tarafı azaltma (increment, çevrimdışında da sıraya girer) ve
+   stok + meta + hareket TEK yazmada. */
+function stokAzalt(n){ return (typeof firebase !== 'undefined' && firebase.database && firebase.database.ServerValue) ? firebase.database.ServerValue.increment(n) : null; }
 function consumeStock(itemId, lotId, miktar, meta){
   if(!itemId || !miktar) return;
   const item = stockItems[itemId]; if(!item) return;
+  meta = meta || {};
+  const now = Date.now(), hid = uid(), yazma = {};
+  let hareket;
   if(item.tur==='boy' && lotId){
     const lot = (item.lots||{})[lotId]; if(!lot) return;
-    const yeniBoy = (Number(lot.boy)||0) - Number(miktar);
-    DB.ref(`stockItems/${itemId}/lots/${lotId}/boy`).set(yeniBoy);
-    DB.ref(`stockItems/${itemId}/sonHareketTs`).set(Date.now()); // Genel Bakış "Son Hareket" sütunu için denormalize alan
-    DB.ref(`stockItems/${itemId}/sonHareketAciklama`).set('Üretim tüketimi'+(meta.isEmriNo?' · '+meta.isEmriNo:''));
-    const hid = uid();
-    const hareket = {
+    const inc = stokAzalt(-Number(miktar));
+    yazma[`stockItems/${itemId}/lots/${lotId}/boy`] = inc != null ? inc : (Number(lot.boy)||0) - Number(miktar);
+    hareket = {
       itemId, lotId, itemKod: item.kod||'', itemIsim: `${item.cap||''} (${lot.boy}${item.birim||'mm'} çubuk)`, miktar: -Number(miktar), birim: item.birim||'mm',
-      isEmriNo: meta.isEmriNo||'', talepNo: meta.talepNo||'', operatorUsername: session.username, operatorName: session.displayName, ts: Date.now()
+      isEmriNo: meta.isEmriNo||'', talepNo: meta.talepNo||'', operatorUsername: session.username, operatorName: session.displayName, ts: now
     };
-    DB.ref('stockHareketleri/'+hid).set(hareket);
-    stockHareketleri[hid] = hareket; // artık canlı dinlenmiyor (bkz. loadStockHareketleri), yerel kopyayı biz güncelliyoruz
   } else {
-    const yeniMiktar = (Number(item.miktar)||0) - Number(miktar);
-    DB.ref('stockItems/'+itemId+'/miktar').set(yeniMiktar);
-    DB.ref('stockItems/'+itemId+'/sonHareketTs').set(Date.now()); // Genel Bakış "Son Hareket" sütunu için denormalize alan
-    DB.ref('stockItems/'+itemId+'/sonHareketAciklama').set('Üretim tüketimi'+(meta.isEmriNo?' · '+meta.isEmriNo:''));
-    const hid = uid();
-    const hareket = {
+    const inc = stokAzalt(-Number(miktar));
+    yazma['stockItems/'+itemId+'/miktar'] = inc != null ? inc : (Number(item.miktar)||0) - Number(miktar);
+    hareket = {
       itemId, itemKod: item.kod||'', itemIsim: item.isim||'', miktar: -Number(miktar), birim: item.birim||'',
-      isEmriNo: meta.isEmriNo||'', talepNo: meta.talepNo||'', operatorUsername: session.username, operatorName: session.displayName, ts: Date.now()
+      isEmriNo: meta.isEmriNo||'', talepNo: meta.talepNo||'', operatorUsername: session.username, operatorName: session.displayName, ts: now
     };
-    DB.ref('stockHareketleri/'+hid).set(hareket);
-    stockHareketleri[hid] = hareket;
   }
+  yazma['stockItems/'+itemId+'/sonHareketTs'] = now;   // Genel Bakış "Son Hareket" sütunu için denormalize alan
+  yazma['stockItems/'+itemId+'/sonHareketAciklama'] = 'Üretim tüketimi'+(meta.isEmriNo?' · '+meta.isEmriNo:'');
+  yazma['stockHareketleri/'+hid] = hareket;
+  DB.ref().update(yazma).catch(err=>toast('Stok düşülemedi: '+((err && err.message)||'hata')));
+  stockHareketleri[hid] = hareket; // artık canlı dinlenmiyor (bkz. loadStockHareketleri), yerel kopyayı biz güncelliyoruz
+}
+/* HAMMADDE İADESİ (13.10.2026, kullanıcı: "kaydı silerek yapıyorduk ama iade daha mantıklı").
+   Yanlış / fazla stok çıkışı silinmez: aynı iş emrine + yazan bir iade hareketi açılır, stok geri
+   artar, asıl harekette iadeEdilen birikir. BOM + Rota ve maliyet, iş emrinin tüketiminden iadeyi düşer.
+   Çubukta: çubuk duruyorsa boyuna eklenir; yoksa iade edilen boyda yeni çubuk açılır. */
+function stokIadeEt(hid){
+  if(!canManageStock()){ toast('İadeyi Şef ya da SuperAdmin yapabilir'); return; }
+  const h = stockHareketleri[hid]; if(!h || !(Number(h.miktar) < 0)) return;
+  const item = stockItems[h.itemId]; if(!item){ toast('Kalem bulunamadı (silinmiş olabilir)'); return; }
+  const kalan = Math.abs(Number(h.miktar)) - (Number(h.iadeEdilen)||0);
+  if(!(kalan > 0)){ toast('Bu çıkışın tamamı zaten iade edilmiş'); return; }
+  const girdi = prompt(`${h.itemKod||''} · ${h.talepNo||h.isEmriNo||''}\nİade edilecek miktar (${h.birim||''}) — en fazla ${kalan}:`, String(kalan));
+  if(girdi == null) return;
+  const x = Number(String(girdi).replace(',', '.'));
+  if(!(x > 0) || x > kalan){ toast('Geçerli bir miktar girin (0 – '+kalan+')'); return; }
+  const now = Date.now(), yeniHid = uid(), yazma = {};
+  let lotId = h.lotId || null;
+  if(item.tur==='boy'){
+    if(lotId && (item.lots||{})[lotId]){
+      const inc = stokAzalt(x); yazma[`stockItems/${h.itemId}/lots/${lotId}/boy`] = inc != null ? inc : (Number(item.lots[lotId].boy)||0) + x;
+    } else { lotId = uid(); yazma[`stockItems/${h.itemId}/lots/${lotId}`] = { boy: x, eklenmeTs: now, kaynak: 'iade' }; }
+  } else {
+    const inc = stokAzalt(x); yazma['stockItems/'+h.itemId+'/miktar'] = inc != null ? inc : (Number(item.miktar)||0) + x;
+  }
+  const iadeHareket = { itemId: h.itemId, lotId, itemKod: h.itemKod||'', itemIsim: h.itemIsim||'', miktar: x, birim: h.birim||'',
+    tip: 'iade', iadeOf: hid, isEmriNo: h.isEmriNo||'', talepNo: h.talepNo||'', aciklama: 'İade — yanlış / fazla çıkış',
+    operatorUsername: session.username, operatorName: session.displayName, ts: now };
+  yazma['stockHareketleri/'+yeniHid] = iadeHareket;
+  yazma['stockHareketleri/'+hid+'/iadeEdilen'] = (Number(h.iadeEdilen)||0) + x;
+  yazma['stockItems/'+h.itemId+'/sonHareketTs'] = now;
+  yazma['stockItems/'+h.itemId+'/sonHareketAciklama'] = 'İade'+(h.talepNo||h.isEmriNo ? ' · '+(h.talepNo||h.isEmriNo) : '');
+  DB.ref().update(yazma).then(()=>{
+    stockHareketleri[yeniHid] = iadeHareket; stockHareketleri[hid] = { ...h, iadeEdilen: (Number(h.iadeEdilen)||0) + x };
+    if(typeof bomRotaVeri !== 'undefined' && bomRotaVeri.stok){ bomRotaVeri.stok[yeniHid] = iadeHareket; bomRotaVeri.ts = Date.now(); }
+    toast(x+' '+(h.birim||'')+' iade edildi — stoğa geri eklendi'); render();
+  }).catch(err=>toast('İade kaydedilemedi: '+((err && err.message)||'hata')));
 }
 /* ---------- Kod ile Giriş (mal kabul) — SuperAdmin/Şef ----------
    Tadilat'taki "Malzeme Ara" modalıyla (bkz. js/catalog.js malzemeLikeMatch, ui/catalog-ui.js

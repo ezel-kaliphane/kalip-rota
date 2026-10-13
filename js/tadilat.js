@@ -392,7 +392,7 @@ function devamEtTadilatDurus(){
   if(!sess || sess.operasyon.status!=='duruş') return;
   const { tadilat: t, operasyon: op } = sess;
   const extra = op.duruşTs ? Math.max(0, Date.now()-op.duruşTs) : 0;
-  const isGunSonu = op.duruşNedeni===GUN_SONU_REASON;
+  const isGunSonu = isVerimlilikDisiDurus(op.duruşNedeni);   // H3 (13.10.2026): Planlı Mola da duruş değil
   // DÜZELTME: Eskiden Gün Sonu beklemesi de KOŞULSUZ duruşToplamMs'e ekleniyordu (üretim
   // işlerindeki bitir()/devamEt() ise excludedMs'e ayırıyor). Bu yüzden bir tadilat 17:30'da
   // Gün Sonu ile duraklatılıp ertesi sabah devam ettirildiğinde, gece boyu geçen ~14.5 saat
@@ -504,7 +504,7 @@ function tadilatBitir(tadilatId, opId, sonOperasyon){
         const extra = src.duruşTs ? Math.max(0, Date.now()-src.duruşTs) : 0;
         // DÜZELTME (bkz. devamEtTadilatDurus'taki aynı düzeltme): Gün Sonu süresi de koşulsuz
         // duruşToplamMs'e ekleniyordu; artık üretim tarafıyla aynı şekilde excludedMs'e ayrılıyor.
-        const isGunSonuSrc = src.duruşNedeni===GUN_SONU_REASON;
+        const isGunSonuSrc = isVerimlilikDisiDurus(src.duruşNedeni);   // H3: Planlı Mola da
         const duruşToplamMs = (src.duruşToplamMs||0) + (isGunSonuSrc?0:extra);
         const excludedMs = (src.excludedMs||0) + (isGunSonuSrc?extra:0);
         const durusLog = !isGunSonuSrc ? appendDurusLog(src.durusLog, src.duruşNedeni, extra, src.duruşTs) : (src.durusLog||null);

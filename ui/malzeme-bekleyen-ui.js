@@ -281,7 +281,7 @@ function renderMalzemeBekleyen(){
         return `<div class="mb-satir ${sd==='yok'?'mb-istek-yok':sd==='geldi'?'mb-istek-geldi':'mb-istek-var'}" title="${sd==='yok'?'İstek no girilmedi — CANIAS isteği henüz açılmadı':sd==='geldi'?'Sipariş geldi — malzeme stokta':'İstek no girildi — sipariş açık, malzeme yolda'}">
           <span><span class="mb-ie">${esc(s.isEmriNo||'—')}</span><span class="mb-talep">${esc(s.talepNo||'')}</span></span>
           <span class="mb-mamul" title="${esc(s.mamulAdi||'')}">${esc(s.mamulAdi||'—')}</span>
-          <span class="mb-sag">${s.ieMiktar||'—'}</span>
+          <span class="mb-sag">${s.ieMiktar||`<span style="color:var(--warn)" title="İ.E. miktarı girilmemiş — ihtiyaç 1 parça sayılıyor">?</span>`}</span>
           <span class="mb-sag" title="${malzemeBoyMu(s)?'Parça boyu × İ.E. miktarı':''}">${malzemeBoyMu(s) && (Number(s.ieMiktar)||0)>1 ? `${Math.round(malzemeToplamGereken(s))} mm<small class="mb-pay" style="color:var(--text-muted)">${s.gerekenMiktar}×${Math.round(Number(s.ieMiktar))}</small>` : `${s.gerekenMiktar} ${esc(s.birim||'')}`}${pay?`<small class="mb-pay" title="Testere payı: kesim başına ${MALZEME_KESIM_PAYI_MM} mm">+${pay}</small>`:''}</span>
           <span style="color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(operatorGosterimAdi({operatorName:s.isaretleyenName, operatorUsername:s.isaretleyenUsername}))}</span>
           <span class="mb-sag" style="color:${bek.renk}">${bek.metin}</span>

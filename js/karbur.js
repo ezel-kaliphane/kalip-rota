@@ -317,13 +317,15 @@ function karburPack(item, pieces){
     for(const b of bars){ if(b.used + need <= item.boy){ b.pieces.push(p); b.used += need; placed = true; break; } }
     if(!placed) bars.push({ pieces: [p], used: need });
   });
+  /* H6 (13.10.2026): çubuktan uzun parça yeni çubuğa konuyor, fire eksi çıkıyordu — seçenek dışı */
+  const sigmayan = list.filter(p => p.boy > item.boy).length;
   bars.forEach(b => {
     b.fire = Math.round((item.boy - b.used) * 100) / 100;
     /* Tam bölünüyorsa son parça için ayrı kesim gerekmez */
     b.kesim = b.fire > 0 ? b.pieces.length : b.pieces.length - 1;
   });
   return {
-    bars, cubuk: bars.length, mm: bars.length * item.boy,
+    sigmayan, bars, cubuk: bars.length, mm: bars.length * item.boy,
     kesim: bars.reduce((s, b) => s + b.kesim, 0),
     artiklar: bars.map(b => b.fire).filter(x => x > 0)
   };
@@ -363,7 +365,9 @@ function karburComputePlan(){
     /* En uygun çubuk boyunu program seçer: en az çubuk → en az mm → en az kesim.
        Stok yetmeyen seçenekler ikinci plana atılır ama gizlenmez. */
     const secenekler = rods.map(item => Object.assign({ item, stok: karburStokAdet(item.id) }, karburPack(item, pieces)))
+      .filter(s => !s.sigmayan)
       .sort((a, b) => (a.cubuk - b.cubuk) || (a.mm - b.mm) || (a.kesim - b.kesim));
+    if(!secenekler.length){ cut.push({ fam: g.fam, key, rodYok: true, sigmiyor: true, enUzun: Math.max(...rods.map(r => r.boy)), pieces: g.pieces }); return; }
     const uygun = secenekler.filter(s => s.stok >= s.cubuk);
     const varsayilan = uygun[0] || secenekler[0];
     const secili = karburRodPick[key] ? (secenekler.find(s => s.item.kod === karburRodPick[key]) || varsayilan) : varsayilan;

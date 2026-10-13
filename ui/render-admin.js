@@ -879,9 +879,10 @@ function renderMalzemeStokScreen(){
 
       const hareketBolumu = `
         <div class="sec-h" style="margin-top:0">Son Stok Hareketleri</div>
-        <table><thead><tr><th>Tarih</th><th>Kalem</th><th>Miktar</th><th>İş Emri</th><th>Kim</th></tr></thead><tbody>
-          ${recentMoves.length===0 ? `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Henüz hareket yok.</td></tr>` : recentMoves.map(m=>`
-            <tr><td>${fmtDT(m.ts)}</td><td class="mono">${esc(m.itemKod)}${m.itemIsim?` <span style="color:var(--text-muted)">· ${esc(m.itemIsim)}</span>`:''}</td><td style="color:${m.miktar<0?'var(--danger)':'var(--success)'}">${m.miktar>0?'+':''}${m.miktar} ${esc(m.birim||'')}${m.aciklama?`<div style="font-size:10.5px;color:var(--text-muted);font-weight:400">${esc(m.aciklama)}</div>`:''}</td><td class="mono">${esc(m.talepNo||m.isEmriNo||'—')}</td><td>${esc(m.operatorName||'')}</td></tr>
+        <table><thead><tr><th>Tarih</th><th>Kalem</th><th>Miktar</th><th>İş Emri</th><th>Kim</th><th></th></tr></thead><tbody>
+          ${recentMoves.length===0 ? `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px">Henüz hareket yok.</td></tr>` : recentMoves.map(m=>`
+            <tr><td>${fmtDT(m.ts)}</td><td class="mono">${esc(m.itemKod)}${m.itemIsim?` <span style="color:var(--text-muted)">· ${esc(m.itemIsim)}</span>`:''}</td><td style="color:${m.miktar<0?'var(--danger)':'var(--success)'}">${m.miktar>0?'+':''}${m.miktar} ${esc(m.birim||'')}${m.aciklama?`<div style="font-size:10.5px;color:var(--text-muted);font-weight:400">${esc(m.aciklama)}</div>`:''}</td><td class="mono">${esc(m.talepNo||m.isEmriNo||'—')}</td><td>${esc(m.operatorName||'')}</td>
+              <td style="text-align:right;white-space:nowrap">${m.tip==='iade' ? '<span style="font-size:11px;color:var(--success)">iade</span>' : (m.miktar<0 && (m.talepNo||m.isEmriNo) && canManageStock()) ? `${m.iadeEdilen?`<span style="font-size:11px;color:var(--text-muted)">${m.iadeEdilen} iade · </span>`:''}${Math.abs(m.miktar)-(Number(m.iadeEdilen)||0) > 0 ? `<button class="btn-ghost" style="width:auto;padding:2px 9px;font-size:11px" title="Yanlış / fazla çıkışı stoğa geri al" onclick="stokIadeEt('${escJs(m.id)}')">İade</button>` : ''}` : ''}</td></tr>
           `).join('')}
         </tbody></table>`;
 
@@ -4449,7 +4450,7 @@ function renderAdmin(){
           </button>
           ${reportMakineDropdownOpen ? `<div class="dropdown-panel">
             ${reportMakineFilter.size>0 ? `<button class="btn-ghost" style="width:100%;margin-bottom:6px;font-size:12px" onclick="clearReportMakineFilter()">${ico('x',14)} Seçimi Temizle</button>` : ''}
-            ${allMachines().map(m=>{ const label=`${m.code} · ${m.name}`; return `<label class="dropdown-item"><input type="checkbox" ${reportMakineFilter.has(label)?'checked':''} onchange="toggleReportMakineSelect('${esc(label)}')"><span>${esc(label)}</span></label>`; }).join('')}
+            ${allMachines().map(m=>{ const label=`${m.code} · ${m.name}`; return `<label class="dropdown-item"><input type="checkbox" ${reportMakineFilter.has(label)?'checked':''} onchange="toggleReportMakineSelect('${escJs(label)}')"><span>${esc(label)}</span></label>`; }).join('')}
           </div>` : ''}
         </div>
         <input type="date" class="filter-input" value="${esc(reportFilter.tarihFrom)}" onchange="setReportFilterField('tarihFrom', this.value)" title="Başlangıç">

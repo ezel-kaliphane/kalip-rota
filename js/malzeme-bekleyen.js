@@ -115,6 +115,7 @@ function malzemeIhtiyac(x){ return malzemeToplamGereken(x) + malzemeKesimPayi(x)
 function malzemeGerekenYazi(x){
   const g = Number(x && x.gerekenMiktar)||0, b = (x && x.birim)||'';
   if(!malzemeBoyMu(x)) return g + ' ' + b;
+  if(!(Math.round(Number(x.ieMiktar)||0) > 0)) return g + ' mm × ? (İ.E. miktarı yok — 1 sayıldı)';   // H7: sessiz varsayım görünsün
   const n = Math.max(1, Math.round(Number(x.ieMiktar)||0) || 1);
   return n > 1 ? g + ' mm × ' + n + ' = ' + Math.round(g * n) + ' mm' : g + ' mm';
 }

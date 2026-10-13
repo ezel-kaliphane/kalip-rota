@@ -82,12 +82,43 @@ test('gece de çalışan makine %100\'ü aşmaz (vardiya dışı = fazla mesai)'
   assert.equal(m.verimlilikRaw, 100);
 });
 
-test('çoklu iş emri grubu makinede bir kez sayılır', () => {
-  kayitlar([
-    { makine: 'UT04 · Torna', groupId: 'g1', startTs: ts('2026-10-05 08:00'), endTs: ts('2026-10-05 12:00') },
-    { makine: 'UT04 · Torna', groupId: 'g1', isEmriNo: 'UC2', startTs: ts('2026-10-05 08:00'), endTs: ts('2026-10-05 12:00') }
-  ]);
-  assert.equal(makine(analiz('2026-10-05', '2026-10-05'), 'UT04').workMin, 240);
+/* Grup kayıtlarını ELLE yazmak yerine uygulamanın kendi finishGrup'u üretir (dış inceleme K4/H1:
+   eski test tam bitiş saati veriyordu, finishGrup ise adet payına göre kısaltılmış saat yazıyor). */
+function grupBitir(uyeler, bitis, eskiBicim){
+  const e = {}; uyeler.forEach((x, i) => { e['g' + i] = { status: 'devam', operatorUsername: 'OP1', operatorName: 'Op Bir', talepNo: 'T' + i, groupId: 'g1', ...x }; });
+  A.ata('nowTick', SIMDI);
+  A.ata('STATE.entries', e);
+  let yazilan = null;
+  const eskiDB = A.calistir('DB'), eskiNow = Date.now;
+  A.ata('DB', { ref: () => ({ update: o => { yazilan = o; return Promise.resolve(); } }) });
+  A.ctx.toast = () => {}; A.ctx.render = () => {};
+  A.ata('session', { username: 'OP1', displayName: 'Op Bir' });
+  Date.now = () => bitis;
+  try{ A.ctx.finishGrup('g1', null, null); } finally { Date.now = eskiNow; A.ata('DB', eskiDB); }
+  const son = JSON.parse(JSON.stringify(e));
+  Object.entries(yazilan).forEach(([yol, v]) => { const [, id, alan] = yol.split('/'); son[id][alan] = v; });
+  if(eskiBicim) Object.values(son).forEach(x => { delete x.gercekBitisTs; delete x.grupPayi; });   // 13.10 öncesi kayıtlar
+  A.ata('STATE.entries', son);
+  return son;
+}
+
+test('grup bitirme: makine ve operatör süresi gerçek süre (H1)', () => {
+  const son = grupBitir([
+    { makine: 'UT04 · Torna', isEmriNo: 'UC1', adet: 10, startTs: ts('2026-10-05 08:00') },
+    { makine: 'UT04 · Torna', isEmriNo: 'UC2', adet: 10, startTs: ts('2026-10-05 08:00') }
+  ], ts('2026-10-05 09:40'));
+  assert.equal(son.g0.endTs, ts('2026-10-05 08:50'), 'endTs adet payına göre kısaltılmış kalır (kayıt başına toplamlar)');
+  const d = analiz('2026-10-05', '2026-10-05');
+  assert.equal(makine(d, 'UT04').workMin, 100);   // eskiden 50
+  assert.equal(op(d).workMin, 100);
+});
+
+test('grup bitirme: 13.10 öncesi kayıtlarda da gerçek süre geri hesaplanır', () => {
+  grupBitir([
+    { makine: 'UT04 · Torna', isEmriNo: 'UC1', adet: 30, startTs: ts('2026-10-05 08:00') },
+    { makine: 'UT04 · Torna', isEmriNo: 'UC2', adet: 10, startTs: ts('2026-10-05 08:30') }
+  ], ts('2026-10-05 10:00'), true);
+  assert.equal(makine(analiz('2026-10-05', '2026-10-05'), 'UT04').workMin, 120);   // 08:00–10:00
 });
 
 test('hafta sonu çalışması fazla mesai', () => {
@@ -155,13 +186,54 @@ test('maliyet: fason ısıl işlemde seçilen tür kg × fiyat', () => {
   assert.ok(Math.abs(m.isil.tutar - kg126 * 20) < 1e-6);
 });
 
-test('maliyet: çoklu iş emri grubunda süre üyelere bölünür', () => {
+test('maliyet: grupta süre üyelere bir kez bölünür — eski ve yeni kayıt (H1)', () => {
   maliyetKur(parametre());
-  const a = { id: 'k0', makine: 'UT04 · Torna', groupId: 'g1', startTs: ts('2026-10-05 08:00'), endTs: ts('2026-10-05 09:40'), status: 'tamamlandi', isEmriNo: 'UC1' };
-  const b = { id: 'k1', makine: 'UT04 · Torna', groupId: 'g1', startTs: ts('2026-10-05 08:00'), endTs: ts('2026-10-05 09:40'), status: 'tamamlandi', isEmriNo: 'UC2' };
-  kayitlar([a, b]);
-  const m = A.ctx.maliyetHesapla(isEmri([a]), true);
-  assert.ok(Math.abs(m.iscilik - 500) < 0.01, '100 dk iki iş emrine bölünür');
+  [false, true].forEach(eski => {
+    const son = grupBitir([
+      { makine: 'UT04 · Torna', isEmriNo: 'UC1', adet: 10, startTs: ts('2026-10-05 08:00') },
+      { makine: 'UT04 · Torna', isEmriNo: 'UC2', adet: 10, startTs: ts('2026-10-05 08:00') }
+    ], ts('2026-10-05 09:40'), eski);
+    A.ata('_maliyetOnbellek', {});
+    const m = A.ctx.maliyetHesapla(isEmri([{ id: 'g0', ...son.g0 }]), true);
+    assert.ok(Math.abs(m.iscilik - 500) < 0.01, (eski ? 'eski' : 'yeni') + ' kayıt: 100 dk / 2 = 50 dk × 10 ₺ (eskiden 250)');
+  });
+});
+
+test('maliyet: hepsi hurda olan işte birim maliyet yok (H4)', () => {
+  maliyetKur(parametre());
+  const e = { id: 'k0', makine: 'UT04 · Torna', startTs: ts('2026-10-05 08:00'), endTs: ts('2026-10-05 09:00'), status: 'tamamlandi', isEmriNo: 'UC1',
+    uygunsuzluklar: { u1: { karar: 'hurda', adet: 2 } } };
+  kayitlar([e]);
+  const m = A.ctx.maliyetHesapla(isEmri([e]), true);
+  assert.equal(m.saglam, 0); assert.equal(m.birim, null);
+});
+
+test('maliyet: kayıt düzeltilince önbellek yenilenir (H2)', () => {
+  maliyetKur(parametre());
+  const e = { id: 'k0', makine: 'UT04 · Torna', startTs: ts('2026-10-05 08:00'), endTs: ts('2026-10-05 09:40'), status: 'tamamlandi', isEmriNo: 'UC1' };
+  kayitlar([e]);
+  const once = A.ctx.maliyetHesapla(isEmri([e]), true).iscilik;
+  const e2 = { ...e, duruşToplamMs: 60 * DK, durusLog: [{ ts: ts('2026-10-05 08:10'), sureMs: 60 * DK, neden: 'Arıza' }] };
+  kayitlar([e2]);   // yeni STATE.entries referansı — aynı iş emri, aynı bitiş
+  const sonra = A.ctx.maliyetHesapla(isEmri([e2]), true).iscilik;
+  assert.ok(Math.abs(once - 1000) < 0.01 && Math.abs(sonra - 400) < 0.01, `önce ${once}, sonra ${sonra}`);
+});
+
+test('maliyet: kur günü yerel güne göre (H8)', () => {
+  const P = parametre(); P.kur = { mod: 'otomatik', usd: 0, eur: 0 };
+  A.ata('maliyetKurSeri', { seri: { '2026-10-05': { usd: 40, eur: 45 }, '2026-10-06': { usd: 41, eur: 46 } } });
+  const k = A.ctx.maliyetKur(ts('2026-10-06 01:30'), P);   // UTC'de hâlâ 5 Ekim
+  assert.equal(k.tarih, '2026-10-06');
+  A.ata('maliyetKurSeri', null);
+});
+
+test('karbür: çubuktan uzun parça seçenek dışı (H6)', () => {
+  const r = A.ctx.karburPack({ boy: 156 }, [{ boy: 160 }, { boy: 50 }]);
+  assert.equal(r.sigmayan, 1);
+});
+
+test('malzeme: İ.E. miktarı yoksa ekranda belli (H7)', () => {
+  assert.match(A.ctx.malzemeGerekenYazi({ birim: 'mm', gerekenMiktar: 45, ieMiktar: 0 }), /İ\.E\. miktarı yok/);
 });
 
 /* ==================== CANİAS KODU AYRI ALANDA (13.10.2026) ==================== */

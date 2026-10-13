@@ -350,7 +350,7 @@ function renderKarburCutGroups(plan, interactive){
     <span class="chip" style="pointer-events:none;border-color:var(--warn);color:var(--warn)">kesilecek çubuk yok</span>
     Ø${karburFmt(g.fam.disCap)} · delik ${esc(g.fam.delik)} · ${esc(g.fam.kalite)} —
     <b>${g.pieces.length} parça karşılanamadı</b>
-    <span style="color:var(--text-muted)">bu malzemede stokta çubuk (${KARBUR_CUBUK_MIN} mm üzeri) yok</span></div>`).join('');
+    <span style="color:var(--text-muted)">${g.sigmiyor ? `parça çubuktan uzun — en uzun çubuk ${karburFmt(g.enUzun)} mm; parça boyunu kontrol et` : `bu malzemede stokta çubuk (${KARBUR_CUBUK_MIN} mm üzeri) yok`}</span></div>`).join('');
   if(!groups.length && !yok.length) return `<div style="font-size:12.5px;color:var(--text-muted);padding:10px 2px">Kesim gerektiren parça yok.</div>`;
 
   groups.forEach(g => {
@@ -807,7 +807,7 @@ function renderKarburGecmis(){
           onclick="karburPlanYukle('${escJs(g.planNo)}')" title="Bu planın satırlarını Kesim Planı ekranına yükle — yeni plan olarak tekrar kaydedebilirsin">⟳ Yeniden yükle</button>` : ''}
         <button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px" onclick="karburGecmisRaporYazdir('${escJs(g.planNo)}')" title="Bu planın kesim raporunu aç / yazdır">🖨 Kesim raporu</button>
         ${(canManageKarbur() && !g.iptal) ? `<button type="button" class="btn-ghost" style="padding:2px 9px;font-size:11px"
-          ${(karburBusy||karburIptalYukleniyor)?'disabled':''} onclick="karburPlanIptalIste('${esc(g.planNo)}')"
+          ${(karburBusy||karburIptalYukleniyor)?'disabled':''} onclick="karburPlanIptalIste('${escJs(g.planNo)}')"
           title="Bu planın stok düşümlerini ve iş emri tüketimini geri al">↩ Geri al</button>` : ''}
       </div>
       ${cakisanIe ? `<div style="font-size:12px;color:var(--danger);background:color-mix(in srgb, var(--danger) 10%, transparent);border-radius:6px;padding:6px 9px;margin:-2px 0 8px">

@@ -24,9 +24,55 @@ function araliklarToplam(l){ return l.reduce((t, a) => t + (a[1] - a[0]), 0); }
 function araliklarKesit(l, s, e){ return l.reduce((t, a) => t + Math.max(0, Math.min(a[1], e) - Math.max(a[0], s)), 0); }
 function olayAraliklari(evs){ return araliklariBirlestir(evs.map(ev => [Number(ev.ts) || 0, (Number(ev.ts) || 0) + (Number(ev.sureMs) || 0)])); }
 
+/* GRUP KAYITLARININ GERÇEK BİTİŞİ (13.10.2026 — dış inceleme H1): finishGrup her üyeye adet payına
+   göre KISALTILMIŞ endTs yazıyor (kayıt başına süre toplamları doğru çıksın diye — maliyet ve
+   raporlar bunu kullanır). Zaman çizelgesi hesabı (verimlilik) ise makinenin GERÇEKTE ne zaman
+   boşaldığını ister: yeni kayıtlarda gercekBitisTs; eskilerde başlangıç + süre ÷ pay (pay = adet /
+   grubun toplam adedi — finishGrup'un tersi). Sonradan katılan / tek tek bitirilen üye payı
+   şişirmesin diye her üyenin tahmini grubun ortanca bitişiyle sınırlanır (birleşim zaten grubun
+   aralığını kapsar). Eskiden verimlilik gruptan tek üyenin kısaltılmış süresini sayıyordu: 2 üyeli
+   grupta gerçeğin yarısı. */
+let _grupBitisOnbellek = null, _grupBitisKaynak = null;
+function grupGercekBitisleri(){
+  if(_grupBitisKaynak === STATE.entries && _grupBitisOnbellek) return _grupBitisOnbellek;
+  const g = {}, talepBaslar = {};
+  entriesArray().forEach(e => {
+    if(e.groupId) (g[e.groupId] ||= []).push(e);
+    const t = String(e.talepNo || '').trim(); if(t) (talepBaslar[t] ||= []).push(e);
+  });
+  /* Fiziksel sınır: parçanın bu makinedeki işi, AYNI talebin bir sonraki operasyonu başlamadan bitmiştir.
+     Gerçek veride (13.10.2026) fason dışı 117 grubun 11'inde payla geri hesaplanan bitiş bu sınırı
+     1–97 saat aşıyordu (sonradan katılan / tek tek bitirilen üyeler) — sınır bunu keser. */
+  const sonrakiBaslangic = e => {
+    const l = talepBaslar[String(e.talepNo || '').trim()] || [];
+    let en = Infinity; l.forEach(x => { if(x.id !== e.id && x.groupId !== e.groupId && x.startTs > e.startTs && x.startTs < en) en = x.startTs; });
+    return en;
+  };
+  const sonuc = {};
+  Object.values(g).forEach(m => {
+    const top = m.reduce((s, e) => s + (Number(e.adet) || 0), 0);
+    const tahmin = m.filter(e => e.status === 'tamamlandi' && e.endTs && !e.gercekBitisTs).map(e => {
+      const p = (typeof e.grupPayi === 'number' && e.grupPayi > 0) ? e.grupPayi : (top > 0 ? (Number(e.adet) || 0) / top : 1 / m.length);
+      return { e, R: p > 0 && p < 1 ? e.startTs + (e.endTs - e.startTs) / p : e.endTs };
+    });
+    if(!tahmin.length) return;
+    const sirali = tahmin.map(x => x.R).sort((a, b) => a - b), orta = sirali[Math.floor((sirali.length - 1) / 2)];
+    tahmin.forEach(({ e, R }) => { sonuc[e.id] = Math.max(e.endTs, Math.min(R, Math.max(orta, e.endTs), sonrakiBaslangic(e))); });
+  });
+  _grupBitisOnbellek = sonuc; _grupBitisKaynak = STATE.entries;
+  return sonuc;
+}
+function entryGercekBitis(e){
+  if(!e.endTs) return nowTick;
+  if(e.gercekBitisTs) return e.gercekBitisTs;
+  if(!e.groupId || e.status !== 'tamamlandi' || !e.id) return e.endTs;
+  const r = grupGercekBitisleri()[e.id];
+  return r ? Math.min(r, Math.max(nowTick, e.endTs)) : e.endTs;
+}
+
 /* Kaydın [aStart, aEnd) penceresindeki NET çalışma aralıkları (duruş + Gün Sonu/Planlı Mola düşülmüş) */
 function entryNetAraliklar(e, aStart, aEnd){
-  const s = Math.max(e.startTs, aStart), en = Math.min(e.endTs || nowTick, aEnd);
+  const s = Math.max(e.startTs, aStart), en = Math.min(entryGercekBitis(e), aEnd);
   if(!(en > s)) return [];
   const kes = olayAraliklari(entryDurusEvents(e).concat(entryExcludedEvents(e)));
   const out = []; let cur = s;
@@ -36,7 +82,7 @@ function entryNetAraliklar(e, aStart, aEnd){
 }
 /* Kaydın penceredeki duruş süresi (verimlilik dışı Gün Sonu / Planlı Mola HARİÇ) */
 function entryDurusPencere(e, aStart, aEnd){
-  const s = Math.max(e.startTs, aStart), en = Math.min(e.endTs || nowTick, aEnd);
+  const s = Math.max(e.startTs, aStart), en = Math.min(entryGercekBitis(e), aEnd);
   if(!(en > s)) return 0;
   return araliklarKesit(olayAraliklari(entryDurusEvents(e)), s, en);
 }

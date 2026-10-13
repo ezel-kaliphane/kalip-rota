@@ -192,7 +192,7 @@ function maliyetKur(ts, P){
   if(P && P.kur && P.kur.mod === 'elle') return elle;
   const s = maliyetKurSeri && maliyetKurSeri.seri;
   if(!s) return elle;
-  const hedef = new Date(ts || Date.now()).toISOString().slice(0, 10);
+  const hedef = dateKey(ts || Date.now());   // H8: yerel gün (UTC değil — 00:00–03:00 arası önceki günün kurunu alıyordu)
   const gunler = Object.keys(s).sort();
   let sec = null; for(const d of gunler){ if(d <= hedef) sec = d; else break; }
   if(!sec) sec = gunler[0];
@@ -234,10 +234,14 @@ function mlMetinKg(capBoy, adet, yog){
 }
 
 /* ---------- İş emri maliyeti ---------- */
-let _maliyetOnbellek = {};
+let _maliyetOnbellek = {}, _maliyetOnbellekSurum = null;
 function maliyetHesapla(x, canli){
   if(!x || !maliyetAcik()) return null;
   if(!canli){ const s = maliyetKapaliKayit(x); if(s) return s; }
+  /* H2 (13.10.2026): kayıt / stok hareketi / parametre değişince önbellek boşalır — yoksa aynı oturumda
+     yapılan duruş/süre/adet düzeltmesi görünmüyor, ay kapanışı bayat rakamı sabitliyordu */
+  const surum = [STATE.entries, bomRotaVeri.ts, maliyetDurum.veri, maliyetKurSeri, stockItems];
+  if(!_maliyetOnbellekSurum || surum.some((v, i) => v !== _maliyetOnbellekSurum[i])){ _maliyetOnbellek = {}; _maliyetOnbellekSurum = surum; }
   const anahtar = (x.talep || x.uKodu) + '|' + x.finishedAt + '|' + (x.hammadde ? x.hammadde.kaynak : '') + '|' + Object.keys(karburKatalog || {}).length;
   if(_maliyetOnbellek[anahtar]) return _maliyetOnbellek[anahtar];
   const P = maliyetParam(x.finishedAt); if(!P) return null;
@@ -253,7 +257,9 @@ function maliyetHesapla(x, canli){
   entriesArray().forEach(e => { if(e.groupId) gruplar[e.groupId] = (gruplar[e.groupId] || 0) + 1; });
   x.ana.concat(x.zarf, x.elmas).sort((a, b) => (a.startTs || 0) - (b.startTs || 0)).forEach(e => {
     const kod = String(e.makine || '').split(' · ')[0];
-    const pay = e.groupId ? (gruplar[e.groupId] || 1) : 1;
+    /* H1: tamamlanmış grup üyesinin süresi ZATEN adet payına göre kısaltılmış (finishGrup) — bir kez
+       daha üye sayısına bölmek 2 üyede maliyeti yarıya indiriyordu. Yalnız açık üyeler bölünür. */
+    const pay = (e.groupId && e.status !== 'tamamlandi') ? (gruplar[e.groupId] || 1) : 1;
     const dk = entryDurationBreakdown(e).netMs / 60000 / pay;
     const g = grupOf(kod);
     const kisi = P.genel.iscilikYontemi === 'kisi' ? mlSayi((P.kisiDk || {})[e.operatorUsername]) : 0;
@@ -354,7 +360,8 @@ function maliyetHesapla(x, canli){
   const toplam = iscilik + elektrik + amort + sarf + genelGider + celik.tutar + karbur.tutar + isil.tutar;
   const adet = Number(x.adet) || 0;
   const saglam = Math.max(0, adet - hurda);
-  const birim = (saglam || adet) ? toplam / (saglam || adet) : null;
+  /* H4: hepsi hurdaysa birim maliyet yok ("sağlam parça yok"); toplam/adet yanıltıcıydı */
+  const birim = saglam > 0 ? toplam / saglam : (hurda > 0 ? null : (adet ? toplam / adet : null));
   const sonuc = { toplam, birim, adet, hurda, saglam, hurdaPayi: birim && hurda ? birim * hurda : 0, kur, toplamDk,
     iscilik, elektrik, amort, sarf, genelGider, celik, karbur, isil, ops, grupsuz, eksik:[...new Set(eksik)],
     yontem: P.genel.iscilikYontemi, genelGiderYuzde: mlSayi(P.genel.genelGiderYuzde), isilMak };

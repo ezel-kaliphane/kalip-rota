@@ -1098,7 +1098,7 @@ function entryDurationBreakdown(e){
   let excludedMs = e.excludedMs||0;
   if(e.status==='duruş' && e.duruşTs){
     const liveExtra = Math.max(0, nowTick - e.duruşTs);
-    if(e.duruşNedeni===GUN_SONU_REASON) excludedMs += liveExtra;
+    if(isVerimlilikDisiDurus(e.duruşNedeni)) excludedMs += liveExtra;   // H3: Planlı Mola da
     else durusMs += liveExtra;
   }
   const netMs = Math.max(0, wallMs - durusMs - excludedMs);
@@ -1147,7 +1147,7 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
     // 1 Ağustos'ta başlayıp 4 Ağustos'ta biten bir iş, "3-5 Ağustos" raporunda HİÇ görünmüyordu
     // (başlangıcı aralığın dışında kaldığı için). Artık kaydın [başlangıç, bitiş] aralığı,
     // seçilen [fromDate, toDate] aralığıyla KESİŞİYORSA dahil ediliyor.
-    const entryEndForFilter = e.endTs || nowTick;
+    const entryEndForFilter = entryGercekBitis(e);   // grup üyesinin kısaltılmış endTs'i değil (bkz. js/verimlilik.js)
     if(e.startTs >= rangeEndMs || entryEndForFilter < rangeStartMs) return false; // hiç kesişmiyor
     if(atolyeFilter && atolyeFilter!=='tumu'){
       const code = String(e.makine||'').split(' · ')[0];
@@ -1181,19 +1181,24 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
     let hasPhysicalAnomaly = false;
     gunler.forEach(dk=>{
       const [w0, w1] = gunPencere(dk); if(!(w1 > w0)) return;
-      const gunKayit = data.entries.filter(e=>e.startTs < w1 && (e.endTs||nowTick) > w0);
+      const gunKayit = data.entries.filter(e=>e.startTs < w1 && entryGercekBitis(e) > w0);
       if(!gunKayit.length) return;
       daysUsed++;
-      const seen = new Set(); let ara = [], tadAra = [], dDurus = 0;
+      /* Çoklu iş emri grubu: üyelerin GERÇEK aralıkları birleştirilir (makine bir kez meşgul);
+         duruş da aralık birleşimiyle, mesai listesine grup başına bir satır. */
+      const mesaiGrup = new Set(); let ara = [], tadAra = [], durAra = [];
       gunKayit.forEach(e=>{
-        if(e.groupId){ if(seen.has(e.groupId)) return; seen.add(e.groupId); }   // çoklu iş emri grubu = makine bir kez meşgul
         const a = entryNetAraliklar(e, w0, w1);
         ara = ara.concat(a); if(e._isTadilat) tadAra = tadAra.concat(a);
-        dDurus += entryDurusPencere(e, w0, w1);
+        const s = Math.max(e.startTs, w0), en = Math.min(entryGercekBitis(e), w1);
+        durAra = durAra.concat(olayAraliklari(entryDurusEvents(e)).map(([x,y])=>[Math.max(x,s), Math.min(y,en)]).filter(([x,y])=>y>x));
+        if(e.groupId){ if(mesaiGrup.has(e.groupId)) return; mesaiGrup.add(e.groupId); }
         const ot = gunFazlaMesaiMs(dk, a);
         if(ot >= 60000) overtimeList.push({ makine: label, operatorUsername: e.operatorUsername, operatorName: e.operatorName, isEmriNo: e.isEmriNo, overtimeMin: Math.round(ot/60000), tarih: dk });
       });
       const birlesik = araliklariBirlestir(ara);
+      const durU = araliklariBirlestir(durAra);
+      const dDurus = Math.max(0, araliklarToplam(durU) - durU.reduce((t,[x,y])=>t+araliklarKesit(birlesik, x, y), 0));
       const dWork = araliklarToplam(birlesik), dTad = Math.min(dWork, araliklarToplam(araliklariBirlestir(tadAra)));
       if(gunKayit.some(entryUzunKosu)){ hasPhysicalAnomaly = true; anyPhysicalAnomaly = true; }
       workMs += dWork; tadMs += dTad; durusMs += dDurus; overtimeMs += gunFazlaMesaiMs(dk, birlesik);
@@ -1233,21 +1238,21 @@ function computeAnalizData(fromDate, toDate, atolyeFilter){
     const days = [];
     gunler.forEach(dk=>{
       const [w0, w1] = gunPencere(dk); if(!(w1 > w0)) return;
-      const gunKayit = op.entries.filter(e=>e.startTs < w1 && (e.endTs||nowTick) > w0);
+      const gunKayit = op.entries.filter(e=>e.startTs < w1 && entryGercekBitis(e) > w0);
       if(!gunKayit.length) return;
-      const seen = new Set(); let ara = [], tadAra = [], durAra = [];
-      const byM = {};
+      let ara = [], tadAra = [], durAra = [];
+      const byM = {};   // makine başına aralıklar — grup üyeleri aynı makinede birleşir
       gunKayit.forEach(e=>{
         const mCode = String(e.makine||'').split(' · ')[0] || '—';
-        const m = (byM[mCode] ||= { workMs:0, durusMs:0, label: e.makine });
-        if(e.groupId){ if(seen.has(e.groupId)) return; seen.add(e.groupId); }
+        const m = (byM[mCode] ||= { ara:[], dur:[], label: e.makine });
         const a = entryNetAraliklar(e, w0, w1);
-        const s = Math.max(e.startTs, w0), en = Math.min(e.endTs||nowTick, w1);
+        const s = Math.max(e.startTs, w0), en = Math.min(entryGercekBitis(e), w1);
         const du = olayAraliklari(entryDurusEvents(e)).map(([x,y])=>[Math.max(x,s), Math.min(y,en)]).filter(([x,y])=>y>x);
         ara = ara.concat(a); durAra = durAra.concat(du); if(e._isTadilat) tadAra = tadAra.concat(a);
-        m.workMs += araliklarToplam(a); m.durusMs += araliklarToplam(du);
+        m.ara = m.ara.concat(a); m.dur = m.dur.concat(du);
         machineSet.add(mCode);
       });
+      Object.values(byM).forEach(m => { m.workMs = araliklarToplam(araliklariBirlestir(m.ara)); m.durusMs = araliklarToplam(araliklariBirlestir(m.dur)); });
       const workU = araliklariBirlestir(ara);
       const dWork = araliklarToplam(workU);
       /* Operatörün duruşu: bir makine dururken diğerinde çalışıyorsa o an duruş sayılmaz */

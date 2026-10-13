@@ -16,6 +16,9 @@ admin.initializeApp();
 const db = admin.database();
 
 const GUN_SONU_REASON = "Gün Sonu (Mesai Bitti, yarın devam edilecek)";
+/* İstemcideki isVerimlilikDisiDurus ile aynı küme (js/constants.js) — Planlı Mola uzun duruş uyarısı üretmesin (H3) */
+const PLANLI_MOLA_REASON = "Planlı Mola (Öğle / Vardiya Arası)";
+const verimlilikDisi = r => r === GUN_SONU_REASON || r === PLANLI_MOLA_REASON;
 
 async function sendToOperator(username, title, body, tag, meta){
   meta = meta || {};
@@ -127,7 +130,7 @@ exports.uzunDurusUyarisi = onSchedule({ schedule: 'every 1 minutes', region: 'eu
   const entryUpdates = {};
 
   for(const [entryId, e] of Object.entries(entries)){
-    if(e.status!=='duruş' || !e.duruşTs || e.duruşNedeni===GUN_SONU_REASON) continue;
+    if(e.status!=='duruş' || !e.duruşTs || verimlilikDisi(e.duruşNedeni)) continue;
     if(now - e.duruşTs < esikMs) continue;
     const prev = notifiedEntries[entryId];
     if(prev && prev.duruşTs === e.duruşTs) continue; // bu duruş için zaten bildirildi
@@ -149,7 +152,7 @@ exports.uzunDurusUyarisi = onSchedule({ schedule: 'every 1 minutes', region: 'eu
   const tadilatUpdates = {};
 
   for(const [key, op] of Object.entries(tadilatDurustakiler)){
-    if(!op.duruşTs || op.duruşNedeni===GUN_SONU_REASON) continue;
+    if(!op.duruşTs || verimlilikDisi(op.duruşNedeni)) continue;
     if(now - op.duruşTs < esikMs) continue;
     const prev = notifiedTadilat[key];
     if(prev && prev.duruşTs === op.duruşTs) continue;

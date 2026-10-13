@@ -88,8 +88,14 @@ function bomRotaListesi(){
   if(_bomRotaCache && _bomRotaCacheAnahtar && anahtar.every((x, i) => x === _bomRotaCacheAnahtar[i])) return _bomRotaCache;
 
   // Stok çıkışları: talep no ile (yoksa iş emri/U kodu ile)
-  const stokTalep = {}, stokIe = {};
+  const stokTalep = {}, stokIe = {}, iadeTalep = {};
   Object.values(bomRotaVeri.stok || {}).forEach(h => {
+    /* İade (13.10.2026): iş emrine yazılmış iade hareketi o iş emrinin tüketiminden düşülür */
+    if(h && h.tip === 'iade' && Number(h.miktar) > 0){
+      const t = String(h.talepNo || '').trim().toUpperCase() || ('IE:' + baseIsEmriNo(h.isEmriNo));
+      const k = h.itemId || h.itemKod; ((iadeTalep[t] = iadeTalep[t] || {})[k] = (iadeTalep[t][k] || 0) + Number(h.miktar));
+      return;
+    }
     if(!h || !(Number(h.miktar) < 0)) return;
     const t = String(h.talepNo || '').trim().toUpperCase(), ie = baseIsEmriNo(h.isEmriNo);
     if(t) (stokTalep[t] = stokTalep[t] || []).push(h);
@@ -141,9 +147,12 @@ function bomRotaListesi(){
         const o = (kalem[k] = kalem[k] || { itemId: h.itemId || '', kod: h.itemKod || '', isim: h.itemIsim || '', miktar: 0, birim: h.birim || '' });
         o.miktar += Math.abs(Number(h.miktar) || 0);
       });
-      const kl = Object.values(kalem);
+      const iade = iadeTalep[talep || ('IE:' + uKodu)] || {};
+      Object.entries(iade).forEach(([k, m]) => { if(kalem[k]) kalem[k].miktar = Math.max(0, kalem[k].miktar - m); });
+      const kl = Object.values(kalem).filter(k => k.miktar > 0);
       hammadde = { kaynak: 'stok', ad: kl.map(k => k.isim || k.kod).join(' + '), boy: kl.map(k => bomSayi(k.miktar) + ' ' + k.birim).join(' + ') };
       hmRaw = { kaynak: 'stok', kalemler: kl };
+      if(!kl.length){ hammadde = null; hmRaw = null; }   // tamamı iade edildiyse hammadde kaydı yok sayılır
     }
     if(!hammadde){
       const m = talep ? (mbTalep[talep] || null) : (mbIe[uKodu] || null);   // talep varsa başka iş emrinin kaydı alınmasın

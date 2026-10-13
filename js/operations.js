@@ -306,7 +306,7 @@ function finishEntry(id, sonrakiMakine, forceSonOperasyon){
   const excludedMs = (e.excludedMs||0) + (isVerimDisi?extra:0);
   const durusLog = isVerimDisi ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
   const excludedLog = isVerimDisi ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
-  const updates = { endTs: Date.now(), status:'tamamlandi', duruşToplamMs, excludedMs, durusLog, excludedLog, finishedByUsername: session.username, finishedByName: session.displayName, sonrakiMakine: sonrakiMakine || null };
+  const updates = { endTs: Date.now(), ...(e.groupId ? { gercekBitisTs: Date.now(), grupPayi: 1 } : {}), status:'tamamlandi', duruşToplamMs, excludedMs, durusLog, excludedLog, finishedByUsername: session.username, finishedByName: session.displayName, sonrakiMakine: sonrakiMakine || null };
   if(forceSonOperasyon) updates.sonOperasyon = true;
   /* Final Kalite Kontrol sonucu (kaliteOnayla): onay/şartlı rotayı kapatır; red rotayı açık
      bırakır, iş emri seçilen düzeltme makinesinde bekler. */
@@ -607,9 +607,9 @@ function duraklatGrup(groupId){
   if(!reason){ toast('Duruş nedeni seçmelisin'); return; }
   const now = Date.now();
   const members = groupMembersOf(groupId);
-  members.forEach(e=>{
-    DB.ref('entries/'+e.id).update({ status:'duruş', duruşNedeni: reason, duruşTs: now });
-  });
+  const yazma = {};   // V2: tek yazma
+  members.forEach(e=>{ yazma['entries/'+e.id+'/status'] = 'duruş'; yazma['entries/'+e.id+'/duruşNedeni'] = reason; yazma['entries/'+e.id+'/duruşTs'] = now; });
+  DB.ref().update(yazma).catch(err=>toast('Kaydedilemedi: '+((err && err.message)||'hata')));
   toast('Tüm iş emirleri duraklatıldı');
   durusOpen=false; durusReasonSel=''; durusCustom='';
   if(reason===GUN_SONU_REASON){
@@ -624,6 +624,7 @@ function devamGrup(groupId){
   const machineBusy = !isFasonMachine(makine) && !isParalelMachine(makine) && entriesArray().some(o => o.groupId!==groupId && o.makine===makine && o.status==='devam');
   if(machineBusy){ toast('Bu makinede zaten aktif başka bir iş var. Önce onu bitir ya da duraklat.'); return; }
   const now = Date.now();
+  const yazma = {};   // V2: tek yazma
   members.forEach(e=>{
     // DÜZELTME (bkz. devamEt'teki aynı düzeltme): zaten devam eden bir üyeyi tekrar işlemek,
     // bayat duruşTs yüzünden aynı duruşu ikinci kez sayıyordu. Grupta karışık durum oluşabiliyor
@@ -635,8 +636,9 @@ function devamGrup(groupId){
     const excludedMs = (e.excludedMs||0) + (isVerimDisi?extra:0);
     const durusLog = isVerimDisi ? (e.durusLog||null) : appendDurusLog(e.durusLog, e.duruşNedeni, extra, e.duruşTs);
     const excludedLog = isVerimDisi ? appendDurusLog(e.excludedLog, e.duruşNedeni, extra, e.duruşTs) : (e.excludedLog||null);
-    DB.ref('entries/'+e.id).update({ status:'devam', duruşTs:null, duruşNedeni:null, duruşToplamMs, excludedMs, durusLog, excludedLog });
+    Object.entries({ status:'devam', duruşTs:null, duruşNedeni:null, duruşToplamMs, excludedMs, durusLog, excludedLog }).forEach(([k,v])=>{ yazma['entries/'+e.id+'/'+k] = v; });
   });
+  DB.ref().update(yazma).catch(err=>toast('Kaydedilemedi: '+((err && err.message)||'hata')));
   toast('Tüm iş emirleri devam ediyor');
   wakeOtherGunSonuEntries(session.username, members.map(e=>e.id));
   wakeOtherGunSonuTadilatOps(session.username, null);
@@ -678,6 +680,7 @@ function finishGrup(groupId, sonrakiMakine, sonrakiMakineKodu){
   });
   const totalAdet = withDurus.reduce((s,x)=>s+(Number(x.e.adet)||0), 0);
   const n = withDurus.length;
+  const tumYazma = {};   // V2 (13.10.2026): tüm üyeler TEK yazmada — bağlantı koparsa yarım grup kalmasın
   withDurus.forEach(x=>{
     const share = totalAdet>0 ? (Number(x.e.adet)||0)/totalAdet : 1/n;
     const wallMs = now - x.e.startTs;
@@ -685,8 +688,11 @@ function finishGrup(groupId, sonrakiMakine, sonrakiMakineKodu){
     const allocatedDurusMs = Math.round(x.duruşToplamMs*share);
     const allocatedExcludedMs = Math.round(x.excludedMs*share);
     const forceSonOperasyon = !x.e.sonOperasyon && sonrakiMakineKodu && sonrakiMakineKodu!==NEXT_OP_BELIRSIZ && otomatikSonOperasyonMu(sonrakiMakineKodu, bilesenOfCode(x.e.isEmriNo));
+    /* endTs adet payına göre kısaltılmış kalır (kayıt başına süre toplamları ve maliyet bunu kullanır);
+       makinenin gerçekte boşaldığı an gercekBitisTs, pay grupPayi (bkz. js/verimlilik.js entryGercekBitis) */
     const updates = {
       endTs: x.e.startTs + allocatedWallMs,
+      gercekBitisTs: now, grupPayi: share,
       status: 'tamamlandi',
       duruşToplamMs: allocatedDurusMs,
       excludedMs: allocatedExcludedMs,
@@ -707,8 +713,9 @@ function finishGrup(groupId, sonrakiMakine, sonrakiMakineKodu){
         aciklama: kbg.aciklama, geriMakine: null, kullanimNotu: null, ymGirisTs: null, ts: kbg.ts, username: kbg.username, name: kbg.name };
       updates.sonOperasyon = kbg.tur!=='red'; updates.sonrakiMakine = null;
     }
-    DB.ref('entries/'+x.e.id).update(updates);
+    Object.entries(updates).forEach(([k, v]) => { tumYazma['entries/'+x.e.id+'/'+k] = v === undefined ? null : v; });
   });
+  DB.ref().update(tumYazma).catch(err=>toast('Kaydedilemedi: '+((err && err.message)||'hata')));
   delete kaliteBekleyen['g:'+groupId];
   toast('Tüm iş emirleri tamamlandı');
   activeGroupId = null; view='list'; render();
@@ -743,8 +750,9 @@ function setSettingsSubTab(t){ settingsSubTab=t; if(t==='bildirimGonder') loadPu
 async function addOperator(){
   const code = (document.getElementById('new-op-code').value||'').trim().toUpperCase();
   const displayName = (document.getElementById('new-op-name').value||'').trim();
-  const password = (document.getElementById('new-op-pass').value||'').replace(/\D/g,'').slice(0,8) || '1234';
+  const password = (document.getElementById('new-op-pass').value||'').replace(/\D/g,'').slice(0,8);
   if(!code){ toast('Kullanıcı kodu girin'); return; }
+  if(password.length < 4){ toast('En az 4 haneli bir şifre girin (varsayılan 1234 kaldırıldı)'); return; }
   if(!displayName){ toast('Ad soyad girin'); return; }
   if(STATE.operators[code]){ toast(code+' zaten kayıtlı'); return; }
   const record = { displayName, password: await sha256Hex(password), defaultMachine: '' };

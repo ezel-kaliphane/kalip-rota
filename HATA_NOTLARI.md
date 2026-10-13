@@ -5,6 +5,36 @@ hatayı ikinci kez yazmamak. En yeni üstte.
 
 ---
 
+## 2026-10-13 — Çoklu iş emri grubunda süre iki kez bölünüyordu (dış Claude incelemesi buldu)
+
+**Belirti.** Başka bir hesaptaki Claude'a depo incelettirildi. Rapor: 2 üyeli grupta maliyet ve verimlilik
+sürenin yarısını kaybediyor. Kodla ve canlı veriyle doğrulandı: 187 grup / 720 iş emri bu yoldan bitmiş.
+
+**Sebep.** `finishGrup` her üyeye GERÇEK bitişi değil, adet payına göre KISALTILMIŞ endTs yazıyor (kayıt
+başına süre toplamları doğru çıksın diye — bilinçli). Ama iki tüketici bunu bilmiyordu: maliyet süreyi bir
+de üye sayısına bölüyordu (2 üyede ¼ değil ½ kayıp), verimlilik gruptan TEK üyenin kısaltılmış süresini
+sayıyordu. Benim yazdığım grup testleri üyelere TAM bitiş saati veriyordu — finishGrup'un hiç üretmediği
+veri. HATA_NOTLARI'ndaki "mock gerçeği taklit etmiyorsa aynadır" dersinin aynısını kendim tekrarladım.
+
+**Düzeltme.** Maliyet tamamlanmış grup üyesini bir daha bölmüyor. Verimlilik `entryGercekBitis`: yeni
+kayıtlarda `gercekBitisTs`, eskilerde başlangıç + süre ÷ pay; sonradan katılan / tek bitirilen üye
+şişirmesin diye grubun ortanca bitişiyle ve aynı talebin SONRAKİ operasyonunun başlangıcıyla sınırlı
+(fason dışı 365 üyenin 360'ı tutarlı). Grup üyeleri artık tekilleştirilmiyor, gerçek aralıklar
+birleştiriliyor. finishGrup / duraklatGrup / devamGrup tek yazmada. Testler artık grubu uygulamanın kendi
+finishGrup'u ile üretiyor (eski ve yeni kayıt biçimi ayrı ayrı); düzeltme geri alınınca 3 test kırmızı.
+
+Aynı incelemeden düzeltilenler: maliyet önbelleği kayıt düzeltmesinde bayatlıyordu (ay kapanışı bayat
+rakamı sabitleyebilirdi); Planlı Mola 4 yerde duruş sayılıyordu (biri sunucu bildirimi); hepsi hurda
+işte birim maliyet; kur günü UTC; karbürde çubuktan uzun parça kabul ediliyordu; İ.E. miktarı yoksa
+sessizce 1; hammadde stoğu oku-hesapla-yaz ile dört ayrı yazmada düşülüyordu (→ increment, tek yazma);
+iki yerde JS dizisine esc() ile gömülen değer (→ escJs); varsayılan şifre 1234. Kullanıcı kararıyla
+hammadde **iadesi** eklendi (silme yerine; BOM/maliyet iadeyi düşer).
+
+**Ders.** Testteki örnek kaydı elle yazma, uygulamanın kendi yazma fonksiyonuyla üret. Bir alan bilinçli
+olarak "gerçek değil, paylaştırılmış" tutuluyorsa (endTs) bunu alanın adında ya da yanında taşı
+(`grupPayi`, `gercekBitisTs`); her tüketici ayrı ayrı bilmek zorunda kalmasın. Dışarıdan bir gözün
+incelemesi işe yarıyor — kendi yazdığım testi kendi varsayımımla yazmıştım.
+
 ## 2026-10-13 — Verimlilik: duruşa basmayan operatör %100, çok günlü kayıt tek güne, paralel makine iki kez
 
 **Belirti.** Kullanıcı: "Muhammet Kurt nasıl %100 verimlilik çıkıyor, geç geldiği günler bile var."
