@@ -93,8 +93,8 @@ function hammaddeNorm(s){
    PARMAKLAR") etiket + açıklama. CANİAS kodu varsa sonda. */
 function hammaddeGosterimAdi(it){
   const et = (it.kod||'') + (it.tur==='boy' && it.cap ? ' '+it.cap : '');
-  const can = malzemeCaniasFromIsim(it.isim);
-  const ac = can ? String(it.isim||'').replace(/\s*\([^()]*\)\s*$/,'').trim() : String(it.isim||'').trim();
+  const can = stokCanias(it);
+  const ac = stokAciklama(it);
   const sik = s => trNorm(s).replace(/[\sø]/g,'');
   const metin = ac && sik(ac).startsWith(sik(et)) ? ac : et + (ac ? ' — '+ac : '');
   return metin + (can ? ' · '+can : (it.caniasBekliyor ? ' · KOD YOK' : ''));
@@ -109,7 +109,7 @@ function hammaddeAramaSkoru(it, sorgu){
      PARMAKLAR"); CANİAS'tan gelenlerde var. "kama 12x12" ikisini de bulsun diye ölçü+BB/AB
      kalıbındaki kalemlere görünmez bir "kama" ekleniyor. */
   const kamaMi = /\d+\s*X\s*\d+\s*X\s*\d+\s*(BB|AB)\b/i.test(it.isim||'') && !/\bKAMA\b/i.test(it.isim||'');
-  const metin = hammaddeNorm(`${it.kod||''} ${it.cap||''} ${it.isim||''}${kamaMi?' kama':''}`);
+  const metin = hammaddeNorm(`${it.kod||''} ${it.cap||''} ${it.isim||''} ${it.canias||''}${kamaMi?' kama':''}`);
   if(q.includes('%')) return malzemeLikeMatch(metin, trNorm(q).replace(/ø/g,'')) ? 1 : -1;
   const kelimeler = hammaddeNorm(q).split(' ').filter(Boolean);
   if(!kelimeler.every(k=>metin.includes(k))) return -1;

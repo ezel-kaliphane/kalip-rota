@@ -154,7 +154,7 @@ function hammaddeEtiket(it){
 }
 function hammaddeAciklama(it){
   if(!it) return '';
-  return it.tur==='boy' ? (it.isim||'') : (it.isim||'');
+  return stokAciklama(it);
 }
 /* Bir hammadde kaleminin anlık stok sayısı. 'boy' lot bazlı: lotların toplamı. */
 function hammaddeStokSayi(it){

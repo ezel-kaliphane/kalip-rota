@@ -840,7 +840,7 @@ function renderMalzemeStokScreen(){
               const lots = lotsArray(it);
               return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
-                  <div><span class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)}</span> ${it.caniasBekliyor?`<span class="matrix-tag" style="--sb:var(--warn)">KOD YOK</span>`:''} <span style="color:var(--text-muted);font-size:12.5px">${esc(it.cap||'')} · Boy Takip · ${lots.length} çubuk</span></div>
+                  <div><span class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)}</span> ${it.caniasBekliyor && !stokCanias(it)?`<span class="matrix-tag" style="--sb:var(--warn)">KOD YOK</span>`:''} <span style="color:var(--text-muted);font-size:12.5px">${esc(it.cap||'')} · Boy Takip · ${lots.length} çubuk</span>${stokCanias(it) ? `<span class="mono" style="font-size:11px;color:var(--text-subtle);border:1px solid var(--border);border-radius:5px;padding:0 5px;margin-left:4px" title="CANİAS kodu">${esc(stokCanias(it))}</span>` : ''}</div>
                   <div style="display:flex;align-items:center;gap:8px">
                     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted)">Alt limit <input type="number" value="${it.altLimit||0}" style="width:90px" onchange="updateStockItemField('${it.id}','altLimit',this.value)"></label>
                     ${session.isSuperAdmin ? `<button class="btn-ghost" style="width:auto;padding:6px 11px;font-size:12px" title="Kod / açıklama düzelt (SuperAdmin)" onclick="hammaddeDuzeltAc('${escJs(it.id)}')">${ico('edit',13)} Düzelt</button>` : ''}
@@ -859,7 +859,7 @@ function renderMalzemeStokScreen(){
               </div>`;
             }
             return `<div class="op-settings-row" style="flex-wrap:wrap;gap:10px">
-              <div style="min-width:140px"><div class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)} ${it.caniasBekliyor?`<span class="matrix-tag" style="--sb:var(--warn)">KOD YOK</span>`:''}</div><div style="font-size:11.5px;color:var(--text-muted)">${esc(it.isim||'')}</div></div>
+              <div style="min-width:140px"><div class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)} ${it.caniasBekliyor && !stokCanias(it)?`<span class="matrix-tag" style="--sb:var(--warn)">KOD YOK</span>`:''}${stokCanias(it) ? `<span class="mono" style="font-size:11px;color:var(--text-subtle);border:1px solid var(--border);border-radius:5px;padding:0 5px;margin-left:4px" title="CANİAS kodu">${esc(stokCanias(it))}</span>` : ''}</div><div style="font-size:11.5px;color:var(--text-muted)">${esc(stokAciklama(it))}</div></div>
               <input type="number" value="${it.miktar}" style="width:110px" onchange="updateStockItemField('${it.id}','miktar',this.value)" title="Mevcut miktar">
               <span style="font-size:12px;color:var(--text-muted)">${esc(it.birim||'adet')}</span>
               <select onchange="updateStockItemField('${it.id}','mode',this.value)" style="width:170px">
@@ -927,7 +927,7 @@ function renderMalzemeStokScreen(){
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:14px">
               <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;flex:1">
                 <div style="font-weight:600">${esc(it.kod||'')}</div>
-                <div style="font-size:11.5px;color:var(--text-muted)">${esc(it.isim||'')}</div>
+                <div style="font-size:11.5px;color:var(--text-muted)">${esc(stokAciklama(it))}${stokCanias(it) ? ` · <span class="mono">${esc(stokCanias(it))}</span>` : ''}</div>
                 <div style="font-size:12.5px;margin-top:6px">Mevcut stok: <b>${it.miktar}</b> ${esc(it.birim||'adet')}</div>
               </div>
               <button class="btn-ghost" title="Başka kalem seç" onclick="stokGirisGeriDon()">${ico('x',16)}</button>
@@ -1294,7 +1294,7 @@ function stokGenelSatirlar(){
         turEtiket = 'adet';
       }
       satirlar.push({
-        id:'malzeme_'+it.id, kod: it.kod||it.id, malzeme: it.isim || it.cap || '—', tur:'Hammadde', turEtiket,
+        id:'malzeme_'+it.id, kod: it.kod||it.id, malzeme: stokAciklama(it) || it.cap || '—', canias: stokCanias(it), tur:'Hammadde', turEtiket,
         stokText, stokSayi: stok, altLimit,
         durum: stok<0 ? 'negatif' : (altLimit>0 && stok<altLimit) ? 'altlimit' : 'normal',
         sonHareketTs: Number(it.sonHareketTs)||0, sonHareketAciklama: it.sonHareketAciklama||'', kaynak:'Hammadde'
@@ -1425,7 +1425,7 @@ function caniasKoduBekleyenKartiHtml(){
     <div class="notice-sub" style="margin-bottom:8px">Şef CANİAS'ta henüz olmayan malzemeyi açtı. Kodu CANİAS'ta açınca hammadde listesini Excel Yükleme → Hammadde'ye yüklemen yeter, kendiliğinden bağlanır; eşleşmeyen olursa kodu buradan gir.</div>
     <div style="display:flex;flex-direction:column;gap:6px">
       ${liste.map(it=>`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 10px">
-        <div style="flex:1;min-width:180px"><span class="mono" style="font-weight:600">${esc(it.isim || [it.kod,it.cap].filter(Boolean).join(' '))}</span>
+        <div style="flex:1;min-width:180px"><span class="mono" style="font-weight:600">${esc(stokAciklama(it) || [it.kod,it.cap].filter(Boolean).join(' '))}</span>
           <div style="font-size:11.5px;color:var(--text-muted)">${esc(it.acanName||it.acanUsername||'—')} · ${it.acilisTs?fmtDT(it.acilisTs):'—'} · ${it.tur==='boy'?lotsArray(it).length+' çubuk':(Number(it.miktar)||0)+' adet'}</div>
           <div class="hk-isler">${isler(it)}</div></div>
         ${sa ? `<input class="mono" style="width:150px;margin:0" placeholder="KLPHM000…" value="${esc(hkGirdi[it.id]||'')}" oninput="hkGirdi['${escJs(it.id)}']=this.value">
@@ -1451,8 +1451,11 @@ function hammaddeDuzeltModalHtml(){
           <input id="hd-kod" value="${esc(m.kod)}" oninput="hammaddeDuzeltYaz('kod',this.value,false)"></div>
         ${boy?`<div class="field"><label for="hd-cap">Çap</label><input id="hd-cap" class="mono" value="${esc(m.cap)}" oninput="hammaddeDuzeltYaz('cap',this.value,false)"></div>`:''}
       </div>
-      <div class="field"><label for="hd-isim">Açıklama</label><input id="hd-isim" value="${esc(m.isim)}" oninput="hammaddeDuzeltYaz('isim',this.value,false)"></div>
-      <div style="font-size:11.5px;color:var(--text-muted);margin:-4px 0 12px">Bekleyen kayıtlardaki ve reçetelerdeki malzeme adı da güncellenir.${/\(KLPHM\d+\)/i.test(m.isim||'') ? ' Sondaki <b>(KLPHM…)</b> CANİAS kodunu silme — QR okutma ve Excel eşleşmesi onunla yapılıyor.' : ''}</div>
+      <div style="display:grid;grid-template-columns:1fr 160px;gap:10px">
+        <div class="field"><label for="hd-isim">Açıklama</label><input id="hd-isim" value="${esc(m.isim)}" oninput="hammaddeDuzeltYaz('isim',this.value,false)"></div>
+        <div class="field"><label for="hd-canias">CANİAS kodu</label><input id="hd-canias" class="mono" placeholder="KLPHM000…" value="${esc(m.canias||'')}" oninput="hammaddeDuzeltYaz('canias',this.value,false)"></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--text-muted);margin:-4px 0 12px">Bekleyen kayıtlardaki ve reçetelerdeki malzeme adı da güncellenir. CANİAS kodu QR okutma ve Excel eşleştirmesinde kullanılır.</div>
       <div style="display:flex;gap:8px"><button class="btn-primary" style="flex:1" ${m.busy?'disabled':''} onclick="hammaddeDuzeltKaydet()">${m.busy?'Kaydediliyor…':'Kaydet'}</button>
         <button class="btn-ghost" onclick="hammaddeDuzeltKapat()">Vazgeç</button></div>`;
   } else {
@@ -1793,7 +1796,7 @@ function stokAramaYaz(v){
 function stokAramaSuz(liste){
   const q = trNorm((stokGenelArama||'').trim());
   if(!q) return liste;
-  return liste.filter(x=> trNorm(`${x.kod} ${x.malzeme} ${x.kaynak||x.tur}`).includes(q));
+  return liste.filter(x=> trNorm(`${x.kod} ${x.malzeme} ${x.canias||''} ${x.kaynak||x.tur}`).includes(q));
 }
 
 function stokKritikTablo(liste, bosMetin){

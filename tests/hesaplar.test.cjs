@@ -163,3 +163,21 @@ test('maliyet: çoklu iş emri grubunda süre üyelere bölünür', () => {
   const m = A.ctx.maliyetHesapla(isEmri([a]), true);
   assert.ok(Math.abs(m.iscilik - 500) < 0.01, '100 dk iki iş emrine bölünür');
 });
+
+/* ==================== CANİAS KODU AYRI ALANDA (13.10.2026) ==================== */
+test('CANİAS kodu: yeni alan ve eski "(KLPHM…)" açıklama ikisi de okunur', () => {
+  const C = A.ctx;
+  assert.equal(C.stokCanias({ isim: '12X12X61 BB — B25 PARMAK (KLPHM000378)' }), 'KLPHM000378');
+  assert.equal(C.stokAciklama({ isim: '12X12X61 BB — B25 PARMAK (KLPHM000378)' }), '12X12X61 BB — B25 PARMAK');
+  assert.equal(C.stokCanias({ isim: '12X12X61 BB — B25 PARMAK', canias: 'klphm000378' }), 'KLPHM000378');
+  assert.equal(C.stokAciklama({ isim: '12X12X61 BB — B25 PARMAK', canias: 'KLPHM000378' }), '12X12X61 BB — B25 PARMAK');
+});
+
+test('QR okutma hem taşınmış hem eski kalemi bulur', () => {
+  A.ata('stockItems', {
+    yeni: { kod: 'B25', tur: 'adet', isim: '12X12X61 BB', canias: 'KLPHM000378', miktar: 5, birim: 'adet' },
+    eski: { kod: 'B31', tur: 'adet', isim: '12X14X61 BB (KLPHM000422)', miktar: 3, birim: 'adet' }
+  });
+  assert.equal(A.ctx.stockOptionByScanCode('KLPHM000378').option.itemId, 'yeni');
+  assert.equal(A.ctx.stockOptionByScanCode('klphm000422').option.itemId, 'eski');
+});

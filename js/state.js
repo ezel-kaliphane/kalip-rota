@@ -423,7 +423,7 @@ function stockConsumableOptions(){
       lotsArray(it).forEach(lot=>{
         opts.push({
           value: it.id+'::'+lot.id, itemId: it.id, lotId: lot.id, tur:'boy',
-          label: `${it.kod}${it.cap?' '+it.cap:''} · ${lot.boy}${it.birim||'mm'} kaldı${it.caniasBekliyor && !malzemeCaniasFromIsim(it.isim) ? ' · KOD YOK' : ''}`,
+          label: `${it.kod}${it.cap?' '+it.cap:''} · ${lot.boy}${it.birim||'mm'} kaldı${it.caniasBekliyor && !stokCanias(it) ? ' · KOD YOK' : ''}`,
           remaining: lot.boy, birim: it.birim||'mm'
         });
       });
@@ -448,7 +448,7 @@ function stockOptionByScanCode(code){
   if(!code) return { status:'empty' };
   const matches = stockConsumableOptions().filter(o=>{
     const item = stockItems[o.itemId]; if(!item) return false;
-    const canias = malzemeCaniasFromIsim(item.isim);
+    const canias = stokCanias(item);
     return canias ? canias===code : String(item.kod||'').trim().toUpperCase()===code;
   });
   if(matches.length===1) return { status:'ok', option: matches[0] };
@@ -638,12 +638,20 @@ function malzemeCaniasFromIsim(isim){
   const m = String(isim||'').match(/\(([^()]+)\)\s*$/);
   return m ? m[1].trim().toUpperCase() : '';
 }
+/* CANİAS KODU AYRI ALANDA (13.10.2026, kullanıcı: "kodu açıklamanın içinde saklamak saçma, ayrı kutuya al").
+   stockItems/{id}/canias. Taşınmamış eski kayıtlar için açıklamanın sonundaki "(KLPHM…)" hâlâ okunur —
+   böylece geçiş sırasında QR okutma, Excel eşleştirmesi, kod bağlama bozulmaz. Kodu OKUYAN her yer
+   stokCanias'ı, açıklamayı GÖSTEREN her yer stokAciklama'yı kullanır. */
+function stokCanias(it){ return it ? (String(it.canias||'').trim().toUpperCase() || malzemeCaniasFromIsim(it.isim)) : ''; }
+function stokAciklama(it){
+  const s = String((it && it.isim)||'').replace(/\s+/g,' ').trim();
+  return malzemeCaniasFromIsim(s) ? s.replace(/\s*\([^()]*\)\s*$/,'').trim() : s;
+}
 function malzemeKamaIsimOlustur(r){
   const parcalar = [r.olcu, r.tip].filter(Boolean).join(' ');
   let isim = parcalar;
   if(r.aciklama) isim += (isim?' — ':'') + r.aciklama;
-  if(r.canias) isim += ` (${r.canias})`;
-  return isim.trim();
+  return isim.trim();   // CANİAS kodu artık ayrı alanda (canias), açıklamaya eklenmiyor
 }
 /* ---------- CANİAS hammadde listesi (01.10.2026) ----------
    CANİAS'tan alınan BAST03_SELMATERIAL dışa aktarımı yalnızca iki sütun taşıyor: "Canias Kodu"
@@ -661,7 +669,7 @@ function malzemeKamaIsimOlustur(r){
    yüzlerce "0 adet" satırı Son Hareketler'i doldururdu. */
 function caniasMalzemeCoz(canias, aciklama){
   const ac = String(aciklama||'').replace(/\s+/g,' ').trim();
-  const isim = `${ac} (${canias})`;
+  const isim = ac;   // kod ayrı alanda (canias) — 13.10.2026'ya kadar "(KOD)" açıklamaya ekleniyordu
   const capM = ac.match(/Ø\s*([\d]+(?:[.,]\d+)?)/);
   if(capM){
     const kalite = ac.slice(0, capM.index).trim() || ac;
@@ -768,7 +776,7 @@ function yeniHammaddeKaydet(){
   }).catch(err=>{ m.busy = false; toast('Açılamadı: '+(err.message||'bilinmeyen hata')); render(); });
 }
 function caniasKoduBekleyenler(){
-  return stockItemsArray().filter(it=>it.caniasBekliyor && !malzemeCaniasFromIsim(it.isim))
+  return stockItemsArray().filter(it=>it.caniasBekliyor && !stokCanias(it))
     .sort((a,b)=>(Number(b.acilisTs)||0)-(Number(a.acilisTs)||0));
 }
 let hkGirdi = {}; // { itemId: SuperAdmin'in yazdığı CANİAS kodu }
@@ -777,10 +785,10 @@ function hammaddeKodBagla(id){
   const it = stockItems[id]; if(!it) return;
   const kod = String(hkGirdi[id]||'').replace(/\s+/g,'').toUpperCase();
   if(!kod){ toast('CANİAS kodunu yazın (ör. KLPHM000566)'); return; }
-  const baska = stockItemsArray().find(x=>x.id!==id && malzemeCaniasFromIsim(x.isim)===kod);
+  const baska = stockItemsArray().find(x=>x.id!==id && stokCanias(x)===kod);
   if(baska){ toast('Bu kod zaten başka kalemde: '+hammaddeGosterimAdi(baska)); return; }
-  const isim = `${String(it.isim || [it.kod, it.cap].filter(Boolean).join(' ')).trim()} (${kod})`;
-  DB.ref('stockItems/'+id).update({ isim, caniasBekliyor:null, kodBaglamaTs: Date.now(), kodBaglayan: session.displayName||session.username }).then(()=>{
+  const isim = stokAciklama(it) || [it.kod, it.cap].filter(Boolean).join(' ');
+  DB.ref('stockItems/'+id).update({ isim, canias: kod, caniasBekliyor:null, kodBaglamaTs: Date.now(), kodBaglayan: session.displayName||session.username }).then(()=>{
     delete hkGirdi[id]; toast('CANİAS kodu bağlandı: '+kod); render();
   }).catch(err=>toast('Kaydedilemedi: '+(err.message||'bilinmeyen hata')));
 }
@@ -805,7 +813,7 @@ function hammaddeDuzeltAc(id){
   const it = stockItems[id]; if(!it) return;
   if(typeof ensureMalzemeBekleyenLoaded==='function') ensureMalzemeBekleyenLoaded();
   if(typeof ensureHammaddeReceteLoaded==='function') ensureHammaddeReceteLoaded(()=>safeRender());
-  hdModal = { id, sekme:'bilgi', kod: it.kod||'', cap: it.cap||'', isim: it.isim||'', ara:'', hedefId:'', busy:false };
+  hdModal = { id, sekme:'bilgi', kod: it.kod||'', cap: it.cap||'', isim: stokAciklama(it), canias: stokCanias(it), ara:'', hedefId:'', busy:false };
   render();
 }
 function hammaddeDuzeltKapat(){ hdModal = null; render(); }
@@ -816,15 +824,21 @@ function hammaddeDuzeltKaydet(){
   const boy = it.tur==='boy';
   const kod = String(m.kod||'').replace(/\s+/g,' ').trim().toLocaleUpperCase('tr-TR');
   let cap = boy ? String(m.cap||'').replace(/\s+/g,'').toLocaleUpperCase('tr-TR').replace(/^Ø?/,'Ø').replace('.',',') : '';
-  const isim = String(m.isim||'').replace(/\s+/g,' ').trim().toLocaleUpperCase('tr-TR') || [kod, cap].filter(Boolean).join(' ');
+  const kalinti = malzemeCaniasFromIsim(m.isim);   // eski alışkanlıkla açıklamaya "(KLPHM…)" yazılmışsa kod alanına taşı
+  if(kalinti && /^[A-Z]{2,}\d{3,}$/.test(kalinti) && !String(m.canias||'').trim()) m.canias = kalinti;
+  const isim = (kalinti && /^[A-Z]{2,}\d{3,}$/.test(kalinti) ? String(m.isim||'').replace(/\s*\([^()]*\)\s*$/,'') : String(m.isim||'')).replace(/\s+/g,' ').trim().toLocaleUpperCase('tr-TR') || [kod, cap].filter(Boolean).join(' ');
   if(!kod){ toast(boy ? 'Kaliteyi yazın' : 'Kodu ya da ölçüyü yazın'); return; }
   if(boy && !/^Ø\d/.test(cap)){ toast('Çapı yazın (ör. Ø27)'); return; }
+  const canias = String(m.canias||'').replace(/\s+/g,'').toUpperCase();
+  if(canias){ const baska = stockItemsArray().find(x=>x.id!==m.id && stokCanias(x)===canias); if(baska){ toast('Bu CANİAS kodu başka kalemde: '+hammaddeGosterimAdi(baska)); return; } }
   const ayni = stockItemsArray().find(x=>x.id!==m.id && (x.tur==='boy')===boy && hammaddeEslesmeAnahtari(x.isim || `${x.kod||''} ${x.cap||''}`)===hammaddeEslesmeAnahtari(isim));
   if(ayni){ toast('Bu malzeme zaten var: '+hammaddeGosterimAdi(ayni)+' — "Mevcut malzemeyle değiştir"i kullanın'); hdModal.sekme='degistir'; hdModal.hedefId=ayni.id; render(); return; }
-  const yeni = { ...it, kod, isim, ...(boy ? { cap } : {}) };
+  const yeni = { ...it, kod, isim, canias: canias || null, ...(canias ? { caniasBekliyor: null } : {}), ...(boy ? { cap } : {}) };
   const etiket = hammaddeEtiket(yeni);
   const b = hammaddeBagliKayitlar(m.id), updates = {};
   updates['stockItems/'+m.id+'/kod'] = kod; updates['stockItems/'+m.id+'/isim'] = isim;
+  updates['stockItems/'+m.id+'/canias'] = canias || null;
+  if(canias) updates['stockItems/'+m.id+'/caniasBekliyor'] = null;
   if(boy) updates['stockItems/'+m.id+'/cap'] = cap;
   b.mb.forEach(x=>{ updates['malzemeBekleyen/'+x.id+'/hammaddeKod'] = etiket; });
   b.recete.forEach(mm=>{ updates['hammaddeRecete/'+mm+'/hammaddeKod'] = etiket; });
@@ -886,12 +900,12 @@ function hammaddeBekleyenKalemSil(id){
    çağrı aynı yoldan geçsin diye ayrı tutuldu. */
 function caniasListesiOnizlemeKur(rows){
   const mevcut = {};
-  Object.entries(stockItems||{}).forEach(([id,v])=>{ const c = malzemeCaniasFromIsim(v && v.isim); if(c) mevcut[c] = id; });
+  Object.entries(stockItems||{}).forEach(([id,v])=>{ const c = stokCanias(v); if(c) mevcut[c] = id; });
   /* Şefin açtığı, CANİAS kodu bekleyen kalemler (bkz. yeniHammaddeKaydet). Listede yeni bir
      kod bunlardan birine uyuyorsa YENİ KALEM AÇILMIYOR — kod o kaleme yazılıyor ki çubuğu ve
      geçmişi kaybolmasın, aynı malzemeden iki kalem olmasın. Uyma: açıklama ("ÇELİK" hariç,
      Ø'süz) aynı, ya da çubukta kalite + çap aynı. Her bekleyen kalem en fazla bir koda. */
-  const bekleyen = Object.entries(stockItems||{}).filter(([,v])=>v && v.caniasBekliyor && !malzemeCaniasFromIsim(v.isim))
+  const bekleyen = Object.entries(stockItems||{}).filter(([,v])=>v && v.caniasBekliyor && !stokCanias(v))
     .map(([id,v])=>({ id, v, anahtar: hammaddeEslesmeAnahtari(v.isim || `${v.kod||''} ${v.cap||''}`), kodCap: v.tur==='boy' ? hammaddeNorm(`${v.kod||''} ${v.cap||''}`) : null }));
   const eslesen = [];
   const gorulen = new Set(), yeni = [];
@@ -933,6 +947,7 @@ function caniasListesiYukle(){
   const now = Date.now();
   eslesen.forEach(e=>{
     updates['stockItems/'+e.itemId+'/isim'] = e.isim;
+    updates['stockItems/'+e.itemId+'/canias'] = e.canias;
     updates['stockItems/'+e.itemId+'/caniasBekliyor'] = null;
     updates['stockItems/'+e.itemId+'/kodBaglamaTs'] = now;
     updates['stockItems/'+e.itemId+'/kodBaglayan'] = 'CANİAS listesi';
@@ -940,8 +955,8 @@ function caniasListesiYukle(){
   yeni.forEach(r=>{
     const id = uid();
     updates['stockItems/'+id] = r.tur==='boy'
-      ? { kod: r.kod, tur:'boy', cap: r.cap, birim:'mm', altLimit:0, isim: r.isim }
-      : { kod: r.kod, tur:'adet', isim: r.isim, birim:'adet', miktar:0, mode:'manuel', altLimit:0 };
+      ? { kod: r.kod, tur:'boy', cap: r.cap, birim:'mm', altLimit:0, isim: r.isim, canias: r.canias }
+      : { kod: r.kod, tur:'adet', isim: r.isim, canias: r.canias, birim:'adet', miktar:0, mode:'manuel', altLimit:0 };
   });
   DB.ref().update(updates).then(()=>{
     toast(`${yeni.length} yeni hammadde kalemi eklendi`+(eslesen.length?`, ${eslesen.length} bekleyen kaleme kod bağlandı`:''));
@@ -1030,7 +1045,7 @@ function confirmMalzemeExcelUpload(){
   const byCanias = {};
   Object.entries(stockItems).forEach(([id,v])=>{
     if(v.tur==='boy') return;
-    const c = malzemeCaniasFromIsim(v.isim);
+    const c = stokCanias(v);
     if(c) byCanias[c] = id;
   });
   const now = Date.now();
@@ -1042,6 +1057,7 @@ function confirmMalzemeExcelUpload(){
     const itemId = isNew ? uid() : existingId;
     updates['stockItems/'+itemId+'/kod'] = r.kod;
     updates['stockItems/'+itemId+'/isim'] = r.isim;
+    if(r.canias) updates['stockItems/'+itemId+'/canias'] = r.canias;
     updates['stockItems/'+itemId+'/tur'] = 'adet';
     updates['stockItems/'+itemId+'/birim'] = 'adet';
     if(isNew){

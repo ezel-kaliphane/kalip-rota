@@ -106,7 +106,7 @@ function mbHammaddeQr(){
   openQrScanner(function(kod){
     kod = String(kod||'').trim().toUpperCase();
     const eslesen = Object.entries(stockItems||{}).filter(([id,it])=>{
-      const canias = malzemeCaniasFromIsim(it && it.isim);
+      const canias = stokCanias(it);
       return canias ? canias===kod : String((it && it.kod)||'').trim().toUpperCase()===kod;
     });
     if(eslesen.length===1){ toast('Seçildi: '+hammaddeEtiket(eslesen[0][1])); mbFormYaz('hammaddeId', eslesen[0][0]); }
@@ -265,7 +265,7 @@ function renderMalzemeBekleyen(){
         <span class="mb-kod">${esc(etiketMetin)}</span>
         <span class="mb-adet">${g.satirlar.length} iş emri</span>
         <span class="matrix-tag" style="--sb:${durum.r}">${durum.t}</span>
-        <span class="mb-olcu">${g.it && g.it.isim ? esc(String(g.it.isim).slice(0,40))+' · ' : ''}Stok <b${g.stok<0?' style="color:var(--danger)"':''}>${g.stok} ${esc(birim)}</b>${g.yolda ? ` · Yolda <b>${g.yolda} ${esc(birim)}</b>` : ''} · Rezerve <b>${g.rezerve} ${esc(birim)}</b> · Kullanılabilir <b style="color:${g.kullanilabilir<0?'var(--danger)':'var(--success)'}">${g.kullanilabilir} ${esc(birim)}</b></span>
+        <span class="mb-olcu">${g.it && stokAciklama(g.it) ? esc(stokAciklama(g.it).slice(0,40))+' · ' : ''}Stok <b${g.stok<0?' style="color:var(--danger)"':''}>${g.stok} ${esc(birim)}</b>${g.yolda ? ` · Yolda <b>${g.yolda} ${esc(birim)}</b>` : ''} · Rezerve <b>${g.rezerve} ${esc(birim)}</b> · Kullanılabilir <b style="color:${g.kullanilabilir<0?'var(--danger)':'var(--success)'}">${g.kullanilabilir} ${esc(birim)}</b></span>
         ${(()=>{ const n = malzemeIstekNoYetkisi() ? malzemeBosBekleyenler(g.hid).length : 0;
           const bos = g.satirlar.filter(x=>!malzemeIstekVar(x)).length;
           const kopya = bos ? `<button class="btn-ghost mb-mini" title="İstek no girilmemiş iş emirleri: talep no + mamul adı, alt alta — satın alma isteğine yapıştır" onclick="event.stopPropagation(); mbTaslakKopyala('${escJs(g.hid)}')">${ico('copy',13)} Malzeme taslağı kopyala · ${bos}</button>` : '';
