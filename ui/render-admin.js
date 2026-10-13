@@ -843,6 +843,7 @@ function renderMalzemeStokScreen(){
                   <div><span class="mono" style="font-weight:700;color:var(--accent)">${esc(it.kod)}</span> ${it.caniasBekliyor?`<span class="matrix-tag" style="--sb:var(--warn)">KOD YOK</span>`:''} <span style="color:var(--text-muted);font-size:12.5px">${esc(it.cap||'')} · Boy Takip · ${lots.length} çubuk</span></div>
                   <div style="display:flex;align-items:center;gap:8px">
                     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted)">Alt limit <input type="number" value="${it.altLimit||0}" style="width:90px" onchange="updateStockItemField('${it.id}','altLimit',this.value)"></label>
+                    ${session.isSuperAdmin ? `<button class="btn-ghost" style="width:auto;padding:6px 11px;font-size:12px" title="Kod / açıklama düzelt (SuperAdmin)" onclick="hammaddeDuzeltAc('${escJs(it.id)}')">${ico('edit',13)} Düzelt</button>` : ''}
                     <button class="del-btn" onclick="deleteStockItem('${it.id}')" title="Kalemi tamamen sil">${ico('trash',14)}</button>
                   </div>
                 </div>
@@ -870,6 +871,7 @@ function renderMalzemeStokScreen(){
                 <input type="checkbox" style="width:auto" ${it.siparisAcik?'checked':''} onchange="toggleStockItemSiparisAcik('${it.id}')">
                 Sipariş açık
               </label>
+              ${session.isSuperAdmin ? `<button class="btn-ghost" style="width:auto;padding:6px 11px;font-size:12px" title="Kod / açıklama düzelt (SuperAdmin)" onclick="hammaddeDuzeltAc('${escJs(it.id)}')">${ico('edit',13)} Düzelt</button>` : ''}
               <button class="del-btn" onclick="deleteStockItem('${it.id}')" title="Sil">${ico('trash',14)}</button>
             </div>`;
           }).join('')}
@@ -1450,7 +1452,7 @@ function hammaddeDuzeltModalHtml(){
         ${boy?`<div class="field"><label for="hd-cap">Çap</label><input id="hd-cap" class="mono" value="${esc(m.cap)}" oninput="hammaddeDuzeltYaz('cap',this.value,false)"></div>`:''}
       </div>
       <div class="field"><label for="hd-isim">Açıklama</label><input id="hd-isim" value="${esc(m.isim)}" oninput="hammaddeDuzeltYaz('isim',this.value,false)"></div>
-      <div style="font-size:11.5px;color:var(--text-muted);margin:-4px 0 12px">Bekleyen kayıtlardaki ve reçetelerdeki malzeme adı da güncellenir.</div>
+      <div style="font-size:11.5px;color:var(--text-muted);margin:-4px 0 12px">Bekleyen kayıtlardaki ve reçetelerdeki malzeme adı da güncellenir.${/\(KLPHM\d+\)/i.test(m.isim||'') ? ' Sondaki <b>(KLPHM…)</b> CANİAS kodunu silme — QR okutma ve Excel eşleşmesi onunla yapılıyor.' : ''}</div>
       <div style="display:flex;gap:8px"><button class="btn-primary" style="flex:1" ${m.busy?'disabled':''} onclick="hammaddeDuzeltKaydet()">${m.busy?'Kaydediliyor…':'Kaydet'}</button>
         <button class="btn-ghost" onclick="hammaddeDuzeltKapat()">Vazgeç</button></div>`;
   } else {
