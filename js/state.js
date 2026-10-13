@@ -642,10 +642,16 @@ function malzemeCaniasFromIsim(isim){
    stockItems/{id}/canias. Taşınmamış eski kayıtlar için açıklamanın sonundaki "(KLPHM…)" hâlâ okunur —
    böylece geçiş sırasında QR okutma, Excel eşleştirmesi, kod bağlama bozulmaz. Kodu OKUYAN her yer
    stokCanias'ı, açıklamayı GÖSTEREN her yer stokAciklama'yı kullanır. */
-function stokCanias(it){ return it ? (String(it.canias||'').trim().toUpperCase() || malzemeCaniasFromIsim(it.isim)) : ''; }
+/* Yalnız KOD biçimindeki parantez (KLPHM000378) kod sayılır — "(1000 YOGUNLUK)" gibi açıklama parçası değil */
+function caniasKoduMu(s){ return /^[A-Z]{2,}\d{3,}$/.test(String(s||'')); }
+function stokCanias(it){
+  if(!it) return '';
+  const alan = String(it.canias||'').trim().toUpperCase(); if(alan) return alan;
+  const ek = malzemeCaniasFromIsim(it.isim); return caniasKoduMu(ek) ? ek : '';
+}
 function stokAciklama(it){
   const s = String((it && it.isim)||'').replace(/\s+/g,' ').trim();
-  return malzemeCaniasFromIsim(s) ? s.replace(/\s*\([^()]*\)\s*$/,'').trim() : s;
+  return caniasKoduMu(malzemeCaniasFromIsim(s)) ? s.replace(/\s*\([^()]*\)\s*$/,'').trim() : s;
 }
 function malzemeKamaIsimOlustur(r){
   const parcalar = [r.olcu, r.tip].filter(Boolean).join(' ');
@@ -825,8 +831,8 @@ function hammaddeDuzeltKaydet(){
   const kod = String(m.kod||'').replace(/\s+/g,' ').trim().toLocaleUpperCase('tr-TR');
   let cap = boy ? String(m.cap||'').replace(/\s+/g,'').toLocaleUpperCase('tr-TR').replace(/^Ø?/,'Ø').replace('.',',') : '';
   const kalinti = malzemeCaniasFromIsim(m.isim);   // eski alışkanlıkla açıklamaya "(KLPHM…)" yazılmışsa kod alanına taşı
-  if(kalinti && /^[A-Z]{2,}\d{3,}$/.test(kalinti) && !String(m.canias||'').trim()) m.canias = kalinti;
-  const isim = (kalinti && /^[A-Z]{2,}\d{3,}$/.test(kalinti) ? String(m.isim||'').replace(/\s*\([^()]*\)\s*$/,'') : String(m.isim||'')).replace(/\s+/g,' ').trim().toLocaleUpperCase('tr-TR') || [kod, cap].filter(Boolean).join(' ');
+  if(caniasKoduMu(kalinti) && !String(m.canias||'').trim()) m.canias = kalinti;
+  const isim = (caniasKoduMu(kalinti) ? String(m.isim||'').replace(/\s*\([^()]*\)\s*$/,'') : String(m.isim||'')).replace(/\s+/g,' ').trim().toLocaleUpperCase('tr-TR') || [kod, cap].filter(Boolean).join(' ');
   if(!kod){ toast(boy ? 'Kaliteyi yazın' : 'Kodu ya da ölçüyü yazın'); return; }
   if(boy && !/^Ø\d/.test(cap)){ toast('Çapı yazın (ör. Ø27)'); return; }
   const canias = String(m.canias||'').replace(/\s+/g,'').toUpperCase();

@@ -181,3 +181,9 @@ test('QR okutma hem taşınmış hem eski kalemi bulur', () => {
   assert.equal(A.ctx.stockOptionByScanCode('KLPHM000378').option.itemId, 'yeni');
   assert.equal(A.ctx.stockOptionByScanCode('klphm000422').option.itemId, 'eski');
 });
+
+test('açıklamadaki normal parantez kod sayılmaz: "(1000 YOGUNLUK)"', () => {
+  const it = { isim: 'POLIETILEN Ø55 PLASTIK MALZEME (1000 YOGUNLUK)', canias: 'KLPHM000362' };
+  assert.equal(A.ctx.stokAciklama(it), 'POLIETILEN Ø55 PLASTIK MALZEME (1000 YOGUNLUK)');
+  assert.equal(A.ctx.stokCanias({ isim: 'POLIETILEN Ø55 PLASTIK MALZEME (1000 YOGUNLUK)' }), '');
+});
