@@ -1,0 +1,13 @@
+# Hesap testleri (13.10.2026): her push'ta verimlilik / malzeme ihtiyacı / maliyet testleri çalışır.
+# GitHub Pages yayınını DURDURMAZ — yalnız kırmızı/yeşil işaret verir; kırmızıysa canlıdaki hesap bozulmuş olabilir.
+name: Hesap testleri
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test "tests/*.test.cjs"
