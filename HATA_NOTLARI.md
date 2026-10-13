@@ -5,6 +5,26 @@ hatayı ikinci kez yazmamak. En yeni üstte.
 
 ---
 
+## 2026-10-13 — Malzeme bekleyen: çubukta rezerve adet kadar eksik (parça boyu toplam sanıldı)
+
+**Belirti.** Kullanıcı: "gerekli boy × adet toplam rezerve olmalı, hesapta hata var." 2344 Ø66 grubunda
+5 iş emri (60 mm × 2, 65 × 3, 55 × 6 …) için rezerve 326 mm görünüyordu; doğrusu 981 mm.
+
+**Sebep.** Formdaki alanın adı "Gereken Miktar"dı ve kod onu iş emrinin TOPLAM ihtiyacı sayıyordu.
+Şef ise baştan beri (72 mm kaydının hepsinde) PARÇA BOYUNU giriyordu — "Ø72X40 → 45 mm". Testere
+payı zaten "kesim sayısı = İ.E. miktarı" ile hesaplandığı için çelişki gözden kaçtı. Aynı yanlış
+reçeteye de taşındı: `birimBasina = gereken / İ.E.` → 68 mamulde parça boyu adede bölünmüş kaydedildi
+(UC13030327: 55 mm yerine 9,17 mm; U0002975: 36 yerine 0,18). Bu da maliyet tahminini düşürüyordu.
+
+**Düzeltme.** Çubukta (birim mm) `gerekenMiktar` = parça boyu, toplam = boy × İ.E. (`malzemeToplamGereken`);
+form "Parça Boyu (mm)" diyor ve toplamı gösteriyor; reçete `birimBasina` = parça boyu. 68 reçete
+kullanıcı onayıyla düzeltildi (eski değerler commit mesajında/oturum yedeğinde).
+
+**Ders.** Bir alanın anlamını etiketten değil, kullanıcının GİRDİĞİ veriden doğrula: kayıtlara
+bakılsaydı (45 mm, İ.E. 3, mamul adı "Ø72X40") parça boyu olduğu ilk gün belliydi. Etiket belirsizse
+("Gereken Miktar") birimi ve kapsamı adıyla söyle ("Parça Boyu (mm)") ve hesaplanan toplamı göster.
+Türetilmiş veri (reçete oranı) aynı varsayımla yazılıyorsa hatayı düzeltirken onu da onar.
+
 ## 2026-10-12 — Aylık kapanış şifrelenirken "Maximum call stack size exceeded" (canlıya çıkmadan yakalandı)
 
 **Belirti.** Önizleme testinde bir ayı (187 iş emri, ~440 KB) kapatırken şifreli metne çevirme çöktü.
