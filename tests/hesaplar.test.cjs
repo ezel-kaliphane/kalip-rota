@@ -259,3 +259,36 @@ test('açıklamadaki normal parantez kod sayılmaz: "(1000 YOGUNLUK)"', () => {
   assert.equal(A.ctx.stokAciklama(it), 'POLIETILEN Ø55 PLASTIK MALZEME (1000 YOGUNLUK)');
   assert.equal(A.ctx.stokCanias({ isim: 'POLIETILEN Ø55 PLASTIK MALZEME (1000 YOGUNLUK)' }), '');
 });
+
+/* ==================== TAKIM — DOLAP BAZLI STOK (13.10.2026) ==================== */
+function sahteDB(depo){
+  return { ref: yol => ({ transaction: fn => {
+    const cur = depo[yol] === undefined ? null : JSON.parse(JSON.stringify(depo[yol]));
+    const sonuc = fn(cur);
+    if(sonuc === undefined) return Promise.resolve({ committed: false, snapshot: { val: () => depo[yol] } });
+    depo[yol] = sonuc; return Promise.resolve({ committed: true, snapshot: { val: () => sonuc } });
+  } }) };
+}
+test('takım: eski tek konumlu kayıt ilk çıkışta dolaplı biçime geçer, yetmeyen dolaptan çıkış iptal', async () => {
+  const depo = { 'toolStock/T1': { miktar: 6, siparisAcik: true } };
+  const eskiDB = A.calistir('DB'); A.ata('DB', sahteDB(depo));
+  try{
+    const it = { locId: 'CNC' };
+    let r = await A.ctx.toolDolapTx('T1', it, depo['toolStock/T1'], 'CNC', { delta: -2 });
+    assert.ok(r.committed); assert.equal(JSON.stringify(depo['toolStock/T1'].dolaplar), JSON.stringify({ CNC: 4 })); assert.equal(depo['toolStock/T1'].miktar, 4);
+    assert.equal(depo['toolStock/T1'].siparisAcik, true, 'diğer alanlar korunur');
+    r = await A.ctx.toolDolapTx('T1', it, depo['toolStock/T1'], 'ATOLYE', { delta: 5 });
+    assert.equal(JSON.stringify(depo['toolStock/T1'].dolaplar), JSON.stringify({ CNC: 4, ATOLYE: 5 })); assert.equal(depo['toolStock/T1'].miktar, 9);
+    r = await A.ctx.toolDolapTx('T1', it, depo['toolStock/T1'], 'ATOLYE', { delta: -6 });
+    assert.equal(r.committed, false, 'ATOLYE dolabında 5 var, 6 çıkamaz');
+    assert.equal(depo['toolStock/T1'].miktar, 9);
+  } finally { A.ata('DB', eskiDB); }
+});
+test('takım: dolap erişimi — kaydı olmayan herkes tüm dolapları görür', () => {
+  A.ata('appSettings', { takimDolapErisim: { OP1: { CNC: true }, OP3: { _hicbiri: true } } });
+  assert.equal(A.ctx.toolDolapErisebilir('OP1', 'CNC'), true);
+  assert.equal(A.ctx.toolDolapErisebilir('OP1', 'ATOLYE'), false);
+  assert.equal(A.ctx.toolDolapErisebilir('OP2', 'ATOLYE'), true);
+  assert.equal(A.ctx.toolDolapErisebilir('OP3', 'CNC'), false);
+  A.ata('appSettings', {});
+});

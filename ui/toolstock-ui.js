@@ -15,7 +15,23 @@ function renderToolStokAdminSettings(){
         <div style="font-size:14px;font-weight:600;color:${toolStokEnabled()?'var(--success)':'var(--text)'}">Takım & Sarf Stok Modülü ${toolStokEnabled()?'Aktif':'Kapalı'}</div>
         <div style="font-size:11.5px;color:var(--text-muted)">Kapalıyken izinli operatörler "🔧 Takım Dolabı" sekmesini hiç görmez.</div>
       </div>
-    </label>`;
+    </label>
+    ${toolStokEnabled() ? renderToolDolapErisimAyari() : ''}`;
+}
+/* Dolap erişimi (13.10.2026): kim hangi dolaptan çıkış yapabilir. Kaydı olmayan kişi tüm dolapları görür. */
+function renderToolDolapErisimAyari(){
+  ensureToolLocationsLoaded(()=>safeRender());
+  const locs = toolLocationsArray().filter(l=>l.aktif!==false);
+  const kisiler = Object.entries(STATE.operators||{}).filter(([k,v])=>v && (v.permTakimStokGor || v.isAdmin || v.isSuperAdmin || v.isSef))
+    .sort((a,b)=>String(a[1].displayName||a[0]).localeCompare(String(b[1].displayName||b[0]),'tr'));
+  if(!locs.length) return `<div style="font-size:12.5px;color:var(--text-muted);margin-top:18px">Dolap erişimi için önce Takım Stok → Konumlar'da dolap tanımlayın.</div>`;
+  return `<div class="sec-h" style="margin-top:22px">Dolap Erişimi</div>
+    <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;max-width:680px">Kişi çıkış yaparken yalnız işaretli dolapları "Alınan konum" olarak görür. Hiç değiştirilmemiş kişi tüm dolapları görür. Aynı kod birden çok dolapta varsa kişi hangisinden aldığını seçer.</div>
+    <div style="overflow-x:auto"><table style="font-size:12.5px"><thead><tr><th>Kişi</th>${locs.map(l=>`<th style="text-align:center">${esc(l.ad)}</th>`).join('')}</tr></thead><tbody>
+      ${kisiler.map(([u,v])=>{ const ozel = !!toolDolapErisimi(u);
+        return `<tr><td>${esc(v.displayName||u)} <span class="mono" style="font-size:11px;color:var(--text-subtle)">${esc(u)}</span>${ozel?'':' <span style="font-size:11px;color:var(--text-muted)">· tümü</span>'}</td>
+        ${locs.map(l=>`<td style="text-align:center"><input type="checkbox" style="width:auto" ${toolDolapErisebilir(u,l.id)?'checked':''} onchange="toolDolapErisimToggle('${escJs(u)}','${escJs(l.id)}')"></td>`).join('')}</tr>`; }).join('')}
+    </tbody></table></div>`;
 }
 
 /* ---------- render: üst seviye "🔧 Takım Stok" sekmesi ----------
@@ -126,9 +142,9 @@ function renderToolCatalogListAdmin(){
             ${locs.map(l=>`<option value="${l.id}" ${it.locId===l.id?'selected':''}>${esc(l.ad)}</option>`).join('')}
           </select></td>
           <td><input value="${esc(it.goz||'')}" style="width:70px" onchange="updateToolCatalogField('${it.id}','goz',this.value)"></td>
-          <td>${canManageToolStok()
+          <td>${(()=>{ const dl = toolDolaplari(toolStock[it.id], it); return dl.length>1 ? `<div style="display:flex;flex-direction:column;gap:3px">${dl.map(x=>`<label style="display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap">${esc(toolDolapAdi(x.locId))}${canManageToolStok()?`<input type="number" min="0" value="${x.miktar}" style="width:58px;text-align:right" title="Bu dolaptaki stoğu elle düzelt" onchange="toolStokMiktarDuzelt('${it.id}',this.value,'${escJs(x.locId)}')">`:` <b>${x.miktar}</b>`}</label>`).join('')}<div style="font-size:11px;color:${dusuk?'var(--danger)':'var(--text-muted)'}">toplam <b>${stok==null?0:stok}</b></div></div>` : ''; })() || (canManageToolStok()
             ? `<input type="number" min="0" value="${stok==null?0:stok}" title="Stoğu elle düzelt — hareket kütüğüne yazılır" style="width:74px;text-align:right;color:${dusuk?'var(--danger)':'var(--text)'};font-weight:${dusuk?'700':'600'}" onchange="toolStokMiktarDuzelt('${it.id}',this.value)">`
-            : `<span style="color:${dusuk?'var(--danger)':'var(--text)'};font-weight:${dusuk?'700':'400'}">${stok==null?'—':stok}</span>`}</td>
+            : `<span style="color:${dusuk?'var(--danger)':'var(--text)'};font-weight:${dusuk?'700':'400'}">${stok==null?'—':stok}</span>`)}</td>
           <td style="text-align:center"><input type="checkbox" ${siparisAcik?'checked':''} title="Bu kalem için tedarikçiye sipariş verildi mi?" onchange="toggleToolStokSiparisAcik('${it.id}')"></td>
           <td><input type="number" value="${it.altLimit||0}" style="width:70px" onchange="updateToolCatalogField('${it.id}','altLimit',this.value)"></td>
           <td><input type="number" value="${it.siparisMiktari||0}" style="width:70px" onchange="updateToolCatalogField('${it.id}','siparisMiktari',this.value)"></td>
@@ -224,6 +240,10 @@ function renderToolGirisAdmin(){
           <input class="mono" inputmode="numeric" aria-label="Adet" value="${toolGirisQty}" style="width:110px;font-size:24px;font-weight:700;text-align:center;padding:6px 8px;margin:0" onfocus="this.select()" oninput="this.value=this.value.replace(/\\D/g,''); toolGirisQty=this.value" onchange="toolGirisQty=Math.max(1, parseInt(this.value,10)||1); render()" onkeydown="if(event.key==='Enter') this.blur()">
           <button class="btn-ghost" style="width:44px;height:44px;font-size:20px;padding:0" onclick="toolGirisChangeQty(1)">+</button>
         </div>
+        <div class="field"><label>Giriş dolabı</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${toolLocationsArray().filter(l=>l.aktif!==false).map(l=>{ const m=(toolDolaplari(toolStock[toolGirisFoundId], it).find(x=>x.locId===l.id)||{}).miktar||0;
+            return `<button type="button" class="chip ${toolGirisDolap===l.id?'active':''}" onclick="toolGirisDolap='${escJs(l.id)}'; render()">${esc(l.ad)} · ${m}</button>`; }).join('')}</div>
+        </div>
         <div class="field"><label>Not (Sipariş No)</label>
           <input value="${esc(toolGirisNote)}" placeholder="ör. Sip. No 2026-114" oninput="toolGirisNote=this.value">
         </div>
@@ -312,8 +332,15 @@ function renderToolStokDetailPanel(){
   return `<div class="card">
     <button class="btn-ghost" style="margin-bottom:14px" onclick="toolOpClearLookup()">← Yeni Arama</button>
     <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:4px"><div style="font-size:17px;font-weight:700;flex:1">${esc(it.ad)}</div>${favYildizHtml('takim', it.canias + ' · ' + (it.ad || ''), true)}</div>
-    <div class="mono" style="color:var(--text-muted);margin-bottom:14px">${esc(it.canias)}${locAd?` · ${esc(locAd)}${it.goz?` / ${esc(it.goz)}`:''}`:''}</div>
-    <div style="font-size:13px;color:var(--text-muted);margin-bottom:18px">Mevcut stok: <b style="font-size:16px;color:var(--text)">${stok}</b> ${esc(it.birim||'adet')}</div>
+    <div class="mono" style="color:var(--text-muted);margin-bottom:14px">${esc(it.canias)}</div>
+    ${(()=>{ const dl = toolDolaplari(toolOpFoundStock, it), benim = dl.filter(x=>toolDolapErisebilir(session.username, x.locId)), baska = dl.filter(x=>!toolDolapErisebilir(session.username, x.locId) && x.miktar>0);
+      return `<div class="field"><label>Alınan konum</label>
+        ${benim.some(x=>x.miktar>0) ? `<div style="display:flex;flex-direction:column;gap:6px">${benim.map(x=>`<button type="button" class="durus-option-card" ${x.miktar>0?'':'disabled'} style="${toolOpDolap===x.locId?'border-color:var(--accent);background:var(--accent-dim)':''}${x.miktar>0?'':';opacity:.45'}" onclick="toolOpDolap='${escJs(x.locId)}'; render()">
+            <span class="durus-radio" style="${toolOpDolap===x.locId?'border-color:var(--accent)':''}"><span style="width:10px;height:10px;border-radius:50%;background:${toolOpDolap===x.locId?'var(--accent)':'transparent'}"></span></span>
+            <span class="durus-option-name" style="flex:1;${toolOpDolap===x.locId?'color:var(--accent)':''}">${esc(toolDolapAdi(x.locId))}${x.locId===it.locId && it.goz ? ` <span style="font-size:12px;color:var(--text-muted)">/ ${esc(it.goz)}</span>` : ''}</span>
+            <b class="mono">${x.miktar} ${esc(it.birim||'adet')}</b></button>`).join('')}</div>`
+          : `<div class="notice" style="--nc:var(--warn);padding:9px 12px"><div class="notice-sub">Erişebildiğin dolaplarda bu kalem yok${baska.length ? ` — ${baska.map(x=>esc(toolDolapAdi(x.locId))+'’nda '+x.miktar).join(', ')} var, oradan alması gereken kişiye haber ver` : ''}.</div></div>`}
+      </div>`; })()}
     ${activeEntries.length>1 ? `
       <div class="field"><label>Hangi iş için?</label>
         <select onchange="toolOpSelectedEntryId=this.value">
@@ -335,7 +362,7 @@ function renderToolStokDetailPanel(){
     <div class="field"><label>Not (opsiyonel)</label>
       <input value="${esc(toolOpNote)}" placeholder="ör. kırıldı, revizyonda vs." oninput="toolOpNote=this.value">
     </div>
-    <button class="btn-primary" style="font-size:15px;padding:14px" ${toolOpBusy?'disabled':''} onclick="doToolCikis()">✓ Çıkış Yap</button>
+    <button class="btn-primary" style="font-size:15px;padding:14px" ${(toolOpBusy||!toolOpDolap)?'disabled':''} onclick="doToolCikis()">${toolOpDolap ? '✓ Çıkış Yap · '+esc(toolDolapAdi(toolOpDolap)) : 'Önce alınan konumu seç'}</button>
   </div>`;
 }
 

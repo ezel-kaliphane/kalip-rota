@@ -82,6 +82,8 @@ let toolOpManualMachine = '';
 let toolOpSelectedEntryId = null; // birden fazla aktif kayıt varsa hangisine bağlansın
 let toolOpNote = '';              // opsiyonel not — toolMoves'a aciklama olarak yazılır
 let toolOpBusy = false;
+let toolOpDolap = null;           // çıkışta seçilen dolap (locId) — bkz. js/takim-dolap.js
+let toolGirisDolap = null;        // mal kabulde girişin yapılacağı dolap
 let toolLastMove = null;          // {id, itemId, canias, ad, tip, miktar, operatorUsername, ts, makine, isEmriNo} — SADECE bu oturumun belleğinde, geri alma için
 
 const TOOL_KATEGORI_LIST = [
@@ -255,30 +257,32 @@ function toolChunkedUpdate(updates, chunkSize){
    Transaction KOŞULSUZ yeni değeri döndürüyor, hiçbir pasta undefined yok: toolStock'ta
    canlı dinleyici olmadığı için ilk pas null gelir ve naif bir koruma orada ölürdü
    (bkz. HATA_NOTLARI 2026-09-15, karbür). Önceki değer sunucu pasında tazeleniyor. */
-function toolStokMiktarDuzelt(itemId, girilen){
+function toolStokMiktarDuzelt(itemId, girilen, locId){
   if(!canManageToolStok()){ toast('Bu işlem için SuperAdmin yetkisi gerekli'); return; }
   const it = toolCatalog[itemId]; if(!it) return;
   const yeni = Math.round(Number(girilen));
-  const bilinen = Number((toolStock[itemId]||{}).miktar)||0;
+  const dolaplar = toolDolaplari(toolStock[itemId], it);
+  locId = locId || dolaplar[0].locId;   // tek dolaplı (eski) kalemde dolap = ana konum
+  const bilinen = (dolaplar.find(x=>x.locId===locId) || {}).miktar || 0;
   if(!isFinite(yeni)){ toast('Geçerli bir sayı girin'); render(); return; }
   if(yeni < 0){ toast('Stok negatif olamaz'); render(); return; }
   if(yeni === bilinen) return; // değişmediyse yazma da kütük kaydı da yok
-  let onceki = bilinen;
-  DB.ref('toolStock/'+itemId+'/miktar').transaction(cur => { onceki = (cur===null?bilinen:(Number(cur)||0)); return yeni; })
-    .then(res=>{
-      if(!res.committed){ toast('İşlem tamamlanamadı, tekrar deneyin'); render(); return; }
+  toolDolapTx(itemId, it, toolStock[itemId], locId, { mutlak: yeni })
+    .then(r=>{
+      if(!r.committed){ toast('İşlem tamamlanamadı, tekrar deneyin'); render(); return; }
+      const onceki = r.onceki;
       const now = Date.now();
       const moveId = DB.ref('toolMoves').push().key;
       const updates = {};
       updates['toolMoves/'+moveId] = { itemId, canias: it.canias||'', tip:'duzeltme', miktar: yeni-onceki,
-        oncekiMiktar: onceki, sonrakiMiktar: yeni, operatorUsername: session.username,
-        operatorName: session.displayName, aciklama:'Elle düzeltme (kalem listesi)', kaynak:'liste', ts: now };
+        oncekiMiktar: r.oncekiToplam, sonrakiMiktar: r.sonrakiToplam, locId, dolap: toolDolapAdi(locId), dolapOnceki: onceki, dolapSonraki: yeni,
+        operatorUsername: session.username, operatorName: session.displayName, aciklama:'Elle düzeltme (kalem listesi)', kaynak:'liste', ts: now };
       updates['toolStock/'+itemId+'/sonHareketTs'] = now;
       updates['toolStock/'+itemId+'/sonHareketAciklama'] = 'Elle düzeltme';
-      if(Number(it.altLimit)>0 && yeni>Number(it.altLimit)) updates['toolStock/'+itemId+'/uyariGonderildi'] = false;
+      if(Number(it.altLimit)>0 && r.sonrakiToplam>Number(it.altLimit)) updates['toolStock/'+itemId+'/uyariGonderildi'] = false;
       DB.ref().update(updates).then(()=>{
-        toolStock[itemId] = { ...(toolStock[itemId]||{}), miktar: yeni, sonHareketTs: now };
-        toast(`${it.ad||it.canias}: ${onceki} → ${yeni}`);
+        toolStock[itemId] = { ...(r.node||{}), sonHareketTs: now };
+        toast(`${it.ad||it.canias} · ${toolDolapAdi(locId)}: ${onceki} → ${yeni}`);
         render();
       }).catch(err=>{ toast('Kaydedilemedi: '+(err.message||'bilinmeyen hata')); render(); });
     }).catch(err=>{ toast('Kaydedilemedi: '+(err.message||'bilinmeyen hata')); render(); });
@@ -491,6 +495,14 @@ function confirmToolExcelUpload(){
       guncellendi++;
       if(toolExcelUpdateStock){
         const onceki = Number((toolStock[itemId]||{}).miktar) || 0;
+        const dl = (toolStock[itemId]||{}).dolaplar;
+        if(dl && typeof dl==='object' && Object.keys(dl).length){
+          /* Dolaplı kalem (13.10.2026): Excel'deki stok satırdaki dolaba yazılır, toplam yeniden hesaplanır */
+          const hedef = locId || (toolCatalog[itemId]||{}).locId || TOOL_KONUMSUZ;
+          const d = { ...dl, [hedef]: r.stok };
+          updates['toolStock/'+itemId+'/dolaplar/'+hedef] = r.stok;
+          updates['toolStock/'+itemId+'/miktar'] = Object.values(d).reduce((s,v)=>s+(Number(v)||0),0);
+        } else
         updates['toolStock/'+itemId+'/miktar']       = r.stok;
         updates['toolStock/'+itemId+'/sonHareketTs'] = now;
         const moveId = DB.ref('toolMoves').push().key;
@@ -611,6 +623,8 @@ function toolGirisLookup(code){
   toolGirisQty = 1;
   toolGirisNote = '';
   toolGirisSiparisAcik = !!(toolStock[found[0]]||{}).siparisAcik;
+  toolGirisDolap = found[1].locId || (toolLocationsArray().find(l=>l.aktif!==false)||{}).id || TOOL_KONUMSUZ;
+  ensureToolLocationsLoaded(()=>safeRender());
   render();
 }
 function toolGirisScanQr(){
@@ -631,29 +645,29 @@ function doToolGiris(){
   const it = toolCatalog[itemId]; if(!it) return;
   const qty = Math.max(1, Number(toolGirisQty)||1);
   const siparisAcik = !!toolGirisSiparisAcik;
-  DB.ref('toolStock/'+itemId+'/miktar').transaction(cur => (Number(cur)||0) + qty)
-    .then(result=>{
-      if(!result.committed){ toast('İşlem tamamlanamadı, tekrar deneyin'); return; }
-      const sonrakiMiktar = Number(result.snapshot.val())||0;
-      const oncekiMiktar = sonrakiMiktar - qty;
+  const locId = toolGirisDolap || it.locId || TOOL_KONUMSUZ;
+  toolDolapTx(itemId, it, toolStock[itemId], locId, { delta: qty })
+    .then(r=>{
+      if(!r.committed){ toast('İşlem tamamlanamadı, tekrar deneyin'); return; }
       const now = Date.now();
       const moveId = DB.ref('toolMoves').push().key;
       const moveRec = {
-        itemId, canias: it.canias, tip:'giris', miktar: qty, oncekiMiktar, sonrakiMiktar,
+        itemId, canias: it.canias, tip:'giris', miktar: qty, oncekiMiktar: r.oncekiToplam, sonrakiMiktar: r.sonrakiToplam,
+        locId, dolap: toolDolapAdi(locId), dolapOnceki: r.onceki, dolapSonraki: r.sonraki,
         operatorUsername: session.username, operatorName: session.displayName,
         aciklama: (toolGirisNote||'').trim(), kaynak:'arama', ts: now
       };
       const updates = {};
       updates['toolMoves/'+moveId] = moveRec;
       updates['toolStock/'+itemId+'/sonHareketTs'] = now;
-      updates['toolStock/'+itemId+'/sonHareketAciklama'] = 'Stok girişi';
+      updates['toolStock/'+itemId+'/sonHareketAciklama'] = 'Stok girişi · '+toolDolapAdi(locId);
       updates['toolStock/'+itemId+'/siparisAcik'] = siparisAcik;
       // Stok alt limitin üzerine çıktıysa uyarı bayrağını da sıfırla — Aşama 4'te bir düşüşte
       // tekrar uyarabilsin diye (bkz. görev talimatı §9).
-      if(it.altLimit>0 && sonrakiMiktar>it.altLimit){ updates['toolStock/'+itemId+'/uyariGonderildi'] = false; }
+      if(it.altLimit>0 && r.sonrakiToplam>it.altLimit){ updates['toolStock/'+itemId+'/uyariGonderildi'] = false; }
       DB.ref().update(updates).then(()=>{
-        toolStock[itemId] = { ...(toolStock[itemId]||{}), miktar: sonrakiMiktar, sonHareketTs: now, siparisAcik };
-        toast(`Giriş kaydedildi: ${it.ad} (+${qty})`);
+        toolStock[itemId] = { ...(r.node||{}), sonHareketTs: now, siparisAcik };
+        toast(`Giriş kaydedildi: ${it.ad} (+${qty}) · ${toolDolapAdi(locId)}`);
         toolGirisClear();
       });
     }).catch(err=>{
@@ -894,6 +908,9 @@ function toolOpLookupByCode(code){
         toolOpLookupBusy = false;
         toolOpFoundItem = item;
         toolOpFoundStock = stockSnap.val() || { miktar: 0 };
+        /* Alınan konum: erişebildiği dolaplardan stoğu olan TEK dolap varsa o seçili gelir; birden çoksa kişi seçer */
+        const uygun = toolDolaplari(toolOpFoundStock, item).filter(x=>x.miktar>0 && toolDolapErisebilir(session.username, x.locId));
+        toolOpDolap = uygun.length===1 ? uygun[0].locId : null;
         toolOpQty = 1;
         toolOpNote = '';
         const active = myActiveEntries();
@@ -910,6 +927,7 @@ function toolOpLookupByCode(code){
 function toolOpClearLookup(){
   toolOpFoundItem = null;
   toolOpFoundStock = null;
+  toolOpDolap = null;
   toolOpScanCode = '';
   toolOpLookupError = null;
   toolOpNote = '';
@@ -934,11 +952,15 @@ function doToolCikis(){
   const it = toolOpFoundItem; if(!it) return;
   const itemId = it.id;
   const qty = Math.max(1, Number(toolOpQty)||1);
+  /* Alınan konum (13.10.2026): aynı kod birden çok dolapta olabilir — çıkış seçilen dolaptan düşer */
+  const locId = toolOpDolap;
+  if(!locId){ toast('Alınan konumu (dolabı) seçin'); return; }
+  if(!toolDolapErisebilir(session.username, locId)){ toast('Bu dolaba erişim yetkin yok'); return; }
   /* (a) Ekran katmanı: toolOpFoundStock, kod okutulduğu anda toolStock/<id>'den once('value')
      ile TAZE okunmuş değer (bkz. toolOpLookup). Kullanıcı burada net bir sebep görüyor. */
-  const bilinen = Number((toolOpFoundStock||{}).miktar)||0;
+  const bilinen = (toolDolaplari(toolOpFoundStock, it).find(x=>x.locId===locId) || {}).miktar || 0;
   if(bilinen - qty < 0){
-    toast(`Stok yetersiz — ${bilinen} adet görünüyor, ${qty} adet çıkış yapılamaz. Önce stok girişi yapın.`);
+    toast(`${toolDolapAdi(locId)}: ${bilinen} adet görünüyor, ${qty} adet çıkış yapılamaz.`);
     return;
   }
   toolOpBusy = true;
@@ -949,29 +971,17 @@ function doToolCikis(){
   const makine = chosen ? chosen.makine : (toolOpManualMachine||'');
   const isEmriNo = chosen ? chosen.isEmriNo : '';
 
-  DB.ref('toolStock/'+itemId+'/miktar').transaction(cur => {
-    /* Firebase, update fonksiyonunu ÖNCE yerel önbellekle çağırır. toolStock'ta maliyet
-       kısıtı yüzünden CANLI DİNLEYİCİ YOK (once('value') ile okunuyor), dolayısıyla bu ilk
-       pasta cur === null gelir. Naif bir `sonraki < 0 ? undefined` koruması transaction'ı
-       sunucuya hiç göndermeden öldürür ve stok bol olsa bile HER çıkışı reddeder — karbürde
-       birebir bu yaşandı, bir hafta hiçbir çıkış kaydedilemedi (HATA_NOTLARI 2026-09-15).
-       Bu yüzden ilk pasta, tarama anında okunan taze değeri kullanıyoruz; transaction sunucuya
-       gidip GERÇEK değerle yeniden çalışıyor ve gerçekten yetmiyorsa iptal orada oluyor. */
-    const mevcut = (cur === null ? bilinen : (Number(cur)||0));
-    const sonraki = mevcut - qty;
-    return sonraki < 0 ? undefined : sonraki;
-  })
-    .then(result=>{
+  /* Dolap + toplam tek transaction (bkz. toolDolapTx): ilk pasta cur === null gelirse taze okunan
+     düğüm kullanılır, sunucuda gerçek değerle yeniden çalışır; dolapta gerçekten yetmiyorsa iptal. */
+  toolDolapTx(itemId, it, toolOpFoundStock, locId, { delta: -qty })
+    .then(r=>{
       toolOpBusy = false;
-      if(!result.committed){ toast('Stok yetersiz — bu sırada başka bir çıkış yapılmış olabilir, stoğu kontrol edin.'); render(); return; }
-      // oncekiMiktar/sonrakiMiktar transaction'ın kendi sonucundan türetiliyor, kendi
-      // hesapladığımız (raced olabilecek) bir değerden değil — bkz. görev talimatı §4.
-      const sonrakiMiktar = Number(result.snapshot.val())||0;
-      const oncekiMiktar = sonrakiMiktar + qty;
+      if(!r.committed){ toast('Stok yetersiz — bu sırada başka bir çıkış yapılmış olabilir, stoğu kontrol edin.'); render(); return; }
       const now = Date.now();
       const moveId = DB.ref('toolMoves').push().key;
       const moveRec = {
-        itemId, canias: it.canias, tip:'cikis', miktar: -qty, oncekiMiktar, sonrakiMiktar,
+        itemId, canias: it.canias, tip:'cikis', miktar: -qty, oncekiMiktar: r.oncekiToplam, sonrakiMiktar: r.sonrakiToplam,
+        locId, dolap: toolDolapAdi(locId), dolapOnceki: r.onceki, dolapSonraki: r.sonraki,
         operatorUsername: session.username, operatorName: session.displayName,
         makine: makine||'', isEmriNo: isEmriNo||'', aciklama: (toolOpNote||'').trim(),
         kaynak: toolOpScanCode ? 'qr' : 'arama', ts: now
@@ -979,11 +989,11 @@ function doToolCikis(){
       const updates = {};
       updates['toolMoves/'+moveId] = moveRec;
       updates['toolStock/'+itemId+'/sonHareketTs'] = now;
-      updates['toolStock/'+itemId+'/sonHareketAciklama'] = (makine ? makine+' çıkış' : 'Takım çıkışı'); // Genel Bakış "Son Hareket" sütunu için
+      updates['toolStock/'+itemId+'/sonHareketAciklama'] = (makine ? makine+' çıkış' : 'Takım çıkışı') + ' · ' + toolDolapAdi(locId); // Genel Bakış "Son Hareket" sütunu için
       DB.ref().update(updates).then(()=>{
-        toolOpFoundStock = { ...(toolOpFoundStock||{}), miktar: sonrakiMiktar, sonHareketTs: now };
+        toolOpFoundStock = r.node || toolOpFoundStock;
         toolLastMove = { id: moveId, ad: it.ad, ...moveRec };
-        toast(sonrakiMiktar<0 ? `⚠ Kaydedildi — stok negatife düştü (${sonrakiMiktar})` : `Çıkış kaydedildi: ${it.ad}`);
+        toast(`Çıkış kaydedildi: ${it.ad} · ${toolDolapAdi(locId)}`);
         toolOpClearLookup();
       });
     }).catch(err=>{
@@ -995,30 +1005,30 @@ function doToolCikis(){
 
 /* Geri alma: silme değil, ters yönde yeni bir hareket. toolMoves toplu indirilmediği için
    sadece BU OTURUMDA yapılan son işlem geri alınabilir (toolLastMove salt bellekte tutuluyor,
-   sayfa yenilenirse geri alma şeridi kaybolur — bu bilinçli bir sadeleştirme). */
+   sayfa yenilenirse geri alma şeridi kaybolur — bu bilinçli bir sadeleştirme). Stok, çıkışın
+   yapıldığı dolaba geri eklenir. */
 function undoLastToolMove(){
   if(!toolLastMove || !session || toolLastMove.operatorUsername !== session.username) return;
   const age = Date.now() - toolLastMove.ts;
   if(age > 10*60*1000){ toast('Geri alma süresi geçti (10 dakika)'); toolLastMove = null; render(); return; }
   const itemId = toolLastMove.itemId;
   const qty = -toolLastMove.miktar; // çıkışın tersi
-  DB.ref('toolStock/'+itemId+'/miktar').transaction(cur => (Number(cur)||0) + qty)
-    .then(result=>{
-      if(!result.committed){ toast('Geri alma tamamlanamadı'); return; }
-      const sonrakiMiktar = Number(result.snapshot.val())||0;
-      const oncekiMiktar = sonrakiMiktar - qty;
+  const it = toolCatalog[itemId] || (toolOpFoundItem && toolOpFoundItem.id===itemId ? toolOpFoundItem : {});
+  const locId = toolLastMove.locId || it.locId || TOOL_KONUMSUZ;
+  toolDolapTx(itemId, it, (toolOpFoundItem && toolOpFoundItem.id===itemId ? toolOpFoundStock : toolStock[itemId]) || {}, locId, { delta: qty })
+    .then(r=>{
+      if(!r.committed){ toast('Geri alma tamamlanamadı'); return; }
       const now = Date.now();
       const moveId = DB.ref('toolMoves').push().key;
       const rec = {
-        itemId, canias: toolLastMove.canias, tip:'iade', miktar: qty, oncekiMiktar, sonrakiMiktar,
+        itemId, canias: toolLastMove.canias, tip:'iade', miktar: qty, oncekiMiktar: r.oncekiToplam, sonrakiMiktar: r.sonrakiToplam,
+        locId, dolap: toolDolapAdi(locId), dolapOnceki: r.onceki, dolapSonraki: r.sonraki,
         operatorUsername: session.username, operatorName: session.displayName,
         makine: toolLastMove.makine||'', isEmriNo: toolLastMove.isEmriNo||'',
         aciklama:'geri alındı', kaynak: toolLastMove.kaynak||'arama', ts: now
       };
       DB.ref('toolMoves/'+moveId).set(rec).then(()=>{
-        if(toolOpFoundItem && toolOpFoundItem.id===itemId){
-          toolOpFoundStock = { ...(toolOpFoundStock||{}), miktar: sonrakiMiktar, sonHareketTs: now };
-        }
+        if(toolOpFoundItem && toolOpFoundItem.id===itemId) toolOpFoundStock = r.node || toolOpFoundStock;
         toast('İşlem geri alındı');
         toolLastMove = null;
         render();
