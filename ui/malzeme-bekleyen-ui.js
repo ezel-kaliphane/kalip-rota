@@ -81,8 +81,8 @@ function mbKodAra(){
     if(r){
       if(!mbForm.hammaddeId) mbForm.hammaddeId = r.hammaddeId||'';
       const adet = Number(mbForm.ieMiktar)||0;
-      if(!mbForm.gerekenMiktar && r.birimBasina>0 && adet>0){
-        mbForm.gerekenMiktar = String(Math.round(r.birimBasina*adet*100)/100);
+      if(!mbForm.gerekenMiktar && r.birimBasina>0 && (adet>0 || r.birim==='mm')){
+        mbForm.gerekenMiktar = String(Math.round(r.birimBasina*(r.birim==='mm' ? 1 : adet)*100)/100);   // çubukta parça boyu
       }
     }
   } else {
@@ -110,6 +110,12 @@ function mbHammaddeQr(){
 }
 /* Açılır liste ve sonuç satırı metni — operatör formuyla ortak (hammaddeGosterimAdi, js/catalog.js). */
 function mbSecenekMetni(it){ return hammaddeGosterimAdi(it); }
+function mbBoySecili(){
+  const it = mbForm.hammaddeId && (stockItems||{})[mbForm.hammaddeId];
+  if(it) return (it.birim||'')==='mm';
+  const r = mbForm.mamulKodu && receteOku(mbForm.mamulKodu);
+  return !!(r && r.birim==='mm');
+}
 function mbHamSec(id){ mbHamAra = ''; mbFormYaz('hammaddeId', id); }
 function mbFormYaz(alan, deger){
   mbForm[alan] = deger;
@@ -118,7 +124,7 @@ function mbFormYaz(alan, deger){
   if(alan==='ieMiktar' && mbForm.mamulKodu){
     const r = receteOku(mbForm.mamulKodu);
     const adet = Number(deger)||0;
-    if(r && r.birimBasina>0 && adet>0) mbForm.gerekenMiktar = String(Math.round(r.birimBasina*adet*100)/100);
+    if(r && r.birimBasina>0 && adet>0 && r.birim!=='mm') mbForm.gerekenMiktar = String(Math.round(r.birimBasina*adet*100)/100);   // çubukta parça boyu adetten bağımsız
   }
   render();
 }
@@ -128,7 +134,7 @@ function mbKaydet(){
   if(!kod){ toast('İş emri ya da talep numarası girin'); return; }
   if(!mbForm.hammaddeId){ toast('Hangi hammaddenin beklendiğini seçin'); return; }
   const gereken = Number(mbForm.gerekenMiktar);
-  if(!isFinite(gereken) || gereken<=0){ toast('Gereken miktarı girin'); return; }
+  if(!isFinite(gereken) || gereken<=0){ toast(mbBoySecili() ? 'Parça boyunu girin' : 'Gereken miktarı girin'); return; }
   const it = (stockItems||{})[mbForm.hammaddeId];
   mbForm.busy = true; render();
   malzemeBekleyenEkle({
@@ -241,7 +247,7 @@ function renderMalzemeBekleyen(){
           <span><span class="mb-ie">${esc(s.isEmriNo||'—')}</span><span class="mb-talep">${esc(s.talepNo||'')}</span></span>
           <span class="mb-mamul" title="${esc(s.mamulAdi||'')}">${esc(s.mamulAdi||'—')}</span>
           <span class="mb-sag">${s.ieMiktar||'—'}</span>
-          <span class="mb-sag">${s.gerekenMiktar} ${esc(s.birim||'')}${pay?`<small class="mb-pay" title="Testere payı: kesim başına ${MALZEME_KESIM_PAYI_MM} mm">+${pay}</small>`:''}</span>
+          <span class="mb-sag" title="${malzemeBoyMu(s)?'Parça boyu × İ.E. miktarı':''}">${malzemeBoyMu(s) && (Number(s.ieMiktar)||0)>1 ? `${Math.round(malzemeToplamGereken(s))} mm<small class="mb-pay" style="color:var(--text-muted)">${s.gerekenMiktar}×${Math.round(Number(s.ieMiktar))}</small>` : `${s.gerekenMiktar} ${esc(s.birim||'')}`}${pay?`<small class="mb-pay" title="Testere payı: kesim başına ${MALZEME_KESIM_PAYI_MM} mm">+${pay}</small>`:''}</span>
           <span style="color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(operatorGosterimAdi({operatorName:s.isaretleyenName, operatorUsername:s.isaretleyenUsername}))}</span>
           <span class="mb-sag" style="color:${bek.renk}">${bek.metin}</span>
           <span class="mb-sag">${istek
@@ -287,7 +293,7 @@ function renderMalzemeBekleyen(){
         const sure = (Number(s.karsilanmaTs)||0) - (Number(s.isaretTs)||0);
         const gun = Math.max(0, Math.round(sure/86400000));
         return `<tr><td class="mono">${esc(s.isEmriNo||'—')}</td><td>${esc(s.mamulAdi||'—')}</td>
-          <td class="mono">${esc(s.hammaddeKod||'—')}</td><td class="mono">${s.gerekenMiktar} ${esc(s.birim||'')}</td>
+          <td class="mono">${esc(s.hammaddeKod||'—')}</td><td class="mono">${esc(malzemeGerekenYazi(s))}</td>
           <td class="mono">${esc(s.caniasIstekNo||'—')}</td><td>${gun} gün</td>
           <td style="color:var(--text-muted)">${esc(s.karsilayanName||s.karsilayanUsername||'—')}</td>
           ${session.isSuperAdmin?`<td style="white-space:nowrap;text-align:right"><button class="btn-ghost mb-mini" title="Yanlışlıkla kapatıldıysa yeniden beklemeye al" onclick="malzemeBekleyenGeriAc('${escJs(s.id)}')">Geri al</button>
@@ -346,10 +352,12 @@ function renderMbYeniModal(){
         <div class="field"><label for="mb-ie">İ.E. Miktarı</label>
           <input id="mb-ie" inputmode="numeric" placeholder="0" value="${esc(mbForm.ieMiktar)}"
             oninput="this.value=this.value.replace(/[^0-9.]/g,'')" onchange="mbFormYaz('ieMiktar',this.value)"></div>
-        <div class="field"><label for="mb-gereken">Gereken Miktar</label>
-          <input id="mb-gereken" inputmode="numeric" placeholder="0" value="${esc(mbForm.gerekenMiktar)}"
+        <div class="field"><label for="mb-gereken">${mbBoySecili() ? 'Parça Boyu (mm)' : 'Gereken Miktar'}</label>
+          <input id="mb-gereken" inputmode="numeric" placeholder="${mbBoySecili() ? 'bir parçanın boyu' : '0'}" value="${esc(mbForm.gerekenMiktar)}"
             oninput="this.value=this.value.replace(/[^0-9.]/g,''); mbForm.gerekenMiktar=this.value" onchange="mbFormYaz('gerekenMiktar',this.value)"></div>
       </div>
+      ${mbBoySecili() && Number(mbForm.gerekenMiktar)>0 ? (() => { const t = { gerekenMiktar:Number(mbForm.gerekenMiktar), ieMiktar:Number(mbForm.ieMiktar)||0, birim:'mm' };
+        return `<div style="font-size:12px;color:var(--text-muted);margin:-6px 0 12px">Toplam ihtiyaç: <b style="color:var(--text)">${esc(malzemeGerekenYazi(t))}</b> + ${malzemeKesimPayi(t)} mm testere payı = <b style="color:var(--text)">${Math.round(malzemeIhtiyac(t))} mm</b></div>`; })() : ''}
 
       <div class="field">
         <label for="mb-ham-ara">Beklenen Hammadde</label>

@@ -148,7 +148,7 @@ function bomRotaListesi(){
     if(!hammadde){
       const m = talep ? (mbTalep[talep] || null) : (mbIe[uKodu] || null);   // talep varsa başka iş emrinin kaydı alınmasın
       if(m){ hammadde = { kaynak: 'bekleyen', ad: m.hammaddeKod, boy: m.gerekenMiktar ? bomSayi(m.gerekenMiktar) + ' ' + (m.birim || '') : '' };
-        hmRaw = { kaynak: 'bekleyen', kalemler: [{ itemId: m.hammaddeId, kod: m.hammaddeKod, miktar: Number(m.gerekenMiktar) || 0, birim: m.birim || '' }] }; }
+        hmRaw = { kaynak: 'bekleyen', kalemler: [{ itemId: m.hammaddeId, kod: m.hammaddeKod, miktar: typeof malzemeToplamGereken === 'function' ? malzemeToplamGereken(m) : (Number(m.gerekenMiktar) || 0), birim: m.birim || '' }] }; }
     }
     if(!hammadde){
       hammadde = operatorMalz(dalli ? zarf : ana);

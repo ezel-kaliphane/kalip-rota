@@ -102,7 +102,22 @@ function malzemeKesimPayi(x){
   if(String((x && x.birim)||'')!=='mm') return 0;
   return MALZEME_KESIM_PAYI_MM * Math.max(1, Math.round(Number(x.ieMiktar)||0) || 1);
 }
-function malzemeIhtiyac(x){ return (Number(x && x.gerekenMiktar)||0) + malzemeKesimPayi(x); }
+/* mm ile takip edilen çubukta gerekenMiktar = PARÇA BOYU (13.10.2026: şef hep parça boyunu
+   giriyor — "Ø72X40 → 45 mm", İ.E. 3 — ama hesap onu toplam sanıyordu; rezerve adet kadar eksik
+   çıkıyordu). Toplam = parça boyu × İ.E. miktarı (bilinmiyorsa 1). Adet/kg kalemlerde toplamdır. */
+function malzemeBoyMu(x){ return String((x && x.birim)||'')==='mm'; }
+function malzemeToplamGereken(x){
+  const g = Number(x && x.gerekenMiktar)||0;
+  return malzemeBoyMu(x) ? g * Math.max(1, Math.round(Number(x.ieMiktar)||0) || 1) : g;
+}
+function malzemeIhtiyac(x){ return malzemeToplamGereken(x) + malzemeKesimPayi(x); }
+/* Ekranda: "45 mm × 3 = 135 mm" (çubuk) ya da "12 adet" */
+function malzemeGerekenYazi(x){
+  const g = Number(x && x.gerekenMiktar)||0, b = (x && x.birim)||'';
+  if(!malzemeBoyMu(x)) return g + ' ' + b;
+  const n = Math.max(1, Math.round(Number(x.ieMiktar)||0) || 1);
+  return n > 1 ? g + ' mm × ' + n + ' = ' + Math.round(g * n) + ' mm' : g + ' mm';
+}
 /* Bir hammaddenin AÇIK siparişleri: kayıtlı olanlar + bekleyen kayıtlarda geçip kaydı olmayan
    (miktarı bilinmeyen) istek no'lar. Her biri için bağlı aktif kayıtlar, kullanılan ve fazla. */
 function malzemeAcikIstekler(hid){
@@ -196,11 +211,12 @@ function malzemeBekleyenEkle(veri, bitti){
   updates['malzemeBekleyen/'+id] = kayit;
   /* Reçete aynı yazmada güncelleniyor: şefin seçtiği hammadde bu mamulün reçetesi olur.
      birimBasina = gereken / iş emri miktarı; iş emri miktarı bilinmiyorsa oran
-     hesaplanamaz, o zaman yalnızca hammadde eşlemesi saklanır (miktar 0). */
+     hesaplanamaz, o zaman yalnızca hammadde eşlemesi saklanır (miktar 0).
+     Çubukta (mm) gereken zaten parça boyu → birimBasina = gereken. */
   const mamul = String(kayit.mamulKodu||'').trim().toUpperCase();
   if(mamul && kayit.hammaddeId && !(hammaddeRecete[mamul] || {}).standart){   // Şef/SuperAdmin standardı varsa reçete ona dokunmaz (bkz. js/urun-agaci.js)
     const eski = hammaddeRecete[mamul] || {};
-    const birimBasina = kayit.ieMiktar>0 ? (kayit.gerekenMiktar / kayit.ieMiktar) : 0;
+    const birimBasina = malzemeBoyMu(kayit) ? kayit.gerekenMiktar : kayit.ieMiktar>0 ? (kayit.gerekenMiktar / kayit.ieMiktar) : 0;
     const yeniRecete = {
       hammaddeId: kayit.hammaddeId, hammaddeKod: kayit.hammaddeKod,
       birimBasina: birimBasina || Number(eski.birimBasina)||0, birim: kayit.birim,

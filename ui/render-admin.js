@@ -2079,7 +2079,7 @@ function iyMalzemeAramaKartHtml(x){
       ${x.isEmriNo && x.isEmriNo!==x.talepNo ? `<span style="font-size:11px;color:var(--text-muted)">U kodu: ${esc(x.isEmriNo)}</span>` : ''}
     </div>
     <div style="margin-top:8px;font-size:13.5px;font-weight:600;color:${renk}">${istek ? (malzemeIstekDurumu(x)==='geldi' ? `Malzeme geldi · istek no ${esc(istek)}` : `Sipariş açıldı · istek no ${esc(istek)}`) : 'İstek no girilmedi · CANIAS isteği henüz açılmadı'}</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${esc(x.mamulAdi||'')}${x.mamulAdi?' · ':''}Beklenen: <span class="mono">${esc(x.hammaddeKod||'—')} · ${esc(String(x.gerekenMiktar||''))} ${esc(x.birim||'')}</span> · ${bek.metin} bekliyor · işaretleyen ${esc(x.isaretleyenName||x.isaretleyenUsername||'—')}</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${esc(x.mamulAdi||'')}${x.mamulAdi?' · ':''}Beklenen: <span class="mono">${esc(x.hammaddeKod||'—')} · ${esc(typeof malzemeGerekenYazi==='function' ? malzemeGerekenYazi(x) : String(x.gerekenMiktar||'')+' '+(x.birim||''))}</span> · ${bek.metin} bekliyor · işaretleyen ${esc(x.isaretleyenName||x.isaretleyenUsername||'—')}</div>
     ${canManageStock() ? `<button class="btn-ghost" style="width:auto;padding:6px 12px;margin-top:10px" onclick="stokSubView='bekleyen'; setView('stokYonetim')">Malzeme Bekleyenler'de aç</button>` : ''}
   </div>`;
 }
@@ -2167,7 +2167,7 @@ function iyMalzemeDetayHtml(r){
     return `<div class="iy-detay-row iy-mb-satir ${istek?(malzemeIstekDurumu(x)==='geldi'?'geldi':'var'):'yok'}">
       <span><span class="mono" style="font-weight:700">${esc(x.talepNo||x.isEmriNo||'—')}</span>${x.isEmriNo && x.isEmriNo!==x.talepNo ? `<span class="mono" style="display:block;font-size:10.5px;color:var(--text-subtle)">${esc(x.isEmriNo)}</span>` : ''}</span>
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.mamulAdi||'')}">${esc(x.mamulAdi||'—')}</span>
-      <span class="mono">${esc(x.hammaddeKod||'—')} <span style="color:var(--text-muted)">· ${esc(String(x.gerekenMiktar||''))} ${esc(x.birim||'')}</span></span>
+      <span class="mono">${esc(x.hammaddeKod||'—')} <span style="color:var(--text-muted)">· ${esc(typeof malzemeGerekenYazi==='function' ? malzemeGerekenYazi(x) : String(x.gerekenMiktar||'')+' '+(x.birim||''))}</span></span>
       <span class="iy-mb-istek">${istek ? (malzemeIstekDurumu(x)==='geldi' ? `Geldi · istek ${esc(istek)}` : `İstek ${esc(istek)}`) : 'İstek no yok'}</span>
       <span class="mono sag" style="color:${bek.renk}">${bek.metin} bekliyor</span>
     </div>`; }).join('')}
