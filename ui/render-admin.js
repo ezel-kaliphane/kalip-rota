@@ -932,7 +932,7 @@ function renderMalzemeStokScreen(){
             </div>
             <div style="display:flex;align-items:center;gap:16px;justify-content:center;margin-bottom:14px">
               <button class="btn-ghost" style="width:44px;height:44px;font-size:20px;padding:0" onclick="stokGirisMiktarDegistir(-1)">−</button>
-              <div style="font-size:24px;font-weight:700;min-width:44px;text-align:center">${stokGirisMiktar}</div>
+              <input class="mono" inputmode="numeric" aria-label="Adet" value="${stokGirisMiktar}" style="width:110px;font-size:24px;font-weight:700;text-align:center;padding:6px 8px;margin:0" onfocus="this.select()" oninput="this.value=this.value.replace(/\\D/g,''); stokGirisMiktar=this.value" onchange="stokGirisMiktar=Math.max(1, parseInt(this.value,10)||1); render()" onkeydown="if(event.key==='Enter') this.blur()">
               <button class="btn-ghost" style="width:44px;height:44px;font-size:20px;padding:0" onclick="stokGirisMiktarDegistir(1)">+</button>
             </div>
             <div class="field"><label>Not (Sipariş No)</label>

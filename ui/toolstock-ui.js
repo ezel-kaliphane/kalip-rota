@@ -221,7 +221,7 @@ function renderToolGirisAdmin(){
         </div>
         <div style="display:flex;align-items:center;gap:16px;justify-content:center;margin-bottom:14px">
           <button class="btn-ghost" style="width:44px;height:44px;font-size:20px;padding:0" onclick="toolGirisChangeQty(-1)">−</button>
-          <div style="font-size:24px;font-weight:700;min-width:44px;text-align:center">${toolGirisQty}</div>
+          <input class="mono" inputmode="numeric" aria-label="Adet" value="${toolGirisQty}" style="width:110px;font-size:24px;font-weight:700;text-align:center;padding:6px 8px;margin:0" onfocus="this.select()" oninput="this.value=this.value.replace(/\\D/g,''); toolGirisQty=this.value" onchange="toolGirisQty=Math.max(1, parseInt(this.value,10)||1); render()" onkeydown="if(event.key==='Enter') this.blur()">
           <button class="btn-ghost" style="width:44px;height:44px;font-size:20px;padding:0" onclick="toolGirisChangeQty(1)">+</button>
         </div>
         <div class="field"><label>Not (Sipariş No)</label>
@@ -329,7 +329,7 @@ function renderToolStokDetailPanel(){
       </div>`}
     <div style="display:flex;align-items:center;gap:16px;justify-content:center;margin:22px 0">
       <button class="btn-ghost" style="width:48px;height:48px;font-size:22px;padding:0" onclick="toolOpChangeQty(-1)">−</button>
-      <div style="font-size:28px;font-weight:700;min-width:50px;text-align:center">${toolOpQty}</div>
+      <input class="mono" inputmode="numeric" aria-label="Adet" value="${toolOpQty}" style="width:110px;font-size:28px;font-weight:700;text-align:center;padding:6px 8px;margin:0" onfocus="this.select()" oninput="this.value=this.value.replace(/\\D/g,''); toolOpQty=this.value" onchange="toolOpQty=Math.max(1, parseInt(this.value,10)||1); render()" onkeydown="if(event.key==='Enter') this.blur()">
       <button class="btn-ghost" style="width:48px;height:48px;font-size:22px;padding:0" onclick="toolOpChangeQty(1)">+</button>
     </div>
     <div class="field"><label>Not (opsiyonel)</label>
