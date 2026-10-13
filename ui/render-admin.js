@@ -2946,6 +2946,7 @@ const EKRAN_BASLIKLARI = {
   /* Tahtada başlığın altında seçili aralık ve canlı göstergesi var ("21 Eylül 2026 · canlı"). */
   analiz:       { baslik:'Analiz', alt:()=>{
                     if(analizRole==='yonetici') return rtAralik().etiket;
+                    if(analizRole==='veri') return 'veri kontrolü · son ' + (typeof veriKontrolGun!=='undefined' ? veriKontrolGun : 7) + ' gün';
                     if(analizRole==='maliyet') return ({ buay:'bu ay', '3ay':'son 3 ay', buyil:'bu yıl', tumu:'tüm kayıtlar' }[typeof maliyetAnalizDonem!=='undefined' ? maliyetAnalizDonem : 'buyil']) + ' · maliyet';
                     const bugun = dateKey(Date.now());
                     if(analizFrom===bugun && analizTo===bugun) return 'bugün · canlı';
@@ -3853,6 +3854,8 @@ function renderAdmin(){
       body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizSaha()}</div>`;
     } else if(analizRole==='maliyet'){
       body = `<div class="analiz-wrap">${analizRoleBar}${renderMaliyetAnaliziIcerik()}</div>`;
+    } else if(analizRole==='veri'){
+      body = `<div class="analiz-wrap">${analizRoleBar}${renderVeriKontrol()}</div>`;
     } else if(analizRole==='kalite'){
       body = `<div class="analiz-wrap">${analizRoleBar}${analizGenelUstHtml({ atolyeYok:true })}${analizKaliteHtml()}</div>`;
     } else {

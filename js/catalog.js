@@ -435,6 +435,7 @@ const ANALIZ_VIEW_DEFS = [
   { key:'kisi', label:'Kişi Bazlı' },
   { key:'operator', label:'Operatör Analizi' },
   { key:'saha', label:'Saha Ekranı' },
+  { key:'veri', label:'Veri Kontrolü' }, // 13.10.2026: kapatılmamış kayıt, hammaddesiz iş, tutarsız miktar — ui/veri-kontrol.js
 ];
 /* Şef (kaliteci) Analiz'de YALNIZCA Kalite'yi görür (06.10.2026, kullanıcı isteği) — sekme izninde
    Analiz kapalı olsa bile; Genel / Kişi Bazlı vb. Şef'e kapalı kalır (rapor kararı S5: adminler). */
@@ -442,6 +443,7 @@ function sefKaliteAnalizi(){ return !!(session && session.isSef && !session.isSu
 function isAnalizViewVisible(key){
   if(!session) return false;
   if(key==='maliyet' && !(typeof canSeeMaliyet==='function' && canSeeMaliyet())) return false; // Şef / Üretim Şefi görmez
+  if(key==='veri' && !session.isAdmin) return false; // Veri Kontrolü yalnız adminler
   if(session.isSuperAdmin) return true;
   if(sefKaliteAnalizi()) return key==='kalite';
   if(!isAdminTabVisible('analiz')) return false;
