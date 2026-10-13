@@ -110,6 +110,26 @@ function mbHammaddeQr(){
 }
 /* Açılır liste ve sonuç satırı metni — operatör formuyla ortak (hammaddeGosterimAdi, js/catalog.js). */
 function mbSecenekMetni(it){ return hammaddeGosterimAdi(it); }
+/* MALZEME TASLAĞI (13.10.2026, kullanıcı isteği): satın alma isteği açarken istek no girilmemiş
+   iş emirlerini "talep no + mamul adı" olarak alt alta panoya kopyalar (ekrandaki sırayla). */
+function mbTaslakMetni(hid){
+  return malzemeBekleyenAktif().filter(x=>x.hammaddeId===hid && !malzemeIstekVar(x))
+    .sort((a,b)=>(Number(a.isaretTs)||0)-(Number(b.isaretTs)||0))
+    .map(x=>[x.talepNo||x.isEmriNo, x.mamulAdi||''].filter(Boolean).join(' ')).join('\n');
+}
+function mbTaslakKopyala(hid){
+  const metin = mbTaslakMetni(hid);
+  if(!metin){ toast('İstek no girilmemiş iş emri yok'); return; }
+  const n = metin.split('\n').length, tamam = () => toast(n + ' satır kopyalandı — satın alma isteğine yapıştır');
+  const yedek = () => {
+    const t = document.createElement('textarea'); t.value = metin; t.setAttribute('readonly',''); t.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.appendChild(t); t.select();
+    let ok = false; try{ ok = document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(t);
+    if(ok) tamam(); else window.prompt('Kopyalanamadı — buradan seçip kopyala:', metin);
+  };
+  if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(metin).then(tamam, yedek); else yedek();
+}
 function mbBoySecili(){
   const it = mbForm.hammaddeId && (stockItems||{})[mbForm.hammaddeId];
   if(it) return (it.birim||'')==='mm';
@@ -235,7 +255,10 @@ function renderMalzemeBekleyen(){
         <span class="matrix-tag" style="--sb:${durum.r}">${durum.t}</span>
         <span class="mb-olcu">${g.it && g.it.isim ? esc(String(g.it.isim).slice(0,40))+' · ' : ''}Stok <b${g.stok<0?' style="color:var(--danger)"':''}>${g.stok} ${esc(birim)}</b>${g.yolda ? ` · Yolda <b>${g.yolda} ${esc(birim)}</b>` : ''} · Rezerve <b>${g.rezerve} ${esc(birim)}</b> · Kullanılabilir <b style="color:${g.kullanilabilir<0?'var(--danger)':'var(--success)'}">${g.kullanilabilir} ${esc(birim)}</b></span>
         ${(()=>{ const n = malzemeIstekNoYetkisi() ? malzemeBosBekleyenler(g.hid).length : 0;
-          return n > 1 ? `<button class="btn-ghost mb-mini" style="margin-left:auto;border-color:var(--danger);color:var(--danger)" onclick="mbTopluAc('${escJs(g.hid)}')">Toplu istek no gir · ${n} iş emri</button>` : ''; })()}
+          const bos = g.satirlar.filter(x=>!malzemeIstekVar(x)).length;
+          const kopya = bos ? `<button class="btn-ghost mb-mini" title="İstek no girilmemiş iş emirleri: talep no + mamul adı, alt alta — satın alma isteğine yapıştır" onclick="mbTaslakKopyala('${escJs(g.hid)}')">${ico('copy',13)} Malzeme taslağı kopyala · ${bos}</button>` : '';
+          const toplu = n > 1 ? `<button class="btn-ghost mb-mini" style="border-color:var(--danger);color:var(--danger)" onclick="mbTopluAc('${escJs(g.hid)}')">Toplu istek no gir · ${n} iş emri</button>` : '';
+          return kopya || toplu ? `<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${kopya}${toplu}</span>` : ''; })()}
       </div>
       ${mbSiparislerHtml(g)}
       ${basliklar}
