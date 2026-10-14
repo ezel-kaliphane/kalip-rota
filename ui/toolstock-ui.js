@@ -81,7 +81,7 @@ function renderToolStokManagementScreen(){
   else if(toolAdminSubView==='excel') html += renderToolExcelUploadAdmin();
   else if(toolAdminSubView==='giris') html += renderToolGirisAdmin();
   else if(toolAdminSubView==='gecmis') html += renderToolHistoryAdmin();
-  html += `</div>`;
+  html += `</div>` + (typeof renderToolTasiModal === 'function' ? renderToolTasiModal() : '');
   return html;
 }
 
@@ -144,7 +144,7 @@ function renderToolCatalogListAdmin(){
           <td><input value="${esc(it.goz||'')}" style="width:70px" onchange="updateToolCatalogField('${it.id}','goz',this.value)"></td>
           <td>${(()=>{ const dl = toolDolaplari(toolStock[it.id], it); return dl.length>1 ? `<div style="display:flex;flex-direction:column;gap:3px">${dl.map(x=>`<label style="display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap">${esc(toolDolapAdi(x.locId))}${canManageToolStok()?`<input type="number" min="0" value="${x.miktar}" style="width:58px;text-align:right" title="Bu dolaptaki stoğu elle düzelt" onchange="toolStokMiktarDuzelt('${it.id}',this.value,'${escJs(x.locId)}')">`:` <b>${x.miktar}</b>`}</label>`).join('')}<div style="font-size:11px;color:${dusuk?'var(--danger)':'var(--text-muted)'}">toplam <b>${stok==null?0:stok}</b></div></div>` : ''; })() || (canManageToolStok()
             ? `<input type="number" min="0" value="${stok==null?0:stok}" title="Stoğu elle düzelt — hareket kütüğüne yazılır" style="width:74px;text-align:right;color:${dusuk?'var(--danger)':'var(--text)'};font-weight:${dusuk?'700':'600'}" onchange="toolStokMiktarDuzelt('${it.id}',this.value)">`
-            : `<span style="color:${dusuk?'var(--danger)':'var(--text)'};font-weight:${dusuk?'700':'400'}">${stok==null?'—':stok}</span>`)}</td>
+            : `<span style="color:${dusuk?'var(--danger)':'var(--text)'};font-weight:${dusuk?'700':'400'}">${stok==null?'—':stok}</span>`)}${canManageToolStok() && Number(stok||0)>0 && toolLocationsArray().filter(l=>l.aktif!==false).length>1 ? `<button class="btn-ghost" style="width:auto;padding:1px 8px;font-size:11px;margin-top:3px;display:block" title="Dolaplar arası taşı" onclick="toolTasiAc('${it.id}')">⇄ Taşı</button>` : ''}</td>
           <td style="text-align:center"><input type="checkbox" ${siparisAcik?'checked':''} title="Bu kalem için tedarikçiye sipariş verildi mi?" onchange="toggleToolStokSiparisAcik('${it.id}')"></td>
           <td><input type="number" value="${it.altLimit||0}" style="width:70px" onchange="updateToolCatalogField('${it.id}','altLimit',this.value)"></td>
           <td><input type="number" value="${it.siparisMiktari||0}" style="width:70px" onchange="updateToolCatalogField('${it.id}','siparisMiktari',this.value)"></td>
@@ -260,7 +260,7 @@ function renderToolHistoryAdmin(){
   if(!toolHistLoaded){ toolHistLoaded = true; loadToolHistory(true); }
   const rows = toolHistFilterTip ? toolHistMoves.filter(m=>m.tip===toolHistFilterTip) : toolHistMoves;
   const opEntries = Object.entries(STATE.operators||{}).sort((a,b)=>(a[1].displayName||a[0]).localeCompare(b[1].displayName||b[0]));
-  const tipLabels = { cikis:'Çıkış', giris:'Giriş', sayim:'Sayım', iade:'İade', fire:'Fire' };
+  const tipLabels = { cikis:'Çıkış', giris:'Giriş', sayim:'Sayım', iade:'İade', fire:'Fire', duzeltme:'Düzeltme', tasima:'Taşıma' };
   return `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">
       <div class="sec-h" style="margin:0">Hareket Geçmişi (${rows.length})</div>
       <button class="btn-ghost" onclick="exportToolHistoryExcel()">⬇ Excel'e Aktar</button>
@@ -290,7 +290,7 @@ function renderToolHistoryAdmin(){
           <td>${fmtDT(m.ts)}</td>
           <td class="mono">${esc(m.canias)}${it?`<div style="font-size:10px;color:var(--text-muted)">${esc(it.ad)}</div>`:''}</td>
           <td style="color:${tipColor}">${tipLabel}</td>
-          <td style="color:${m.miktar<0?'var(--danger)':'var(--success)'}">${m.miktar>0?'+':''}${m.miktar}</td>
+          <td style="color:${m.tip==='tasima'?'var(--text)':m.miktar<0?'var(--danger)':'var(--success)'}">${m.tip==='tasima'?'':(m.miktar>0?'+':'')}${m.miktar}${m.dolap&&m.tip!=='tasima'?`<div style="font-size:10px;color:var(--text-muted)">${esc(m.dolap)}</div>`:''}</td>
           <td class="mono" style="font-size:11px">${m.oncekiMiktar}→${m.sonrakiMiktar}</td>
           <td>${esc(m.operatorName||m.operatorUsername||'')}</td>
           <td style="font-size:11px">${esc(m.makine||'')}${m.isEmriNo?` · ${esc(m.isEmriNo)}`:''}</td>

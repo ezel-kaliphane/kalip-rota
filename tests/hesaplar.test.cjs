@@ -292,3 +292,16 @@ test('takım: dolap erişimi — kaydı olmayan herkes tüm dolapları görür',
   assert.equal(A.ctx.toolDolapErisebilir('OP3', 'CNC'), false);
   A.ata('appSettings', {});
 });
+
+test('takım: dolaplar arası taşıma toplamı değiştirmez, kaynakta yetmezse iptal', async () => {
+  const depo = { 'toolStock/T2': { miktar: 6, dolaplar: { CNC: 4, ATOLYE: 2 } } };
+  const eskiDB = A.calistir('DB'); A.ata('DB', sahteDB(depo));
+  try{
+    let r = await A.ctx.toolTasiTx('T2', {}, depo['toolStock/T2'], 'CNC', 'ATOLYE', 3);
+    assert.ok(r.committed);
+    assert.equal(JSON.stringify(depo['toolStock/T2'].dolaplar), JSON.stringify({ CNC: 1, ATOLYE: 5 }));
+    assert.equal(depo['toolStock/T2'].miktar, 6);
+    r = await A.ctx.toolTasiTx('T2', {}, depo['toolStock/T2'], 'CNC', 'ATOLYE', 2);
+    assert.equal(r.committed, false);
+  } finally { A.ata('DB', eskiDB); }
+});
