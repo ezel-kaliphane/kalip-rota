@@ -901,6 +901,12 @@ function hammaddeDegistirKaydet(){
   if(!dst || m.hedefId===m.id){ toast('Doğru malzemeyi listeden seçin'); return; }
   const stok = hammaddeStokSayi(src);
   if(stok>0 && (src.tur==='boy')!==(dst.tur==='boy')){ toast('Bu kalemde stok var ve seçilen malzemenin türü farklı (çubuk / adet) — önce stoğu düzeltin'); return; }
+  /* Bağlı kayıtlar okunmadan değiştirilirse bekleyen kayıtlar silinen kaleme bağlı kalırdı */
+  if((typeof malzemeBekleyenReady!=='undefined' && !malzemeBekleyenReady) || (typeof hammaddeReceteReady!=='undefined' && !hammaddeReceteReady)){
+    if(typeof ensureMalzemeBekleyenLoaded==='function') ensureMalzemeBekleyenLoaded();
+    if(typeof ensureHammaddeReceteLoaded==='function') ensureHammaddeReceteLoaded(()=>safeRender());
+    toast('Bağlı kayıtlar yükleniyor — birkaç saniye sonra tekrar deneyin'); return;
+  }
   const b = hammaddeBagliKayitlar(m.id), etiket = hammaddeEtiket(dst), updates = {};
   b.mb.forEach(x=>{ updates['malzemeBekleyen/'+x.id+'/hammaddeId'] = m.hedefId; updates['malzemeBekleyen/'+x.id+'/hammaddeKod'] = etiket; });
   b.recete.forEach(mm=>{ updates['hammaddeRecete/'+mm+'/hammaddeId'] = m.hedefId; updates['hammaddeRecete/'+mm+'/hammaddeKod'] = etiket; });
@@ -923,7 +929,14 @@ function hammaddeDegistirKaydet(){
     }
     delete stockItems[m.id];
     b.recete.forEach(mm=>{ hammaddeRecete[mm] = { ...hammaddeRecete[mm], hammaddeId: m.hedefId, hammaddeKod: etiket }; });
-    toast('Değiştirildi: '+etiket); hdModal = null; render();
+    const eskiAd = hammaddeGosterimAdi(src), yeniAd = hammaddeGosterimAdi(dst);
+    const talepler = b.mb.map(x=>x.talepNo||x.isEmriNo).filter(Boolean);
+    const mesaj = `${eskiAd} → ${yeniAd}: `
+      + (b.mb.length ? `${b.mb.length} bekleyen kayıt${talepler.length ? ' ('+talepler.slice(0,5).join(', ')+(talepler.length>5?' …':'')+')' : ''}` : 'bekleyen kayıt yok')
+      + (b.recete.length ? ` ve ${b.recete.length} reçete` : '') + (b.mb.length || b.recete.length ? ' taşındı' : '')
+      + (stok>0 ? `, ${stok} ${src.birim||''} stok aktarıldı` : '')
+      + `; ${eskiAd} kalemi silindi.`;
+    (typeof bigToastOk==='function' ? bigToastOk : toast)(mesaj); hdModal = null; render();
   }).catch(err=>{ m.busy = false; toast('Kaydedilemedi: '+(err.message||'hata')); render(); });
 }
 function hammaddeBekleyenKalemSil(id){
