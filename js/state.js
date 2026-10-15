@@ -481,6 +481,16 @@ function stockScanUygula(setStockItemId){
    yazılmayabiliyordu. Artık sunucu tarafı azaltma (increment, çevrimdışında da sıraya girer) ve
    stok + meta + hareket TEK yazmada. */
 function stokAzalt(n){ return (typeof firebase !== 'undefined' && firebase.database && firebase.database.ServerValue) ? firebase.database.ServerValue.increment(n) : null; }
+/* Stoksuz çubuktan tüketim onayı (15.10.2026, kullanıcı: "stoksuz malzemeden tüketim yapılıyor pop up çıksın").
+   satirlar: [{ itemId, lotId, miktar, etiket }] — stoksuz olmayanlar atlanır; hiç yoksa sormadan true. */
+function stoksuzTuketimOnay(satirlar){
+  const l = (satirlar || []).filter(s => { const it = stockItems[s.itemId]; return it && it.tur === 'boy' && !s.lotId && Number(s.miktar) > 0; });
+  if(!l.length) return true;
+  const nl = String.fromCharCode(10);
+  return confirm('⚠ STOKSUZ MALZEMEDEN TÜKETİM' + nl + nl
+    + l.map(s => { const it = stockItems[s.itemId]; return '• ' + [it.kod, it.cap].filter(Boolean).join(' ') + ' — ' + s.miktar + ' ' + (it.birim || 'mm') + (s.etiket ? ' (' + s.etiket + ')' : ''); }).join(nl)
+    + nl + nl + 'Bu malzemenin çubuk stoğu tutulmuyor: kesim iş emrine yazılacak ama stoktan düşülmeyecek.' + nl + 'Devam edilsin mi?');
+}
 function consumeStock(itemId, lotId, miktar, meta){
   if(!itemId || !miktar) return;
   const item = stockItems[itemId]; if(!item) return;

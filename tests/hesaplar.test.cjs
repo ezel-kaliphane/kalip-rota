@@ -327,3 +327,19 @@ test('çubuk stoğu yoksa kalem yine seçilir; kesim yalnız tüketim olarak yaz
   const h = yollar.filter(y => y.startsWith('stockHareketleri/')).map(y => yazilan[y])[0];
   assert.equal(h.miktar, -126); assert.equal(h.talepNo, 'T1'); assert.equal(h.stoksuz, true);
 });
+
+test('stoksuz çubuktan tüketimde onay sorulur; stoklu / adet kalemde sorulmaz', () => {
+  A.ata('stockItems', {
+    c1: { kod: '2344', cap: 'Ø66', tur: 'boy', birim: 'mm' },
+    c2: { kod: '2344', cap: 'Ø91', tur: 'boy', birim: 'mm', lots: { L1: { boy: 1000 } } },
+    a1: { kod: 'B25', tur: 'adet', miktar: 5 }
+  });
+  const sorular = []; const eski = A.ctx.confirm;
+  A.ctx.confirm = m => { sorular.push(m); return false; };
+  try{
+    assert.equal(A.ctx.stoksuzTuketimOnay([{ itemId: 'c2', lotId: 'L1', miktar: 100 }, { itemId: 'a1', miktar: 2 }]), true);
+    assert.equal(sorular.length, 0);
+    assert.equal(A.ctx.stoksuzTuketimOnay([{ itemId: 'c1', lotId: null, miktar: 126, etiket: 'T1' }]), false);
+    assert.equal(sorular.length, 1); assert.match(sorular[0], /STOKSUZ/); assert.match(sorular[0], /2344 Ø66 — 126 mm \(T1\)/);
+  } finally { A.ctx.confirm = eski; }
+});

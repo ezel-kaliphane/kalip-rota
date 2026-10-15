@@ -80,6 +80,7 @@ function hmGirKaydet(){
   const manuel = !!lotId || it.mode === 'manuel' || it.tur === 'boy';
   const miktar = manuel ? Number(String(g.miktar || '').replace(',', '.')) : (Number(String(g.miktar || '').replace(',', '.')) || g.adet);
   if(!(miktar > 0)){ toast(lotId ? 'Kesilen boyu girin' : 'Kullanılan miktarı girin'); return; }
+  if(!stoksuzTuketimOnay([{ itemId, lotId: lotId || null, miktar, etiket: g.talep || g.isEmriNo }])) return;
   const onceki = new Set(Object.keys(stockHareketleri || {}));
   consumeStock(itemId, lotId || null, miktar, { isEmriNo: g.isEmriNo, talepNo: g.talep });
   /* BOM + Rota / maliyet hareketleri ekran açılışında bir kez okuyor — yeni hareketi oraya da ekle */

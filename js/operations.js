@@ -192,6 +192,9 @@ function baslat(){
       });
       if(eksik.length && !confirm('İlk operasyon — hammadde seçilmedi: ' + eksik.map(it=>it.talepNoRaw).join(', ') + '\n\nHammadde kullanılmıyorsa Tamam ile başlat; kullanılıyorsa İptal deyip listeden seç.')) return;
     }
+    if(stockEnabled() && !stoksuzTuketimOnay(items.filter(it=>{ if(!it.stockItemId || it.bilesen==='ELMAS') return false; const r = resolveTrackingCode(it.talepNoRaw, it.bilesen); return isFirstOperationFor(r.isEmriNo, r.talepNo); }).map(it=>{
+      const [sid, lid] = it.stockItemId.split('::'); return { itemId: sid, lotId: lid||null, miktar: Number(it.stockMiktar)||0, etiket: it.talepNoRaw };
+    }))) return;
     const groupId = uid();
     items.forEach(it=>{
       const id = uid();
@@ -254,6 +257,7 @@ function baslat(){
       if(isManual){
         stockMiktarSel = Number(document.getElementById('nf-stok-miktar')?.value ?? newForm.stockMiktar ?? 0) || 0;
         if(stockMiktarSel<=0){ toast((stockLotIdSel || boyMu) ? 'Kesilen boyu girin' : 'Kullanılan hammadde miktarını girin'); return; }
+        if(!stoksuzTuketimOnay([{ itemId: stockItemIdSel, lotId: stockLotIdSel, miktar: stockMiktarSel }])) return;
       } else {
         stockMiktarSel = Number(adet)||0;
       }
