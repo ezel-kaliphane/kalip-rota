@@ -131,7 +131,10 @@ function malzemeAcikIstekler(hid){
     const bagli = aktif.filter(x=>String(x.caniasIstekNo||'').trim().toUpperCase()===String(no).trim().toUpperCase());
     const kullanilan = bagli.reduce((t,x)=>t+malzemeIhtiyac(x), 0);
     const miktar = (k && k.miktar!=null && k.miktar!=='' && Number(k.miktar)>0) ? Number(k.miktar) : null;
-    return { istekNo: no, anahtar: malzemeIstekAnahtar(no, hid), kayit: k, miktar, birim: (k && k.birim) || (bagli[0] && bagli[0].birim) || '',
+    /* Kısmi teslim (15.10.2026): gelen = şimdiye kadar teslim alınan; yolda kalan = sipariş − gelen */
+    const gelen = Number(k && k.gelen) || 0;
+    return { istekNo: no, anahtar: malzemeIstekAnahtar(no, hid), kayit: k, miktar, gelen, kalan: miktar==null ? null : Math.max(0, miktar - gelen),
+      birim: (k && k.birim) || (bagli[0] && bagli[0].birim) || '',
       bagli, kullanilan, fazla: miktar==null ? null : miktar - kullanilan, acilisTs: (k && k.acilisTs) || 0 };
   }).sort((a,b)=>(a.acilisTs||0)-(b.acilisTs||0));
 }
@@ -400,19 +403,49 @@ function malzemeIstekMiktarKaydet(istekNo, hid, miktar){
     .catch(err=>toast('Kaydedilemedi: '+((err&&err.message)||'hata')+' — malzemeIstek kuralı yayınlandı mı?'));
 }
 /* Sipariş geldi (Şef + SuperAdmin). Yoldaki miktar artık stokta sayılır — stok girişinin
-   kendisi Stok Girişi'nden yapılır (orada bu kutu işaretlenince ikisi birlikte olur). */
-function malzemeIstekGeldiYaz(istekNo, hid, sessiz){
+   kendisi Stok Girişi'nden yapılır (orada bu kutu işaretlenince ikisi birlikte olur).
+   KISMİ TESLİM (15.10.2026, kullanıcı: "8000 mm istedim, 3600'ü geldi; şef 3600 geldi diyebilmeli"):
+   gelenMiktar verilirse siparişin gelen'ine eklenir, teslim geçmişine (teslimler) yazılır; toplam
+   gelen sipariş miktarına ulaşınca sipariş kendiliğinden "geldi" olur. gelenMiktar yoksa ya da
+   siparişin miktarı bilinmiyorsa tamamı geldi sayılır (eski davranış). */
+function malzemeIstekGeldiYaz(istekNo, hid, sessiz, gelenMiktar){
   if(!canManageStock()){ toast('Bu işlem için Şef ya da SuperAdmin yetkisi gerekli'); return Promise.resolve(false); }
   const key = malzemeIstekAnahtar(istekNo, hid), var_ = malzemeIstek[key], it = (stockItems||{})[hid], now = Date.now();
-  const geldi = { durum:'geldi', geldiTs: now, geldiUsername: session.username, geldiName: session.displayName||session.username };
-  const upd = {};
-  if(var_) Object.entries(geldi).forEach(([k,v])=>{ upd['malzemeIstek/'+key+'/'+k] = v; });
-  else upd['malzemeIstek/'+key] = { istekNo: String(istekNo).trim(), hammaddeId: hid, hammaddeKod: it ? hammaddeEtiket(it) : '', miktar: null,
-    birim: (it && it.birim)||'', acanUsername: session.username, acanName: session.displayName||session.username, acilisTs: now, ...geldi };
-  return DB.ref().update(upd).then(()=>{ if(!sessiz) toast('Sipariş geldi olarak işaretlendi: istek '+istekNo); render(); return true; })
-    .catch(err=>{ toast('Kaydedilemedi: '+((err&&err.message)||'hata')+' — malzemeIstek kuralı yayınlandı mı?'); return false; });
+  const birim = (var_ && var_.birim) || (it && it.birim) || '';
+  const siparis = var_ && Number(var_.miktar) > 0 ? Number(var_.miktar) : null;
+  const oncekiGelen = Number(var_ && var_.gelen) || 0;
+  const gelen = Number(gelenMiktar) > 0 ? Number(gelenMiktar) : null;
+  const tamami = siparis == null || gelen == null || oncekiGelen + gelen >= siparis;
+  const yeniGelen = siparis == null ? (gelen != null ? oncekiGelen + gelen : null) : (gelen == null ? siparis : Math.min(siparis, oncekiGelen + gelen));
+  const kim = { geldiUsername: session.username, geldiName: session.displayName||session.username };
+  const upd = {}, yol = 'malzemeIstek/'+key;
+  if(!var_) upd[yol] = { istekNo: String(istekNo).trim(), hammaddeId: hid, hammaddeKod: it ? hammaddeEtiket(it) : '', miktar: null,
+    birim, acanUsername: session.username, acanName: session.displayName||session.username, acilisTs: now };
+  const alan = (k, v) => { if(var_) upd[yol+'/'+k] = v; else upd[yol][k] = v; };
+  if(yeniGelen != null) alan('gelen', yeniGelen);
+  if(gelen != null || yeniGelen != null){
+    const tid = uid();
+    if(var_) upd[yol+'/teslimler/'+tid] = { miktar: gelen != null ? gelen : (siparis != null ? siparis - oncekiGelen : null), ts: now, ...kim };
+    else upd[yol].teslimler = { [tid]: { miktar: gelen, ts: now, ...kim } };
+  }
+  alan('sonTeslimTs', now);
+  if(tamami){ alan('durum', 'geldi'); alan('geldiTs', now); alan('geldiUsername', kim.geldiUsername); alan('geldiName', kim.geldiName); }
+  return DB.ref().update(upd).then(()=>{
+    if(!sessiz) toast(tamami ? 'Siparişin tamamı geldi: istek '+istekNo
+      : `İstek ${istekNo}: ${gelen} ${birim} geldi (toplam ${yeniGelen} / ${siparis}) — ${siparis - yeniGelen} ${birim} hâlâ yolda`);
+    render(); return true;
+  }).catch(err=>{ toast('Kaydedilemedi: '+((err&&err.message)||'hata')+' — malzemeIstek kuralı yayınlandı mı?'); return false; });
 }
+let mbGeldiAcik = null, mbGeldiDeger = '';   // grup başlığında teslim miktarı girilen sipariş anahtarı
 function malzemeIstekGeldi(istekNo, hid){
+  const s = malzemeAcikIstekler(hid).find(x => String(x.istekNo).trim().toUpperCase() === String(istekNo).trim().toUpperCase());
+  if(s && s.miktar != null){ mbGeldiAcik = s.anahtar; mbGeldiDeger = String(s.kalan); render(); return; }   // miktar biliniyor → ne kadar geldiği sorulur
   if(!confirm(`İstek ${istekNo} geldi olarak işaretlensin mi?\n\nMalzemeyi stoğa Stok Girişi'nden girmeyi unutma — orada "bu giriş siparişin teslimi" kutusunu işaretlersen ikisi birlikte olur.`)) return;
   malzemeIstekGeldiYaz(istekNo, hid);
+}
+function malzemeIstekGeldiKaydet(istekNo, hid){
+  const m = Number(String(mbGeldiDeger||'').replace(',', '.'));
+  if(!(m > 0)){ toast('Gelen miktarı girin'); return; }
+  mbGeldiAcik = null;
+  malzemeIstekGeldiYaz(istekNo, hid, false, m);
 }

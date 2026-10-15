@@ -343,3 +343,25 @@ test('stoksuz çubuktan tüketimde onay sorulur; stoklu / adet kalemde sorulmaz'
     assert.equal(sorular.length, 1); assert.match(sorular[0], /STOKSUZ/); assert.match(sorular[0], /2344 Ø66 — 126 mm \(T1\)/);
   } finally { A.ctx.confirm = eski; }
 });
+
+/* ==================== MALZEME SİPARİŞİ — KISMİ TESLİM (15.10.2026) ==================== */
+test('sipariş kısmi teslim: 8000 mm siparişin 3600\'ü gelince 4400 yolda, sipariş açık; kalanı gelince kapanır', async () => {
+  const depo = { istek: { 'X_H1': { istekNo: 'X', hammaddeId: 'H1', miktar: 8000, birim: 'mm', durum: 'acik' } } };
+  A.ata('malzemeIstek', depo.istek);
+  A.ata('malzemeBekleyen', {});
+  A.ata('stockItems', { H1: { kod: '2344', cap: 'Ø91', tur: 'boy', birim: 'mm' } });
+  A.ata('session', { username: 'SEF', displayName: 'Şef', isSef: true, isAdmin: true });
+  const uygula = o => { Object.entries(o).forEach(([yol, v]) => { const p = yol.split('/'); if(p[0] !== 'malzemeIstek') return;
+    let n = depo.istek; for(let i = 1; i < p.length - 1; i++){ n = (n[p[i]] ||= {}); } n[p[p.length - 1]] = v; }); };
+  const eskiDB = A.calistir('DB'); A.ctx.toast = () => {}; A.ctx.render = () => {}; A.ctx.canManageStock = () => true;
+  A.ata('DB', { ref: () => ({ update: o => { uygula(o); return Promise.resolve(); } }) });
+  try{
+    await A.ctx.malzemeIstekGeldiYaz('X', 'H1', true, 3600);
+    let s = A.ctx.malzemeAcikIstekler('H1')[0];
+    assert.equal(s.gelen, 3600); assert.equal(s.kalan, 4400); assert.notEqual(depo.istek.X_H1.durum, 'geldi');
+    await A.ctx.malzemeIstekGeldiYaz('X', 'H1', true, 4400);
+    assert.equal(depo.istek.X_H1.durum, 'geldi'); assert.equal(depo.istek.X_H1.gelen, 8000);
+    assert.equal(Object.keys(depo.istek.X_H1.teslimler).length, 2);
+    assert.equal(A.ctx.malzemeAcikIstekler('H1').length, 0, 'tamamı gelen sipariş açık listede yok');
+  } finally { A.ata('DB', eskiDB); }
+});

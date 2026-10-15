@@ -584,10 +584,13 @@ let stokGirisSiparisAcik = false;
 let stokGirisCubukBoyu = '';
 let stokGirisIstekKapat = {}; // { istekNo: true } — bu giriş hangi açık malzeme siparişinin teslimi (06.10.2026)
 /* Girişten sonra işaretli siparişleri "geldi" yap. */
-function stokGirisIstekleriKapat(itemId){
+function stokGirisIstekleriKapat(itemId, girilenMiktar){
   const nolar = Object.keys(stokGirisIstekKapat).filter(k=>stokGirisIstekKapat[k]);
   stokGirisIstekKapat = {};
   if(!nolar.length || typeof malzemeIstekGeldiYaz!=='function') return;
+  /* Kısmi teslim (15.10.2026): tek sipariş işaretliyse girilen miktar o siparişe teslim sayılır;
+     birden çok işaretliyse (hangisine ne kadar belli değil) hepsi tamamen geldi sayılır. */
+  if(nolar.length===1 && Number(girilenMiktar)>0){ malzemeIstekGeldiYaz(nolar[0], itemId, false, Number(girilenMiktar)); return; }
   nolar.forEach(no=>malzemeIstekGeldiYaz(no, itemId, true));
   toast('Sipariş geldi olarak işaretlendi: '+nolar.join(', '));
 }
@@ -597,10 +600,10 @@ function stokGirisIstekKutulariHtml(itemId){
   if(typeof ensureMalzemeBekleyenLoaded==='function') ensureMalzemeBekleyenLoaded();
   const liste = malzemeAcikIstekler(itemId); if(!liste.length) return '';
   return `<div class="notice" style="--nc:var(--warn);margin:0 0 12px;padding:9px 12px"><div class="notice-sub">
-    <b>Bu malzemenin açık siparişi var.</b> Bu giriş bir siparişin teslimiyse işaretle — sipariş "geldi" olur:
+    <b>Bu malzemenin açık siparişi var.</b> Bu giriş bir siparişin teslimiyse işaretle — girilen miktar o siparişe teslim sayılır (tamamı gelince sipariş kapanır):
     ${liste.map(s=>`<label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer">
       <input type="checkbox" style="width:auto" ${stokGirisIstekKapat[s.istekNo]?'checked':''} onchange="stokGirisIstekKapat['${escJs(s.istekNo)}']=this.checked">
-      İstek <b class="mono">${esc(s.istekNo)}</b> · ${s.miktar==null?'miktar bilinmiyor':s.miktar+' '+esc(s.birim||'')} · ${s.bagli.length} iş emri bekliyor</label>`).join('')}
+      İstek <b class="mono">${esc(s.istekNo)}</b> · ${s.miktar==null?'miktar bilinmiyor':s.miktar+' '+esc(s.birim||'')+(s.gelen>0?` (${s.gelen} geldi, ${s.kalan} yolda)`:'')} · ${s.bagli.length} iş emri bekliyor</label>`).join('')}
   </div></div>`;
 }
 function stockGirisAramaSonuclar(){
@@ -646,7 +649,7 @@ function stokGirisCubukEkle(){
     DB.ref(`stockItems/${itemId}/sonHareketTs`).set(Date.now()); // Genel Bakış "Son Hareket" sütunu için denormalize alan
     DB.ref(`stockItems/${itemId}/sonHareketAciklama`).set('Yeni çubuk eklendi');
     toast('Yeni çubuk eklendi');
-    stokGirisIstekleriKapat(itemId);
+    stokGirisIstekleriKapat(itemId, boy);
     stokGirisGeriDon();
   });
 }
@@ -673,7 +676,7 @@ function stockGirisKaydet(){
       stockHareketleri[hid] = hareket;
       stockItems[itemId] = { ...item, miktar: sonrakiMiktar, siparisAcik, sonHareketTs: Date.now() };
       toast(`Giriş kaydedildi: ${item.kod||''} (+${miktar})`);
-      stokGirisIstekleriKapat(itemId);
+      stokGirisIstekleriKapat(itemId, miktar);
       stokGirisGeriDon();
     }).catch(err=>{
       toast('Giriş kaydedilemedi: '+(err.message||'bilinmeyen hata'));

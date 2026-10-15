@@ -225,7 +225,7 @@ function renderMalzemeBekleyen(){
     /* Yolda = açık (gelmemiş) siparişlerin miktarı — kullanılabilire dahil (12.10.2026, kullanıcı:
        "4500 mm sipariş açık, 1742 kullanılacak; -1742 değil 2758 kalmalı"). Miktarı bilinmeyen
        sipariş sayılmaz. Sipariş "Geldi" olunca yoldan düşer, stoğa girişle stokta görünür. */
-    const yolda = malzemeAcikIstekler(hid).reduce((t,s)=>t+(s.miktar||0), 0);
+    const yolda = malzemeAcikIstekler(hid).reduce((t,s)=>t+(s.kalan||0), 0);   // kısmi teslimde yalnız gelmeyen kısım
     return { hid, it, stok, rezerve, yolda, kullanilabilir: stok+yolda-rezerve,
       satirlar: satirlar.sort((a,b)=>(Number(a.isaretTs)||0)-(Number(b.isaretTs)||0)) };
   }).sort((a,b)=> a.kullanilabilir - b.kullanilabilir);
@@ -460,14 +460,18 @@ function mbSiparislerHtml(g){
       : s.fazla>=0 ? `<span class="mb-sip-fazla">fazla ${Math.round(s.fazla)} ${esc(birim)}</span>`
       : `<span class="mb-sip-eksik">eksik ${Math.round(-s.fazla)} ${esc(birim)}</span>`;
     return `<div class="mb-siparis">
-      <span>${ico('box',13)} İstek <b class="mono">${esc(s.istekNo)}</b> · ${s.miktar==null?'—':`<b>${s.miktar} ${esc(birim)}</b>`} sipariş · ${s.bagli.length} iş emri ${Math.round(s.kullanilan)} ${esc(birim)} · ${durum}</span>
+      <span>${ico('box',13)} İstek <b class="mono">${esc(s.istekNo)}</b> · ${s.miktar==null?'—':`<b>${s.miktar} ${esc(birim)}</b>`} sipariş${s.gelen>0 && s.miktar!=null ? ` · <b style="color:var(--success)">${s.gelen} geldi</b> · <b style="color:var(--warn)">${s.kalan} yolda</b>` : ''} · ${s.bagli.length} iş emri ${Math.round(s.kullanilan)} ${esc(birim)} · ${durum}</span>
       <span class="mb-sip-eylem">
         ${malzemeIstekNoYetkisi() ? (duzen
           ? `<input class="mono" style="width:110px;margin:0" inputmode="decimal" placeholder="miktar" value="${esc(mbSiparisMiktarDeger)}" oninput="mbSiparisMiktarDeger=this.value.replace(/[^0-9.,]/g,'')">
              <button class="btn-primary mb-mini" onclick="malzemeIstekMiktarKaydet('${escJs(s.istekNo)}','${escJs(g.hid)}', mbSiparisMiktarDeger); mbSiparisMiktarAcik=null">Kaydet</button>
              <button class="btn-ghost mb-mini" onclick="mbSiparisMiktarAcik=null; render()">Vazgeç</button>`
           : `<button class="btn-ghost mb-mini" onclick="mbSiparisMiktarAcik='${escJs(s.anahtar)}'; mbSiparisMiktarDeger='${s.miktar||''}'; render()">${s.miktar==null?'Miktar gir':'Miktarı düzelt'}</button>`) : ''}
-        ${canManageStock() ? `<button class="btn-ghost mb-mini mb-sip-geldi" onclick="malzemeIstekGeldi('${escJs(s.istekNo)}','${escJs(g.hid)}')">Geldi</button>` : ''}
+        ${canManageStock() ? (mbGeldiAcik===s.anahtar
+          ? `<span style="font-size:11.5px;color:var(--text-muted)">gelen</span><input class="mono" style="width:100px;margin:0" inputmode="decimal" value="${esc(mbGeldiDeger)}" oninput="mbGeldiDeger=this.value.replace(/[^0-9.,]/g,'')" onkeydown="if(event.key==='Enter') malzemeIstekGeldiKaydet('${escJs(s.istekNo)}','${escJs(g.hid)}')"><span style="font-size:11.5px;color:var(--text-muted)">${esc(birim)}</span>
+             <button class="btn-primary mb-mini" onclick="malzemeIstekGeldiKaydet('${escJs(s.istekNo)}','${escJs(g.hid)}')">Kaydet</button>
+             <button class="btn-ghost mb-mini" onclick="mbGeldiAcik=null; render()">Vazgeç</button>`
+          : `<button class="btn-ghost mb-mini mb-sip-geldi" title="Gelen miktarı gir — kısmi teslimde sipariş açık kalır" onclick="malzemeIstekGeldi('${escJs(s.istekNo)}','${escJs(g.hid)}')">Geldi</button>`) : ''}
       </span>
     </div>`; }).join('')}</div>`;
 }
