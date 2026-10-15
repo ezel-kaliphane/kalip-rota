@@ -365,3 +365,22 @@ test('sipariş kısmi teslim: 8000 mm siparişin 3600\'ü gelince 4400 yolda, si
     assert.equal(A.ctx.malzemeAcikIstekler('H1').length, 0, 'tamamı gelen sipariş açık listede yok');
   } finally { A.ata('DB', eskiDB); }
 });
+
+/* ==================== FASON ISIL İŞLEM — SERTLİK ARALIĞI (15.10.2026) ==================== */
+test('fason ısıl işlem: tür seçilince sertlik aralığı zorunlu, kayda yazılır', () => {
+  const C = A.ctx; const mesajlar = []; let yazilan = null, bitirilen = null;
+  const eskiDB = A.calistir('DB'), eskiToast = C.toast, eskiBitir = C.bitir;
+  C.toast = m => mesajlar.push(m); C.bitir = id => { bitirilen = id; };
+  A.ata('DB', { ref: () => ({ update: o => { yazilan = o; return Promise.resolve(); } }) });
+  try{
+    A.ata('fasonIsilModal', { id: 'e1', groupId: null, secili: { 'Islah': true }, sertMin: '', sertMax: '' });
+    C.fasonIsilKaydet(false);
+    assert.equal(yazilan, null); assert.match(mesajlar.pop(), /Sertlik aralığını yazın/);
+    A.ata('fasonIsilModal', { id: 'e1', groupId: null, secili: { 'Islah': true }, sertMin: '56', sertMax: '54' });
+    C.fasonIsilKaydet(false);
+    assert.equal(JSON.stringify(yazilan['entries/e1/fasonIsilSertlik']), JSON.stringify({ min: 54, max: 56, birim: 'HRC' }), 'ters yazılırsa düzeltilir');
+    assert.equal(bitirilen, 'e1');
+    assert.equal(C.fasonIsilSertlikYazi({ min: 54, max: 56 }), '54–56 HRC');
+    assert.equal(C.fasonIsilSertlikYazi({ min: 40.5, max: 40.5, birim: 'HRC' }), '40,5 HRC');
+  } finally { A.ata('DB', eskiDB); C.toast = eskiToast; C.bitir = eskiBitir; }
+});

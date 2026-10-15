@@ -1480,6 +1480,15 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .mb-siparis{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--text-muted)}
 .mb-siparis b{color:var(--text)}
 .mb-sip-eylem{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+/* Fason ısıl işlem — sertlik aralığı (15.10.2026) */
+.fis-sertlik{margin:6px 0 4px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--panel)}
+.fis-sertlik-bas{font-size:13px;font-weight:600;margin-bottom:8px}
+.fis-sertlik-bas span{font-size:11px;font-weight:500;color:var(--text-muted);margin-left:4px}
+.fis-sertlik-kutular{display:flex;align-items:center;gap:8px}
+.fis-sertlik-kutular input{width:84px;height:44px;margin:0;font-size:20px;font-weight:700;text-align:center}
+.fis-sertlik-kutular span{font-size:18px;color:var(--text-muted)}
+.fis-sertlik-kutular em{font-style:normal;font-size:13px;color:var(--text-muted)}
+.fis-sertlik-son{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 /* Sipariş satırında satır içi giriş (15.10.2026) — etiket + birimli geniş kutu + aynı boyda düğmeler */
 .mb-satir-girdi{display:inline-flex;align-items:center;gap:8px;padding:4px 4px 4px 12px;border:1px solid color-mix(in srgb, var(--accent) 45%, var(--border));border-radius:10px;background:var(--panel)}
 .mb-satir-girdi label{margin:0;font-size:12px;font-weight:600;color:var(--text-muted);white-space:nowrap;text-transform:none;letter-spacing:0}

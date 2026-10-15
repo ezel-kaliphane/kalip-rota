@@ -2069,6 +2069,7 @@ function renderIyGecmisModal(){
               ${e.status==='duruş' && e.duruşNedeni ? `<div style="font-size:12px;color:var(--warn);margin-top:4px">Duruş: "${esc(e.duruşNedeni)}"</div>` : ''}
               ${e.kalite ? `<div style="font-size:12px;color:${kaliteDagilim(e.kalite).red?'var(--danger)':kaliteDagilim(e.kalite).sartli?'var(--warn)':'var(--success)'};margin-top:4px">Kalite: ${esc(kaliteOzetMetni(e.kalite))}${e.kalite.redNeden?` · red: ${esc(e.kalite.redNeden)}`:''}${e.kalite.sartliNeden?` · şartlı: ${esc(e.kalite.sartliNeden)}`:''}${kaliteAciklamaMetni(e.kalite)?` — ${esc(kaliteAciklamaMetni(e.kalite))}`:''}${e.kalite.redHataOp||e.kalite.sartliHataOp?` · hata: ${[e.kalite.redHataOp,e.kalite.sartliHataOp].filter(Boolean).map(h=>esc(kaliteHataMetni(h))).join(', ')}`:''} · ${esc(e.kalite.name||'')}</div>` : ''}
               ${kaliteGecmisEkHtml(e)}
+              ${(e.fasonIsilTur || e.fasonIsilSertlik) ? `<div style="font-size:12px;margin-top:4px">Isıl işlem: <b>${esc([].concat(e.fasonIsilTur ? (Array.isArray(e.fasonIsilTur) ? e.fasonIsilTur : Object.values(e.fasonIsilTur)) : []).join(' + ') || '—')}</b>${e.fasonIsilSertlik && typeof fasonIsilSertlikYazi==='function' ? ` · <b>${esc(fasonIsilSertlikYazi(e.fasonIsilSertlik))}</b>` : ''}</div>` : ''}
               ${e.sonrakiMakine ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">${ico('chevronRight',11)} Sıradaki: ${esc(e.sonrakiMakine)}</div>` : ''}
             </div>`;
           }).join('')}

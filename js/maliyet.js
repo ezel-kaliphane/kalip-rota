@@ -344,7 +344,8 @@ function maliyetHesapla(x, canli){
     }
     if(turler.length && celik.kg){
       isil.tutar = turler.reduce((s, t) => s + celik.kg * mlPara(t.fiyat, t.para || 'TRY', kur), 0);
-      isil.aciklama = turler.map(t => t.tur).join(' + ') + ' · ' + mlFmt(celik.kg, 2) + ' kg' + (secilen.length ? ' · fason dönüşünde seçildi' : ' · çelik türünün varsayılanı');
+      const sert = x.ana.concat(x.zarf, x.elmas).map(e => e.fasonIsilSertlik).find(Boolean);
+      isil.aciklama = turler.map(t => t.tur).join(' + ') + (sert && typeof fasonIsilSertlikYazi === 'function' ? ' (' + fasonIsilSertlikYazi(sert) + ')' : '') + ' · ' + mlFmt(celik.kg, 2) + ' kg' + (secilen.length ? ' · fason dönüşünde seçildi' : ' · çelik türünün varsayılanı');
     }
     else if(!turler.length) eksik.push('Isıl işlem fiyatı bulunamadı (çelik türüne ısıl işlem türü bağla)');
     else eksik.push('Isıl işlem için çelik kg yok');
