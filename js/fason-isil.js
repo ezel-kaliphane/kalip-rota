@@ -43,12 +43,52 @@ function fasonIsilModalAc(id, groupId){
    başlatılır). Başlatmadaki tüm iş emirlerine fasonIsilTur, fasonIsilSertlik ve fasonPaket
    {id, kg, ts, gonderen} yazılır; liste Stok Takibi → Isıl İşlem (ui/fason-paket.js). Dönüşte bilgi
    zaten varsa soru sorulmaz. */
-let fasonGonderim = null;   // { tur:[], sertlik, kg } — modal kaydedilince baslat() bunu kayda yazar
-function fasonIsilGonderimAc(){
+let fasonGonderim = null;   // { tur:[], sertlik, kg, kgler:{anahtar:kg} } — modal kaydedilince baslat() bunu kayda yazar
+/* İŞ EMRİ BAŞINA KG (15.10.2026, kullanıcı: "her iş emrinin kendi adedi ve kilosu var; bir iş emrinin
+   bir adedi kaç kg görmek istiyorum — ileride maliyette kullanacağız; operatör çok uğraşmasın").
+   Operatör her iş emrinin parçalarını AYRI tartıp kantarda gördüğünü yazar (bölme yapmaz);
+   entries/{id}/fasonKg = o iş emrinin bu paketteki kg'si, 1 adet = fasonKg / adet (fasonBirimKg),
+   paket kg = toplam. Aynı iş emri kodu (mamul + bileşen) daha önce tartıldıysa kutu önceki
+   adet ağırlığı × adet ile dolu gelir — doğruysa operatör dokunmaz. */
+function fasonSayi(v){ const n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isNaN(n) ? null : n; }
+function fasonKgYazi(v){ return v == null ? '' : String(Math.round(v * 100) / 100).replace('.', ','); }
+function fasonKalemAnahtar(talepNo, isEmriNo){ return String(talepNo || '') + '|' + String(isEmriNo || ''); }
+function fasonBirimKg(e){ const kg = Number(e && e.fasonKg), a = Number(e && e.adet); return kg > 0 && a > 0 ? kg / a : null; }
+/* Aynı iş emri kodunun (ör. UC17000274_ELMAS) en son tartılan 1 adet ağırlığı */
+function fasonOncekiBirimKg(isEmriNo){
+  let son = null;
+  entriesArray().forEach(e => { if(e.isEmriNo === isEmriNo && fasonBirimKg(e) && (!son || (e.startTs || 0) > (son.startTs || 0))) son = e; });
+  return son ? fasonBirimKg(son) : null;
+}
+function fasonKalemMamul(k){
+  return (typeof fpMamul === 'function' ? fpMamul(k) : '') || (typeof getTalepInfo === 'function' && k.talepNo ? (getTalepInfo(k.talepNo) || {}).malzemeAdi : '') || '';
+}
+function fasonKalemHazirla(k, anahtar, kgVar){
+  const onceki = fasonOncekiBirimKg(k.isEmriNo), adet = Number(k.adet) || 0;
+  const kg = kgVar != null ? kgVar : (onceki && adet ? Math.round(onceki * adet * 100) / 100 : null);
+  return { anahtar, talepNo: k.talepNo, isEmriNo: k.isEmriNo, adet, mamul: fasonKalemMamul(k), onceki, oneri: kgVar == null && kg != null, kg: kg != null ? fasonKgYazi(kg) : '' };
+}
+/* baslat() doğrulamadan SONRA çağırır: kalemler = [{ talepNo, isEmriNo, adet }] */
+function fasonIsilGerekli(makine, kalemler){
+  if(!fasonIsilMakinesiMi(makine)){ fasonGonderim = null; return false; }
+  const g = fasonGonderim;
+  if(g && (g.atla || kalemler.every(k => g.kgler && g.kgler[fasonKalemAnahtar(k.talepNo, k.isEmriNo)] > 0))) return false;
+  fasonGonderim = null;
+  return fasonIsilGonderimAc(kalemler);
+}
+function fasonIsilGonderimAc(kalemler){
   if(!fasonIsilTurleri().length) return false;
-  fasonIsilModal = { mod: 'gonderim', secili: {}, sertMin: '', sertMax: '', kg: '' };
+  fasonIsilModal = { mod: 'gonderim', secili: {}, sertMin: '', sertMax: '',
+    kalemler: (kalemler || []).map(k => fasonKalemHazirla(k, fasonKalemAnahtar(k.talepNo, k.isEmriNo), null)) };
   render();
   return true;
+}
+function fasonKalemKgYaz(i, v){
+  const m = fasonIsilModal; if(!m || !m.kalemler || !m.kalemler[i]) return;
+  const k = m.kalemler[i]; k.kg = String(v || '').replace(/[^0-9.,]/g, ''); k.oneri = false;
+  const kg = fasonSayi(k.kg), b = document.getElementById('fis-birim-' + i), t = document.getElementById('fis-toplam');
+  if(b) b.textContent = kg > 0 && k.adet ? '1 adet = ' + fasonKgYazi(kg / k.adet) + ' kg' : (k.onceki ? 'geçen sefer 1 adet ' + fasonKgYazi(k.onceki) + ' kg' : '');
+  if(t) t.textContent = fasonKgYazi(m.kalemler.reduce((s, x) => s + (fasonSayi(x.kg) || 0), 0)) + ' kg';
 }
 /* Eski / bilgisiz pakete sonradan bilgi (Isıl İşlem listesinden) */
 function fasonIsilPaketBilgiAc(ids){
@@ -56,13 +96,19 @@ function fasonIsilPaketBilgiAc(ids){
   const ilk = STATE.entries[ids[0]] || {};
   const tur = ilk.fasonIsilTur ? (Array.isArray(ilk.fasonIsilTur) ? ilk.fasonIsilTur : Object.values(ilk.fasonIsilTur)) : [];
   const s = ilk.fasonIsilSertlik || {};
+  const eskiToplam = ilk.fasonPaket && Number(ilk.fasonPaket.kg) > 0 ? Number(ilk.fasonPaket.kg) : null;
   fasonIsilModal = { mod: 'paket', ids, secili: Object.fromEntries(tur.map(t => [t, true])), sertMin: s.min != null ? String(s.min) : '', sertMax: s.max != null ? String(s.max) : '',
-    kg: ilk.fasonPaket && ilk.fasonPaket.kg ? String(ilk.fasonPaket.kg).replace('.', ',') : '' };
+    eskiToplam: ids.some(id => !(Number((STATE.entries[id] || {}).fasonKg) > 0)) ? eskiToplam : null,
+    kalemler: ids.map(id => { const e = STATE.entries[id] || {};
+      /* tek iş emirli eski pakette paket kg'si zaten o iş emrinin kg'si */
+      const kgVar = Number(e.fasonKg) > 0 ? Number(e.fasonKg) : (ids.length === 1 && eskiToplam ? eskiToplam : null);
+      return fasonKalemHazirla(e, id, kgVar); }) };
   render();
 }
-function fasonGonderimAlanlari(paketId){
+function fasonGonderimAlanlari(paketId, talepNo, isEmriNo){
   const g = fasonGonderim; if(!g || g.atla) return {};
-  return { fasonIsilTur: g.tur, fasonIsilSertlik: g.sertlik,
+  const kg = g.kgler && g.kgler[fasonKalemAnahtar(talepNo, isEmriNo)];
+  return { fasonIsilTur: g.tur, fasonIsilSertlik: g.sertlik, ...(kg > 0 ? { fasonKg: kg } : {}),
     fasonPaket: { id: paketId, kg: g.kg, ts: Date.now(), gonderen: session.username, gonderenAd: session.displayName || session.username } };
 }
 function fasonIsilKaydet(atla){
@@ -82,10 +128,16 @@ function fasonIsilKaydet(atla){
     sertlik = { min: mn, max: mx, birim: 'HRC' };
   }
   if(m.mod === 'gonderim' || m.mod === 'paket'){
-    const kg = parseFloat(String(m.kg || '').replace(',', '.'));
-    if(!(kg > 0)){ toast('Paketin KG\'sini yazın (ör. 9,27)'); return; }
+    const kgler = {}; let kg = 0;
+    for(let i = 0; i < (m.kalemler || []).length; i++){
+      const k = m.kalemler[i], v = fasonSayi(k.kg);
+      if(!(v > 0)){ toast(`${k.talepNo || k.isEmriNo}: parçaları tartıp kg yazın`); const el = document.getElementById('fis-kg-' + i); if(el) el.focus(); return; }
+      kgler[k.anahtar] = Math.round(v * 1000) / 1000; kg += v;
+    }
+    if(!(kg > 0)){ toast('Ağırlık yazın'); return; }
+    kg = Math.round(kg * 1000) / 1000;
     if(m.mod === 'gonderim'){
-      fasonGonderim = { tur: secim, sertlik, kg: Math.round(kg * 1000) / 1000 };
+      fasonGonderim = { tur: secim, sertlik, kg, kgler };
       fasonIsilModal = null;
       baslat();   // asıl başlatma — bilgi kayda yazılır (bkz. fasonGonderimAlanlari)
       return;
@@ -94,7 +146,7 @@ function fasonIsilKaydet(atla){
     const paket = { ...(ilk.fasonPaket || {}), id: (ilk.fasonPaket && ilk.fasonPaket.id) || ilk.groupId || m.ids[0], kg: Math.round(kg * 1000) / 1000,
       ts: (ilk.fasonPaket && ilk.fasonPaket.ts) || ilk.startTs || Date.now(), gonderen: (ilk.fasonPaket && ilk.fasonPaket.gonderen) || ilk.operatorUsername || '',
       gonderenAd: (ilk.fasonPaket && ilk.fasonPaket.gonderenAd) || ilk.operatorName || '' };
-    m.ids.forEach(id => { upd['entries/' + id + '/fasonIsilTur'] = secim; upd['entries/' + id + '/fasonIsilSertlik'] = sertlik; upd['entries/' + id + '/fasonPaket'] = paket; });
+    m.ids.forEach(id => { upd['entries/' + id + '/fasonIsilTur'] = secim; upd['entries/' + id + '/fasonIsilSertlik'] = sertlik; upd['entries/' + id + '/fasonPaket'] = paket; upd['entries/' + id + '/fasonKg'] = kgler[id]; });
     DB.ref().update(upd).then(() => toast('Paket bilgisi kaydedildi')).catch(err => toast('Kaydedilemedi: ' + ((err && err.message) || 'hata')));
     fasonIsilModal = null; render();
     return;
@@ -115,7 +167,7 @@ function renderFasonIsilModal(){
     <div class="durus-modal-panel">
       <div class="durus-modal-handle" style="cursor:pointer" onclick="fasonIsilModal=null; render()"></div>
       <div class="durus-modal-header"><div><div class="durus-modal-title">${m.mod === 'gonderim' ? 'Fason ısıl işleme gönderim' : m.mod === 'paket' ? 'Isıl işlem paket bilgisi' : 'Fason ısıl işlem'}</div>
-        <div class="durus-modal-sub">${m.mod ? 'Bu pakete hangi ısıl işlem yapılacak? Tür, istenen sertlik ve paketin KG\'si — satın alma isteği bu bilgiyle açılır.' : 'Fasondan dönen parçaya hangi ısıl işlem yapıldı? Birden fazla seçilebilir.'}</div></div>
+        <div class="durus-modal-sub">${m.mod ? 'Bu pakete hangi ısıl işlem yapılacak? Tür, istenen sertlik ve her iş emrinin kg\'si — satın alma isteği bu bilgiyle açılır.' : 'Fasondan dönen parçaya hangi ısıl işlem yapıldı? Birden fazla seçilebilir.'}</div></div>
         <button class="icon-btn" onclick="fasonIsilModal=null; render()">${ico('x',16)}</button></div>
       <div class="durus-modal-list">
         ${turler.map(t => { const on = !!m.secili[t]; return `<button class="durus-option-card" style="${on ? 'border-color:var(--accent);background:var(--accent-dim)' : ''}" onclick="fasonIsilModal.secili['${escJs(t)}']=!fasonIsilModal.secili['${escJs(t)}']; render()">
@@ -129,12 +181,18 @@ function renderFasonIsilModal(){
           <div class="fis-sertlik-kutular">
             <input id="fis-sert-min" class="mono" inputmode="decimal" placeholder="min" value="${esc(m.sertMin)}" oninput="fasonIsilModal.sertMin=this.value.replace(/[^0-9.,]/g,'')" onkeydown="if(event.key==='Enter') document.getElementById('fis-sert-max').focus()">
             <span>–</span>
-            <input id="fis-sert-max" class="mono" inputmode="decimal" placeholder="max" value="${esc(m.sertMax)}" oninput="fasonIsilModal.sertMax=this.value.replace(/[^0-9.,]/g,'')" onkeydown="if(event.key==='Enter'){ const kg=document.getElementById('fis-kg'); if(kg) kg.focus(); else fasonIsilKaydet(false); }">
+            <input id="fis-sert-max" class="mono" inputmode="decimal" placeholder="max" value="${esc(m.sertMax)}" oninput="fasonIsilModal.sertMax=this.value.replace(/[^0-9.,]/g,'')" onkeydown="if(event.key==='Enter'){ const kg=document.getElementById('fis-kg-0'); if(kg) kg.focus(); else fasonIsilKaydet(false); }">
             <em>HRC</em>
           </div>
           ${(() => { const son = fasonIsilSonAraliklar(); return son.length ? `<div class="fis-sertlik-son">${son.map(([a, b]) => `<button type="button" class="chip ${String(m.sertMin) === String(a) && String(m.sertMax) === String(b) ? 'active' : ''}" onclick="fasonIsilModal.sertMin='${a}'; fasonIsilModal.sertMax='${b}'; render()">${a === b ? a : a + '–' + b}</button>`).join('')}</div>` : ''; })()}
-          ${m.mod ? `<div class="fis-sertlik-bas" style="margin-top:12px">Paket ağırlığı <span>KG</span></div>
-          <div class="fis-sertlik-kutular"><input id="fis-kg" class="mono" inputmode="decimal" placeholder="ör. 9,27" style="width:120px" value="${esc(m.kg || '')}" oninput="fasonIsilModal.kg=this.value.replace(/[^0-9.,]/g,'')" onkeydown="if(event.key==='Enter') fasonIsilKaydet(false)"><em>KG</em></div>` : ''}
+          ${m.mod ? `<div class="fis-sertlik-bas" style="margin-top:12px">Ağırlık <span>her iş emrinin parçalarını ayrı tartın</span></div>
+          <div class="fis-kalemler">${(m.kalemler || []).map((k, i, l) => { const kg = fasonSayi(k.kg); return `<div class="fis-kalem">
+            <div class="fis-kalem-ad"><b class="mono">${esc(k.talepNo || k.isEmriNo || '—')}</b><span>${esc(k.mamul || k.isEmriNo || '')}</span></div>
+            <div class="fis-kalem-adet">${k.adet} adet</div>
+            <span class="mb-girdi-kutu"><input id="fis-kg-${i}" class="mono" inputmode="decimal" placeholder="tart" value="${esc(k.kg)}" oninput="fasonKalemKgYaz(${i}, this.value)" onkeydown="if(event.key==='Enter'){ const s=document.getElementById('fis-kg-${i + 1}'); if(s) s.focus(); else fasonIsilKaydet(false); }"><em>kg</em></span>
+            <div class="fis-kalem-birim" id="fis-birim-${i}">${kg > 0 && k.adet && !k.oneri ? '1 adet = ' + fasonKgYazi(kg / k.adet) + ' kg' : k.onceki ? 'geçen sefer 1 adet ' + fasonKgYazi(k.onceki) + ' kg' + (k.oneri ? ' — kutu dolduruldu, doğruysa dokunmayın' : '') : ''}</div>
+          </div>`; }).join('')}</div>
+          <div class="fis-toplam"><span>Paket toplamı${m.eskiToplam ? ` <em>(eski kayıt: ${fasonKgYazi(m.eskiToplam)} kg)</em>` : ''}</span><b id="fis-toplam">${fasonKgYazi((m.kalemler || []).reduce((s, x) => s + (fasonSayi(x.kg) || 0), 0))} kg</b></div>` : ''}
         </div>
         <button class="durus-modal-footer-btn" onclick="fasonIsilKaydet(false)">${m.mod === 'gonderim' ? 'Kaydet ve gönder (başlat)' : m.mod === 'paket' ? 'Kaydet' : 'Kaydet ve devam et'}</button></div>
     </div></div>`;

@@ -1490,6 +1490,21 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .fis-sertlik-kutular em{font-style:normal;font-size:13px;color:var(--text-muted)}
 .fis-sertlik-son{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .fis-sertlik-kutular input::placeholder{font-size:13px;font-weight:400;color:var(--text-subtle);opacity:.8}
+/* Fason ısıl gönderim — iş emri başına kg (15.10.2026) */
+.fis-sertlik-bas span{text-transform:none}
+.fis-kalemler{display:flex;flex-direction:column;gap:6px;max-height:34vh;overflow:auto}
+.fis-kalem{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:2px 10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+.fis-kalem-ad{min-width:0}
+.fis-kalem-ad b{display:block;font-size:13px}
+.fis-kalem-ad span{display:block;font-size:11.5px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fis-kalem-adet{font-size:13px;font-weight:600;white-space:nowrap}
+.fis-kalem .mb-girdi-kutu{height:40px}
+.fis-kalem .mb-girdi-kutu input{width:72px;height:38px;font-size:16px;text-align:right}
+.fis-kalem-birim{grid-column:1/-1;font-size:11.5px;color:var(--text-muted)}
+.fis-kalem-birim:empty{display:none}
+.fis-toplam{display:flex;justify-content:space-between;align-items:baseline;margin-top:8px;font-size:13px}
+.fis-toplam em{font-style:normal;color:var(--text-muted);font-size:11.5px}
+.fis-toplam b{font-size:17px}
 /* Sipariş satırında satır içi giriş (15.10.2026) — etiket + birimli geniş kutu + aynı boyda düğmeler */
 .mb-satir-girdi{display:inline-flex;align-items:center;gap:8px;padding:4px 4px 4px 12px;border:1px solid color-mix(in srgb, var(--accent) 45%, var(--border));border-radius:10px;background:var(--panel)}
 .mb-satir-girdi label{margin:0;font-size:12px;font-weight:600;color:var(--text-muted);white-space:nowrap;text-transform:none;letter-spacing:0}

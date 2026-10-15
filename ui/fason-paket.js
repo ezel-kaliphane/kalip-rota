@@ -40,7 +40,7 @@ function fpTaslakMetni(p){
   const ozet = `${p.adet} ADET ${fpKg(p.kg)} KG ${fpTurKisa(p.tur)} ${fpSertlik(p.sertlik)}`.replace(/\s+/g, ' ').trim();
   const satirlar = p.uyeler.map(e => {
     const mamul = fpMamul(e);
-    return [e.talepNo || e.isEmriNo, mamul].filter(Boolean).join(' ') + ' - ' + (Number(e.adet) || 0) + ' ADET';
+    return [e.talepNo || e.isEmriNo, mamul].filter(Boolean).join(' ') + ' - ' + (Number(e.adet) || 0) + ' ADET' + (Number(e.fasonKg) > 0 ? ' - ' + fpKg(Number(e.fasonKg)) + ' KG' : '');
   });
   return [ozet].concat(satirlar).join('\n');
 }
@@ -94,7 +94,7 @@ function fpKartHtml(p){
     ${p.uyeler.map(e => `<div class="mb-satir" style="grid-template-columns:minmax(0,1fr) minmax(0,2.4fr) auto auto">
       <span><span class="mb-ie">${esc(e.talepNo || e.isEmriNo || '—')}</span><span class="mb-talep">${esc(e.isEmriNo || '')}</span></span>
       <span class="mb-mamul">${esc(fpMamul(e) || '—')}</span>
-      <span class="mb-sag"><b>${esc(e.adet || '?')}</b> adet</span>
+      <span class="mb-sag"><b>${esc(e.adet || '?')}</b> adet${Number(e.fasonKg) > 0 ? ` · <b>${fpKg(Number(e.fasonKg))}</b> kg <span style="color:var(--text-muted)">(1 adet ${fpKg(Number(e.fasonKg) / (Number(e.adet) || 1))} kg)</span>` : ''}</span>
       <span class="mb-sag" style="color:var(--text-muted)">${e.status === 'tamamlandi' ? 'döndü ' + fmtDT(e.endTs).split(' ')[0] : 'fasonda'}</span>
     </div>`).join('')}
   </div>`;

@@ -411,3 +411,30 @@ test('ısıl işlem paketi: kopyalanan taslak kullanıcının ERP biçiminde', (
   assert.equal(metin.length, 5);
   assert.equal(A.ctx.fpTaslakMetni(p4).split('\n')[0], '42 ADET 3 KG 3343 61-63 HRC');
 });
+
+test('ısıl işlem paketi: iş emri başına kg kayda gider, 1 adet kg hesaplanır, önceki tartım bulunur', () => {
+  kayitlar([
+    { makine: 'FII01 · Fason Isıl İşlem', status: 'tamamlandi', talepNo: '2609010001', isEmriNo: 'UC9_ELMAS', adet: '4', fasonKg: 2, startTs: ts('2026-09-01 10:00') },
+    { makine: 'FII01 · Fason Isıl İşlem', status: 'tamamlandi', talepNo: '2609200001', isEmriNo: 'UC9_ELMAS', adet: '2', fasonKg: 1.2, startTs: ts('2026-09-20 10:00') },
+    { makine: 'FII01 · Fason Isıl İşlem', status: 'tamamlandi', talepNo: '2609200002', isEmriNo: 'UC9_ZARF', adet: '2', fasonKg: 9, startTs: ts('2026-09-25 10:00') }
+  ]);
+  // en son tartılan aynı kod (ZARF farklı parça, sayılmaz)
+  assert.equal(A.ctx.fasonOncekiBirimKg('UC9_ELMAS'), 0.6);
+  assert.equal(A.ctx.fasonOncekiBirimKg('YOK'), null);
+  assert.equal(A.ctx.fasonBirimKg({ fasonKg: 4.1, adet: '2' }), 2.05);
+  A.ata('session', { username: 'OPRT14', displayName: 'Şeref' });
+  A.ata('fasonGonderim', { tur: ['2344 sertleştirme'], sertlik: { min: 45, max: 47, birim: 'HRC' }, kg: 5.3,
+    kgler: { [A.ctx.fasonKalemAnahtar('2610020008', 'UC1')]: 4.1, [A.ctx.fasonKalemAnahtar('2610020010', 'UC2')]: 1.2 } });
+  const a = A.ctx.fasonGonderimAlanlari('g1', '2610020008', 'UC1');
+  assert.equal(a.fasonKg, 4.1);
+  assert.equal(a.fasonPaket.kg, 5.3);
+  assert.equal(a.fasonPaket.id, 'g1');
+  // aynı kalemlerle tekrar başlatmada pencere tekrar açılmaz; farklı makinede bilgi temizlenir
+  assert.equal(A.ctx.fasonIsilGerekli('FII01 · Fason Isıl İşlem', [{ talepNo: '2610020008', isEmriNo: 'UC1' }, { talepNo: '2610020010', isEmriNo: 'UC2' }]), false);
+  assert.equal(A.ctx.fasonIsilGerekli('UT03 · Torna', [{ talepNo: '2610020008', isEmriNo: 'UC1' }]), false);
+  assert.equal(A.calistir('fasonGonderim'), null);
+  // kopyalanan metinde iş emri satırına kg
+  A.ctx.usMamulAdi = () => '';
+  const p = { adet: 2, kg: 4.1, tur: ['2344 sertleştirme'], sertlik: { min: 45, max: 47 }, uyeler: [{ talepNo: '2610020008', adet: '2', fasonKg: 4.1 }] };
+  assert.equal(A.ctx.fpTaslakMetni(p).split('\n')[1], '2610020008 - 2 ADET - 4,1 KG');
+});

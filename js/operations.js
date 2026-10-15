@@ -144,9 +144,6 @@ function baslat(){
   const canCoklu = !!(STATE.operators[session.username]||{}).cokluIsEmri;
 
   if(!getAllowedMachines().includes(makine)){ toast('Listeden geçerli bir makine seçin'); return; }
-  /* Fason ısıl işleme gönderim: önce paket bilgisi (tür, HRC, KG) — bkz. js/fason-isil.js */
-  if(typeof fasonIsilMakinesiMi==='function' && fasonIsilMakinesiMi(makine) && !fasonGonderim && fasonIsilGonderimAc()) return;
-  if(typeof fasonIsilMakinesiMi==='function' && !fasonIsilMakinesiMi(makine)) fasonGonderim = null;
 
   if(canCoklu && newForm.cokluMode){
     // Çoklu İş Emri: aynı makinede, aynı anda birden fazla İş Emri No — her birinin kendi adediyle
@@ -186,6 +183,8 @@ function baslat(){
         }
       }
     }
+    /* Fason ısıl işleme gönderim: doğrulamadan sonra paket bilgisi (tür, HRC, iş emri başına kg) — js/fason-isil.js */
+    if(typeof fasonIsilGerekli==='function' && fasonIsilGerekli(makine, items.map(it=>{ const r = resolveTrackingCode(it.talepNoRaw, it.bilesen); return { talepNo: r.talepNo, isEmriNo: r.isEmriNo, adet: it.adet }; }))) return;
     /* İlk operasyonda hammadde seçilmemişse uyar (engel değil — 07.10.2026 kararı). Karbür dalı hariç. */
     if(stockEnabled() && stockConsumableOptions().length){
       const eksik = items.filter(it => {
@@ -204,7 +203,7 @@ function baslat(){
       const { isEmriNo, talepNo } = resolveTrackingCode(it.talepNoRaw, it.bilesen);
       const wasFirst = isFirstOperationFor(isEmriNo, talepNo);
       const entry = { isEmriNo, talepNo, makine, malzemeCinsi, capBoy, adet: it.adet, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startedByUsername:session.username, startedByName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0, excludedMs:0, groupId,
-        ...(fasonGonderim && typeof fasonGonderimAlanlari==='function' ? fasonGonderimAlanlari(groupId) : {}) };
+        ...(fasonGonderim && typeof fasonGonderimAlanlari==='function' ? fasonGonderimAlanlari(groupId, talepNo, isEmriNo) : {}) };
       const pendingParti = findPendingParti(isEmriNo);
       if(pendingParti){ entry.partiRootId = pendingParti.partiRootId; entry.parentEntryId = pendingParti.id; }
       DB.ref('entries/'+id).set(entry);
@@ -247,6 +246,7 @@ function baslat(){
   const machineBusy = !isFasonMachine(makine) && !isParalelMachine(makine) && entriesArray().some(e => e.makine === makine && e.status === 'devam');
   if(machineBusy){ toast('Bu makinede zaten aktif bir iş var. Önce o iş bitirilmeli ya da duraklatılmalı.'); return; }
   const { isEmriNo, talepNo } = resolveTrackingCode(isEmriNoRaw, bilesenSel);
+  if(typeof fasonIsilGerekli==='function' && fasonIsilGerekli(makine, [{ talepNo, isEmriNo, adet }])) return;
   const wasFirst = isFirstOperationFor(isEmriNo, talepNo);
   let stockItemIdSel = '', stockLotIdSel = null, stockMiktarSel = 0;
   if(stockEnabled() && wasFirst){
@@ -278,7 +278,7 @@ function baslat(){
     const sel = document.getElementById('nf-duzeltme-ref');
     entry.duzeltme = kaliteDuzeltmeKaydi(sel ? sel.value : (newForm.duzeltmeRef||''));
   }
-  if(fasonGonderim && typeof fasonGonderimAlanlari==='function') Object.assign(entry, fasonGonderimAlanlari(id));
+  if(fasonGonderim && typeof fasonGonderimAlanlari==='function') Object.assign(entry, fasonGonderimAlanlari(id, talepNo, isEmriNo));
   fasonGonderim = null;
   DB.ref('entries/'+id).set(entry);
   if(stockItemIdSel && stockMiktarSel>0) consumeStock(stockItemIdSel, stockLotIdSel, stockMiktarSel, { isEmriNo, talepNo });
