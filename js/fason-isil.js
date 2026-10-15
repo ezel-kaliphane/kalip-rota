@@ -83,11 +83,18 @@ function fasonIsilGonderimAc(kalemler){
   render();
   return true;
 }
+/* Satır altı: kutuya ne yazılacağı açık olsun (kullanıcı: "2 adedin ağırlığını mı yazıyor yoksa tek mi?") */
+function fasonKalemIpucu(k){
+  const kg = fasonSayi(k.kg), a = k.adet;
+  if(kg > 0 && a && !k.oneri) return a > 1 ? `${a} adet toplam ${fasonKgYazi(kg)} kg → 1 adet = ${fasonKgYazi(kg / a)} kg` : `1 adet = ${fasonKgYazi(kg)} kg`;
+  if(k.oneri && k.onceki) return `Geçen sefer 1 adet ${fasonKgYazi(k.onceki)} kg${a > 1 ? ` × ${a} adet` : ''} — doğruysa dokunmayın`;
+  return a > 1 ? `${a} adedin hepsini birlikte tartın, toplamı yazın` : 'Parçayı tartıp yazın';
+}
 function fasonKalemKgYaz(i, v){
   const m = fasonIsilModal; if(!m || !m.kalemler || !m.kalemler[i]) return;
   const k = m.kalemler[i]; k.kg = String(v || '').replace(/[^0-9.,]/g, ''); k.oneri = false;
   const kg = fasonSayi(k.kg), b = document.getElementById('fis-birim-' + i), t = document.getElementById('fis-toplam');
-  if(b) b.textContent = kg > 0 && k.adet ? '1 adet = ' + fasonKgYazi(kg / k.adet) + ' kg' : (k.onceki ? 'geçen sefer 1 adet ' + fasonKgYazi(k.onceki) + ' kg' : '');
+  if(b) b.textContent = fasonKalemIpucu(k);
   if(t) t.textContent = fasonKgYazi(m.kalemler.reduce((s, x) => s + (fasonSayi(x.kg) || 0), 0)) + ' kg';
 }
 /* Eski / bilgisiz pakete sonradan bilgi (Isıl İşlem listesinden) */
@@ -185,12 +192,12 @@ function renderFasonIsilModal(){
             <em>HRC</em>
           </div>
           ${(() => { const son = fasonIsilSonAraliklar(); return son.length ? `<div class="fis-sertlik-son">${son.map(([a, b]) => `<button type="button" class="chip ${String(m.sertMin) === String(a) && String(m.sertMax) === String(b) ? 'active' : ''}" onclick="fasonIsilModal.sertMin='${a}'; fasonIsilModal.sertMax='${b}'; render()">${a === b ? a : a + '–' + b}</button>`).join('')}</div>` : ''; })()}
-          ${m.mod ? `<div class="fis-sertlik-bas" style="margin-top:12px">Ağırlık <span>her iş emrinin parçalarını ayrı tartın</span></div>
+          ${m.mod ? `<div class="fis-sertlik-bas" style="margin-top:12px">Ağırlık <span>her iş emrinin tüm parçaları birlikte — toplam kg</span></div>
           <div class="fis-kalemler">${(m.kalemler || []).map((k, i, l) => { const kg = fasonSayi(k.kg); return `<div class="fis-kalem">
             <div class="fis-kalem-ad"><b class="mono">${esc(k.talepNo || k.isEmriNo || '—')}</b><span>${esc(k.mamul || k.isEmriNo || '')}</span></div>
             <div class="fis-kalem-adet">${k.adet} adet</div>
-            <span class="mb-girdi-kutu"><input id="fis-kg-${i}" class="mono" inputmode="decimal" placeholder="tart" value="${esc(k.kg)}" oninput="fasonKalemKgYaz(${i}, this.value)" onkeydown="if(event.key==='Enter'){ const s=document.getElementById('fis-kg-${i + 1}'); if(s) s.focus(); else fasonIsilKaydet(false); }"><em>kg</em></span>
-            <div class="fis-kalem-birim" id="fis-birim-${i}">${kg > 0 && k.adet && !k.oneri ? '1 adet = ' + fasonKgYazi(kg / k.adet) + ' kg' : k.onceki ? 'geçen sefer 1 adet ' + fasonKgYazi(k.onceki) + ' kg' + (k.oneri ? ' — kutu dolduruldu, doğruysa dokunmayın' : '') : ''}</div>
+            <span class="mb-girdi-kutu"><input id="fis-kg-${i}" class="mono" inputmode="decimal" placeholder="${k.adet > 1 ? 'toplam' : 'ağırlık'}" value="${esc(k.kg)}" oninput="fasonKalemKgYaz(${i}, this.value)" onkeydown="if(event.key==='Enter'){ const s=document.getElementById('fis-kg-${i + 1}'); if(s) s.focus(); else fasonIsilKaydet(false); }"><em>kg</em></span>
+            <div class="fis-kalem-birim" id="fis-birim-${i}">${esc(fasonKalemIpucu(k))}</div>
           </div>`; }).join('')}</div>
           <div class="fis-toplam"><span>Paket toplamı${m.eskiToplam ? ` <em>(eski kayıt: ${fasonKgYazi(m.eskiToplam)} kg)</em>` : ''}</span><b id="fis-toplam">${fasonKgYazi((m.kalemler || []).reduce((s, x) => s + (fasonSayi(x.kg) || 0), 0))} kg</b></div>` : ''}
         </div>
