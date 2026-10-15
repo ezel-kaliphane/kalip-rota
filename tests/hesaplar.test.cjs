@@ -305,3 +305,25 @@ test('takım: dolaplar arası taşıma toplamı değiştirmez, kaynakta yetmezse
     assert.equal(r.committed, false);
   } finally { A.ata('DB', eskiDB); }
 });
+
+/* ==================== STOKSUZ ÇUBUK (15.10.2026) ==================== */
+test('çubuk stoğu yoksa kalem yine seçilir; kesim yalnız tüketim olarak yazılır, stok düşülmez', () => {
+  A.ata('stockItems', {
+    c1: { kod: '2344', cap: 'Ø66', tur: 'boy', birim: 'mm', isim: '2344 Ø66 CELIK', canias: 'KLPHM000224' },
+    c2: { kod: '2344', cap: 'Ø91', tur: 'boy', birim: 'mm', isim: '2344 Ø91 CELIK', lots: { L1: { boy: 1000 } } },
+    a1: { kod: 'B25', tur: 'adet', isim: 'KAMA', miktar: 5, birim: 'adet' }
+  });
+  const opts = A.ctx.stockConsumableOptions();
+  const c1 = opts.filter(o => o.itemId === 'c1'), c2 = opts.filter(o => o.itemId === 'c2');
+  assert.equal(c1.length, 1); assert.equal(c1[0].value, 'c1'); assert.equal(c1[0].stoksuz, true);
+  assert.equal(c2.length, 1); assert.equal(c2[0].value, 'c2::L1', 'kayıtlı çubuk varsa yalnız çubuklar');
+  let yazilan = null;
+  const eskiDB = A.calistir('DB');
+  A.ata('DB', { ref: () => ({ update: o => { yazilan = o; return Promise.resolve(); } }) });
+  A.ata('session', { username: 'OP1', displayName: 'Op Bir' });
+  try{ A.ctx.consumeStock('c1', null, 126, { isEmriNo: 'UC1', talepNo: 'T1' }); } finally { A.ata('DB', eskiDB); }
+  const yollar = Object.keys(yazilan);
+  assert.ok(!yollar.some(y => /\/miktar$|\/lots\//.test(y)), 'stok yolu yazılmamalı: ' + yollar.join(', '));
+  const h = yollar.filter(y => y.startsWith('stockHareketleri/')).map(y => yazilan[y])[0];
+  assert.equal(h.miktar, -126); assert.equal(h.talepNo, 'T1'); assert.equal(h.stoksuz, true);
+});

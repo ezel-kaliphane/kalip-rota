@@ -204,7 +204,7 @@ function baslat(){
       if(stockEnabled() && wasFirst && it.stockItemId){
         const [selItemId, selLotId] = it.stockItemId.split('::');
         const stItem = stockItems[selItemId];
-        const miktar = selLotId ? (Number(it.stockMiktar)||0) : (stItem && stItem.mode==='oto' ? Number(it.adet)||0 : Number(it.stockMiktar)||0);
+        const miktar = (selLotId || (stItem && stItem.tur==='boy')) ? (Number(it.stockMiktar)||0) : (stItem && stItem.mode==='oto' ? Number(it.adet)||0 : Number(it.stockMiktar)||0);
         if(miktar>0) consumeStock(selItemId, selLotId||null, miktar, { isEmriNo, talepNo });
       }
     });
@@ -249,10 +249,11 @@ function baslat(){
       const [selItemId, selLotId] = rawVal.split('::');
       stockItemIdSel = selItemId; stockLotIdSel = selLotId||null;
       const stItem = stockItems[stockItemIdSel];
-      const isManual = stockLotIdSel || (stItem && stItem.mode==='manuel');
+      const boyMu = !!(stItem && stItem.tur==='boy');   // stoksuz çubukta da kesilen boy elle girilir
+      const isManual = stockLotIdSel || boyMu || (stItem && stItem.mode==='manuel');
       if(isManual){
         stockMiktarSel = Number(document.getElementById('nf-stok-miktar')?.value ?? newForm.stockMiktar ?? 0) || 0;
-        if(stockMiktarSel<=0){ toast(stockLotIdSel ? 'Kesilen boyu girin' : 'Kullanılan hammadde miktarını girin'); return; }
+        if(stockMiktarSel<=0){ toast((stockLotIdSel || boyMu) ? 'Kesilen boyu girin' : 'Kullanılan hammadde miktarını girin'); return; }
       } else {
         stockMiktarSel = Number(adet)||0;
       }

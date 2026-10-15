@@ -420,6 +420,18 @@ function stockConsumableOptions(){
   const opts = [];
   stockItemsArray().forEach(it=>{
     if(it.tur==='boy'){
+      /* STOKSUZ ÇUBUK (15.10.2026, kullanıcı onayı): 253 çubuk kaleminin hiçbirinde kayıtlı çubuk yoktu,
+         operatör (ör. testerede Ali Bilici) yalnız adet kalemleri görüyor, hammaddeyi atlıyordu. Kayıtlı
+         çubuk yoksa kalem yine seçilebilir; kesilen boy yalnız TÜKETİM olarak iş emrine yazılır, stok
+         düşülmez (bkz. consumeStock). Çubuk stoğu girilmeye başlanınca kendiliğinden stoklu akış. */
+      if(!lotsArray(it).length){
+        opts.push({
+          value: it.id, itemId: it.id, lotId: null, tur:'boy', stoksuz: true,
+          label: `${it.kod}${it.cap?' '+it.cap:''} · kesilen boyu yaz (çubuk stoğu tutulmuyor)${it.caniasBekliyor && !stokCanias(it) ? ' · KOD YOK' : ''}`,
+          remaining: null, birim: it.birim||'mm'
+        });
+        return;
+      }
       lotsArray(it).forEach(lot=>{
         opts.push({
           value: it.id+'::'+lot.id, itemId: it.id, lotId: lot.id, tur:'boy',
@@ -475,6 +487,19 @@ function consumeStock(itemId, lotId, miktar, meta){
   meta = meta || {};
   const now = Date.now(), hid = uid(), yazma = {};
   let hareket;
+  if(item.tur==='boy' && !lotId){
+    /* Stoksuz çubuk: stok düşülmez (çubuk kaydı yok), yalnız tüketim hareketi — BOM / maliyet / hammaddesiz listesi bunu okur */
+    hareket = {
+      itemId, lotId: null, stoksuz: true, itemKod: item.kod||'', itemIsim: `${item.cap||''} (stoksuz kesim)`, miktar: -Number(miktar), birim: item.birim||'mm',
+      isEmriNo: meta.isEmriNo||'', talepNo: meta.talepNo||'', operatorUsername: session.username, operatorName: session.displayName, ts: now
+    };
+    yazma['stockItems/'+itemId+'/sonHareketTs'] = now;
+    yazma['stockItems/'+itemId+'/sonHareketAciklama'] = 'Kesim (stoksuz)'+(meta.isEmriNo?' · '+meta.isEmriNo:'');
+    yazma['stockHareketleri/'+hid] = hareket;
+    DB.ref().update(yazma).catch(err=>toast('Tüketim yazılamadı: '+((err && err.message)||'hata')));
+    stockHareketleri[hid] = hareket;
+    return;
+  }
   if(item.tur==='boy' && lotId){
     const lot = (item.lots||{})[lotId]; if(!lot) return;
     const inc = stokAzalt(-Number(miktar));
