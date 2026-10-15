@@ -468,10 +468,11 @@ function mbSiparislerHtml(g){
              <button class="btn-ghost mb-mini" onclick="mbSiparisMiktarAcik=null; render()">Vazgeç</button>`
           : `<button class="btn-ghost mb-mini" onclick="mbSiparisMiktarAcik='${escJs(s.anahtar)}'; mbSiparisMiktarDeger='${s.miktar||''}'; render()">${s.miktar==null?'Miktar gir':'Miktarı düzelt'}</button>`) : ''}
         ${canManageStock() ? (mbGeldiAcik===s.anahtar
-          ? `<span style="font-size:11.5px;color:var(--text-muted)">gelen</span><input class="mono" style="width:100px;margin:0" inputmode="decimal" value="${esc(mbGeldiDeger)}" oninput="mbGeldiDeger=this.value.replace(/[^0-9.,]/g,'')" onkeydown="if(event.key==='Enter') malzemeIstekGeldiKaydet('${escJs(s.istekNo)}','${escJs(g.hid)}')"><span style="font-size:11.5px;color:var(--text-muted)">${esc(birim)}</span>
+          ? `<span style="font-size:11.5px;color:var(--text-muted)">kısmi gelen</span><input id="mb-kismi-${esc(s.anahtar)}" class="mono" style="width:100px;margin:0" inputmode="decimal" placeholder="${s.kalan!=null?'en çok '+s.kalan:''}" value="${esc(mbGeldiDeger)}" oninput="mbGeldiDeger=this.value.replace(/[^0-9.,]/g,'')" onkeydown="if(event.key==='Enter') malzemeIstekGeldiKaydet('${escJs(s.istekNo)}','${escJs(g.hid)}')"><span style="font-size:11.5px;color:var(--text-muted)">${esc(birim)}</span>
              <button class="btn-primary mb-mini" onclick="malzemeIstekGeldiKaydet('${escJs(s.istekNo)}','${escJs(g.hid)}')">Kaydet</button>
              <button class="btn-ghost mb-mini" onclick="mbGeldiAcik=null; render()">Vazgeç</button>`
-          : `<button class="btn-ghost mb-mini mb-sip-geldi" title="Gelen miktarı gir — kısmi teslimde sipariş açık kalır" onclick="malzemeIstekGeldi('${escJs(s.istekNo)}','${escJs(g.hid)}')">Geldi</button>`) : ''}
+          : `${s.miktar!=null ? `<button class="btn-ghost mb-mini" title="Siparişin bir kısmı geldi — gelen miktarı gir, kalanı yolda kalır" onclick="malzemeIstekKismiAc('${escJs(s.istekNo)}','${escJs(g.hid)}')">Kısmi geldi</button>` : ''}
+             <button class="btn-ghost mb-mini mb-sip-geldi" title="Siparişin tamamı geldi" onclick="malzemeIstekGeldi('${escJs(s.istekNo)}','${escJs(g.hid)}')">Geldi</button>`) : ''}
       </span>
     </div>`; }).join('')}</div>`;
 }

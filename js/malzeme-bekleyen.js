@@ -437,9 +437,15 @@ function malzemeIstekGeldiYaz(istekNo, hid, sessiz, gelenMiktar){
   }).catch(err=>{ toast('Kaydedilemedi: '+((err&&err.message)||'hata')+' — malzemeIstek kuralı yayınlandı mı?'); return false; });
 }
 let mbGeldiAcik = null, mbGeldiDeger = '';   // grup başlığında teslim miktarı girilen sipariş anahtarı
-function malzemeIstekGeldi(istekNo, hid){
+/* "Geldi" = tamamı geldi (eski davranış); kısmi teslim ayrı "Kısmi geldi" düğmesinden (15.10.2026, kullanıcı:
+   "geldi üzerinden yapma, anlaşılması güç; kısmi geldi diye ayrı seçenek olsun, basınca input açılsın"). */
+function malzemeIstekKismiAc(istekNo, hid){
   const s = malzemeAcikIstekler(hid).find(x => String(x.istekNo).trim().toUpperCase() === String(istekNo).trim().toUpperCase());
-  if(s && s.miktar != null){ mbGeldiAcik = s.anahtar; mbGeldiDeger = String(s.kalan); render(); return; }   // miktar biliniyor → ne kadar geldiği sorulur
+  if(!s) return;
+  mbGeldiAcik = s.anahtar; mbGeldiDeger = ''; render();
+  setTimeout(() => { const el = document.getElementById('mb-kismi-' + s.anahtar); if(el) el.focus(); }, 30);
+}
+function malzemeIstekGeldi(istekNo, hid){
   if(!confirm(`İstek ${istekNo} geldi olarak işaretlensin mi?\n\nMalzemeyi stoğa Stok Girişi'nden girmeyi unutma — orada "bu giriş siparişin teslimi" kutusunu işaretlersen ikisi birlikte olur.`)) return;
   malzemeIstekGeldiYaz(istekNo, hid);
 }
