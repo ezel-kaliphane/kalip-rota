@@ -513,7 +513,7 @@ function renderOperator(){
     body += `</div>`;
   }
 
-  return `<div class="root-mobile theme-${resolvedTheme()}">${header}${body}${bottomNavHtml()}${messagesModalOpen ? renderMessagesModal() : ''}${sendMsgOpen ? renderSendMessageModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}</div>`;
+  return `<div class="root-mobile theme-${resolvedTheme()}">${header}${body}${bottomNavHtml()}${messagesModalOpen ? renderMessagesModal() : ''}${sendMsgOpen ? renderSendMessageModal() : ''}${resimAramaOpen ? renderResimAramaModal() : ''}${typeof fasonIsilModal!=='undefined' && fasonIsilModal && fasonIsilModal.mod ? renderFasonIsilModal() : ''}</div>`;
 }
 
 /* İlk Operasyon hammadde araması (01.10.2026). CANİAS listesi yüklenince bu açılır liste 118

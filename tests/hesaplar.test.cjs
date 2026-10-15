@@ -384,3 +384,30 @@ test('fason ısıl işlem: tür seçilince sertlik aralığı zorunlu, kayda yaz
     assert.equal(C.fasonIsilSertlikYazi({ min: 40.5, max: 40.5, birim: 'HRC' }), '40,5 HRC');
   } finally { A.ata('DB', eskiDB); C.toast = eskiToast; C.bitir = eskiBitir; }
 });
+
+/* ==================== FASON ISIL İŞLEM PAKETİ (15.10.2026) ==================== */
+test('ısıl işlem paketi: kopyalanan taslak kullanıcının ERP biçiminde', () => {
+  const paket = { id: 'g1', kg: 9.27, ts: ts('2026-10-09 14:00'), gonderen: 'OP14', gonderenAd: 'Şeref' };
+  const ortak = { makine: 'FII01 · Fason Isıl İşlem', status: 'devam', groupId: 'g1', startTs: ts('2026-10-09 14:00'),
+    fasonIsilTur: ['2344 sertleştirme'], fasonIsilSertlik: { min: 45, max: 47, birim: 'HRC' }, fasonPaket: paket };
+  kayitlar([
+    { ...ortak, talepNo: '2610020008', isEmriNo: 'UC1', adet: '2' },
+    { ...ortak, talepNo: '2610020010', isEmriNo: 'UC2', adet: '2' },
+    { ...ortak, talepNo: '2610020012', isEmriNo: 'UC3', adet: '3' },
+    { ...ortak, talepNo: '2610050021', isEmriNo: 'UC4', adet: '1' },
+    { makine: 'FII01 · Fason Isıl İşlem', status: 'devam', talepNo: '2609030006', isEmriNo: 'UC5', adet: '42', startTs: ts('2026-10-10 13:09'),
+      fasonIsilTur: ['3343 sertleştirme'], fasonIsilSertlik: { min: 61, max: 63 }, fasonPaket: { id: 'k4', kg: 3 } }
+  ]);
+  A.ctx.usMamulAdi = e => ({ UC1: 'M12X35 KALIP' })[e.isEmriNo] || '';
+  A.ctx.getTalepInfo = k => k === '2610020010' ? { malzemeAdi: 'B33 KONIK KVN' } : null;
+  const l = A.ctx.fasonPaketleri();
+  assert.equal(l.length, 2);
+  const p1 = l.find(p => p.id === 'g1'), p4 = l.find(p => p.id === 'k4');
+  assert.equal(p1.adet, 8);
+  const metin = A.ctx.fpTaslakMetni(p1).split('\n');
+  assert.equal(metin[0], '8 ADET 9,27 KG 2344 45-47 HRC');
+  assert.equal(metin[1], '2610020008 M12X35 KALIP - 2 ADET');
+  assert.equal(metin[2], '2610020010 B33 KONIK KVN - 2 ADET');
+  assert.equal(metin.length, 5);
+  assert.equal(A.ctx.fpTaslakMetni(p4).split('\n')[0], '42 ADET 3 KG 3343 61-63 HRC');
+});

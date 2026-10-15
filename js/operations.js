@@ -144,6 +144,9 @@ function baslat(){
   const canCoklu = !!(STATE.operators[session.username]||{}).cokluIsEmri;
 
   if(!getAllowedMachines().includes(makine)){ toast('Listeden geçerli bir makine seçin'); return; }
+  /* Fason ısıl işleme gönderim: önce paket bilgisi (tür, HRC, KG) — bkz. js/fason-isil.js */
+  if(typeof fasonIsilMakinesiMi==='function' && fasonIsilMakinesiMi(makine) && !fasonGonderim && fasonIsilGonderimAc()) return;
+  if(typeof fasonIsilMakinesiMi==='function' && !fasonIsilMakinesiMi(makine)) fasonGonderim = null;
 
   if(canCoklu && newForm.cokluMode){
     // Çoklu İş Emri: aynı makinede, aynı anda birden fazla İş Emri No — her birinin kendi adediyle
@@ -200,7 +203,8 @@ function baslat(){
       const id = uid();
       const { isEmriNo, talepNo } = resolveTrackingCode(it.talepNoRaw, it.bilesen);
       const wasFirst = isFirstOperationFor(isEmriNo, talepNo);
-      const entry = { isEmriNo, talepNo, makine, malzemeCinsi, capBoy, adet: it.adet, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startedByUsername:session.username, startedByName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0, excludedMs:0, groupId };
+      const entry = { isEmriNo, talepNo, makine, malzemeCinsi, capBoy, adet: it.adet, not, sonOperasyon, operatorUsername:session.username, operatorName:session.displayName, startedByUsername:session.username, startedByName:session.displayName, startTs:Date.now(), endTs:null, status:'devam', duruşToplamMs:0, excludedMs:0, groupId,
+        ...(fasonGonderim && typeof fasonGonderimAlanlari==='function' ? fasonGonderimAlanlari(groupId) : {}) };
       const pendingParti = findPendingParti(isEmriNo);
       if(pendingParti){ entry.partiRootId = pendingParti.partiRootId; entry.parentEntryId = pendingParti.id; }
       DB.ref('entries/'+id).set(entry);
@@ -212,6 +216,7 @@ function baslat(){
       }
     });
     toast(`${items.length} iş emri birlikte başlatıldı`);
+    fasonGonderim = null;
     newForm = { isEmriNo:'', bilesen:'', makine: (STATE.operators[session.username]||{}).defaultMachine || '', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false, stockItemId:'', stockMiktar:'', cokluMode:false, cokluItems:[{isEmriNo:'',bilesen:'',adet:'',stockItemId:'',stockMiktar:''},{isEmriNo:'',bilesen:'',adet:'',stockItemId:'',stockMiktar:''}] };
     activeGroupId = groupId;
     activeDetailId = null;
@@ -273,6 +278,8 @@ function baslat(){
     const sel = document.getElementById('nf-duzeltme-ref');
     entry.duzeltme = kaliteDuzeltmeKaydi(sel ? sel.value : (newForm.duzeltmeRef||''));
   }
+  if(fasonGonderim && typeof fasonGonderimAlanlari==='function') Object.assign(entry, fasonGonderimAlanlari(id));
+  fasonGonderim = null;
   DB.ref('entries/'+id).set(entry);
   if(stockItemIdSel && stockMiktarSel>0) consumeStock(stockItemIdSel, stockLotIdSel, stockMiktarSel, { isEmriNo, talepNo });
   toast(pendingParti ? `Operasyon başlatıldı — bekleyen ${pendingParti.adet} adetlik partiye bağlandı` : 'Operasyon başlatıldı');
@@ -288,7 +295,7 @@ function baslat(){
 function bitir(id){
   const e = STATE.entries[id] || {};
   if(kaliteMakinesiMi(e.makine)){ kaliteModalAc(id, null); return; } // Final Kalite Kontrol: önce sonuç
-  if(typeof fasonIsilMakinesiMi==='function' && fasonIsilMakinesiMi(e.makine) && !fasonIsilGecildi.has(id) && fasonIsilModalAc(id, null)) return; // fason ısıl işlem: önce tür
+  if(typeof fasonIsilMakinesiMi==='function' && fasonIsilMakinesiMi(e.makine) && !e.fasonIsilTur && !fasonIsilGecildi.has(id) && fasonIsilModalAc(id, null)) return; // fason ısıl işlem: gönderimde girilmediyse önce tür
   if(!e.sonOperasyon){
     nextOpPendingId = id;
     nextOpPendingGroupId = null;
@@ -652,7 +659,7 @@ function bitirGrup(groupId){
   const members = groupMembersOf(groupId);
   if(members.length===0) return;
   if(members.some(e=>kaliteMakinesiMi(e.makine))){ kaliteModalAc(null, groupId); return; }
-  if(typeof fasonIsilMakinesiMi==='function' && members.some(e=>fasonIsilMakinesiMi(e.makine)) && !fasonIsilGecildi.has('g:'+groupId) && fasonIsilModalAc(null, groupId)) return;
+  if(typeof fasonIsilMakinesiMi==='function' && members.some(e=>fasonIsilMakinesiMi(e.makine) && !e.fasonIsilTur) && !fasonIsilGecildi.has('g:'+groupId) && fasonIsilModalAc(null, groupId)) return;
   if(members.some(e=>!e.sonOperasyon)){
     nextOpPendingGroupId = groupId;
     nextOpPendingId = null;

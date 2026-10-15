@@ -1004,7 +1004,9 @@ const STOK_BOLUMLERI = [
   { key:'bekleyen', ikon:'clock',  label:'Malzeme Bekleyenler', alt:'stok yok, is emri parkta', gor:()=>canManageStock() },
   /* Yarı mamul deposu (06.10.2026): FKK'da red verilip başka yerde işlenerek kullanılabilecek
      parçalar kendiliğinden buraya düşer (js/kalite.js). */
-  { key:'yarimamul', ikon:'katman', label:'Yarı Mamul', alt:'FKK red · başka işte kullanılabilir', gor:()=>canManageStock() }
+  { key:'yarimamul', ikon:'katman', label:'Yarı Mamul', alt:'FKK red · başka işte kullanılabilir', gor:()=>canManageStock() },
+  /* Fason ısıl işlem paketleri (15.10.2026): gönderimde girilen tür/HRC/KG, ERP isteği için kopyala + istek no (ui/fason-paket.js) */
+  { key:'isil', ikon:'box', label:'Isıl İşlem', alt:'fason paketleri · istek no', gor:()=>canManageStock() }
 ];
 
 /* ---- Bölümler: her modülde aynı fiiller, aynı sırada ----
@@ -1726,6 +1728,7 @@ function renderStokScreen(){
   else if(stokSubView==='malzeme') icerik = `<div class="settings-wrap">${renderMalzemeStokScreen()}</div>`;
   else if(stokSubView==='bekleyen') icerik = renderMalzemeBekleyen();
   else if(stokSubView==='yarimamul') icerik = renderYariMamul();
+  else if(stokSubView==='isil') icerik = (typeof renderFasonPaketleri==='function' ? renderFasonPaketleri() : '');
   else                             icerik = '';
 
   return `<div class="stok-govde">${topHeader}${ray}<div class="stok-icerik">${bolumSatiri}${icerik}</div></div>`;

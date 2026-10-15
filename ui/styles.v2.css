@@ -1489,6 +1489,7 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .fis-sertlik-kutular span{font-size:18px;color:var(--text-muted)}
 .fis-sertlik-kutular em{font-style:normal;font-size:13px;color:var(--text-muted)}
 .fis-sertlik-son{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.fis-sertlik-kutular input::placeholder{font-size:13px;font-weight:400;color:var(--text-subtle);opacity:.8}
 /* Sipariş satırında satır içi giriş (15.10.2026) — etiket + birimli geniş kutu + aynı boyda düğmeler */
 .mb-satir-girdi{display:inline-flex;align-items:center;gap:8px;padding:4px 4px 4px 12px;border:1px solid color-mix(in srgb, var(--accent) 45%, var(--border));border-radius:10px;background:var(--panel)}
 .mb-satir-girdi label{margin:0;font-size:12px;font-weight:600;color:var(--text-muted);white-space:nowrap;text-transform:none;letter-spacing:0}
