@@ -1480,6 +1480,17 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .mb-siparis{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--text-muted)}
 .mb-siparis b{color:var(--text)}
 .mb-sip-eylem{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+/* Sipariş satırında satır içi giriş (15.10.2026) — etiket + birimli geniş kutu + aynı boyda düğmeler */
+.mb-satir-girdi{display:inline-flex;align-items:center;gap:8px;padding:4px 4px 4px 12px;border:1px solid color-mix(in srgb, var(--accent) 45%, var(--border));border-radius:10px;background:var(--panel)}
+.mb-satir-girdi label{margin:0;font-size:12px;font-weight:600;color:var(--text-muted);white-space:nowrap;text-transform:none;letter-spacing:0}
+.mb-girdi-kutu{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg)}
+.mb-girdi-kutu:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent)}
+.mb-girdi-kutu input{width:150px;height:30px;margin:0;padding:0;border:0;background:transparent;box-shadow:none;outline:none;font-size:13.5px;font-weight:600;text-align:right}
+.mb-girdi-kutu input:focus{border:0;box-shadow:none;outline:none}
+.mb-girdi-kutu input::placeholder{font-weight:400;color:var(--text-subtle)}
+.mb-girdi-kutu em{font-style:normal;font-size:12px;color:var(--text-muted)}
+.mb-satir-girdi .btn-primary,.mb-satir-girdi .btn-ghost{width:auto;height:32px;min-height:32px;padding:0 14px;font-size:12.5px;border-radius:7px;display:inline-flex;align-items:center}
+@media (max-width:600px){.mb-satir-girdi{flex-wrap:wrap}.mb-girdi-kutu input{width:110px}}
 .mb-sip-fazla{color:var(--success-text, var(--success));font-weight:700}
 .mb-sip-eksik{color:var(--danger-text);font-weight:700}
 .mb-sip-bilinmiyor{color:var(--warn-text);font-weight:600}
