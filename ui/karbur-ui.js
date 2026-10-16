@@ -483,9 +483,23 @@ function renderKarburPicker(){
 }
 
 /* ==================== STOK & FİRE ==================== */
+/* Durum araması (16.10.2026, kullanıcı: "filtre yani arama kısmı ekle, kolayca görebileyim").
+   Kelimeler ayrı ayrı aranır, hepsi geçmeli: "15 va90" → Ø15 ve VA90; stok kodu, çap, delik, kalite, boy. */
+let karburDurumAra = '';
+function karburAraNorm(s){ return String(s == null ? '' : s).toLocaleUpperCase('tr-TR').replace(/Ø/g, '').replace(/,/g, '.'); }
+function karburDurumEslesir(k){
+  const kel = karburAraNorm(karburDurumAra).split(/\s+/).filter(Boolean);
+  if(!kel.length) return true;
+  const metin = karburAraNorm([k.kod, k.disCap, k.delik, k.kalite, k.boy, (k.alanlar || []).join(' ')].join(' '));
+  const parcalar = metin.split(/[\sX×]+/).filter(Boolean);
+  /* sayı kelimesi ölçüyle TAM eşleşsin (15 → Ø15, Ø150 değil); diğerleri metnin içinde geçsin */
+  return kel.every(w => /^\d+(\.\d+)?$/.test(w) ? parcalar.some(x => Number(x) === Number(w)) : metin.includes(w));
+}
 function renderKarburStok(){
-  const kesimler = karburKesimKalemleri();
-  const adetler  = karburAdetKalemleri();
+  const kesimHepsi = karburKesimKalemleri(), adetHepsi = karburAdetKalemleri();
+  const kesimler = kesimHepsi.filter(karburDurumEslesir);
+  const adetler  = adetHepsi.filter(karburDurumEslesir);
+  const araVar = !!karburDurumAra.trim();
   const fireler  = karburFireArray();
   const yon = canManageKarbur();
 
@@ -512,8 +526,20 @@ function renderKarburStok(){
     : `<b>${karburStokAdet(k.id)}</b>`;
 
   let html = `<div class="card" style="margin-bottom:14px">
-    <div style="font-size:13px;font-weight:600;margin-bottom:4px">Kesim planına girenler</div>
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Boyu ${KARBUR_CUBUK_MIN} mm ve üzeri olanlar çubuk (kesilir), kısası hazır standart parça (istenen boya eşitse kesimsiz verilir).</div>
+    <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px">
+      <div style="flex:1;min-width:240px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Kesim planına girenler${araVar ? ` <span style="font-weight:500;color:var(--text-muted)">· ${kesimler.length} / ${kesimHepsi.length}</span>` : ''}</div>
+        <div style="font-size:11px;color:var(--text-muted)">Boyu ${KARBUR_CUBUK_MIN} mm ve üzeri olanlar çubuk (kesilir), kısası hazır standart parça (istenen boya eşitse kesimsiz verilir).</div>
+      </div>
+      <div style="position:relative;flex:0 1 380px;min-width:220px">
+        <input id="karbur-durum-ara" class="mono" placeholder="Ara: kod, çap, kalite — ör. 15 va90 · ST7 · 156" value="${esc(karburDurumAra)}"
+          oninput="karburDurumAra=this.value; render()" onkeydown="if(event.key==='Escape'){ karburDurumAra=''; render(); }"
+          style="margin:0;padding-right:${araVar ? 34 : 12}px">
+        ${araVar ? `<button type="button" class="icon-btn" title="Aramayı temizle" onclick="karburDurumAra=''; render(); setTimeout(()=>{ const el=document.getElementById('karbur-durum-ara'); if(el) el.focus(); },30)"
+          style="position:absolute;right:4px;top:50%;transform:translateY(-50%);width:28px;height:28px">${ico('x', 14)}</button>` : ''}
+        ${araVar ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Aşağıdaki "Adet olarak tüketilenler" de süzülür (${adetler.length} / ${adetHepsi.length})</div>` : ''}
+      </div>
+    </div>
     ${kesimler.length ? `<table class="tbl"><thead><tr><th>Stok Kodu</th><th>Dış Çap</th><th>Delik</th><th>Kalite</th>
       <th style="text-align:right">Boy</th><th>Tür</th><th style="text-align:right">Adet</th><th style="text-align:right">Alt Limit</th><th>Kullanım</th></tr></thead><tbody>
       ${kesimler.map(k => `<tr><td>${esc(k.kod)}</td><td>Ø${karburFmt(k.disCap)}</td><td>${esc(k.delik)}</td>
@@ -522,11 +548,11 @@ function renderKarburStok(){
         <td style="text-align:right;width:88px">${adetHucre(k)}</td>
         <td style="text-align:right;width:70px">${altLimitHucre(k)}</td>
         <td style="width:200px">${kullanimSecici(k)}</td></tr>`).join('')}
-    </tbody></table>` : `<div style="font-size:12.5px;color:var(--text-muted)">Kayıt yok.</div>`}
+    </tbody></table>` : `<div style="font-size:12.5px;color:var(--text-muted)">${araVar ? `"${esc(karburDurumAra.trim())}" ile eşleşen kalem yok.` : 'Kayıt yok.'}</div>`}
   </div>
 
   <div class="card" style="margin-bottom:14px">
-    <div style="font-size:13px;font-weight:600;margin-bottom:4px">Adet olarak tüketilenler</div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:4px">Adet olarak tüketilenler${araVar ? ` <span style="font-weight:500;color:var(--text-muted)">· ${adetler.length} / ${adetHepsi.length}</span>` : ''}</div>
     <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Kesilik gelen kalemler (ör. somun elmasları) — kesim planına hiç girmez, doğrudan adet düşülür. Bir kalemi listeler arasında taşımak için sağdaki <b>Kullanım</b> seçeneğini değiştir.</div>
     ${adetler.length ? `<table class="tbl"><thead><tr><th>Stok Kodu</th><th>Ölçüler</th><th>Kalite</th>
       <th style="text-align:right">Adet</th><th style="text-align:right">Alt Limit</th><th>Kullanım</th></tr></thead><tbody>
@@ -536,7 +562,7 @@ function renderKarburStok(){
         <td style="text-align:right;width:88px">${adetHucre(k)}</td>
         <td style="text-align:right;width:70px">${altLimitHucre(k)}</td>
         <td style="width:200px">${kullanimSecici(k)}</td></tr>`).join('')}
-    </tbody></table>` : `<div style="font-size:12.5px;color:var(--text-muted)">Kayıt yok.</div>`}
+    </tbody></table>` : `<div style="font-size:12.5px;color:var(--text-muted)">${araVar ? `"${esc(karburDurumAra.trim())}" ile eşleşen kalem yok.` : 'Kayıt yok.'}</div>`}
   </div>
 
   <div class="card" style="margin-bottom:14px">

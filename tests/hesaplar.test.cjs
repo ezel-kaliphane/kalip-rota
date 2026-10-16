@@ -468,3 +468,17 @@ test('ısıl işlem paketi: kısmi aktar kg\'yi adede göre böler, paket bilgis
   assert.equal(A.ctx.fasonBirimKg(cocuk), 2);
   assert.equal(A.ctx.fasonBirimKg({ fasonKg: yazilan['entries/p1/fasonKg'], adet: yazilan['entries/p1/adet'] }), 2);
 });
+
+test('karbür durum araması: kelimeler ayrı ayrı, sayı ölçüyle tam eşleşir', () => {
+  const k1 = { kod: 'C15XH156X3XVA90', disCap: 15, delik: '3', kalite: 'VA90', boy: 156 };
+  const k2 = { kod: 'V150X156X3XST7', disCap: 150, delik: '3', kalite: 'ST7', boy: 156 };
+  const ara = q => { A.ata('karburDurumAra', q); return [k1, k2].filter(A.ctx.karburDurumEslesir).map(k => k.kod).join(','); };
+  assert.equal(ara(''), 'C15XH156X3XVA90,V150X156X3XST7');
+  assert.equal(ara('15 va90'), 'C15XH156X3XVA90');
+  assert.equal(ara('Ø15'), 'C15XH156X3XVA90');
+  assert.equal(ara('st7'), 'V150X156X3XST7');
+  assert.equal(ara('156'), 'C15XH156X3XVA90,V150X156X3XST7');
+  assert.equal(ara('c15xh'), 'C15XH156X3XVA90');
+  assert.equal(ara('99'), '');
+  A.ata('karburDurumAra', '');
+});
