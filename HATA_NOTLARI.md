@@ -5,6 +5,24 @@ hatayı ikinci kez yazmamak. En yeni üstte.
 
 ---
 
+## 2026-10-16 — Kısmi Aktar, fason ısıl işin kg'sini bölmüyordu (canlıya çıkmadan yakalandı)
+
+**Belirti.** Hata taramasında bulundu, canlıda örneği yok (414 FII01 kaydının hiçbiri kısmi aktarılmamış).
+2 adet / 4,1 kg'lık işte 1 adet aktarılınca kalan kayıt "1 adet = 4,1 kg" gösterecekti (doğrusu 2,05);
+aktarılan kısım tür, sertlik ve paket bilgisini taşımadığı için Isıl İşlem listesinde ayrı bir "bilgisiz
+paket" olarak çıkacak, maliyette türü kaybolacaktı.
+
+**Sebep.** `confirmKismiAktar` çocuk kaydı alan alan elle kuruyor ve kalan kayıtta yalnız `adet`'i
+güncelliyor. Yeni eklenen `fasonKg` adede bağlı bir toplam; `fasonIsilTur`/`fasonPaket` ise kaydın
+kimliğine ait. Bölme fonksiyonu ikisini de bilmiyordu.
+
+**Düzeltme.** Paket alanları çocuğa kopyalanıyor, `fasonKg` adede göre bölünüyor (iki tarafta 1 adet kg
+aynı kalır). Test uygulamanın `fasonGonderimAlanlari` + `confirmKismiAktar` fonksiyonlarıyla; düzeltme
+geri alınınca kırmızı.
+
+**Ders.** Kayda adetle orantılı yeni bir alan eklerken adedi değiştiren her yolu (kısmi aktar, grup
+bölme, düzeltme) ara: `grep "/adet'\]"` ve kaydı elle kuran yerler (`childEntry`).
+
 ## 2026-10-13 — Çoklu iş emri grubunda süre iki kez bölünüyordu (dış Claude incelemesi buldu)
 
 **Belirti.** Başka bir hesaptaki Claude'a depo incelettirildi. Rapor: 2 üyeli grupta maliyet ve verimlilik

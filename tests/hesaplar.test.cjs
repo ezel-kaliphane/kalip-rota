@@ -438,3 +438,33 @@ test('ısıl işlem paketi: iş emri başına kg kayda gider, 1 adet kg hesaplan
   const p = { adet: 2, kg: 4.1, tur: ['2344 sertleştirme'], sertlik: { min: 45, max: 47 }, uyeler: [{ talepNo: '2610020008', adet: '2', fasonKg: 4.1 }] };
   assert.equal(A.ctx.fpTaslakMetni(p).split('\n')[1], '2610020008 - 2 ADET - 4,1 KG');
 });
+
+/* 16.10.2026 hata taraması: FII01'de Kısmi Aktar — kalan kayıtta kg aynı kalıp adet azalınca "1 adet kg"
+   katlanıyordu; aktarılan kısım paket bilgisini taşımıyordu. Kayıt uygulamanın kendi fonksiyonlarıyla üretilir. */
+test('ısıl işlem paketi: kısmi aktar kg\'yi adede göre böler, paket bilgisi aktarılan kısma geçer', () => {
+  A.ata('session', { username: 'OPRT14', displayName: 'Şeref' });
+  A.ata('fasonGonderim', { tur: ['2344 sertleştirme'], sertlik: { min: 45, max: 47, birim: 'HRC' }, kg: 6,
+    kgler: { [A.ctx.fasonKalemAnahtar('2610020008', 'UC1')]: 6 } });
+  const e = { isEmriNo: 'UC1', talepNo: '2610020008', makine: 'FII01 · Fason Isıl İşlem', adet: '3', status: 'devam',
+    operatorUsername: 'OPRT14', operatorName: 'Şeref', startTs: ts('2026-10-14 11:00'), ...A.ctx.fasonGonderimAlanlari('p1', '2610020008', 'UC1') };
+  A.ata('fasonGonderim', null);
+  A.ata('STATE.entries', { p1: e });
+  let yazilan = null;
+  const eskiDB = A.calistir('DB'), eskiGet = A.ctx.document.getElementById;
+  A.ata('DB', { ref: () => ({ update: o => { yazilan = o; return { then: () => ({ catch: () => {} }) }; } }) });
+  A.ctx.document.getElementById = id => id === 'kismi-aktar-adet' ? { value: '1' } : null;
+  try{ A.ctx.confirmKismiAktar('p1'); } finally { A.ata('DB', eskiDB); A.ctx.document.getElementById = eskiGet; }
+  assert.ok(yazilan, 'yazma yok');
+  assert.ok(!Object.keys(yazilan).some(y => y.includes('undefined')));
+  const cocukYol = Object.keys(yazilan).find(y => y.split('/').length === 2 && y !== 'entries/p1');
+  const cocuk = yazilan[cocukYol];
+  assert.equal(cocuk.adet, '1');
+  assert.equal(cocuk.fasonKg, 2);
+  assert.equal(yazilan['entries/p1/fasonKg'], 4);
+  assert.equal(yazilan['entries/p1/adet'], '2');
+  assert.equal(cocuk.fasonPaket.id, 'p1');
+  assert.equal(JSON.stringify(cocuk.fasonIsilTur), '["2344 sertleştirme"]');
+  // 1 adet ağırlığı iki tarafta da aynı kalır
+  assert.equal(A.ctx.fasonBirimKg(cocuk), 2);
+  assert.equal(A.ctx.fasonBirimKg({ fasonKg: yazilan['entries/p1/fasonKg'], adet: yazilan['entries/p1/adet'] }), 2);
+});

@@ -404,7 +404,16 @@ function confirmKismiAktar(id){
     duruşToplamMs:0, excludedMs:0,
     partiRootId: rootId, parentEntryId: e.id
   };
+  /* Fason ısıl paket bilgisi (16.10.2026 hata taraması): aktarılan kısım da aynı paketin parçası — tür,
+     sertlik, paket ve istek no taşınır; iş emri kg'si adede göre bölünür. Yoksa kalan kayıtta
+     "1 adet kg" katlanıyor (kg aynı, adet azalmış), aktarılan kısım da listede bilgisiz paket görünüyordu. */
+  ['fasonIsilTur', 'fasonIsilSertlik', 'fasonPaket', 'fasonIstekNo'].forEach(k => { if(e[k] != null) childEntry[k] = e[k]; });
   const updates = {};
+  if(Number(e.fasonKg) > 0){
+    const kgCocuk = Math.round(Number(e.fasonKg) * miktar / mevcut * 1000) / 1000;
+    childEntry.fasonKg = kgCocuk;
+    updates['entries/'+id+'/fasonKg'] = Math.round((Number(e.fasonKg) - kgCocuk) * 1000) / 1000;
+  }
   updates['entries/'+childId] = childEntry;
   updates['entries/'+id+'/adet'] = String(kalan);
   updates['entries/'+id+'/partiRootId'] = rootId;
