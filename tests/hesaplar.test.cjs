@@ -582,3 +582,19 @@ test('önceki notlar: aynı talep no (dallar dahil), kendi kaydı ve boş notlar
   assert.ok(A.ctx.oncekiNotlarHtml(fkk, fkk.id).includes('Takım kırıldı'));
   assert.equal(A.ctx.oncekiNotlarHtml({ talepNo: '2610030000', isEmriNo: 'X' }, null), '');
 });
+
+/* 19.10.2026: stok tabloları — gruplama ve renk durumu */
+test('stok tablosu: kalite / ölçü ayrıştırma ve stok durumu', () => {
+  const adet = { kod: '1040 LAMA 30X85X400', tur: 'adet', miktar: -2 };
+  const cubuk = { kod: '2344', cap: 'Ø80', tur: 'boy', lots: {} };
+  const parmak = { kod: 'B13', isim: '12X12X56 BB — B13 DAYAMALAR', tur: 'adet', miktar: 120 };
+  assert.equal(A.ctx.hamKalite(adet), '1040'); assert.equal(A.ctx.hamOlcu(adet), 'LAMA 30X85X400');
+  assert.equal(A.ctx.hamKalite(cubuk), '2344'); assert.equal(A.ctx.hamOlcu(cubuk), 'Ø80');
+  assert.equal(A.ctx.hamDurum(adet), 'eksi'); assert.equal(A.ctx.hamDurum(cubuk), 'tutulmuyor'); assert.equal(A.ctx.hamDurum(parmak), 'ok');
+  assert.equal(A.ctx.hamDurum({ kod: 'X', tur: 'adet', miktar: 2, altLimit: 3 }), 'kritik');
+  A.ata('toolStock', { a: { miktar: 0 }, b: { miktar: 1 }, c: { miktar: 9 } });
+  assert.equal(A.ctx.takimDurum({ id: 'a', altLimit: 10 }), 'yok');
+  assert.equal(A.ctx.takimDurum({ id: 'b', altLimit: 1 }), 'kritik');
+  assert.equal(A.ctx.takimDurum({ id: 'c', altLimit: 1 }), 'ok');
+  A.ata('toolStock', {});
+});

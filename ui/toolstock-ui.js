@@ -52,7 +52,7 @@ function renderToolStokManagementScreen(){
   }
 
   let html = `<div class="settings-wrap">`;
-  if(!canManageToolStok()){
+  if(!canManageToolStok() && toolAdminSubView!=='liste'){
     html += `<div style="font-size:12px;color:var(--text-muted);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px">👁 Sadece görüntüleme modundasın — kayıt/düzenleme işlemleri için SuperAdmin yetkisi gerekir.</div>`;
   }
   /* Bölüm satırı artık burada çizilmiyor — üç stok modülünde de aynı görünsün diye tek
@@ -76,84 +76,13 @@ function renderToolStokManagementScreen(){
   }
   if(!toolAdminSubView){
     html += `<div style="font-size:12.5px;color:var(--text-muted)">Görebileceğin bir alt sekme yok.</div>`;
-  } else if(toolAdminSubView==='liste') html += renderToolCatalogListAdmin();
+  } else if(toolAdminSubView==='liste') html += renderTakimTablo();   // ui/stok-tablo.js (19.10.2026)
   else if(toolAdminSubView==='konumlar') html += renderToolLocationsAdmin();
   else if(toolAdminSubView==='excel') html += renderToolExcelUploadAdmin();
   else if(toolAdminSubView==='giris') html += renderToolGirisAdmin();
   else if(toolAdminSubView==='gecmis') html += renderToolHistoryAdmin();
   html += `</div>` + (typeof renderToolTasiModal === 'function' ? renderToolTasiModal() : '');
   return html;
-}
-
-function renderToolCatalogListAdmin(){
-  const allItems = toolCatalogArray();
-  const items = toolCatalogFilteredArray();
-  const locs = toolLocationsArray();
-  const konumsuzCount = allItems.filter(it=>!it.locId).length;
-  const selectedCount = Object.keys(toolBulkSelected).length;
-  const allFilteredSelected = items.length>0 && items.every(it=>toolBulkSelected[it.id]);
-  return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px">
-      <div class="sec-h" style="margin:0">Kalem Listesi (${items.length}/${allItems.length})${konumsuzCount>0?` · <span style="color:var(--warn)">${konumsuzCount} konumsuz</span>`:''}</div>
-      <button class="btn-ghost" onclick="ensureToolStockLoaded(function(){ toast('Stok yenilendi'); render(); }, true)">↻ Stok Adetlerini Yenile</button>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-      <input placeholder="Ara — kelimeler sırasız (ör. freze 6) ya da %joker%…" value="${esc(toolListSearch)}" style="flex:1;min-width:220px" oninput="toolSetListFilter('search',this.value)">
-      <select style="width:170px" onchange="toolSetListFilter('kategori',this.value)">
-        <option value="">Tüm Kategoriler</option>
-        ${TOOL_KATEGORI_LIST.map(k=>`<option value="${k.v}" ${toolListFilterKategori===k.v?'selected':''}>${k.l}</option>`).join('')}
-      </select>
-      <select style="width:170px" onchange="toolSetListFilter('loc',this.value)">
-        <option value="">Tüm Konumlar</option>
-        <option value="__none__" ${toolListFilterLoc==='__none__'?'selected':''}>— Konumsuz —</option>
-        ${locs.map(l=>`<option value="${l.id}" ${toolListFilterLoc===l.id?'selected':''}>${esc(l.ad)}</option>`).join('')}
-      </select>
-    </div>
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:12px">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-        <input type="checkbox" style="width:auto" ${allFilteredSelected?'checked':''} onchange="toolBulkSelectAllFiltered(this.checked)"> Listedeki ${items.length} kalemin tümünü seç
-      </label>
-      <span style="font-size:12px;color:var(--text-muted)">${selectedCount} kalem seçili</span>
-      <select style="width:170px" onchange="toolBulkTargetLoc=this.value">
-        <option value="">— Hedef konum —</option>
-        ${locs.map(l=>`<option value="${l.id}" ${toolBulkTargetLoc===l.id?'selected':''}>${esc(l.ad)}</option>`).join('')}
-      </select>
-      <button class="btn-primary" style="width:auto;padding:8px 14px" ${selectedCount===0?'disabled':''} onclick="bulkMoveToolItemsToLocation()">→ Seçilenleri Taşı</button>
-      <button class="btn-ghost" ${selectedCount===0?'disabled':''} onclick="printToolLabels()">🖨 Etiket Yazdır</button>
-      ${selectedCount>0?`<button class="btn-ghost" onclick="toolBulkClearSelection()">Seçimi Temizle</button>`:''}
-    </div>
-    <div style="overflow-x:auto">
-    <table style="font-size:12px"><thead><tr>
-      <th></th><th>CANİAS</th><th>Ad</th><th>Kategori</th><th>Marka</th><th>Konum</th><th>Göz</th><th>Stok</th><th title="Sipariş açık mı?">Sip.</th><th>Alt Limit</th><th>Sipariş</th><th>Demirbaş</th><th>Aktif</th>
-    </tr></thead><tbody>
-      ${items.length===0 ? `<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:16px">Filtreye uyan kalem yok.</td></tr>` : items.map(it=>{
-        const stok = (toolStock[it.id]||{}).miktar;
-        const dusuk = it.altLimit>0 && Number(stok||0)<=it.altLimit;
-        const siparisAcik = !!(toolStock[it.id]||{}).siparisAcik;
-        return `<tr>
-          <td style="text-align:center"><input type="checkbox" ${toolBulkSelected[it.id]?'checked':''} onchange="toggleToolBulkSelect('${it.id}',this.checked)"></td>
-          <td class="mono">${esc(it.canias)}${it.stokKodu?`<div style="font-size:10px;color:var(--text-muted)">${esc(it.stokKodu)}</div>`:''}</td>
-          <td>${esc(it.ad)}</td>
-          <td><select onchange="updateToolCatalogField('${it.id}','kategori',this.value)" style="width:130px">
-            ${TOOL_KATEGORI_LIST.map(k=>`<option value="${k.v}" ${it.kategori===k.v?'selected':''}>${k.l}</option>`).join('')}
-          </select></td>
-          <td><input value="${esc(it.marka||'')}" style="width:100px" onchange="updateToolCatalogField('${it.id}','marka',this.value)"></td>
-          <td><select onchange="updateToolCatalogField('${it.id}','locId',this.value)" style="width:120px">
-            <option value="">—</option>
-            ${locs.map(l=>`<option value="${l.id}" ${it.locId===l.id?'selected':''}>${esc(l.ad)}</option>`).join('')}
-          </select></td>
-          <td><input value="${esc(it.goz||'')}" style="width:70px" onchange="updateToolCatalogField('${it.id}','goz',this.value)"></td>
-          <td>${(()=>{ const dl = toolDolaplari(toolStock[it.id], it); return dl.length>1 ? `<div style="display:flex;flex-direction:column;gap:3px">${dl.map(x=>`<label style="display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap">${esc(toolDolapAdi(x.locId))}${canManageToolStok()?`<input type="number" min="0" value="${x.miktar}" style="width:58px;text-align:right" title="Bu dolaptaki stoğu elle düzelt" onchange="toolStokMiktarDuzelt('${it.id}',this.value,'${escJs(x.locId)}')">`:` <b>${x.miktar}</b>`}</label>`).join('')}<div style="font-size:11px;color:${dusuk?'var(--danger)':'var(--text-muted)'}">toplam <b>${stok==null?0:stok}</b></div></div>` : ''; })() || (canManageToolStok()
-            ? `<input type="number" min="0" value="${stok==null?0:stok}" title="Stoğu elle düzelt — hareket kütüğüne yazılır" style="width:74px;text-align:right;color:${dusuk?'var(--danger)':'var(--text)'};font-weight:${dusuk?'700':'600'}" onchange="toolStokMiktarDuzelt('${it.id}',this.value)">`
-            : `<span style="color:${dusuk?'var(--danger)':'var(--text)'};font-weight:${dusuk?'700':'400'}">${stok==null?'—':stok}</span>`)}${canManageToolStok() && Number(stok||0)>0 && toolLocationsArray().filter(l=>l.aktif!==false).length>1 ? `<button class="btn-ghost" style="width:auto;padding:1px 8px;font-size:11px;margin-top:3px;display:block" title="Dolaplar arası taşı" onclick="toolTasiAc('${it.id}')">⇄ Taşı</button>` : ''}</td>
-          <td style="text-align:center"><input type="checkbox" ${siparisAcik?'checked':''} title="Bu kalem için tedarikçiye sipariş verildi mi?" onchange="toggleToolStokSiparisAcik('${it.id}')"></td>
-          <td><input type="number" value="${it.altLimit||0}" style="width:70px" onchange="updateToolCatalogField('${it.id}','altLimit',this.value)"></td>
-          <td><input type="number" value="${it.siparisMiktari||0}" style="width:70px" onchange="updateToolCatalogField('${it.id}','siparisMiktari',this.value)"></td>
-          <td style="text-align:center"><input type="checkbox" ${it.demirbas?'checked':''} onchange="updateToolCatalogField('${it.id}','demirbas',this.checked)"></td>
-          <td style="text-align:center"><input type="checkbox" ${it.aktif!==false?'checked':''} onchange="updateToolCatalogField('${it.id}','aktif',this.checked)"></td>
-        </tr>`;
-      }).join('')}
-    </tbody></table>
-    </div>`;
 }
 
 function renderToolLocationsAdmin(){
