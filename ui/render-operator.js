@@ -43,7 +43,9 @@ function renderOperator(){
   let body = '';
   if(view==='takimStok' && !(toolStokEnabled() && canSeeToolStok())){ view = 'list'; }
   if(view==='takimStok'){
-    body = renderToolStokOperator();
+    /* body-pad: alt gezinme çubuğu kadar boşluk — yoksa telefonda "Çıkış Yap" düğmesi çubuğun ARKASINDA
+       kalıp basılamıyordu (19.10.2026, operatör bildirdi; 360×640'ta yeniden üretildi) */
+    body = `<div class="body-pad">${renderToolStokOperator()}</div>`;
   } else if(view==='tadilat'){
     const sess = tadilatForceBekleyen ? null : myActiveTadilatSession();
     if(sess && sess.operasyon.status==='duruş'){

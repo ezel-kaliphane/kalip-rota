@@ -5,6 +5,21 @@ hatayı ikinci kez yazmamak. En yeni üstte.
 
 ---
 
+## 2026-10-19 — Telefonda Takım Dolabı "Çıkış Yap" alttaki menünün arkasında kalıyordu
+
+**Belirti.** Operatör gösterdi: takım/sarf çıkışında en alttaki "Çıkış Yap" düğmesine basılamıyor. 360×640
+telefonda yeniden üretildi: sayfa en alta kaydırılınca bile düğme (557–609 px) sabit alt menünün (556 px'ten
+başlıyor) arkasında; sayfa yalnız 4 px kayıyordu.
+
+**Sebep.** Operatör ekranlarının hepsi içeriği `.body-pad` içine koyuyor (alt menü yüksekliği kadar alt
+boşluk); `view==='takimStok'` dalı `renderToolStokOperator()`'ı sarmadan veriyordu. Uzun ekranda (küçük
+telefon, birden çok dolap, "Hangi iş için?" seçimi) son düğme menünün altına düşüyordu.
+
+**Düzeltme.** Dal `<div class="body-pad">` ile sarıldı; aynı boyutta düğme menünün 63 px üstünde.
+
+**Ders.** Operatör tarafına yeni bir `view` eklerken gövdeyi `.body-pad` (ya da kendi alt boşluğu olan
+`.lock-screen`) içinde ver; telefonda en kısa ekranla (360×640) en alttaki düğmeye `elementFromPoint` ile bak.
+
 ## 2026-10-16 — Kısmi Aktar, fason ısıl işin kg'sini bölmüyordu (canlıya çıkmadan yakalandı)
 
 **Belirti.** Hata taramasında bulundu, canlıda örneği yok (414 FII01 kaydının hiçbiri kısmi aktarılmamış).
