@@ -5,7 +5,7 @@
     "entries": {
       ".read": true,
       ".write": false,
-      ".indexOn": ["status"],
+      ".indexOn": ["status", "startTs"],
       "$entryId": {
         ".write": true,
         ".validate": "newData.hasChildren(['isEmriNo','makine','operatorUsername','startTs','status'])",
@@ -113,6 +113,7 @@
     "tadilatlar": {
       ".read": true,
       ".write": false,
+      ".indexOn": ["olusturmaTs"],
       "$tadilatId": { ".write": true }
     },
     "tadilatDurustaOperasyonlar": {

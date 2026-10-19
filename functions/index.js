@@ -115,24 +115,24 @@ exports.uzunDurusUyarisi = onSchedule({ schedule: 'every 1 minutes', region: 'eu
   // Bunun yerine js/tadilat.js, bir operasyon 'duruş'a her girdiğinde/çıktığında küçük bir
   // denormalize düğüm olan tadilatDurustaOperasyonlar/{tadilatId}_{opId} altını güncel tutuyor —
   // biz burada tüm tadilatlar ağacı yerine sadece bu küçük düğümü okuyoruz.
-  const [entriesSnap, tadilatDurustakilerSnap, notifiedEntriesSnap, notifiedTadilatSnap] = await Promise.all([
+  // 19.10.2026 maliyet: pushNotified/entries hiç silinmediği için ~40 KB'a büyümüştü ve gündüz her
+  // dakika TAMAMI okunuyordu (~38 MB/gün). Artık yalnız eşiği geçmiş adayların kendi kaydı okunuyor.
+  const [entriesSnap, tadilatDurustakilerSnap] = await Promise.all([
     db.ref('entries').orderByChild('status').equalTo('duruş').get(),
-    db.ref('tadilatDurustaOperasyonlar').get(),
-    db.ref('pushNotified/entries').get(),
-    db.ref('pushNotified/tadilat').get()
+    db.ref('tadilatDurustaOperasyonlar').get()
   ]);
+  const bildirimOku = async (yol) => (await db.ref(yol).get()).val();
 
   const esikMs = (Number(settings.uzunDurusEsikDk) || 30) * 60000;
   const now = Date.now();
 
   const entries = entriesSnap.val() || {};
-  const notifiedEntries = notifiedEntriesSnap.val() || {};
   const entryUpdates = {};
 
   for(const [entryId, e] of Object.entries(entries)){
     if(e.status!=='duruş' || !e.duruşTs || verimlilikDisi(e.duruşNedeni)) continue;
     if(now - e.duruşTs < esikMs) continue;
-    const prev = notifiedEntries[entryId];
+    const prev = await bildirimOku('pushNotified/entries/'+entryId);
     if(prev && prev.duruşTs === e.duruşTs) continue; // bu duruş için zaten bildirildi
     const dk = Math.round((now - e.duruşTs)/60000);
     const makineKisa = (e.makine||'').split(' · ')[0] || '';
@@ -148,13 +148,12 @@ exports.uzunDurusUyarisi = onSchedule({ schedule: 'every 1 minutes', region: 'eu
   if(Object.keys(entryUpdates).length>0){ await db.ref().update(entryUpdates); }
 
   const tadilatDurustakiler = tadilatDurustakilerSnap.val() || {};
-  const notifiedTadilat = notifiedTadilatSnap.val() || {};
   const tadilatUpdates = {};
 
   for(const [key, op] of Object.entries(tadilatDurustakiler)){
     if(!op.duruşTs || verimlilikDisi(op.duruşNedeni)) continue;
     if(now - op.duruşTs < esikMs) continue;
-    const prev = notifiedTadilat[key];
+    const prev = await bildirimOku('pushNotified/tadilat/'+key);
     if(prev && prev.duruşTs === op.duruşTs) continue;
     const dk = Math.round((now - op.duruşTs)/60000);
     const makineKisa = (op.makine||'').split(' · ')[0] || '';

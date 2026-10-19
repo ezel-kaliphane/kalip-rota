@@ -194,10 +194,8 @@ function initFirebase(){
       if(session && !_scopedLoadsDone){ _scopedLoadsDone = true; loadMyPushHistory(); loadMessages(); }
       safeRender();
     });
-    DB.ref('entries').on('value', snap=>{
-      STATE.entries = snap.val() || {};
-      safeRender();
-    });
+    /* entries artık tarih dilimleriyle dinleniyor (19.10.2026 maliyet — bkz. parcaliDinle) */
+    parcaliDinle('entries', 'startTs', v => { STATE.entries = v; safeRender(); });
     // Maliyet optimizasyonu: aşağıdaki 6 düğüm nadiren değişen REFERANS listeleri — canlı
     // dinlemeye ihtiyaçları yok, tek seferlik okunuyor. Bir admin bunları düzenlerse (bkz.
     // js/catalog.js, js/operations.js) ilgili fonksiyon kendi yerel kopyasını da güncelleyip
@@ -232,14 +230,8 @@ function initFirebase(){
       STATE.tadilatOnHazirIstekler = snap.val() || {};
       safeRender();
     }).catch(err=>console.warn('tadilatOnHazirIstekler okunamadı:', err));
-    DB.ref('validIsEmri').get().then(snap=>{
-      STATE.validIsEmri = snap.val() || {};
-      safeRender();
-    }).catch(err=>console.warn('validIsEmri okunamadı:', err));
-    DB.ref('malzemeListesi').get().then(snap=>{
-      malzemeListesi = snap.val() || {};
-      safeRender();
-    }).catch(err=>console.warn('malzemeListesi okunamadı:', err));
+    /* validIsEmri (~650 KB) ve malzemeListesi (~620 KB): sürümlü önbellek — settings gelince
+       yüklenir (bkz. surumluListeYukle, settings dinleyicisi). */
     DB.ref('isMerkezleri').get().then(snap=>{
       isMerkezleri = snap.val() || {};
       safeRender();
@@ -262,6 +254,8 @@ function initFirebase(){
     }).catch(err=>console.warn('durusReasons okunamadı:', err));
     DB.ref('settings').on('value', snap=>{
       appSettings = snap.val() || {};
+      surumluListeYukle('validIsEmri', v => { STATE.validIsEmri = v; });
+      surumluListeYukle('malzemeListesi', v => { malzemeListesi = v; });
       safeRender();
     });
     DB.ref('stockItems').on('value', snap=>{
@@ -273,12 +267,66 @@ function initFirebase(){
     // o yüzden o sekme açılınca (loadStockHareketleri, setSettingsSubTab'da) tek seferlik,
     // son-20'yle sınırlı bir sorgu yeterli. consumeStock() kendi yazdığı hareketi yerel
     // kopyaya da ekleyip render() çağırıyor, o yüzden hareketi yapan cihaz anında görür.
-    DB.ref('tadilatlar').on('value', snap=>{
-      tadilatlar = snap.val() || {};
-      safeRender();
-    });
+    parcaliDinle('tadilatlar', 'olusturmaTs', v => { tadilatlar = v; safeRender(); });
     return true;
   }catch(e){ console.warn('Firebase init hatası', e); return false; }
+}
+/* ===================== MALİYET: PARÇALI DİNLEME (19.10.2026) =====================
+   Firebase "Downloads" günde 1,5–1,9 GB'a çıktı. Profil (database:profile, 19.10 mesai başı):
+   neredeyse tamamı entries (2,5 MB) ve tadilatlar (1,6 MB) dinleyicilerinin İLK gönderimi. Web
+   istemcisi bağlantı kopup gelince (telefon ekranı kilitlenip açılınca) dinlediği düğümde tek kayıt
+   değişmiş olsa bile düğümün TAMAMINI yeniden alıyor — her telefon açılışı ~4,2 MB.
+   Çözüm: aynı düğüm, başlangıç zamanına göre HAFTALIK dilimlere bölünmüş sorgularla dinleniyor;
+   bellekteki veri birebir aynı (tüm kayıtlar), yalnız yeniden bağlanınca sadece DEĞİŞEN dilim gelir.
+   Eski haftalar neredeyse hiç değişmiyor (ölçüm: 30 günden eski kayıtlardan son 7 günde 1 tanesi).
+   Dilimler tam bir bölüntü: ilki (01.07.2026 öncesi + alanı olmayanlar) endAt ile, sonuncusu açık
+   uçlu startAt ile — hiçbir kayıt dışarıda kalmaz, sayı/metin karışığı da sona düşer.
+   GEREKLİ KURAL: entries ".indexOn": ["status","startTs"], tadilatlar ".indexOn": ["olusturmaTs"].
+   İndeks yoksa Firebase her dilim için düğümün tamamını indirir — kural yayınlanmadan bu kod
+   canlıya çıkmamalı. */
+const PARCA_ILK = Date.UTC(2026, 5, 28, 21);   // 29.06.2026 00:00 İstanbul (pazartesi); öncesi tek dilim
+function parcaSinirlari(simdi){
+  const s = [];
+  for(let t = PARCA_ILK; t <= simdi; t += 7 * 864e5) s.push(t);
+  return s;
+}
+function parcaliDinle(yol, alan, ata){
+  const s = parcaSinirlari(Date.now());
+  const sorgular = [DB.ref(yol).orderByChild(alan).endAt(s[0] - 1)];
+  for(let i = 0; i < s.length; i++){
+    const q = DB.ref(yol).orderByChild(alan).startAt(s[i]);
+    sorgular.push(i + 1 < s.length ? q.endAt(s[i + 1] - 1) : q);
+  }
+  const parcalar = new Array(sorgular.length).fill(null);
+  let gelen = 0;
+  sorgular.forEach((q, i) => q.on('value', snap => {
+    if(parcalar[i] === null) gelen++;
+    parcalar[i] = snap.val() || {};
+    if(gelen < sorgular.length) return;   // ilk yüklemede yarım veriyle çizme — hepsi gelsin
+    ata(Object.assign({}, ...parcalar));  // her seferinde YENİ nesne (entriesArray önbelleği referansa bakar)
+  }, err => console.warn(yol + ' dilimi okunamadı:', err)));
+}
+/* Nadiren değişen büyük listeler (Excel'den yüklenir): settings/{ad}Version değişmedikçe tarayıcıdaki
+   kopya kullanılır; yükleme/silme sürümü artırır (js/catalog.js). Güvenlik için kopya 12 saatten
+   eskiyse yine indirilir — eski bir istemci sürüm artırmadan yüklese bile en geç yarım günde düzelir. */
+const _surumluYuklenen = {};
+function surumluListeYukle(ad, ata){
+  const surum = Number((appSettings && appSettings[ad + 'Version']) || 0);
+  if(_surumluYuklenen[ad] === surum) return;
+  _surumluYuklenen[ad] = surum;
+  const k = load('liste_' + ad, null);
+  if(k && k.surum === surum && Date.now() - (k.ts || 0) < 12 * 3600e3 && k.veri){ ata(k.veri); safeRender(); return; }
+  DB.ref(ad).get().then(snap => {
+    const veri = snap.val() || {};
+    ata(veri);
+    try{ localStorage.setItem('liste_' + ad, JSON.stringify({ surum, ts: Date.now(), veri })); }
+    catch(e){ try{ localStorage.removeItem('liste_' + ad); }catch(e2){} }   // kota dolarsa saklama, her açılışta indir
+    safeRender();
+  }).catch(err => { _surumluYuklenen[ad] = undefined; console.warn(ad + ' okunamadı:', err); });
+}
+function surumArtir(ad){
+  try{ localStorage.removeItem('liste_' + ad); }catch(e){}
+  return DB.ref('settings/' + ad + 'Version').set(firebase.database.ServerValue.increment(1));
 }
 function seedIfNeeded(){
   if(Object.keys(STATE.operators).length>0) return;

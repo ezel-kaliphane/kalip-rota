@@ -500,3 +500,15 @@ test('karbür Ctrl+D: üstteki hücre; çapta delik + kalite de gelir; Ctrl+Shif
   assert.equal(A.ctx.karburTusKopyala('kesim', 0, 'boy', false), false);   // üstte satır yok
   A.ata('karburRows', []);
 });
+
+/* 19.10.2026 maliyet: entries/tadilatlar haftalık dilimlerle dinleniyor — dilimler her kaydı TAM BİR kez kapsamalı */
+test('parçalı dinleme: haftalık dilimler boşluksuz ve çakışmasız', () => {
+  const simdi = ts('2026-10-19 11:00');
+  const s = A.ctx.parcaSinirlari(simdi);
+  assert.equal(new Date(s[0]).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', weekday: 'long' }), 'Pazartesi');
+  assert.ok(s[s.length - 1] <= simdi && simdi - s[s.length - 1] < 7 * 864e5, 'son dilim bu hafta başlamalı');
+  // firebase sorgularının anlamı: [ -∞ , s0-1 ], [ s_i , s_{i+1}-1 ], [ s_n , +∞ )
+  const dilimler = [[-Infinity, s[0] - 1]].concat(s.map((b, i) => [b, i + 1 < s.length ? s[i + 1] - 1 : Infinity]));
+  const ornekler = [0, s[0] - 1, s[0], s[1] - 1, s[1], ts('2026-08-14 10:00'), ts('2026-10-12 00:00'), ts('2026-10-18 23:59'), simdi, simdi + 30 * 864e5];
+  ornekler.forEach(v => assert.equal(dilimler.filter(([a, b]) => v >= a && v <= b).length, 1, 'değer ' + v));
+});

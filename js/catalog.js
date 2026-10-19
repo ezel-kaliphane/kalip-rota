@@ -180,6 +180,7 @@ async function uploadMalzemeListesi(){
       if(count===0){ if(statusEl) statusEl.textContent = 'Sütunda hiç veri bulunamadı.'; return; }
       DB.ref('malzemeListesi').set(list).then(()=>{
         malzemeListesi = list; // artık canlı dinlenmiyor, yerel kopyayı biz güncelliyoruz
+        surumArtir('malzemeListesi');   // diğer cihazlar tarayıcıdaki kopyayı bıraksın
         bigToastOk(`${count} malzeme kodu yüklendi`);
         if(statusEl) statusEl.textContent = `${count} kayıt başarıyla yüklendi (sayfa: ${sheetName}).`;
         fileInput.value = '';
@@ -195,7 +196,7 @@ async function uploadMalzemeListesi(){
 function clearMalzemeListesi(){
   if(!canManageMalzemeListesi()) return;
   if(!confirm('Malzeme listesini tamamen silmek istediğinize emin misiniz?')) return;
-  DB.ref('malzemeListesi').remove();
+  DB.ref('malzemeListesi').remove().then(() => surumArtir('malzemeListesi'));
   malzemeListesi = {}; render();
 }
 /* ===================== İŞ MERKEZİ LİSTESİ (Tadilat "Talep Edilen Makine" kaynağı) =====================
@@ -783,6 +784,7 @@ Devam edilsin mi?`)){
       const sutunOzeti = ` · sütunlar → anahtar ${bas(colIdx)}, mamul kodu ${bas(malzKoduIdx)}, mamul adı ${bas(malzAdiIdx)}, İ.E. miktarı ${bas(ieMiktarIdx)}${ieMiktarIdx!==-1?` (${miktarDolu} satırda dolu)`:''}`;
       DB.ref('validIsEmri').set(codes).then(()=>{
         STATE.validIsEmri = codes; // artık canlı dinlenmiyor (bkz. firebase-push.js) — yerel kopyayı da güncelle
+        surumArtir('validIsEmri');   // diğer cihazlar tarayıcıdaki kopyayı bıraksın
         bigToastOk(`${codeCount} İş Talep No yüklendi`);
         if(statusEl) statusEl.textContent = `${codeCount} kayıt başarıyla yüklendi — ${rows.length-1} satır okundu (sayfa: ${sheetName})${sutunOzeti}${xlsxOkumaNotu()}.`;
         fileInput.value = '';
@@ -802,6 +804,7 @@ function clearIsEmriListesi(){
   if(!canManageIsEmriList()) return;
   if(!confirm('İş emri listesini tamamen silmek istediğine emin misin? Bu, doğrulamayı devre dışı bırakır (herkes serbestçe iş emri no girebilir).')) return;
   DB.ref('validIsEmri').remove().then(()=>{
+    surumArtir('validIsEmri');
     STATE.validIsEmri = {};
     toast('Liste temizlendi');
     render();
