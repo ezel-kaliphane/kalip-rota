@@ -808,6 +808,7 @@ function renderGroupScreen(groupId, groupMembers){
           <div>
             <div class="mono" style="font-weight:700;color:var(--accent)">${esc(e.talepNo || e.isEmriNo)}</div>
             <div style="font-size:11.5px;color:var(--text-muted)">Adet: ${esc(e.adet||'—')}${e.status==='duruş'?' · Duruşta':''}</div>
+            ${typeof oncekiNotlar==='function' && oncekiNotlar(e, e.id).length ? `<div style="font-size:11.5px;color:var(--warn);margin-top:2px">${ico('alert',11)} ${oncekiNotlar(e, e.id).length} önceki not — aşağıda</div>` : ''}
           </div>
           <div style="display:flex;gap:6px">
             <button class="btn-ghost" style="padding:8px 10px;font-size:12.5px" onclick="openEditActive('${e.id}')" title="Bilgileri Düzenle">${ico('edit',14)}</button>
@@ -815,6 +816,7 @@ function renderGroupScreen(groupId, groupMembers){
           </div>
         </div>
       `).join('')}
+      ${typeof oncekiNotlarHtml==='function' ? groupMembers.map(e=>oncekiNotlarHtml(e, e.id, `${esc(e.talepNo || e.isEmriNo)} — önceki operasyon notları`)).join('') : ''}
     </div>
     ${actionBlock}
   </div>`;
@@ -920,6 +922,7 @@ function renderLockScreen(active){
       <div class="lock-meta">${fmtDT(active.startTs)} itibarıyla devam ediyor</div>
       ${active.adet ? `<div class="lock-meta">Adet: ${esc(active.adet)}</div>` : ''}
       ${active.not ? `<div class="lock-note">"${esc(active.not)}"</div>` : ''}
+      ${typeof oncekiNotlarHtml==='function' ? `<div class="onceki-not-kilit">${oncekiNotlarHtml(active, active.id)}</div>` : ''}
       ${durusBlock}
       ${editButton}
       ${editBlock}

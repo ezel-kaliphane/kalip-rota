@@ -46,6 +46,7 @@ function renderKaliteModal(){
         <button class="icon-btn" onclick="kaliteModalKapat()">${ico('x',16)}</button>
       </div>
       <div class="durus-modal-list">
+        ${typeof oncekiNotlarHtml==='function' ? oncekiNotlarHtml(e, m.id, 'Operatör notları — karar vermeden önce oku') : ''}
         <div class="kal-satir">
           <label for="kal-k">Kontrol edilen</label>
           ${kaliteSayiKutu('kal-k', m.kontrol, 'kaliteKontrolYaz(this.value)')}
@@ -95,6 +96,7 @@ function renderKaliteGrupModal(){
         <button class="icon-btn" onclick="kaliteModalKapat()">${ico('x',16)}</button>
       </div>
       <div class="durus-modal-list">
+        ${typeof oncekiNotlarHtml==='function' ? uyeler.map(u=>oncekiNotlarHtml(u, u.id, `${esc(u.talepNo||u.isEmriNo||'')} — operatör notları`)).join('') : ''}
         <div class="kal-sonuclar">${btn('onay','Onay','var(--success)')}${btn('sartli','Şartlı kabul','var(--warn)')}${btn('red','Red','var(--danger)')}</div>
         ${m.grupSonuc==='red' ? `<div class="kal-not">Grupta red parçalar "karar sonra" olarak kaydedilir; Şef / SuperAdmin İş Yoğunluğu'ndan her iş emri için ayrı karar verir. Parça parça dağılım gerekiyorsa iş emirlerini tek tek bitir.</div>` : ''}
         ${m.grupSonuc && m.grupSonuc!=='onay' ? `<div class="kal-blok"><div class="kal-blok-bas">Neden</div>${kaliteNedenSecici('neden', m.neden, 'kaliteYaz')}</div>

@@ -566,3 +566,19 @@ test('yer düzelt penceresi: bekleyen iş → değiştir, sıradaki → değişt
   assert.equal(durum('T4').tip, 'yeni');                     // hiç kaydı yok
   A.ata('ydModal', null); A.ata('isEmriSira', {}); A.ata('_isEmriSiraDinleniyor', false);
 });
+
+/* 19.10.2026: FKK başlamadan önce aynı iş emrinin diğer operasyon notlarını görmeli */
+test('önceki notlar: aynı talep no (dallar dahil), kendi kaydı ve boş notlar hariç, zaman sırasıyla', () => {
+  kayitlar([
+    { makine: 'TES01 · Testere', status: 'tamamlandi', talepNo: '2610010001', isEmriNo: 'UC5_ZARF', startTs: ts('2026-10-14 08:00'), not: 'Malzeme çapı küçük geldi' },
+    { makine: 'C01 · CNC Torna', status: 'tamamlandi', talepNo: '2610010001', isEmriNo: 'UC5', startTs: ts('2026-10-15 08:00'), not: '  ' },
+    { makine: 'UF01 · Freze', status: 'tamamlandi', talepNo: '2610010001', isEmriNo: 'UC5', startTs: ts('2026-10-16 08:00'), not: 'Takım kırıldı, yüzeyde iz var' },
+    { makine: 'C01 · CNC Torna', status: 'tamamlandi', talepNo: '2610019999', isEmriNo: 'UC5', startTs: ts('2026-10-16 09:00'), not: 'başka iş emri' },
+    { makine: 'FKK · Final Kalite Kontrol', status: 'devam', talepNo: '2610010001', isEmriNo: 'UC5', startTs: ts('2026-10-17 08:00'), not: 'kendi notu' }
+  ]);
+  const fkk = A.ctx.entriesArray().find(e => e.makine.startsWith('FKK'));
+  const l = A.ctx.oncekiNotlar(fkk, fkk.id).map(e => e.not);
+  assert.equal(JSON.stringify(l), JSON.stringify(['Malzeme çapı küçük geldi', 'Takım kırıldı, yüzeyde iz var']));
+  assert.ok(A.ctx.oncekiNotlarHtml(fkk, fkk.id).includes('Takım kırıldı'));
+  assert.equal(A.ctx.oncekiNotlarHtml({ talepNo: '2610030000', isEmriNo: 'X' }, null), '');
+});

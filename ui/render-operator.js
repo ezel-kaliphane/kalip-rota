@@ -335,6 +335,7 @@ function renderOperator(){
             <option value="" ${newForm.duzeltmeRef===''?'selected':''}>Listede yok</option></select></div>` : ''}`;
       })()}
       ${switchRow('nf-son-operasyon', newForm.sonOperasyon, 'Son Operasyon', 'Bitince iş rotası kapanır', {onchange:'newForm.sonOperasyon=this.checked', style:'margin-bottom:14px'})}
+      ${typeof oncekiNotlarFormHtml==='function' ? oncekiNotlarFormHtml() : ''}
       <button class="btn-start" onclick="baslat()">${ico('play',14)} Başla (saat otomatik)</button>
       ` : ''}
     </div>`;
