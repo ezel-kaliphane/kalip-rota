@@ -482,3 +482,21 @@ test('karbür durum araması: kelimeler ayrı ayrı, sayı ölçüyle tam eşle�
   assert.equal(ara('99'), '');
   A.ata('karburDurumAra', '');
 });
+
+test('karbür Ctrl+D: üstteki hücre; çapta delik + kalite de gelir; Ctrl+Shift+D satırın tamamı', () => {
+  A.ctx.toast = () => {};
+  const ust = { isEmri: '2610010001', disCap: '15', delik: '3', kalite: 'VA90', boy: '52', adet: '4' };
+  const yeni = () => ({ isEmri: '', disCap: '12', delik: '1.5', kalite: 'ST7', boy: '', adet: '' });
+  const satirlar = () => JSON.parse(A.calistir('JSON.stringify(karburRows)'));
+  A.ata('karburRows', [ust, yeni()]);
+  assert.equal(A.ctx.karburTusKopyala('kesim', 1, 'boy', false), true);
+  assert.equal(JSON.stringify(satirlar()[1]), JSON.stringify({ isEmri: '', disCap: '12', delik: '1.5', kalite: 'ST7', boy: '52', adet: '' }));
+  A.ata('karburRows', [ust, yeni()]);
+  A.ctx.karburTusKopyala('kesim', 1, 'disCap', false);
+  assert.equal(JSON.stringify(satirlar()[1]), JSON.stringify({ isEmri: '', disCap: '15', delik: '3', kalite: 'VA90', boy: '', adet: '' }));
+  A.ata('karburRows', [ust, yeni()]);
+  A.ctx.karburTusKopyala('kesim', 1, 'adet', true);
+  assert.equal(JSON.stringify(satirlar()[1]), JSON.stringify(ust));
+  assert.equal(A.ctx.karburTusKopyala('kesim', 0, 'boy', false), false);   // üstte satır yok
+  A.ata('karburRows', []);
+});

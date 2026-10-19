@@ -477,6 +477,42 @@ function karburRemoveAdetRow(i){ karburAdetRows.splice(i, 1); karburResetPlan();
 function karburSetAdetRow(i, f, v){ if(karburAdetRows[i]) karburAdetRows[i][f] = v; }
 function karburSetAdetRowSel(i, f, v){ if(!karburAdetRows[i]) return; karburAdetRows[i][f] = v; karburResetPlan(); render(); }
 
+/* KLAVYE KISAYOLLARI (19.10.2026, kullanıcı: "ctrl+d gibi komutlar çalışsa, alt satırı doldurmayı
+   kolaylaştırır"). Excel gibi: Ctrl+D = üstteki satırın AYNI hücresini bu satıra kopyala. Malzeme bir
+   bütün: çap kopyalanınca delik + kalite de gelir, delik kopyalanınca kalite de (çap değişince delik/
+   kalite zaten sıfırlanıyor — yarım kopya tutarsız satır bırakırdı). Ctrl+Shift+D = üstteki satırın
+   tamamı. Ctrl+Enter = alta yeni boş satır, iş emri kutusuna geçer. Kopyalanan iş emri reçeteyi
+   tekrar doldurmaz (karburReceteUygula aynı iş emrinin başka satırı varsa dokunmaz). */
+const KARBUR_TUS_ALANLAR = { kesim: ['isEmri', 'disCap', 'delik', 'kalite', 'boy', 'adet'], adet: ['isEmri', 'katalogId', 'adet'] };
+const KARBUR_TUS_BAGLI = { disCap: ['disCap', 'delik', 'kalite'], delik: ['delik', 'kalite'] };
+function karburTusOdak(tur, i, alan){
+  setTimeout(() => { const el = document.getElementById(`kb-${tur}-${i}-${alan}`); if(el){ el.focus(); if(el.select && el.tagName === 'INPUT') el.select(); } }, 30);
+}
+function karburTusKopyala(tur, i, alan, tumSatir){
+  const rows = tur === 'adet' ? karburAdetRows : karburRows;
+  if(!rows[i]) return false;
+  if(i === 0){ toast('Üstte kopyalanacak satır yok'); return false; }
+  const ust = rows[i - 1], r = rows[i];
+  const alanlar = tumSatir ? KARBUR_TUS_ALANLAR[tur] : (tur === 'kesim' && KARBUR_TUS_BAGLI[alan]) || [alan];
+  alanlar.forEach(a => { r[a] = ust[a] == null ? '' : ust[a]; });
+  delete r._recete;
+  karburResetPlan();
+  return true;
+}
+function karburTabloTus(ev, tur){
+  const el = ev.target;
+  if(!el || !el.dataset || el.dataset.kbAlan == null || !(ev.ctrlKey || ev.metaKey)) return;
+  const tus = String(ev.key || '').toLowerCase(), i = Number(el.dataset.kbSatir), alan = el.dataset.kbAlan;
+  if(tus === 'd'){
+    ev.preventDefault();   // tarayıcının "yer imi ekle" kısayolu çalışmasın
+    if(karburTusKopyala(tur, i, alan, ev.shiftKey)){ render(); karburTusOdak(tur, i, alan); }
+  } else if(tus === 'enter'){
+    ev.preventDefault();
+    el.blur();             // bu kutuda yazılan işlensin (onchange / reçete)
+    if(tur === 'adet') karburAddAdetRow(); else karburAddRow();
+    karburTusOdak(tur, (tur === 'adet' ? karburAdetRows : karburRows).length - 1, 'isEmri');
+  }
+}
 function karburSetPay(v){ const n = karburNum(v); if(n >= 0) karburPay = n; karburResetPlan(); }
 function karburResetPlan(){ karburBasePlan = null; karburAssigns = {}; karburRodPick = {}; karburSaveSummary = null; karburEksikUyari = null; karburPlanNo = null; }
 function karburHesapla(){ karburResetPlan(); karburPlanNo = karburYeniPlanNo(); karburBasePlan = karburComputePlan(); render(); }

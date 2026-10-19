@@ -169,7 +169,8 @@ function renderKarburRowsTable(){
     return `<div style="font-size:12.5px;color:var(--text-muted);padding:14px 4px">Henüz satır yok — <b>+ Satır ekle</b> ile başla.</div>`;
   }
   const caps = karburCaps();
-  let html = `<table class="tbl"><thead><tr>
+  let html = `<div style="font-size:11px;color:var(--text-muted);margin:0 0 6px">Kısayol: <kbd>Ctrl</kbd>+<kbd>D</kbd> üstteki hücreyi kopyalar (çapta delik + kalite de gelir) · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> üstteki satırın tamamı · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> yeni satır</div>
+    <table class="tbl" onkeydown="karburTabloTus(event,'kesim')"><thead><tr>
     <th style="width:120px">İş Emri No</th><th style="width:82px">Dış Çap</th>
     <th style="width:78px">Delik</th><th style="width:104px">Kalite</th>
     <th style="width:74px;text-align:right">Boy</th><th style="width:62px;text-align:right">Adet</th>
@@ -179,18 +180,18 @@ function renderKarburRowsTable(){
     const boy = karburNum(r.boy);
     const hazir = (!f.hata && !f.secimBekliyor && boy > 0) ? karburFamHazir(f, boy) : null;
     html += `<tr>
-      <td><input value="${esc(r.isEmri)}" oninput="karburSetRow(${i},'isEmri',this.value)" onblur="karburReceteUygula('kesim',${i})" placeholder="2609010024"></td>
-      <td><input class="mono" list="karbur-cap-listesi" value="${r.disCap ? 'Ø'+karburFmt(karburNum(r.disCap)) : ''}" placeholder="Ø10"
+      <td><input id="kb-kesim-${i}-isEmri" data-kb-satir="${i}" data-kb-alan="isEmri" value="${esc(r.isEmri)}" oninput="karburSetRow(${i},'isEmri',this.value)" onblur="karburReceteUygula('kesim',${i})" placeholder="2609010024"></td>
+      <td><input id="kb-kesim-${i}-disCap" data-kb-satir="${i}" data-kb-alan="disCap" class="mono" list="karbur-cap-listesi" value="${r.disCap ? 'Ø'+karburFmt(karburNum(r.disCap)) : ''}" placeholder="Ø10"
         onfocus="this.select()" onchange="karburCapYaz(${i},this.value)" onkeydown="if(event.key==='Enter') this.blur()" title="Yaz (ör. 10) ya da listeden seç"></td>
-      <td><input class="mono" list="karbur-delik-${i}" value="${esc(r.delik||'')}" placeholder="hepsi"
+      <td><input id="kb-kesim-${i}-delik" data-kb-satir="${i}" data-kb-alan="delik" class="mono" list="karbur-delik-${i}" value="${esc(r.delik||'')}" placeholder="hepsi"
         onfocus="this.select()" onchange="karburSecimYaz(${i},'delik',this.value)" onkeydown="if(event.key==='Enter') this.blur()" title="Yaz ya da listeden seç — boş: hepsi">
         <datalist id="karbur-delik-${i}">${karburDelikler(r.disCap).map(d=>`<option value="${esc(d)}"></option>`).join('')}</datalist></td>
-      <td><input class="mono" list="karbur-kalite-${i}" value="${esc(r.kalite||'')}" placeholder="hepsi"
+      <td><input id="kb-kesim-${i}-kalite" data-kb-satir="${i}" data-kb-alan="kalite" class="mono" list="karbur-kalite-${i}" value="${esc(r.kalite||'')}" placeholder="hepsi"
         onfocus="this.select()" onchange="karburSecimYaz(${i},'kalite',this.value)" onkeydown="if(event.key==='Enter') this.blur()" title="Yaz ya da listeden seç — boş: hepsi">
         <datalist id="karbur-kalite-${i}">${karburKaliteler(r.disCap, r.delik).map(k=>`<option value="${esc(k)}"></option>`).join('')}</datalist></td>
-      <td><input value="${esc(r.boy)}" style="text-align:right"
+      <td><input id="kb-kesim-${i}-boy" data-kb-satir="${i}" data-kb-alan="boy" value="${esc(r.boy)}" style="text-align:right"
         oninput="this.value=this.value.replace(/[^\\d,.]/g,''); karburSetRow(${i},'boy',this.value)" onblur="render()" placeholder="52"></td>
-      <td><input value="${esc(r.adet)}" style="text-align:right"
+      <td><input id="kb-kesim-${i}-adet" data-kb-satir="${i}" data-kb-alan="adet" value="${esc(r.adet)}" style="text-align:right"
         oninput="this.value=this.value.replace(/\\D/g,''); karburSetRow(${i},'adet',this.value)" onblur="render()"></td>
       <td><button type="button" class="icon-btn" title="satırı sil" onclick="karburRemoveRow(${i})">✕</button></td>
     </tr>`;
@@ -228,19 +229,19 @@ function renderKarburAdetTable(){
     <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Kesilmeden doğrudan stoktan verilen kalemler. Boy yazmıyorsun, stok kodunu seçiyorsun.
       ${kalemler.length ? '' : '<b>Bu listede kalem yok</b> — <b>Stok &amp; Fire</b> ekranından bir kalemi “adet olarak tüketilir” olarak işaretle.'}</div>`;
   if(karburAdetRows.length){
-    html += `<table class="tbl"><thead><tr><th style="width:120px">İş Emri No</th><th>Stok Kodu</th>
+    html += `<table class="tbl" onkeydown="karburTabloTus(event,'adet')"><thead><tr><th style="width:120px">İş Emri No</th><th>Stok Kodu</th>
       <th style="width:70px;text-align:right">Adet</th><th style="width:90px;text-align:right">Stok</th><th style="width:30px"></th></tr></thead><tbody>`;
     karburAdetRows.forEach((r, i) => {
       const it = r.katalogId ? kalemler.find(k => k.id === r.katalogId) : null;
       const adet = parseInt(r.adet, 10) || 0;
       const stok = it ? karburStokAdet(it.id) : null;
       html += `<tr>
-        <td><input value="${esc(r.isEmri)}" oninput="karburSetAdetRow(${i},'isEmri',this.value)" onblur="karburReceteUygula('adet',${i})" placeholder="2609010024">${r._recete ? `<div style="font-size:10.5px;color:var(--accent);margin-top:2px">reçeteden · ${r._recete.gozlem}. kayıt</div>` : ''}</td>
-        <td><select onchange="karburSetAdetRowSel(${i},'katalogId',this.value)">
+        <td><input id="kb-adet-${i}-isEmri" data-kb-satir="${i}" data-kb-alan="isEmri" value="${esc(r.isEmri)}" oninput="karburSetAdetRow(${i},'isEmri',this.value)" onblur="karburReceteUygula('adet',${i})" placeholder="2609010024">${r._recete ? `<div style="font-size:10.5px;color:var(--accent);margin-top:2px">reçeteden · ${r._recete.gozlem}. kayıt</div>` : ''}</td>
+        <td><select id="kb-adet-${i}-katalogId" data-kb-satir="${i}" data-kb-alan="katalogId" onchange="karburSetAdetRowSel(${i},'katalogId',this.value)">
           <option value="" ${!r.katalogId ? 'selected' : ''}>— kalem seç —</option>
           ${kalemler.map(k => `<option value="${esc(k.id)}" ${r.katalogId === k.id ? 'selected' : ''}>${esc(k.kod)} · ${esc(k.kalite)} (stok ${karburStokAdet(k.id)})</option>`).join('')}
         </select></td>
-        <td><input value="${esc(r.adet)}" style="text-align:right"
+        <td><input id="kb-adet-${i}-adet" data-kb-satir="${i}" data-kb-alan="adet" value="${esc(r.adet)}" style="text-align:right"
           oninput="this.value=this.value.replace(/\D/g,''); karburSetAdetRow(${i},'adet',this.value)" onblur="render()"></td>
         <td style="text-align:right">${stok == null ? '—'
           : `${stok}${adet > stok ? ` <span class="chip" style="pointer-events:none;border-color:var(--danger);color:var(--danger)">yetersiz</span>` : ''}`}</td>
