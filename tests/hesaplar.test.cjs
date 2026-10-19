@@ -548,3 +548,21 @@ test('sıraya koy: kaydı olmayan iş emri kuyrukta, ilk kayıt açılınca dü�
   assert.equal(A.ctx.isEmriSiraKuyrukKayitlari().length, 0);
   A.ata('isEmriSira', {}); A.ata('_isEmriSiraDinleniyor', false);
 });
+
+/* 19.10.2026 (kullanıcı): "+ Sıraya koy" bir yerde bekleyen işi ikinci bir yere sokabiliyordu — tek pencere durumu bulur */
+test('yer düzelt penceresi: bekleyen iş → değiştir, sıradaki → değiştir, hiç kaydı yok → sıraya koy, işlenen → işlem yok', () => {
+  A.ata('session', { username: 'SEF1', displayName: 'Şef Bir', isSef: true });
+  A.ctx.render = () => {}; A.ctx.toast = () => {};
+  A.ata('_isEmriSiraDinleniyor', true);
+  A.ata('isEmriSira', { 'T3_TEK': { talepNo: 'T3', isEmriNo: 'T3', makine: 'TES01 · Testere', ts: ts('2026-10-18 08:00') } });
+  kayitlar([
+    { makine: 'C01 · CNC Torna', status: 'tamamlandi', talepNo: 'T1', isEmriNo: 'T1', adet: '4', startTs: ts('2026-10-17 09:00'), endTs: ts('2026-10-17 10:00'), sonrakiMakine: 'UF01 · Freze' },
+    { makine: 'C01 · CNC Torna', status: 'devam', talepNo: 'T2', isEmriNo: 'T2', adet: '2', startTs: ts('2026-10-19 09:00') }
+  ]);
+  const durum = t => { A.ctx.ydBulAc(t); return JSON.parse(A.calistir('JSON.stringify({ tip: ydModal.tip, eski: ydModal.eskiYer })')); };
+  assert.equal(JSON.stringify(durum('T1')), JSON.stringify({ tip: 'kayit', eski: 'UF01 · Freze' }));
+  assert.equal(durum('T2').tip, null);                       // şu an işleniyor
+  assert.equal(JSON.stringify(durum('T3')), JSON.stringify({ tip: 'sira', eski: 'TES01 · Testere' }));
+  assert.equal(durum('T4').tip, 'yeni');                     // hiç kaydı yok
+  A.ata('ydModal', null); A.ata('isEmriSira', {}); A.ata('_isEmriSiraDinleniyor', false);
+});

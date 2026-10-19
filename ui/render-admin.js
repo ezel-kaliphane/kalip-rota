@@ -2116,10 +2116,7 @@ function iyAramaHtml(){
   const mbSonuc = q ? iyMalzemeAramaSonuclari(q) : [];
   const siraSonuc = q && typeof ydAramaKartlari==='function' ? ydAramaKartlari(q) : '';
   return `<div style="margin-bottom:16px">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <input id="iy-arama" type="search" class="filter-input mono" style="flex:1;min-width:220px;max-width:420px" placeholder="İş Emri No / Talep No ile ara — nerede olduğunu gör" value="${esc(iyAramaMetni)}" oninput="setIyAramaMetni(this.value)">
-      ${typeof ydYetki==='function' && ydYetki() ? `<button type="button" class="btn-ghost" style="width:auto;padding:8px 14px" title="Hiç operasyonu açılmamış iş emrini bir makinenin sırasına koy" onclick="ydYeniAc()">+ Sıraya koy</button>` : ''}
-    </div>
+    <input id="iy-arama" type="search" class="filter-input mono" style="width:100%;max-width:420px" placeholder="İş Emri No / Talep No ile ara — nerede olduğunu gör" value="${esc(iyAramaMetni)}" oninput="setIyAramaMetni(this.value)">
     ${q ? `<div style="margin-top:12px">${sonuclar.length===0 && mbSonuc.length===0 && !siraSonuc
       ? `<div class="analiz-chart-box" style="text-align:center;color:var(--text-muted);padding:16px">"${esc(q)}" ile eşleşen kayıt bulunamadı.</div>`
       : mbSonuc.map(iyMalzemeAramaKartHtml).join('') + siraSonuc + sonuclar.map(iyAramaSonucKartHtml).join('')}</div>` : ''}
@@ -2127,7 +2124,8 @@ function iyAramaHtml(){
 }
 function iyGorunumSecici(){
   const defs = [['liste','Liste'],['ozet','Özet'],['hafta','Hafta'],['pano','Pano']];
-  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+    ${typeof ydYetki==='function' && ydYetki() ? `<button type="button" class="btn-ghost yd-ana-dugme" title="İş emrinin yerini düzelt ya da hiç kaydı olmayan işi bir makinenin sırasına koy (Şef / SuperAdmin)" onclick="ydBulAc()">${ico('edit',13)} Yer düzelt / sıraya koy</button>` : ''}
     ${defs.map(([k,label])=>`<button class="chip ${isYogunluguGorunum===k?'active':''}" onclick="setIsYogunluguGorunum('${k}')">${label}</button>`).join('')}
     ${isYogunluguGorunum==='pano' ? `<a href="?pano=1" target="_blank" rel="noopener" class="chip" style="text-decoration:none">Tam ekran ↗</a>` : ''}
   </div>`;

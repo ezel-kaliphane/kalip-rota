@@ -60,30 +60,55 @@ function ydSiraAc(key){
     eskiYer: x.makine, ara: '', secim: '', busy: false, uyari: '' };
   render();
 }
-function ydYeniAc(){
+/* TEK PENCERE (19.10.2026, kullanıcı: "+ Sıraya koy ile hâlihazırda bir yerde bekleyen işi başka yere
+   sokabiliyorum — o zaman 'değiştir' demesi lazım; ayrı pencere açılsın, oradan yapsın"). Pencere önce
+   iş emrini bulur ve ŞU AN NEREDE olduğunu gösterir; sunulan işlem duruma göre tektir:
+   kaydı var + bitmiş → Yeri değiştir (son kayıt) · sırada → Yeri değiştir (sıra kaydı) / Sıradan çıkar ·
+   hiç kaydı yok → Sıraya koy · şu an işleniyor → işlem yok. */
+function ydBulAc(talep){
   if(!ydYetki()){ toast('Bu işlem için Şef ya da SuperAdmin yetkisi gerekli'); return; }
   ensureIsEmriSiraLoaded();
-  ydModal = { tip: 'yeni', talepNo: '', isEmriNo: '', bilesen: '', adet: '', mamulAdi: '', eskiYer: '', ara: '', secim: '', busy: false, uyari: '' };
-  render();
-  setTimeout(() => { const el = document.getElementById('yd-talep'); if(el) el.focus(); }, 30);
+  ydModal = { bul: true, tip: null, talepNo: talep || '', isEmriNo: '', bilesen: '', adet: '', mamulAdi: '', eskiYer: '', ara: '', secim: '', busy: false, uyari: '', durum: null };
+  if(talep) ydTalepCoz(); else render();
+  setTimeout(() => { const el = document.getElementById('yd-talep'); if(el && !talep) el.focus(); }, 30);
 }
+const ydYeniAc = ydBulAc;
 function ydKapat(){ ydModal = null; render(); }
 
-/* Yeni sırada: talep no + bileşen → takip kodu, mamul, İ.E. miktarı; kaydı varsa "Yerini değiştir"e yönlendir */
 function ydTalepCoz(){
-  const m = ydModal; if(!m || m.tip !== 'yeni') return;
+  const m = ydModal; if(!m || !m.bul) return;
   const talep = String(m.talepNo || '').trim().toUpperCase();
-  m.uyari = ''; m.isEmriNo = ''; m.mamulAdi = '';
+  Object.assign(m, { tip: null, entryId: null, siraKey: null, eskiYer: '', isEmriNo: '', mamulAdi: '', uyari: '', durum: null, secim: '' });
   if(!talep){ render(); return; }
-  if(!isEmriValid(talep)){ m.uyari = 'Bu iş emri listede yok — kodu kontrol edin'; render(); return; }
+  if(!isEmriValid(talep)){ m.durum = { renk: 'var(--danger)', metin: 'Bu iş emri listede yok', detay: 'Kodu kontrol edin' }; render(); return; }
   const r = resolveTrackingCode(talep, m.bilesen || '');
   const bilgi = typeof isEmriBilgisiBul === 'function' ? isEmriBilgisiBul(talep) : null;
   m.isEmriNo = r.isEmriNo; m.talepNo = r.talepNo;
   m.mamulAdi = (bilgi && bilgi.mamulAdi) || '';
-  if(!String(m.adet || '').trim() && bilgi && bilgi.ieMiktar) m.adet = String(bilgi.ieMiktar);
-  const kayitVar = entriesArray().some(e => String(e.talepNo || '').trim().toUpperCase() === r.talepNo && e.isEmriNo === r.isEmriNo);
-  if(kayitVar) m.uyari = 'KAYIT_VAR';
-  else if((isEmriSira || {})[ydSiraAnahtar(r.talepNo, m.bilesen)]) m.uyari = 'Bu iş emri zaten bir sırada — kaydedilirse yeri değişir';
+  const kayitlar = entriesArray().filter(e => String(e.talepNo || '').trim().toUpperCase() === r.talepNo && e.isEmriNo === r.isEmriNo)
+    .sort((a, b) => (a.startTs || 0) - (b.startTs || 0));
+  const son = kayitlar[kayitlar.length - 1];
+  const mbVar = typeof malzemeBekleyenAktif === 'function' && malzemeBekleyenAktif().some(x => String(x.talepNo || '').trim().toUpperCase() === r.talepNo);
+  if(son){
+    m.durum = iyDurumOzeti(son); m.adet = son.adet || '';
+    if(son.status !== 'tamamlandi'){ m.uyari = 'Şu an işleniyor — bitmeden yeri değiştirilemez.'; }
+    else {
+      const kapali = !!son.sonOperasyon && !son.sonrakiMakine;
+      Object.assign(m, { tip: 'kayit', entryId: son.id, eskiYer: kapali ? 'Rota tamamlandı' : (son.sonrakiMakine || '—'),
+        uyari: kapali ? 'Rotası "tamamlandı" olarak kapanmış — yeni yer seçilince yeniden açılır.' : '' });
+    }
+  } else {
+    const key = ydSiraAnahtar(r.talepNo, m.bilesen), sira = (isEmriSira || {})[key];
+    if(sira){
+      Object.assign(m, { tip: 'sira', siraKey: key, eskiYer: sira.makine, adet: sira.adet || '' });
+      m.durum = { renk: 'var(--warn)', metin: `${sira.makine} sırasında bekliyor`, detay: `İlk operasyon · ${esc(sira.kimAd || sira.kim || '')} ${fmtDT(sira.ts)}'de sıraya koydu` };
+    } else {
+      m.tip = 'yeni';
+      if(!String(m.adet || '').trim() && bilgi && bilgi.ieMiktar) m.adet = String(bilgi.ieMiktar);
+      m.durum = { renk: 'var(--text-muted)', metin: 'Hiç operasyonu açılmamış', detay: 'Bir makinenin sırasına konacak (ilk operasyon)' };
+    }
+  }
+  if(mbVar) m.durum.detay = (m.durum.detay ? m.durum.detay + ' · ' : '') + 'Malzeme Bekleyenler\'de';
   render();
 }
 
@@ -95,6 +120,7 @@ function ydSecimEtiketi(kod){
 }
 function ydKaydet(){
   const m = ydModal; if(!m || m.busy || !ydYetki()) return;
+  if(!m.tip){ toast(m.uyari || 'Önce iş emrini bulun'); return; }
   if(!m.secim){ toast('Gideceği yeri seçin'); return; }
   const yeni = ydSecimEtiketi(m.secim), now = Date.now(), kim = session.username, kimAd = session.displayName || session.username;
   if(m.tip !== 'yeni' && yeni === m.eskiYer){ toast('Zaten orada'); return; }
@@ -109,8 +135,9 @@ function ydKaydet(){
     upd[p + '/yerDuzeltme/' + DB.ref().push().key] = { eskiYer: m.eskiYer, yeniYer: yeni, ts: now, kim, kimAd };
   } else {
     if(m.tip === 'yeni'){
-      if(!m.isEmriNo){ toast(m.uyari && m.uyari !== 'KAYIT_VAR' ? m.uyari : 'İş emri no yazın'); return; }
-      if(m.uyari === 'KAYIT_VAR'){ toast('Bu iş emrinin kaydı var — "Yerini değiştir"i kullanın'); return; }
+      if(!m.isEmriNo){ toast('İş emri no yazın'); return; }
+      /* pencere açıkken başka biri kayıt açtıysa sıraya koyma — değiştir olmalı */
+      if(entriesArray().some(e => String(e.talepNo || '').trim().toUpperCase() === m.talepNo && e.isEmriNo === m.isEmriNo)){ toast('Bu iş emrinde az önce kayıt açıldı — tekrar arayın'); ydTalepCoz(); return; }
       if(!/^\d+$/.test(String(m.adet || '').trim()) || !(Number(m.adet) > 0)){ toast('Adet yazın'); return; }
     }
     const key = m.tip === 'sira' ? m.siraKey : ydSiraAnahtar(m.talepNo, m.bilesen);
@@ -173,17 +200,23 @@ function ydMakineListesiHtml(){
 }
 function renderYerDuzeltModal(){
   const m = ydModal; if(!m) return '';
-  const baslik = m.tip === 'yeni' ? 'Sıraya koy — ilk operasyon' : 'Yerini değiştir';
-  const yeniUst = m.tip === 'yeni' ? `<div class="yd-yeni">
+  const baslik = m.bul ? 'Yer düzelt / sıraya koy' : 'Yerini değiştir';
+  const yeniUst = m.bul ? `<div class="yd-yeni">
       <div class="yd-alanlar">
         <div class="field" style="margin:0;flex:1.4;min-width:150px"><label>İş emri no</label>
-          <input id="yd-talep" class="mono" placeholder="ör. 2610020008" value="${esc(m.talepNo)}" oninput="ydModal.talepNo=this.value" onchange="ydTalepCoz()" onkeydown="if(event.key==='Enter') this.blur()"></div>
-        <div class="field" style="margin:0;width:96px"><label>Adet</label>
-          <input class="mono" inputmode="numeric" value="${esc(m.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); ydModal.adet=this.value"></div>
+          <input id="yd-talep" class="mono" placeholder="ör. 2610020008 — yaz, Enter" value="${esc(m.talepNo)}" oninput="ydModal.talepNo=this.value" onchange="ydTalepCoz()" onkeydown="if(event.key==='Enter') this.blur()"></div>
+        ${m.tip === 'yeni' ? `<div class="field" style="margin:0;width:96px"><label>Adet</label>
+          <input class="mono" inputmode="numeric" value="${esc(m.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); ydModal.adet=this.value"></div>` : ''}
       </div>
       <div class="yd-bilesen">${[['', 'Tek parça'], ['ZARF', 'Çelik (_Zarf)'], ['ELMAS', 'Karbür (_Elmas)']].map(([k, l]) => `<button type="button" class="chip ${m.bilesen === k ? 'active' : ''}" onclick="ydModal.bilesen='${k}'; ydTalepCoz()">${l}</button>`).join('')}</div>
-      ${m.isEmriNo ? `<div class="yd-bilgi">${esc(m.isEmriNo)}${m.mamulAdi ? ' · ' + esc(m.mamulAdi) : ''}</div>` : ''}
-      ${m.uyari === 'KAYIT_VAR' ? `<div class="yd-uyari">Bu iş emrinin zaten kaydı var. <button type="button" class="btn-ghost yd-dugme kucuk" onclick="ydKayitAc('${escJs(m.isEmriNo)}')">Yerini değiştir</button></div>` : m.uyari ? `<div class="yd-uyari">${esc(m.uyari)}</div>` : ''}
+      ${m.durum ? `<div class="yd-durum" style="--yd:${m.durum.renk}">
+        <div class="yd-durum-ust">${m.isEmriNo ? `<span class="mono">${esc(m.talepNo)}</span> <span class="yd-bilgi">${esc(m.isEmriNo)}${m.mamulAdi ? ' · ' + esc(m.mamulAdi) : ''}${m.adet && m.tip !== 'yeni' ? ' · ' + esc(m.adet) + ' adet' : ''}</span>` : ''}</div>
+        <div class="yd-durum-metin">${m.durum.metin}</div>
+        ${m.durum.detay ? `<div class="yd-bilgi">${m.durum.detay}</div>` : ''}
+        ${m.tip ? `<div class="yd-islem">${m.tip === 'yeni' ? 'İşlem: <b>sıraya koy</b>' : `İşlem: <b>yerini değiştir</b> — şu an: <b>${esc(m.eskiYer)}</b>${m.secim ? ` → <b style="color:var(--accent)">${esc(ydSecimEtiketi(m.secim))}</b>` : ''}`}
+          ${m.tip === 'sira' ? `<button type="button" class="btn-ghost yd-dugme kucuk" style="color:var(--danger)" onclick="ydSiradanCikar('${escJs(m.siraKey)}')">Sıradan çıkar</button>` : ''}</div>` : ''}
+      </div>` : ''}
+      ${m.uyari ? `<div class="yd-uyari">${esc(m.uyari)}</div>` : ''}
     </div>` : `<div class="yd-ozet">
       <div><span class="mono" style="font-weight:700;color:var(--accent)">${esc(m.talepNo || m.isEmriNo)}</span>${m.talepNo ? ` <span style="font-size:11.5px;color:var(--text-muted)">${esc(m.isEmriNo)}</span>` : ''}${m.adet ? ` · ${esc(m.adet)} adet` : ''}</div>
       <div class="yd-simdi">Şu an: <b>${esc(m.eskiYer)}</b>${m.secim ? ` → <b style="color:var(--accent)">${esc(ydSecimEtiketi(m.secim))}</b>` : ''}</div>
@@ -193,13 +226,13 @@ function renderYerDuzeltModal(){
     <div class="durus-modal-panel">
       <div class="durus-modal-handle" style="cursor:pointer" onclick="ydKapat()"></div>
       <div class="durus-modal-header"><div><div class="durus-modal-title">${baslik}</div>
-        <div class="durus-modal-sub">${m.tip === 'yeni' ? 'Hiç operasyonu açılmamış iş emrini bir makinenin sırasına koyar. Biri o işte Başla\'ya basınca sıradan kendiliğinden düşer.' : 'Yanlış bırakılan yeri düzeltir — sahte operasyon açılmaz, rota ve verimlilik etkilenmez. Değişiklik kayda not edilir.'}</div></div>
+        <div class="durus-modal-sub">${m.bul ? 'İş emri no yazın: şu an nerede olduğu görünür. Bir yerde bekliyorsa yeri değiştirilir, hiç kaydı yoksa sıraya konur. Sahte operasyon açılmaz.' : 'Yanlış bırakılan yeri düzeltir — sahte operasyon açılmaz, rota ve verimlilik etkilenmez. Değişiklik kayda not edilir.'}</div></div>
         <button class="icon-btn" onclick="ydKapat()">${ico('x', 16)}</button></div>
       ${yeniUst}
-      <div style="padding:0 16px 8px"><input id="yd-ara" type="search" placeholder="Makine ara — kod ya da ad" value="${esc(m.ara)}" oninput="ydModal.ara=this.value; render()" style="margin:0"></div>
-      <div class="durus-modal-list">${ydMakineListesiHtml()}</div>
+      ${m.tip ? `<div style="padding:0 16px 8px"><input id="yd-ara" type="search" placeholder="Makine ara — kod ya da ad" value="${esc(m.ara)}" oninput="ydModal.ara=this.value; render()" style="margin:0"></div>
+      <div class="durus-modal-list">${ydMakineListesiHtml()}</div>` : `<div class="durus-modal-list"></div>`}
       <div class="durus-modal-footer">
-        <button class="durus-modal-footer-btn" ${m.secim && !m.busy ? '' : 'disabled'} onclick="ydKaydet()">${m.busy ? 'Kaydediliyor…' : m.tip === 'yeni' ? 'Sıraya koy' : 'Yeri değiştir'}</button>
+        <button class="durus-modal-footer-btn" ${m.tip && m.secim && !m.busy ? '' : 'disabled'} onclick="ydKaydet()">${m.busy ? 'Kaydediliyor…' : m.tip === 'yeni' ? 'Sıraya koy' : 'Yeri değiştir'}</button>
       </div>
     </div></div>`;
 }
