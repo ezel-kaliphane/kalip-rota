@@ -132,5 +132,5 @@ function renderVeriKontrol(){
     vkTablo(['İş emri', 'Makine', 'Operatör', 'Fark'], b.durus.map(({ e, fark }) =>
       `<tr class="rt-tablo-sabit"><td>${vkIsEmri(e)}</td><td>${vkMakine(e)}</td><td>${vkKisi(e)}</td><td class="mono">${fark > 0 ? '+' : '−'}${fmtDur(Math.abs(fark))}</td></tr>`), 15), 'var(--text-muted)');
 
-  return h + (iyGecmisModalIsEmriNo ? renderIyGecmisModal() : '') + (typeof renderHmGirModal === 'function' ? renderHmGirModal() : '');
+  return h + (iyGecmisModalIsEmriNo ? renderIyGecmisModal() : '') + (typeof renderHmGirModal === 'function' ? renderHmGirModal() : '') + (typeof ydModal !== 'undefined' && ydModal ? renderYerDuzeltModal() : '');
 }

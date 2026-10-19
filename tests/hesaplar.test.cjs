@@ -512,3 +512,39 @@ test('parçalı dinleme: haftalık dilimler boşluksuz ve çakışmasız', () =>
   const ornekler = [0, s[0] - 1, s[0], s[1] - 1, s[1], ts('2026-08-14 10:00'), ts('2026-10-12 00:00'), ts('2026-10-18 23:59'), simdi, simdi + 30 * 864e5];
   ornekler.forEach(v => assert.equal(dilimler.filter(([a, b]) => v >= a && v <= b).length, 1, 'değer ' + v));
 });
+
+/* 19.10.2026: İş Yoğunluğu yer düzeltme — sahte operasyon yerine son kaydın bırakılan yeri değişir */
+test('yer düzeltme: son kaydın yeri değişir, FKK seçilince rota kapanır, not düşülür', () => {
+  const fkk = A.ctx.allMachines().find(m => m.code === 'FKK'), diger = A.ctx.allMachines().find(m => m.code !== 'FKK');
+  assert.ok(fkk && diger, 'makine listesi');
+  kayitlar([
+    { makine: diger.code + ' · ' + diger.name, status: 'tamamlandi', talepNo: '2610020008', isEmriNo: 'UC1', adet: '4', startTs: ts('2026-10-17 09:00'), endTs: ts('2026-10-17 10:00'), sonOperasyon: false, sonrakiMakine: 'Belirsiz' }
+  ]);
+  let yazilan = null;
+  const eskiDB = A.calistir('DB');
+  A.ata('DB', { ref: () => ({ update: o => { yazilan = o; return Promise.resolve(); }, push: () => ({ key: 'k1' }) }) });
+  A.ata('session', { username: 'SEF1', displayName: 'Şef Bir', isSef: true });
+  A.ctx.render = () => {}; A.ctx.toast = () => {};
+  try{
+    A.ctx.ydKayitAc('UC1');
+    A.calistir("ydModal.secim = 'FKK'");
+    A.ctx.ydKaydet();
+  } finally { A.ata('DB', eskiDB); }
+  const id = Object.keys(JSON.parse(A.calistir('JSON.stringify(STATE.entries)')))[0];
+  assert.equal(yazilan['entries/' + id + '/sonrakiMakine'], 'FKK · ' + fkk.name);
+  assert.equal(yazilan['entries/' + id + '/sonOperasyon'], true);
+  const not = yazilan['entries/' + id + '/yerDuzeltme/k1'];
+  assert.equal(not.eskiYer, 'Belirsiz'); assert.equal(not.kim, 'SEF1');
+  assert.ok(!Object.keys(yazilan).some(y => y.includes('undefined')));
+});
+
+test('sıraya koy: kaydı olmayan iş emri kuyrukta, ilk kayıt açılınca düşer', () => {
+  const sira = { '2610050001_TEK': { talepNo: '2610050001', isEmriNo: 'UC9', adet: '3', makine: 'TES01 · Testere', ts: ts('2026-10-18 08:00'), kim: 'SEF1' } };
+  A.ata('isEmriSira', sira); A.ata('_isEmriSiraDinleniyor', true);
+  kayitlar([]);
+  let k = A.ctx.isEmriSiraKuyrukKayitlari();
+  assert.equal(k.length, 1); assert.equal(k[0].sonrakiMakine, 'TES01 · Testere'); assert.equal(k[0]._sira, true);
+  kayitlar([{ makine: 'TES01 · Testere', status: 'devam', talepNo: '2610050001', isEmriNo: 'UC9', adet: '3', startTs: ts('2026-10-19 08:00') }]);
+  assert.equal(A.ctx.isEmriSiraKuyrukKayitlari().length, 0);
+  A.ata('isEmriSira', {}); A.ata('_isEmriSiraDinleniyor', false);
+});

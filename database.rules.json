@@ -144,6 +144,11 @@
       }
     },
     "tadilatOnHazirIstekler": { ".read": true, ".write": true },
+    "isEmriSira": {
+      ".read": true,
+      ".write": false,
+      "$sira": { ".write": true }
+    },
     "pushLog": { ".read": true, ".write": false, ".indexOn": ["toUsername", "sentAt"] },
 
     "toolLocations": {

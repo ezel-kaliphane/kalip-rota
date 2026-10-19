@@ -1922,14 +1922,15 @@ function iyMalzemeBekleyenler(){
   return malzemeBekleyenAktif().slice().sort((a,b)=>(malzemeIstekVar(a)-malzemeIstekVar(b)) || (Number(a.isaretTs)||0)-(Number(b.isaretTs)||0));
 }
 function iyVeri(){
-  const bekleyenler = bekleyenSonrakiOperasyonlar();
+  /* Sıraya konmuş, henüz hiç kaydı açılmamış iş emirleri de kuyrukta (bkz. ui/yer-duzelt.js) */
+  const bekleyenler = bekleyenSonrakiOperasyonlar().concat(typeof isEmriSiraKuyrukKayitlari==='function' ? isEmriSiraKuyrukKayitlari() : []);
   // Sadece _ZARF/_ELMAS + Press kombinasyonu özel çift-eşleştirme görünümüne taşınıyor — bileşensiz
   // (normal) bir iş emri Press'i sonraki makine olarak işaretlemişse (zarf/elmas birleşimiyle
   // ilgisiz, farklı bir kullanım), genel makine listesinde olduğu gibi görünmeye devam etmeli.
   const digerBekleyenler = bekleyenler.filter(e => {
     const kod = String(e.sonrakiMakine||'').split(' · ')[0];
     const bilesen = bilesenOfCode(e.isEmriNo);
-    return !(kod==='P01' && (bilesen==='ZARF' || bilesen==='ELMAS'));
+    return e._sira || !(kod==='P01' && (bilesen==='ZARF' || bilesen==='ELMAS'));
   });
   const byMakine = {};
   digerBekleyenler.forEach(e=>{
@@ -2032,7 +2033,10 @@ function iyAramaSonucKartHtml(grp){
     <div style="margin-top:8px;font-size:13.5px;font-weight:600;color:${durum.renk}">${durum.metin}</div>
     ${durum.detay ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${durum.detay}</div>` : ''}
     <div class="route-chain" style="margin-top:10px">${chain.map((c,i)=>`<span class="route-chip">${esc(c)}</span>${i<chain.length-1?'<span class="route-arrow">→</span>':''}`).join('')}</div>
-    ${canManageStock() && typeof uygModalAc==='function' ? `<button class="btn-ghost" style="width:auto;padding:7px 12px;margin-top:10px;color:var(--danger);border-color:var(--danger-border)" onclick="uygModalAc('${escJs(grp.last.id)}')">${ico('alert',13)} Uygunsuzluk bildir</button>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      ${grp.last.status==='tamamlandi' && typeof ydDugme==='function' ? ydDugme(grp.isEmriNo) : ''}
+      ${canManageStock() && typeof uygModalAc==='function' ? `<button class="btn-ghost" style="width:auto;padding:7px 12px;color:var(--danger);border-color:var(--danger-border)" onclick="uygModalAc('${escJs(grp.last.id)}')">${ico('alert',13)} Uygunsuzluk bildir</button>` : ''}
+    </div>
   </div>`;
 }
 // İş emri no'ya tıklayınca açılan "geçmiş" penceresi — isEmriNo'nun TÜM kayıtlarını kronolojik
@@ -2056,7 +2060,10 @@ function renderIyGecmisModal(){
       <div class="modal-body">
         <div style="font-size:13.5px;font-weight:600;color:${durum.renk}">${durum.metin}</div>
         ${durum.detay ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;margin-bottom:16px">${durum.detay}</div>` : '<div style="margin-bottom:16px"></div>'}
-        ${canManageStock() ? `<button class="btn-ghost" style="width:auto;padding:8px 14px;margin:-4px 0 14px;color:var(--danger);border-color:var(--danger-border)" onclick="uygModalAc('${escJs(last.id)}')">${ico('alert',14)} Uygunsuzluk bildir</button>` : ''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px">
+          ${last.status==='tamamlandi' && typeof ydDugme==='function' ? ydDugme(isEmriNo) : ''}
+          ${canManageStock() ? `<button class="btn-ghost" style="width:auto;padding:8px 14px;color:var(--danger);border-color:var(--danger-border)" onclick="uygModalAc('${escJs(last.id)}')">${ico('alert',14)} Uygunsuzluk bildir</button>` : ''}
+        </div>
         <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:10px">Geçmiş — ${kayitlar.length} adım</div>
         <div style="display:flex;flex-direction:column;gap:10px">
           ${kayitlar.map((e,i)=>{
@@ -2074,6 +2081,7 @@ function renderIyGecmisModal(){
               ${kaliteGecmisEkHtml(e)}
               ${(e.fasonIsilTur || e.fasonIsilSertlik) ? `<div style="font-size:12px;margin-top:4px">Isıl işlem: <b>${esc([].concat(e.fasonIsilTur ? (Array.isArray(e.fasonIsilTur) ? e.fasonIsilTur : Object.values(e.fasonIsilTur)) : []).join(' + ') || '—')}</b>${e.fasonIsilSertlik && typeof fasonIsilSertlikYazi==='function' ? ` · <b>${esc(fasonIsilSertlikYazi(e.fasonIsilSertlik))}</b>` : ''}${typeof fasonBirimKg==='function' && fasonBirimKg(e) ? ` · <b>${fasonKgYazi(Number(e.fasonKg))} kg</b> (1 adet ${fasonKgYazi(fasonBirimKg(e))} kg)` : ''}</div>` : ''}
               ${e.sonrakiMakine ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">${ico('chevronRight',11)} Sıradaki: ${esc(e.sonrakiMakine)}</div>` : ''}
+              ${e.yerDuzeltme ? Object.values(e.yerDuzeltme).sort((a,b)=>(a.ts||0)-(b.ts||0)).map(d=>`<div style="font-size:11.5px;color:var(--warn);margin-top:3px">Yer düzeltildi: ${esc(d.eskiYer||'—')} → ${esc(d.yeniYer||'—')} · ${esc(d.kimAd||d.kim||'')} · ${fmtDT(d.ts)}</div>`).join('') : ''}
             </div>`;
           }).join('')}
         </div>
@@ -2106,11 +2114,15 @@ function iyAramaHtml(){
   const q = iyAramaMetni.trim();
   const sonuclar = q ? iyAramaSonuclari(q) : [];
   const mbSonuc = q ? iyMalzemeAramaSonuclari(q) : [];
+  const siraSonuc = q && typeof ydAramaKartlari==='function' ? ydAramaKartlari(q) : '';
   return `<div style="margin-bottom:16px">
-    <input id="iy-arama" type="search" class="filter-input mono" style="width:100%;max-width:420px" placeholder="İş Emri No / Talep No ile ara — nerede olduğunu gör" value="${esc(iyAramaMetni)}" oninput="setIyAramaMetni(this.value)">
-    ${q ? `<div style="margin-top:12px">${sonuclar.length===0 && mbSonuc.length===0
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="iy-arama" type="search" class="filter-input mono" style="flex:1;min-width:220px;max-width:420px" placeholder="İş Emri No / Talep No ile ara — nerede olduğunu gör" value="${esc(iyAramaMetni)}" oninput="setIyAramaMetni(this.value)">
+      ${typeof ydYetki==='function' && ydYetki() ? `<button type="button" class="btn-ghost" style="width:auto;padding:8px 14px" title="Hiç operasyonu açılmamış iş emrini bir makinenin sırasına koy" onclick="ydYeniAc()">+ Sıraya koy</button>` : ''}
+    </div>
+    ${q ? `<div style="margin-top:12px">${sonuclar.length===0 && mbSonuc.length===0 && !siraSonuc
       ? `<div class="analiz-chart-box" style="text-align:center;color:var(--text-muted);padding:16px">"${esc(q)}" ile eşleşen kayıt bulunamadı.</div>`
-      : mbSonuc.map(iyMalzemeAramaKartHtml).join('') + sonuclar.map(iyAramaSonucKartHtml).join('')}</div>` : ''}
+      : mbSonuc.map(iyMalzemeAramaKartHtml).join('') + siraSonuc + sonuclar.map(iyAramaSonucKartHtml).join('')}</div>` : ''}
   </div>`;
 }
 function iyGorunumSecici(){
@@ -2168,7 +2180,8 @@ function iyListeHtml(v){
         </button>
         ${acik ? `<div class="iy-detay">
           ${r.isPres ? iyPresDetayHtml(r) : r.isMalzeme ? iyMalzemeDetayHtml(r) : r.isKalite ? kaliteKararDetayHtml(r) : r.isHammadde ? hammaddesizDetayHtml(r) : r.isEmriler.map(e=>`<div class="iy-detay-row">
-            <span><span class="mono" style="color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline dotted" onclick="openIyGecmisModal('${escJs(e.isEmriNo)}')">${esc(e.talepNo||e.isEmriNo)}</span>${v.malzemeTalepSet.has(String(e.talepNo||'').trim().toUpperCase()) ? ` <span class="iy-mb-etiket" title="Bu iş emri Malzeme Bekleyenler'de">malzeme bekliyor</span>` : ''}</span>
+            <span><span class="mono" style="color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline dotted" onclick="${e._sira ? `ydSiraAc('${escJs(e.siraKey)}')` : `openIyGecmisModal('${escJs(e.isEmriNo)}')`}">${esc(e.talepNo||e.isEmriNo)}</span>${v.malzemeTalepSet.has(String(e.talepNo||'').trim().toUpperCase()) ? ` <span class="iy-mb-etiket" title="Bu iş emri Malzeme Bekleyenler'de">malzeme bekliyor</span>` : ''}${e._sira ? ` <span class="iy-mb-etiket yd-sira-etiket" title="Hiç operasyonu açılmadan sıraya kondu">sıraya kondu</span>` : ''}
+              ${typeof ydYetki==='function' && ydYetki() ? `<span class="yd-satir-dugme">${e._sira ? ydSiraDugmeleri(e.siraKey) : ydDugme(e.isEmriNo, true)}</span>` : ''}</span>
             <span style="color:var(--text-muted)">${esc(e.makine||'—')}</span>
             <span class="mono sag">${esc(e.adet||'—')}</span>
             <span style="color:var(--text-muted)">${esc(e.operatorName||e.operatorUsername||'')}</span>
@@ -2334,7 +2347,7 @@ function renderIsYogunlugu(){
     ${iyGorunumSecici()}
     ${iyKpiHtml(v)}
     ${govde}
-  </div>${iyGecmisModalIsEmriNo && !uygModal ? renderIyGecmisModal() : ''}${typeof renderHmGirModal==='function' ? renderHmGirModal() : ''}`;
+  </div>${iyGecmisModalIsEmriNo && !uygModal ? renderIyGecmisModal() : ''}${typeof renderHmGirModal==='function' ? renderHmGirModal() : ''}${typeof ydModal!=='undefined' && ydModal ? renderYerDuzeltModal() : ''}`;
 }
 /* Sidebar'ın "Yönetim" grubundaki Excel Yükleme (A.11, 22.09.2026) ve Operatörler (A.12,
    28.09.2026) artık KENDİ ekranlarına gidiyor; ikisi de eskiden var olan işlevlere
