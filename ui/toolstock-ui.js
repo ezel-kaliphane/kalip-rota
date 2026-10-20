@@ -268,7 +268,11 @@ function renderToolStokDetailPanel(){
             <span class="durus-radio" style="${toolOpDolap===x.locId?'border-color:var(--accent)':''}"><span style="width:10px;height:10px;border-radius:50%;background:${toolOpDolap===x.locId?'var(--accent)':'transparent'}"></span></span>
             <span class="durus-option-name" style="flex:1;${toolOpDolap===x.locId?'color:var(--accent)':''}">${esc(toolDolapAdi(x.locId))}${x.locId===it.locId && it.goz ? ` <span style="font-size:12px;color:var(--text-muted)">/ ${esc(it.goz)}</span>` : ''}</span>
             <b class="mono">${x.miktar} ${esc(it.birim||'adet')}</b></button>`).join('')}</div>`
-          : `<div class="notice" style="--nc:var(--warn);padding:9px 12px"><div class="notice-sub">Erişebildiğin dolaplarda bu kalem yok${baska.length ? ` — ${baska.map(x=>esc(toolDolapAdi(x.locId))+'’nda '+x.miktar).join(', ')} var, oradan alması gereken kişiye haber ver` : ''}.</div></div>`}
+          /* 20.10.2026 (Ceyhan KURTULMUŞ, Ø3 karbür freze): stok TÜM dolaplarda 0 iken de "erişebildiğin dolaplarda
+             yok" yazıyordu — sorun yetkideymiş gibi okunup ayarlara bakıldı. Sıfır stok ile erişim yokluğu ayrıldı. */
+          : baska.length
+            ? `<div class="notice" style="--nc:var(--warn);padding:9px 12px"><div class="notice-sub">Erişebildiğin dolaplarda bu kalem yok — ${baska.map(x=>esc(toolDolapAdi(x.locId))+'’nda '+x.miktar).join(', ')} var, oradan alması gereken kişiye haber ver.</div></div>`
+            : `<div class="notice" style="--nc:var(--danger);padding:9px 12px"><div class="notice-sub"><b>Sistemde bu kalemin stoğu yok (0 ${esc(it.birim||'adet')}).</b> Dolapta varsa stok yanlış görünüyor — şefe ya da SuperAdmin'e haber ver; Stok Takibi → Takım &amp; Sarf → Yönetim'den sayımı düzeltilince çıkış yapabilirsin.</div></div>`}
       </div>`; })()}
     ${activeEntries.length>1 ? `
       <div class="field"><label>Hangi iş için?</label>
@@ -291,7 +295,7 @@ function renderToolStokDetailPanel(){
     <div class="field"><label>Not (opsiyonel)</label>
       <input value="${esc(toolOpNote)}" placeholder="ör. kırıldı, revizyonda vs." oninput="toolOpNote=this.value">
     </div>
-    <button class="btn-primary" style="font-size:15px;padding:14px" ${(toolOpBusy||!toolOpDolap)?'disabled':''} onclick="doToolCikis()">${toolOpDolap ? '✓ Çıkış Yap · '+esc(toolDolapAdi(toolOpDolap)) : 'Önce alınan konumu seç'}</button>
+    <button class="btn-primary" style="font-size:15px;padding:14px" ${(toolOpBusy||!toolOpDolap)?'disabled':''} onclick="doToolCikis()">${toolOpDolap ? '✓ Çıkış Yap · '+esc(toolDolapAdi(toolOpDolap)) : toolDolaplari(toolOpFoundStock, it).some(x=>x.miktar>0 && toolDolapErisebilir(session.username, x.locId)) ? 'Önce alınan konumu seç' : 'Stok yok — çıkış yapılamaz'}</button>
   </div>`;
 }
 
