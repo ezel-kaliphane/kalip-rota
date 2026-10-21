@@ -79,7 +79,9 @@ function fasonIsilGerekli(makine, kalemler){
 function fasonIsilGonderimAc(kalemler){
   if(!fasonIsilTurleri().length) return false;
   fasonIsilModal = { mod: 'gonderim', secili: {}, sertMin: '', sertMax: '',
-    kalemler: (kalemler || []).map(k => fasonKalemHazirla(k, fasonKalemAnahtar(k.talepNo, k.isEmriNo), null)) };
+    /* 21.10.2026 (Şeref KOLDAŞ): "çoklu iş emrinde her iş emrini tartıp adet yazıp kenara kaldırıyorum, sonra kg için
+       başa dönmek zorluyor" — kg artık başlatma formunda adetle birlikte girilir (Kg (toplam)); burada dolu gelir. */
+    kalemler: (kalemler || []).map(k => fasonKalemHazirla(k, fasonKalemAnahtar(k.talepNo, k.isEmriNo), fasonSayi(k.kg) > 0 ? fasonSayi(k.kg) : null)) };
   render();
   return true;
 }

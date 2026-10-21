@@ -191,16 +191,19 @@ function renderOperator(){
         <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px">Her iş için ayrı İş Emri No (Talep No) ve Adet gir. İstediğin kadar ekleyebilirsin.</div>
         ${newForm.cokluItems.map((it,i)=>{
           const cInfo = getTalepInfo(it.isEmriNo);
+          /* Fason ısılda satıra Kg (toplam) da giriyor — telefonda sığmıyordu (iş emri kutusu ezildi): satır iki sıraya iner */
+          const kgli = typeof fasonIsilMakinesiMi==='function' && fasonIsilMakinesiMi(newForm.makine);
           return `
           <div style="margin-bottom:10px">
-          <div style="display:flex;gap:8px;align-items:flex-end">
-            <div class="field" style="flex:1.3;margin-bottom:0;min-width:0"><label>İ.E. No ${i+1}</label><div style="position:relative"><input id="nf-coklu-isemri-${i}" class="mono" style="padding-right:46px" placeholder="ör. 2607140006" value="${esc(it.isEmriNo)}" oninput="newForm.cokluItems[${i}].isEmriNo=this.value" onblur="render()"><button type="button" style="position:absolute;right:0;top:0;bottom:0;width:42px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:var(--text-muted);padding:0;line-height:0" title="QR Kod Okut" onclick="openQrScanner(function(v){ newForm.cokluItems[${i}].isEmriNo=v; render(); })">${ico('camera',14)}</button></div></div>
+          <div style="display:flex;gap:8px;align-items:flex-end${kgli?';flex-wrap:wrap':''}">
+            <div class="field" style="flex:1.3;margin-bottom:0;min-width:${kgli?'150px':'0'}"><label>İ.E. No ${i+1}</label><div style="position:relative"><input id="nf-coklu-isemri-${i}" class="mono" style="padding-right:46px" placeholder="ör. 2607140006" value="${esc(it.isEmriNo)}" oninput="newForm.cokluItems[${i}].isEmriNo=this.value" onblur="render()"><button type="button" style="position:absolute;right:0;top:0;bottom:0;width:42px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:var(--text-muted);padding:0;line-height:0" title="QR Kod Okut" onclick="openQrScanner(function(v){ newForm.cokluItems[${i}].isEmriNo=v; render(); })">${ico('camera',14)}</button></div></div>
             <div class="field" style="width:110px;margin-bottom:0;flex-shrink:0"><label>Bileşen</label><select id="nf-coklu-bilesen-${i}" onchange="newForm.cokluItems[${i}].bilesen=this.value; render()">
               <option value="" ${!it.bilesen?'selected':''}>Tek Parça</option>
               <option value="ZARF" ${it.bilesen==='ZARF'?'selected':''}>_ZARF (Çelik)</option>
               <option value="ELMAS" ${it.bilesen==='ELMAS'?'selected':''}>_ELMAS (Karbür)</option>
             </select></div>
             <div class="field" style="width:80px;margin-bottom:0;flex-shrink:0"><label>Adet</label><input id="nf-coklu-adet-${i}" inputmode="numeric" placeholder="120" value="${esc(it.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newForm.cokluItems[${i}].adet=this.value" onblur="render()"></div>
+            ${typeof fasonIsilMakinesiMi==='function' && fasonIsilMakinesiMi(newForm.makine) ? `<div class="field" style="width:84px;margin-bottom:0;flex-shrink:0"><label title="Bu iş emrinin tüm parçaları birlikte">Kg (toplam)</label><input id="nf-coklu-kg-${i}" inputmode="decimal" placeholder="tart" value="${esc(it.kg||'')}" oninput="this.value=this.value.replace(/[^0-9.,]/g,''); newForm.cokluItems[${i}].kg=this.value"></div>` : ''}
             ${newForm.cokluItems.length>1 ? `<button type="button" class="btn-ghost" style="padding:10px 12px;flex-shrink:0" onclick="removeCokluItem(${i})">${ico('trash',14)}</button>` : ''}
           </div>
           ${it.isEmriNo ? (cInfo ? `<div style="font-size:11.5px;color:var(--success);margin:4px 0 0 2px">${ico('check',14)} ${esc(cInfo.malzemeKodu||'')}${cInfo.malzemeKodu&&cInfo.malzemeAdi?' · ':''}${esc(cInfo.malzemeAdi||'')}</div>` : (Object.keys(STATE.validIsEmri||{}).length>0 ? `<div style="font-size:11.5px;color:var(--warn);margin:4px 0 0 2px">${ico('alert',14)} Bu talep no listede bulunamadı</div>` : '')) : ''}
@@ -321,7 +324,8 @@ function renderOperator(){
       ${twoStep ? `<button type="button" class="btn-ghost" style="margin-bottom:16px" onclick="setNewStep(1)">← Geri · iş emri ve makine</button>` : ''}
       <div class="field"><label>Malzeme Cinsi (opsiyonel)</label><input id="nf-malzeme-cinsi" placeholder="ör. 4Mo1 ıslahlı" value="${esc(newForm.malzemeCinsi)}" oninput="newForm.malzemeCinsi=this.value"></div>
       <div class="field"><label>Çap ve Boy (opsiyonel)</label><input id="nf-cap-boy" placeholder="ör. Ø26 x 200" value="${esc(newForm.capBoy)}" oninput="newForm.capBoy=this.value"></div>
-      ${!newForm.cokluMode ? `<div class="field"><label>Adet</label><input id="nf-adet" inputmode="numeric" placeholder="ör. 120" value="${esc(newForm.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newForm.adet=this.value" onblur="render()"></div>` : ''}
+      ${!newForm.cokluMode ? `<div class="field"><label>Adet</label><input id="nf-adet" inputmode="numeric" placeholder="ör. 120" value="${esc(newForm.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newForm.adet=this.value" onblur="render()"></div>
+      ${typeof fasonIsilMakinesiMi==='function' && fasonIsilMakinesiMi(newForm.makine) ? `<div class="field"><label>Kg (toplam) <span style="text-transform:none;font-weight:500;letter-spacing:0;color:var(--text-muted)">— parçaların hepsi birlikte</span></label><input id="nf-fason-kg" inputmode="decimal" placeholder="tart, ör. 4,1" value="${esc(newForm.fasonKg||'')}" oninput="this.value=this.value.replace(/[^0-9.,]/g,''); newForm.fasonKg=this.value"></div>` : ''}` : ''}
       ${(twoStep && !newForm.cokluMode) ? `<div style="display:flex;gap:8px;margin:-6px 0 16px">${[10,50,100,250,500].map(n=>`<button type="button" class="chip" style="flex:1;text-align:center;padding:11px 4px" onclick="setAdetQuick(${n})">${n}</button>`).join('')}</div>` : ''}
       <div class="field"><label>Not (opsiyonel)</label><textarea id="nf-not" style="min-height:60px" placeholder="Serbest not" oninput="newForm.not=this.value">${esc(newForm.not)}</textarea></div>
       ${(()=>{ /* Düzeltme (rework) işi — iş emrinin kayıtlı bir hatası varsa (06.10.2026) */

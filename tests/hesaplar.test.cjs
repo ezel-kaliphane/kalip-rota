@@ -598,3 +598,14 @@ test('stok tablosu: kalite / ölçü ayrıştırma ve stok durumu', () => {
   assert.equal(A.ctx.takimDurum({ id: 'c', altLimit: 1 }), 'ok');
   A.ata('toolStock', {});
 });
+
+/* 21.10.2026 (Şeref KOLDAŞ): kg başlatma formunda adetle birlikte girilir — gönderim penceresinde dolu gelir */
+test('fason ısıl gönderim: formda yazılan iş emri kg\'si pencerede dolu, yazılmayan boş', () => {
+  A.ctx.render = () => {};
+  A.ata('appSettings', { isilIslemTurleri: ['2344 sertleştirme'] });
+  kayitlar([]);
+  A.ctx.fasonIsilGonderimAc([{ talepNo: 'T1', isEmriNo: 'UC1', adet: '2', kg: '4,1' }, { talepNo: 'T2', isEmriNo: 'UC2', adet: '3', kg: '' }]);
+  const k = JSON.parse(A.calistir('JSON.stringify(fasonIsilModal.kalemler.map(x => ({ kg: x.kg, oneri: x.oneri })))'));
+  assert.equal(JSON.stringify(k), JSON.stringify([{ kg: '4,1', oneri: false }, { kg: '', oneri: false }]));
+  A.ata('fasonIsilModal', null); A.ata('appSettings', {});
+});

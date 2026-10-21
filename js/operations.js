@@ -154,6 +154,7 @@ function baslat(){
         talepNoRaw: raw,
         bilesen,
         adet: (document.getElementById('nf-coklu-adet-'+i)?.value ?? it.adet ?? '').trim(),
+        kg: (document.getElementById('nf-coklu-kg-'+i)?.value ?? it.kg ?? '').trim(),
         stockItemId: document.getElementById('nf-coklu-stok-'+i)?.value ?? it.stockItemId ?? '',
         stockMiktar: (document.getElementById('nf-coklu-stok-miktar-'+i)?.value ?? it.stockMiktar ?? '').trim()
       };
@@ -184,7 +185,7 @@ function baslat(){
       }
     }
     /* Fason ısıl işleme gönderim: doğrulamadan sonra paket bilgisi (tür, HRC, iş emri başına kg) — js/fason-isil.js */
-    if(typeof fasonIsilGerekli==='function' && fasonIsilGerekli(makine, items.map(it=>{ const r = resolveTrackingCode(it.talepNoRaw, it.bilesen); return { talepNo: r.talepNo, isEmriNo: r.isEmriNo, adet: it.adet }; }))) return;
+    if(typeof fasonIsilGerekli==='function' && fasonIsilGerekli(makine, items.map(it=>{ const r = resolveTrackingCode(it.talepNoRaw, it.bilesen); return { talepNo: r.talepNo, isEmriNo: r.isEmriNo, adet: it.adet, kg: it.kg }; }))) return;
     /* İlk operasyonda hammadde seçilmemişse uyar (engel değil — 07.10.2026 kararı). Karbür dalı hariç. */
     if(stockEnabled() && stockConsumableOptions().length){
       const eksik = items.filter(it => {
@@ -246,7 +247,7 @@ function baslat(){
   const machineBusy = !isFasonMachine(makine) && !isParalelMachine(makine) && entriesArray().some(e => e.makine === makine && e.status === 'devam');
   if(machineBusy){ toast('Bu makinede zaten aktif bir iş var. Önce o iş bitirilmeli ya da duraklatılmalı.'); return; }
   const { isEmriNo, talepNo } = resolveTrackingCode(isEmriNoRaw, bilesenSel);
-  if(typeof fasonIsilGerekli==='function' && fasonIsilGerekli(makine, [{ talepNo, isEmriNo, adet }])) return;
+  if(typeof fasonIsilGerekli==='function' && fasonIsilGerekli(makine, [{ talepNo, isEmriNo, adet, kg: (document.getElementById('nf-fason-kg')?.value ?? newForm.fasonKg ?? '').trim() }])) return;
   const wasFirst = isFirstOperationFor(isEmriNo, talepNo);
   let stockItemIdSel = '', stockLotIdSel = null, stockMiktarSel = 0;
   if(stockEnabled() && wasFirst){
