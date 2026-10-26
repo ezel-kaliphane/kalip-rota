@@ -178,13 +178,13 @@ function renderFasonIsilModal(){
       <div class="durus-modal-header"><div><div class="durus-modal-title">${m.mod === 'gonderim' ? 'Fason ısıl işleme gönderim' : m.mod === 'paket' ? 'Isıl işlem paket bilgisi' : 'Fason ısıl işlem'}</div>
         <div class="durus-modal-sub">${m.mod ? 'Bu pakete hangi ısıl işlem yapılacak? Tür, istenen sertlik ve her iş emrinin kg\'si — satın alma isteği bu bilgiyle açılır.' : 'Fasondan dönen parçaya hangi ısıl işlem yapıldı? Birden fazla seçilebilir.'}</div></div>
         <button class="icon-btn" onclick="fasonIsilModal=null; render()">${ico('x',16)}</button></div>
-      <div class="durus-modal-list">
-        ${turler.map(t => { const on = !!m.secili[t]; return `<button class="durus-option-card" style="${on ? 'border-color:var(--accent);background:var(--accent-dim)' : ''}" onclick="fasonIsilModal.secili['${escJs(t)}']=!fasonIsilModal.secili['${escJs(t)}']; render()">
-          <span class="durus-radio" style="${on ? 'border-color:var(--accent)' : ''};border-radius:5px"><span style="width:10px;height:10px;border-radius:2px;background:${on ? 'var(--accent)' : 'transparent'}"></span></span>
-          <span class="durus-option-name" style="${on ? 'color:var(--accent)' : ''}">${esc(t)}</span></button>`; }).join('')}
-        ${m.mod === 'paket' ? '' : `<button class="durus-option-card dashed" onclick="fasonIsilKaydet(true)"><span class="durus-option-name" style="color:var(--text-muted)">${m.mod === 'gonderim' ? 'Şimdi değil — bilgisiz gönder' : 'Bilmiyorum / atla'}</span></button>`}
-      </div>
-      <div class="durus-modal-footer" style="flex-direction:column;align-items:stretch;gap:10px">
+      <!-- 01.11.2026 (Şeref KOLDAŞ telefonu): çok iş emrinde alttaki sabit bölüm (sertlik + kg satırları) büyüyüp
+           tür listesini ekrandan itiyordu. Artık tek kaydırılabilir gövde: türler kompakt düğmeler (iki sütun) en üstte,
+           altında sertlik ve kg; sabit alt bölümde yalnız Kaydet düğmesi. -->
+      <div class="durus-modal-list fis-govde">
+        <div class="fis-sertlik-bas">Isıl işlem türü <span>birden fazla seçilebilir</span></div>
+        <div class="fis-turler">${turler.map(t => { const on = !!m.secili[t]; return `<button type="button" class="fis-tur ${on ? 'on' : ''}" aria-pressed="${on}" onclick="fasonIsilModal.secili['${escJs(t)}']=!fasonIsilModal.secili['${escJs(t)}']; render()"><span class="fis-tur-kutu">${on ? ico('check', 13) : ''}</span>${esc(t)}</button>`; }).join('')}</div>
+        ${m.mod === 'paket' ? '' : `<button type="button" class="fis-atla" onclick="fasonIsilKaydet(true)">${m.mod === 'gonderim' ? 'Şimdi değil — bilgisiz gönder' : 'Bilmiyorum / atla'}</button>`}
         <div class="fis-sertlik" style="margin:0">
           <div class="fis-sertlik-bas">Sertlik aralığı <span>HRC</span></div>
           <div class="fis-sertlik-kutular">
@@ -203,6 +203,8 @@ function renderFasonIsilModal(){
           </div>`; }).join('')}</div>
           <div class="fis-toplam"><span>Paket toplamı${m.eskiToplam ? ` <em>(eski kayıt: ${fasonKgYazi(m.eskiToplam)} kg)</em>` : ''}</span><b id="fis-toplam">${fasonKgYazi((m.kalemler || []).reduce((s, x) => s + (fasonSayi(x.kg) || 0), 0))} kg</b></div>` : ''}
         </div>
+      </div>
+      <div class="durus-modal-footer">
         <button class="durus-modal-footer-btn" onclick="fasonIsilKaydet(false)">${m.mod === 'gonderim' ? 'Kaydet ve gönder (başlat)' : m.mod === 'paket' ? 'Kaydet' : 'Kaydet ve devam et'}</button></div>
     </div></div>`;
 }

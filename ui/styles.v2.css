@@ -1839,3 +1839,13 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .ky-makine span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ky-makine.on{color:var(--text);border-color:color-mix(in srgb,var(--accent) 40%,var(--border))}
 @media (max-width:760px){.ky-liste{position:static;max-height:none;flex-basis:100%}.ky-kisiler{max-height:240px}}
+/* Fason ısıl penceresi — tek kaydırılabilir gövde (01.11.2026) */
+.fis-govde{display:flex;flex-direction:column;gap:10px}
+.fis-turler{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.fis-tur{width:100%;margin:0;min-height:46px;display:flex;align-items:center;gap:9px;padding:8px 11px;border:1px solid var(--border);border-radius:11px;background:var(--panel);color:var(--text);font-size:13.5px;font-weight:600;text-align:left;line-height:1.25}
+.fis-tur.on{border-color:var(--accent);background:var(--accent-dim);color:var(--accent)}
+.fis-tur-kutu{flex:none;width:20px;height:20px;border-radius:6px;border:2px solid var(--border);display:inline-flex;align-items:center;justify-content:center}
+.fis-tur.on .fis-tur-kutu{border-color:var(--accent);background:var(--accent);color:var(--bg)}
+.fis-atla{width:auto;align-self:flex-start;margin:0;padding:6px 2px;border:0;background:transparent;color:var(--text-muted);font-size:12.5px;text-decoration:underline}
+.fis-govde .fis-sertlik{margin:4px 0 0}
+.fis-govde .fis-kalemler{max-height:none;overflow:visible}
