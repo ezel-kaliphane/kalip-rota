@@ -1979,7 +1979,7 @@ function iyAramaSonucKartHtml(grp){
   const chain = grp.entries.map(e=>(e.makine||'').split(' · ')[0]||'—');
   return `<div class="analiz-chart-box" style="margin-bottom:10px">
     <div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:8px">
-      <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;cursor:pointer;text-decoration:underline dotted" onclick="openIyGecmisModal('${escJs(grp.isEmriNo)}')">${esc(grp.talepNo || grp.isEmriNo)}</span>
+      <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;cursor:pointer;text-decoration:underline dotted" onclick="openIyGecmisModal('${escJs(grp.isEmriNo)}','${escJs(grp.talepNo)}')">${esc(grp.talepNo || grp.isEmriNo)}</span>
       ${bilesen ? `<span class="chip" style="padding:3px 9px;font-size:11px">${BILESEN_LABEL[bilesen]} (_${bilesen})</span>` : ''}
       ${grp.talepNo ? `<span style="font-size:11px;color:var(--text-muted)">U kodu: ${esc(grp.isEmriNo)}</span>` : ''}
     </div>
@@ -1987,7 +1987,7 @@ function iyAramaSonucKartHtml(grp){
     ${durum.detay ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${durum.detay}</div>` : ''}
     <div class="route-chain" style="margin-top:10px">${chain.map((c,i)=>`<span class="route-chip">${esc(c)}</span>${i<chain.length-1?'<span class="route-arrow">→</span>':''}`).join('')}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-      ${grp.last.status==='tamamlandi' && typeof ydDugme==='function' ? ydDugme(grp.isEmriNo) : ''}
+      ${grp.last.status==='tamamlandi' && typeof ydDugme==='function' ? ydDugme(grp.isEmriNo, false, grp.talepNo) : ''}
       ${canManageStock() && typeof uygModalAc==='function' ? `<button class="btn-ghost" style="width:auto;padding:7px 12px;color:var(--danger);border-color:var(--danger-border)" onclick="uygModalAc('${escJs(grp.last.id)}')">${ico('alert',13)} Uygunsuzluk bildir</button>` : ''}
     </div>
   </div>`;
@@ -1996,7 +1996,7 @@ function iyAramaSonucKartHtml(grp){
 // sırayla, her adımda hangi makine/kim/ne zaman olduğunu gösterir (bkz. iyGecmisIcinKayitlar).
 function renderIyGecmisModal(){
   const isEmriNo = iyGecmisModalIsEmriNo;
-  const kayitlar = iyGecmisIcinKayitlar(isEmriNo);
+  const kayitlar = iyGecmisIcinKayitlar(isEmriNo, iyGecmisModalTalepNo);
   if(kayitlar.length===0){ iyGecmisModalIsEmriNo = null; return ''; }
   const last = kayitlar[kayitlar.length-1];
   const durum = iyDurumOzeti(last);
@@ -2014,7 +2014,7 @@ function renderIyGecmisModal(){
         <div style="font-size:13.5px;font-weight:600;color:${durum.renk}">${durum.metin}</div>
         ${durum.detay ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;margin-bottom:16px">${durum.detay}</div>` : '<div style="margin-bottom:16px"></div>'}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px">
-          ${last.status==='tamamlandi' && typeof ydDugme==='function' ? ydDugme(isEmriNo) : ''}
+          ${last.status==='tamamlandi' && typeof ydDugme==='function' ? ydDugme(isEmriNo, false, last.talepNo) : ''}
           ${canManageStock() ? `<button class="btn-ghost" style="width:auto;padding:8px 14px;color:var(--danger);border-color:var(--danger-border)" onclick="uygModalAc('${escJs(last.id)}')">${ico('alert',14)} Uygunsuzluk bildir</button>` : ''}
         </div>
         <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:10px">Geçmiş — ${kayitlar.length} adım</div>
@@ -2088,7 +2088,7 @@ function iyGorunumSecici(){
 function iyPresDetayHtml(r){
   const branchLine = (label, bilgi) => {
     if(!bilgi) return `<span style="color:var(--text-muted)">${label}: — henüz açılmadı</span>`;
-    const tik = `onclick="openIyGecmisModal('${escJs(bilgi.last.isEmriNo)}')"`;
+    const tik = `onclick="openIyGecmisModal('${escJs(bilgi.last.isEmriNo)}','${escJs(bilgi.last.talepNo||'')}')"`;
     if(bilgi.hazir) return `<span ${tik} style="color:var(--success);cursor:pointer;text-decoration:underline dotted">${label}: ${ico('check',12)} hazır</span>`;
     const durum = (bilgi.last.status==='devam'||bilgi.last.status==='duruş') ? 'işlemde' : 'bitmedi (son operasyon yok)';
     return `<span ${tik} style="color:var(--warn);cursor:pointer;text-decoration:underline dotted">${label}: bekleniyor (${durum})</span>`;
@@ -2132,8 +2132,8 @@ function iyListeHtml(v){
         </button>
         ${acik ? `<div class="iy-detay">
           ${r.isPres ? iyPresDetayHtml(r) : r.isMalzeme ? iyMalzemeDetayHtml(r) : r.isKalite ? kaliteKararDetayHtml(r) : r.isHammadde ? hammaddesizDetayHtml(r) : r.isEmriler.map(e=>`<div class="iy-detay-row">
-            <span><span class="mono" style="color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline dotted" onclick="${e._sira ? `ydSiraAc('${escJs(e.siraKey)}')` : `openIyGecmisModal('${escJs(e.isEmriNo)}')`}">${esc(e.talepNo||e.isEmriNo)}</span>${v.malzemeTalepSet.has(String(e.talepNo||'').trim().toUpperCase()) ? ` <span class="iy-mb-etiket" title="Bu iş emri Malzeme Bekleyenler'de">malzeme bekliyor</span>` : ''}${e._sira ? ` <span class="iy-mb-etiket yd-sira-etiket" title="Hiç operasyonu açılmadan sıraya kondu">sıraya kondu</span>` : ''}
-              ${typeof ydYetki==='function' && ydYetki() ? `<span class="yd-satir-dugme">${e._sira ? ydSiraDugmeleri(e.siraKey) : ydDugme(e.isEmriNo, true)}</span>` : ''}</span>
+            <span><span class="mono" style="color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline dotted" onclick="${e._sira ? `ydSiraAc('${escJs(e.siraKey)}')` : `openIyGecmisModal('${escJs(e.isEmriNo)}','${escJs(e.talepNo||'')}')`}">${esc(e.talepNo||e.isEmriNo)}</span>${v.malzemeTalepSet.has(String(e.talepNo||'').trim().toUpperCase()) ? ` <span class="iy-mb-etiket" title="Bu iş emri Malzeme Bekleyenler'de">malzeme bekliyor</span>` : ''}${e._sira ? ` <span class="iy-mb-etiket yd-sira-etiket" title="Hiç operasyonu açılmadan sıraya kondu">sıraya kondu</span>` : ''}
+              ${typeof ydYetki==='function' && ydYetki() ? `<span class="yd-satir-dugme">${e._sira ? ydSiraDugmeleri(e.siraKey) : ydDugme(e.isEmriNo, true, e.talepNo)}</span>` : ''}</span>
             <span style="color:var(--text-muted)">${esc(e.makine||'—')}</span>
             <span class="mono sag">${esc(e.adet||'—')}</span>
             <span style="color:var(--text-muted)">${esc(e.operatorName||e.operatorUsername||'')}</span>

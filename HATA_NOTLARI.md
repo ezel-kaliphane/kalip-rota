@@ -5,6 +5,24 @@ hatayı ikinci kez yazmamak. En yeni üstte.
 
 ---
 
+## 2026-10-26 — Aynı U kodlu iş emirleri karışıyordu: arama, geçmiş, kuyruk, yer düzeltme
+
+**Belirti.** Kullanıcı İş Yoğunluğu'nda 2609080005'i aradı; kart doğru, tıklayınca 2609100004'ün geçmişi açıldı.
+Ölçüm: 149 U kodunda birden çok iş emri var; kuyruklar U koduna göre sayıldığı için 29 iş emri hiçbir
+kuyrukta görünmüyordu (12'si son 30 gün — 2609080005 20 gündür PT01 sırasında, görünmüyordu).
+
+**Sebep.** `bekleyenSonrakiOperasyonlar`, `iyAramaSonuclari`, `iyGecmisIcinKayitlar` ve `ydKayitAc` "son kayıt"ı
+`isEmriNo` (U kodu + dal eki = MAMUL) ile seçiyordu. İş emrinin kimliği talep no'dur; aynı mamul tekrar üretime
+girince yeni iş emri eskisini ezdi. 07.10'daki "ilk operasyon" hatasının aynı sınıfı (anahtar işin kimliği değil).
+
+**Düzeltme.** `isEmriAnahtari(e)` = talep no + takip kodu (talep no'suz eski kayıtta yalnız takip kodu — 44
+kayıt, hepsi 60 günden eski). Kuyruk, arama (iş emri no → o iş emri, U kodu → o U kodlu bütün iş emirleri),
+geçmiş penceresi (`openIyGecmisModal(isEmriNo, talepNo)`) ve "Yerini değiştir" bu anahtarla. Test: aynı U kodlu
+iki iş emri.
+
+**Ders.** "Bir işin son durumu" sorusunun anahtarı İŞ EMRİDİR (talep no), mamul kodu değil. `isEmriNo` adı
+yanıltıcı: alan mamul kodunu taşıyor. Yeni bir "son kayıt / bekleyen" hesabı yazarken `isEmriAnahtari` kullan.
+
 ## 2026-10-19 — Telefonda Takım Dolabı "Çıkış Yap" alttaki menünün arkasında kalıyordu
 
 **Belirti.** Operatör gösterdi: takım/sarf çıkışında en alttaki "Çıkış Yap" düğmesine basılamıyor. 360×640

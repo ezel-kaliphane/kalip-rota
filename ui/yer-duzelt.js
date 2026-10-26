@@ -41,9 +41,10 @@ function isEmriSiraKuyrukKayitlari(){
 function ydSiraAnahtar(talepNo, bilesen){ return (String(talepNo || '').trim().toUpperCase() + '_' + (bilesen || 'TEK')).replace(/[.#$\[\]\/]/g, '-'); }
 
 /* ---------- açılış ---------- */
-function ydKayitAc(isEmriNo){
+function ydKayitAc(isEmriNo, talepNo){
   if(!ydYetki()){ toast('Bu işlem için Şef ya da SuperAdmin yetkisi gerekli'); return; }
-  const list = iyGecmisIcinKayitlar(isEmriNo), son = list[list.length - 1];
+  /* talepNo ile: aynı U kodlu BAŞKA iş emrinin kaydına dokunulmaz (26.10.2026) */
+  const list = iyGecmisIcinKayitlar(isEmriNo, talepNo), son = list[list.length - 1];
   if(!son){ toast('Bu iş emrinin kaydı yok — "Sıraya koy"u kullanın'); return; }
   if(son.status !== 'tamamlandi'){ toast('Şu an ' + (son.makine || '') + "'de işleniyor — bitmeden yeri değiştirilemez"); return; }
   const kapali = !!son.sonOperasyon && !son.sonrakiMakine;
@@ -169,9 +170,9 @@ function ydMalzemeBekliyor(){
 }
 
 /* ---------- görünüm ---------- */
-function ydDugme(isEmriNo, kucuk){
+function ydDugme(isEmriNo, kucuk, talepNo){
   if(!ydYetki()) return '';
-  return `<button type="button" class="btn-ghost yd-dugme${kucuk ? ' kucuk' : ''}" title="Bırakılan yeri düzelt (Şef / SuperAdmin)" onclick="event.stopPropagation(); ydKayitAc('${escJs(isEmriNo)}')">${ico('chevronRight', 12)} Yerini değiştir</button>`;
+  return `<button type="button" class="btn-ghost yd-dugme${kucuk ? ' kucuk' : ''}" title="Bırakılan yeri düzelt (Şef / SuperAdmin)" onclick="event.stopPropagation(); ydKayitAc('${escJs(isEmriNo)}','${escJs(talepNo || '')}')">${ico('chevronRight', 12)} Yerini değiştir</button>`;
 }
 function ydSiraDugmeleri(key){
   if(!ydYetki()) return '';

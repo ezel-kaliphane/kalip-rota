@@ -15,12 +15,18 @@ function getAllowedMachines(){
 // (Press/FKK'da olsun ya da olmasın, AYNI isEmriNo ile) yeni bir kayıt açtığı an bu kayıt "en
 // son" olmaktan çıkar, dolayısıyla bekleyen listesinden kendiliğinden düşer (biri fiilen gelip
 // işi gerçekten aldı demektir — ayrı bir "işlendi" işaretlemeye gerek yok).
+/* 26.10.2026 HATA (kullanıcı: "2609080005'i arıyorum, detayda 2609100004 çıkıyor"): son kayıt U KODUNA göre
+   seçiliyordu — aynı mamulün (U kodu) iki iş emri varken yenisi eskisini kuyruktan GİZLİYORDU (o gün 29 iş emri,
+   149 U kodunda birden çok iş emri). Anahtar artık iş emri: talep no + takip kodu (talep no'suz eski kayıtta
+   yalnız takip kodu). */
+function isEmriAnahtari(e){ const t = String((e && e.talepNo) || '').trim().toUpperCase(); return (t ? t + '|' : '') + ((e && e.isEmriNo) || ''); }
 function bekleyenSonrakiOperasyonlar(){
   const sonKayitlar = {};
   entriesArray().forEach(e=>{
     if(!e.isEmriNo) return;
-    const mevcut = sonKayitlar[e.isEmriNo];
-    if(!mevcut || (e.startTs||0) > (mevcut.startTs||0)) sonKayitlar[e.isEmriNo] = e;
+    const k = isEmriAnahtari(e);
+    const mevcut = sonKayitlar[k];
+    if(!mevcut || (e.startTs||0) > (mevcut.startTs||0)) sonKayitlar[k] = e;
   });
   return Object.values(sonKayitlar).filter(e => e.status==='tamamlandi' && e.sonrakiMakine);
 }
@@ -71,17 +77,18 @@ function iyAramaSonuclari(sorgu){
   entriesArray().forEach(e=>{
     if(!e.isEmriNo) return;
     if(!e.isEmriNo.toUpperCase().includes(q) && !(e.talepNo||'').toUpperCase().includes(q)) return;
-    (byIsEmri[e.isEmriNo] ||= []).push(e);
+    (byIsEmri[isEmriAnahtari(e)] ||= []).push(e);
   });
-  return Object.entries(byIsEmri).map(([isEmriNo, list])=>{
-    const sorted = list.slice().sort((a,b)=>a.startTs-b.startTs);
-    return { isEmriNo, talepNo: sorted[sorted.length-1].talepNo||'', entries: sorted, last: sorted[sorted.length-1] };
+  return Object.values(byIsEmri).map(list=>{
+    const sorted = list.slice().sort((a,b)=>a.startTs-b.startTs), last = sorted[sorted.length-1];
+    return { isEmriNo: last.isEmriNo, talepNo: last.talepNo||'', entries: sorted, last };
   }).sort((a,b)=> b.last.startTs - a.last.startTs).slice(0,25);
 }
 // Bir isEmriNo'nun TÜM kayıtları, kronolojik sırayla — "geçmiş" penceresinde hangi makinelerden
 // geçtiğini, kimin işlediğini, ne zaman işlediğini göstermek için.
-function iyGecmisIcinKayitlar(isEmriNo){
-  return entriesArray().filter(e=>e.isEmriNo===isEmriNo).sort((a,b)=>a.startTs-b.startTs);
+function iyGecmisIcinKayitlar(isEmriNo, talepNo){
+  const t = String(talepNo||'').trim().toUpperCase();
+  return entriesArray().filter(e=>e.isEmriNo===isEmriNo && (!t || String(e.talepNo||'').trim().toUpperCase()===t)).sort((a,b)=>a.startTs-b.startTs);
 }
 function openActiveDetail(id){ activeDetailId = id; render(); }
 function closeActiveDetail(){ activeDetailId = null; setView('list'); }

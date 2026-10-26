@@ -40,7 +40,7 @@ function hammaddesizDetayHtml(r){
     const mamul = (typeof usMamulAdi === 'function' ? usMamulAdi(e) : '') || '';
     const yazi = [e.malzemeCinsi, e.capBoy].filter(Boolean).join(' · ');
     return `<div class="iy-detay-row" style="grid-template-columns:minmax(0,1.1fr) minmax(0,1.6fr) minmax(0,.9fr) minmax(0,1fr) auto">
-      <span><span class="mono" style="color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline dotted" onclick="openIyGecmisModal('${escJs(e.isEmriNo)}')">${esc(e.talepNo || e.isEmriNo)}</span>
+      <span><span class="mono" style="color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline dotted" onclick="openIyGecmisModal('${escJs(e.isEmriNo)}','${escJs(e.talepNo||'')}')">${esc(e.talepNo || e.isEmriNo)}</span>
         <span class="mono" style="display:block;font-size:10.5px;color:var(--text-subtle)">${esc(e.isEmriNo)} · ${esc(e.adet || '?')} adet</span></span>
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(mamul)}">${esc(mamul || '—')}${yazi ? `<span style="display:block;font-size:11px;color:var(--warn)">operatör yazdı: ${esc(yazi)}</span>` : ''}</span>
       <span style="color:var(--text-muted)">${esc(String(e.makine || '').split(' · ')[0])} · ${esc(e.operatorName || e.operatorUsername || '')}</span>

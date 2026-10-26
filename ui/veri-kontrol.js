@@ -81,7 +81,7 @@ function vkTablo(basliklar, satirlar, sinir){
     ${satirlar.length > n ? `<div style="font-size:11.5px;color:var(--text-muted);margin-top:6px">+${satirlar.length - n} satır daha</div>` : ''}`;
 }
 function vkIsEmri(e){
-  return `<span class="mono" style="color:var(--accent);cursor:pointer;text-decoration:underline dotted" title="İş emrinin geçmişi" onclick="openIyGecmisModal('${escJs(e.isEmriNo)}')">${esc(e.talepNo || e.isEmriNo || '—')}</span>
+  return `<span class="mono" style="color:var(--accent);cursor:pointer;text-decoration:underline dotted" title="İş emrinin geçmişi" onclick="openIyGecmisModal('${escJs(e.isEmriNo)}','${escJs(e.talepNo||'')}')">${esc(e.talepNo || e.isEmriNo || '—')}</span>
     <span class="mono" style="display:block;font-size:10.5px;color:var(--text-subtle)">${esc(e.isEmriNo || '')}</span>`;
 }
 const vkMakine = e => `<span class="mono">${esc(String(e.makine || '').split(' · ')[0])}</span>`;

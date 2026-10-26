@@ -654,9 +654,10 @@ function setIyAramaMetni(v){ iyAramaMetni = v; render(); }
 // İş Yoğunluğu'nda bir iş emri no'ya tıklayınca açılan "geçmiş" penceresi — hangi makinelerden
 // geçti, kim işledi, ne zaman işledi. isEmriNo ile açılıyor (talep no değil — _ZARF/_ELMAS
 // gibi bileşenler aynı talep no'yu paylaşabilir, isEmriNo tekil).
-let iyGecmisModalIsEmriNo = null;
-function openIyGecmisModal(isEmriNo){ iyGecmisModalIsEmriNo = isEmriNo; render(); }
-function closeIyGecmisModal(){ iyGecmisModalIsEmriNo = null; render(); }
+let iyGecmisModalIsEmriNo = null, iyGecmisModalTalepNo = '';
+/* talepNo verilirse yalnız O İŞ EMRİNİN kayıtları (aynı U kodlu başka iş emirleri karışmaz — 26.10.2026) */
+function openIyGecmisModal(isEmriNo, talepNo){ iyGecmisModalIsEmriNo = isEmriNo; iyGecmisModalTalepNo = talepNo || ''; render(); }
+function closeIyGecmisModal(){ iyGecmisModalIsEmriNo = null; iyGecmisModalTalepNo = ''; render(); }
 // Tam ekran atölye panosu: index.html?pano=1 — bkz. js/app.js render()/renderLiveBits().
 function isYogunluguPanoMode(){
   try{ return new URLSearchParams(location.search).get('pano') === '1'; }catch(e){ return false; }

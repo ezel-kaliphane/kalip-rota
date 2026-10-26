@@ -609,3 +609,18 @@ test('fason ısıl gönderim: formda yazılan iş emri kg\'si pencerede dolu, ya
   assert.equal(JSON.stringify(k), JSON.stringify([{ kg: '4,1', oneri: false }, { kg: '', oneri: false }]));
   A.ata('fasonIsilModal', null); A.ata('appSettings', {});
 });
+
+/* 26.10.2026 HATA: aynı U kodlu iki iş emri — arama/geçmiş/kuyruk U koduna göre karışıyordu */
+test('aynı U kodlu iki iş emri: kuyrukta ikisi de, arama iş emri / U kodu ayrımı, geçmiş yalnız o iş emri', () => {
+  kayitlar([
+    { makine: 'UT01 · Torna', status: 'tamamlandi', talepNo: '2609080005', isEmriNo: 'UC13040009', adet: '5', startTs: ts('2026-10-01 08:00'), endTs: ts('2026-10-01 10:00'), sonrakiMakine: 'PT01 · Pres' },
+    { makine: 'ODT03 · Taşlama', status: 'tamamlandi', talepNo: '2609100004', isEmriNo: 'UC13040009', adet: '5', startTs: ts('2026-10-10 08:00'), endTs: ts('2026-10-10 10:00'), sonrakiMakine: 'UT01 · Torna' },
+    { makine: 'P01 · Pres', status: 'tamamlandi', talepNo: '2609100004', isEmriNo: 'UC13040009', adet: '5', startTs: ts('2026-09-26 08:00'), endTs: ts('2026-09-26 08:10'), sonrakiMakine: 'F02 · Fırın' }
+  ]);
+  const kuyruk = A.ctx.bekleyenSonrakiOperasyonlar().map(e => e.talepNo + '→' + e.sonrakiMakine.split(' · ')[0]).sort();
+  assert.equal(JSON.stringify(kuyruk), JSON.stringify(['2609080005→PT01', '2609100004→UT01']));
+  assert.equal(JSON.stringify(A.ctx.iyAramaSonuclari('2609080005').map(g => g.talepNo)), JSON.stringify(['2609080005']));
+  assert.equal(A.ctx.iyAramaSonuclari('UC13040009').length, 2);
+  assert.equal(A.ctx.iyGecmisIcinKayitlar('UC13040009', '2609080005').length, 1);
+  assert.equal(A.ctx.iyGecmisIcinKayitlar('UC13040009', '2609100004').length, 2);
+});
