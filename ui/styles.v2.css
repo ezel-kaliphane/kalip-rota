@@ -1798,3 +1798,44 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .ayar-ara:focus-within{border-color:var(--accent)}
 .ayar-ara input{flex:1;margin:0;padding:0;height:42px;border:0;background:transparent;box-shadow:none;outline:none;font-size:14.5px}
 .ayar-vurgu{outline:2px solid var(--accent);outline-offset:3px;transition:outline-color .6s}
+/* Kişi Yetkileri — tek ekran (26.10.2026, ui/kisi-yetkileri.js) */
+.ky-ekran{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.ky-liste{flex:0 1 280px;min-width:240px;display:flex;flex-direction:column;gap:8px;position:sticky;top:12px;max-height:calc(100vh - 24px)}
+.ky-ara{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;border:1px solid var(--border);border-radius:11px;background:var(--panel);color:var(--text-muted)}
+.ky-ara:focus-within{border-color:var(--accent)}
+.ky-ara input{flex:1;margin:0;padding:0;height:38px;border:0;background:transparent;box-shadow:none;outline:none}
+.ky-kisiler{display:flex;flex-direction:column;gap:4px;overflow:auto;padding-right:2px}
+.ky-kisi{width:100%;margin:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 8px;text-align:left;padding:8px 11px;border:1px solid var(--border);border-radius:10px;background:var(--panel);color:var(--text)}
+.ky-kisi.on{border-color:var(--accent);background:var(--accent-dim)}
+.ky-ad{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ky-kod{grid-column:1;font-size:11.5px;color:var(--text-muted)}
+.ky-rol{grid-column:2;grid-row:1/3;align-self:center;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;color:var(--text-muted);border:1px solid var(--border)}
+.ky-rol.yon{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,var(--border))}
+.ky-bos{color:var(--text-muted);font-size:12.5px;padding:10px}
+.ky-detay{flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.ky-bos-detay{padding:40px 20px;text-align:center;color:var(--text-muted);border:1px dashed var(--border);border-radius:14px}
+.ky-baslik{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.ky-baslik-ad{font-size:19px;font-weight:700}
+.ky-alt{font-size:12.5px;color:var(--text-muted)}
+.ky-rozet{font-size:12px;color:var(--text-muted);border:1px solid var(--border);border-radius:999px;padding:4px 11px}
+.ky-bolum .set-sec{display:flex;align-items:center;gap:8px}
+.ky-say{font-family:var(--mono,ui-monospace,monospace);font-size:12px;color:var(--accent);text-transform:none;letter-spacing:0}
+.ky-not{font-size:12px;color:var(--text-muted);margin:-2px 0 10px}
+.ky-alt-baslik{font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;margin:12px 0 6px}
+.ky-alt-baslik small{text-transform:none;letter-spacing:0;font-weight:500}
+.ky-kutular{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px}
+.ky-kutu{display:flex;align-items:flex-start;gap:9px;margin:0;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:var(--panel-alt);cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text)}
+.ky-kutu input{width:18px;height:18px;margin:1px 0 0;flex:none}
+.ky-kutu span{display:flex;flex-direction:column;gap:2px}
+.ky-kutu b{font-weight:600}
+.ky-kutu small{font-size:11.5px;color:var(--text-muted)}
+.ky-kutu:has(input:checked){border-color:color-mix(in srgb,var(--accent) 50%,var(--border))}
+.ky-alan{display:flex;flex-direction:column;gap:5px;margin:12px 0 0;max-width:420px;text-transform:none;letter-spacing:0;font-size:12.5px;color:var(--text-muted)}
+.ky-alan select{margin:0}
+.ky-makineler{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px}
+.ky-makine{display:flex;align-items:center;gap:8px;margin:0;padding:7px 10px;border:1px solid var(--border);border-radius:9px;background:var(--panel-alt);font-size:12.5px;text-transform:none;letter-spacing:0;cursor:pointer;color:var(--text-muted)}
+.ky-makine input{width:16px;height:16px;margin:0}
+.ky-makine b{color:var(--accent)}
+.ky-makine span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ky-makine.on{color:var(--text);border-color:color-mix(in srgb,var(--accent) 40%,var(--border))}
+@media (max-width:760px){.ky-liste{position:static;max-height:none;flex-basis:100%}.ky-kisiler{max-height:240px}}

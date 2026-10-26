@@ -2826,11 +2826,12 @@ function renderAyarlarMenu(){
     { g:'stok', kosul:sa, etiket:'Hammadde Stok Takibi', id:'sw-malzeme', alt:'Kapalıyken operatör stoğu görmez; yönetim ekranı çalışmaya devam eder', toggle:'toggleStockTracking()', ac:stockEnabled(), kw:'hammadde malzeme stok modul ac kapa' },
     { g:'stok', kosul:sa||sef, etiket:'Hammadde Stok Ayarları', alt:'Malzeme stoğu modülünün ayarları', hedef:'stok', kw:'hammadde malzeme stok ayar celik cubuk' },
     // KİŞİLER VE YETKİLER
-    { g:'yetki', kosul:sa, etiket:'Kişi Bazlı Makine Erişimi', alt:'Operatörün "Çalışılan Makine" listesini belirler', hedef:'access', kw:'kisi operator makine erisim yetki' },
-    { g:'yetki', kosul:sa, etiket:'Sekme / Bölüm Erişimi', alt:"Kullanıcı bazlı — Canlı Panel'in üç sekmesi ayrı ayrı", deger:`${yoneticiSay} kişi`, hedef:'tabErisimi', kw:'sekme bolum erisim yetki kullanici canli panel' },
-    { g:'yetki', kosul:sa, etiket:'Takım Stok Görünürlük / Sayım İzinleri', alt:'Kalem Listesi, Konumlar, Sayım — kullanıcı bazlı', hedef:'takimStok', kw:'takim stok gorunurluk sayim izin yetki' },
-    { g:'yetki', kosul:sa && toolStokEnabled(), etiket:'Takım Dolabı Erişimi', alt:'Kim hangi dolaptan çıkış yapabilir', onclick:"ayarGit('takimStok','Dolap Erişimi')", kw:'dolap erisim yetki takim' },
-    { g:'yetki', kosul:sa, etiket:'Tadilat Oluşturma Yetkisi', alt:'Operatörler ekranında, kişi satırlarında', deger:`${tadilatYetkiliSay} kişi`, onclick:'gotoOperatorler()', kw:'tadilat olusturma yetki operator' },
+    /* 26.10.2026: bir kişinin bütün yetkileri tek ekranda (Operatörler → Kişi Yetkileri); aşağıdakiler herkesi
+       yan yana gösteren TOPLU tablolar olarak kaldı */
+    { g:'yetki', kosul:sa, etiket:'Kişi Yetkileri', alt:'Kişiyi seç — makine erişimi, sekmeler, takım dolabı, çoklu iş, fason, tadilat, rapor yetkileri tek ekranda', deger:`${Object.values(STATE.operators||{}).filter(v=>v && !v.isSuperAdmin).length} kişi`, onclick:'kisiYetkiAc()', kw:'kisi yetki izin erisim makine sekme bolum takim dolap sayim coklu is emri fason mesaj tadilat rapor bildirim atolye operator personel' },
+    { g:'yetki', kosul:sa, etiket:'Sekme Erişimi — toplu tablo', alt:'Bütün yöneticilerin görebildiği bölümler yan yana', deger:`${yoneticiSay} kişi`, hedef:'tabErisimi', kw:'sekme bolum erisim yetki kullanici canli panel toplu' },
+    { g:'yetki', kosul:sa && toolStokEnabled(), etiket:'Takım Dolabı Erişimi — toplu tablo', alt:'Kim hangi dolaptan çıkış yapabilir, herkes yan yana', onclick:"ayarGit('takimStok','Dolap Erişimi')", kw:'dolap erisim yetki takim toplu' },
+    { g:'yetki', kosul:sa, etiket:'Personel Ayarları — toplu tablo', alt:'Çoklu iş, fason, mesaj, varsayılan makine — herkes yan yana', onclick:"operatorSubView='personel'; gotoOperatorler()", kw:'personel coklu is fason mesaj varsayilan makine tadilat toplu' },
     // BİLDİRİMLER
     { g:'bildirim', kosul:true, etiket:'Bildirimlerim', alt:'Sana gelen son bildirimler', hedef:'bildirimlerim', kw:'bildirim gelen' },
     { g:'bildirim', kosul:sa, etiket:'Bildirim Gönder', alt:'Seçtiğin kişilere anlık bildirim', hedef:'bildirimGonder', kw:'bildirim gonder mesaj' },
@@ -3174,11 +3175,12 @@ function renderKullaniciEkle(){
   return body;
 }
 const OPERATOR_BOLUMLERI = [
-  { key:'personel', label:'Personel Ayarları', alt:'varsayılan makine, çoklu iş, makine erişimi' },
+  { key:'yetki',    label:'Kişi Yetkileri',    alt:'bir kişinin bütün yetkileri tek ekranda (ui/kisi-yetkileri.js)' },
+  { key:'personel', label:'Personel Ayarları', alt:'varsayılan makine, çoklu iş, makine erişimi — herkes tek tabloda' },
   { key:'atolye',   label:'Atölye Ayarları',   alt:'hangi personel hangi atölyede' },
   { key:'ekle',     label:'Kullanıcı Ekle',    alt:'yeni operatör/kullanıcı aç' },
 ];
-let operatorSubView = 'personel';
+let operatorSubView = 'yetki';
 function setOperatorSubView(k){ operatorSubView = k; render(); }
 function renderOperatorler(){
   /* YETKI: bu uc satir Ayarlar menusunde `sa` ile, yani SADECE SuperAdmin'e ciziliyordu
@@ -3187,12 +3189,13 @@ function renderOperatorler(){
   if(!(session && session.isSuperAdmin)){
     return `<div class="settings-wrap"><div style="color:var(--text-muted);font-size:12.5px">Bu ekrana erişim yetkin yok.</div></div>`;
   }
-  if(!OPERATOR_BOLUMLERI.some(b=>b.key===operatorSubView)) operatorSubView = 'personel';
+  if(!OPERATOR_BOLUMLERI.some(b=>b.key===operatorSubView)) operatorSubView = 'yetki';
   const serit = `<div class="sub-tabs" style="flex-wrap:wrap">
     ${OPERATOR_BOLUMLERI.map(b=>`<button class="sub-tab-btn ${operatorSubView===b.key?'active':''}" title="${esc(b.alt)}" onclick="setOperatorSubView('${b.key}')">${esc(b.label)}</button>`).join('')}
   </div>`;
   let govde = '';
-  if(operatorSubView==='personel')    govde = renderPersonelAyarlari();
+  if(operatorSubView==='yetki')       govde = renderKisiYetkileri();
+  else if(operatorSubView==='personel') govde = renderPersonelAyarlari();
   else if(operatorSubView==='atolye') govde = renderPersonelAtolye();
   else if(operatorSubView==='ekle')   govde = renderKullaniciEkle();
   return `<div class="settings-wrap">${serit}${govde}</div>`;
