@@ -1793,3 +1793,8 @@ button.mb-istek-no{border-color:var(--warn-border)}
 /* Liste + panel yan yana ancak ~1200 px'ten geniş ekranda sığıyor; daha darda panel sağdan çekmece, telefonda alttan */
 @media (max-width:1200px){.st-panel{position:fixed;right:12px;top:72px;bottom:12px;width:min(390px,calc(100vw - 24px));max-width:none;max-height:none;z-index:60;box-shadow:-10px 0 34px rgba(0,0,0,.4)}}
 @media (max-width:640px){.st-panel{left:8px;right:8px;top:auto;bottom:8px;width:auto;max-height:80vh;box-shadow:0 -8px 30px rgba(0,0,0,.4)}.st-dolap{white-space:normal}}
+/* Ayarlar araması (26.10.2026) */
+.ayar-ara{display:flex;align-items:center;gap:9px;height:46px;padding:0 14px;margin:0 0 14px;border:1px solid var(--border);border-radius:12px;background:var(--panel);color:var(--text-muted);max-width:640px}
+.ayar-ara:focus-within{border-color:var(--accent)}
+.ayar-ara input{flex:1;margin:0;padding:0;height:42px;border:0;background:transparent;box-shadow:none;outline:none;font-size:14.5px}
+.ayar-vurgu{outline:2px solid var(--accent);outline-offset:3px;transition:outline-color .6s}

@@ -2769,96 +2769,103 @@ function ayarSatiri(o){
     <span class="chev">${ico('chevronRight',15)}</span>
   </button>`;
 }
+/* ===================== AYARLAR — ARAMA + SORUYA GÖRE GRUPLAR (26.10.2026, kullanıcı: "ayarda bir şeyleri bulmak
+   çok zor") =====================
+   Önce: 6 grup / ~30 satır; adı içeriğini söylemeyen satırlar (ısıl işlem türleri "Maliyet Parametreleri"nin
+   içindeydi, "Uzun Duruş Uyarı Eşiği" bütün bildirim ayarlarını açıyordu), dört yere dağılmış kişi yetkileri,
+   iki ayrı karbür satırı, arama yok. Şimdi: üstte arama (her satırın anahtar kelimeleri var), gruplar sorulan
+   soruya göre, iç içe ayarlar (ısıl işlem türleri, dolap erişimi) kendi satırıyla ve doğrudan o bölüme açılır.
+   Ekranların İÇİNE dokunulmadı; satırların erişim koşulları eskisiyle aynı. */
+let ayarAra = '';
+function ayarGit(hedef, bolumBasligi){
+  setSettingsSubTab(hedef);
+  if(!bolumBasligi) return;
+  setTimeout(() => {
+    const el = [...document.querySelectorAll('.set-sec, .sec-h')].find(x => (x.textContent || '').trim().startsWith(bolumBasligi));
+    const kart = el && (el.closest('.set-card') || el);
+    if(kart){ kart.scrollIntoView({ block: 'start', behavior: 'smooth' }); kart.classList.add('ayar-vurgu'); setTimeout(() => kart.classList.remove('ayar-vurgu'), 1800); }
+    else if(hedef === 'maliyet') toast('Isıl işlem türleri, maliyet şifresi girildikten sonra görünen "Isıl işlem (fason)" tablosunda');
+  }, 120);
+}
 function renderAyarlarMenu(){
   const sa = !!session.isSuperAdmin, sef = !!session.isSef;
-  // ek: grubun satirlarindan SONRA, kapanis div'inden ONCE basilacak icerik (rol notu gibi)
-  const grup = (baslik, satirlar, ek) => {
-    const dolu = satirlar.filter(Boolean);
-    return dolu.length ? `<div class="set-card"><div class="set-sec" style="margin:0 0 10px">${baslik}</div>${dolu.join('')}${ek||''}</div>` : '';
-  };
   const esikDk = Math.round(uzunDurusEsikMs()/60000);
   const makineSay = allMachines().length;
   const bolumKuralSay = Object.keys(getBolumKurallari()||{}).length;
   const yoneticiSay = Object.entries(STATE.operators).filter(([c,v])=>!v.isSuperAdmin && (v.isAdmin||v.isSef||v.isUretimSef)).length;
-  /* 28.09.2026 — tahtadaki (design/AyarlarOneri) bes satir menude yoktu, ayarlarin kendisi
-     alt ekranlarin icinde gomuluydu. Artik menude kendi satirlari ve GUNCEL DEGERLERI var.
-     Sayilar canli kaynaklardan turetiliyor, sabit yazilmis hicbir rakam yok. */
   const fasonSay   = Object.keys(fasonMachines||{}).filter(k=>fasonMachines[k]).length;
   const gizliSay   = Object.keys(hiddenMachines||{}).length;
   const tadilatAtolyeSay = allMachines().filter(m=>machineAtolyeOf(m.code)==='tadilat').length;
-  /* Tadilat yetkisi kosulu, Operatorler ekranindaki kutucugun ifadesiyle BIREBIR ayni
-     (bkz. renderPersonelAyarlari > toggleTadilatYetkisi): acikca verilmisse o, verilmemisse
-     Sef/Uretim Sefi varsayilan acik. SuperAdmin her zaman yetkili oldugu icin sayilmiyor. */
+  /* Tadilat yetkisi sayısı Operatörler ekranındaki kutucuğun ifadesiyle birebir aynı */
   const tadilatYetkiliSay = Object.entries(STATE.operators).filter(([c,v])=>
     !v.isSuperAdmin && (v.isAdmin||v.isSef||v.isUretimSef) &&
     (v.permTadilatOlustur===true || (v.permTadilatOlustur!==false && (v.isSef||v.isUretimSef)))).length;
+  const maliyetGor = typeof canSeeMaliyet === 'function' && canSeeMaliyet();
+  const isilSay = typeof fasonIsilTurleri === 'function' ? fasonIsilTurleri().length : 0;
+  const durusSay = (STATE.durusReasons || []).length;
 
-  const g1 = grup('Genel &amp; Kurulum', [
-    /* Tema satiri toggleTheme() cagiriyordu ve o yalnizca koyu<->acik ceviriyor: yoneticinin
-       kayitli temasi 'system' ise satira basinca sessizce sabit bir temaya donusuyordu.
-       Operator ayarlarindaki uclu secici (themeOptHtml) burada kullanilamiyor — .set-row bir
-       <button> ve icine buton konmaz — o yuzden satir uc durum arasinda donuyor. */
-    ayarSatiri({ etiket:'Tema', alt:'Koyu · Açık · Sistem arasında geçer',
-      deger: theme==='system' ? 'Sistem' : (resolvedTheme()==='dark'?'Koyu':'Açık'), onclick:'temaDongusu()' }),
-    sa && ayarSatiri({ etiket:'Takım &amp; Sarf Stok Modülü', id:'sw-toolstok', toggle:'toggleToolStokEnabled()', ac:toolStokEnabled() }),
-    sa && ayarSatiri({ etiket:'Karbür Stok Modülü', id:'sw-karbur', toggle:'toggleKarburEnabled()', ac:karburEnabled() }),
-    sa && ayarSatiri({ etiket:'Malzeme Stok Takibi', id:'sw-malzeme', alt:'Kapalıyken operatör stoğu görmez; yönetim ekranı çalışmaya devam eder', toggle:'toggleStockTracking()', ac:stockEnabled() }),
-    sa && ayarSatiri({ etiket:'Resim Bul — görsel arama', id:'sw-resimbul', alt:'Yerel ağdaki ayrı sunucuya bağımlı', toggle:'toggleResimBul()', ac:resimBulEnabled() }),
-  ]);
+  /* g: grup · kw: aramada eşleşen ek kelimeler · kosul: eski şerit koşuluyla aynı */
+  const S = [
+    // ÜRETİM LİSTELERİ — operatörün seçtiği listeler
+    { g:'uretim', kosul:sa, etiket:'Duruş Nedenleri', alt:'Planlı Mola ve Gün Sonu verimlilik paydasına girmez', deger: durusSay ? `${durusSay} neden` : '', hedef:'durusReasons', kw:'durus mola gun sonu verimlilik' },
+    { g:'uretim', kosul:sa, etiket:'Kalite Red Nedenleri', alt:'Final Kalite Kontrol — şartlı kabul ve red nedenleri', deger:`${kaliteNedenleri().length} neden`, hedef:'kaliteNedenleri', kw:'fkk kalite red sartli kabul neden' },
+    { g:'uretim', kosul:sa && maliyetGor, etiket:'Isıl İşlem Türleri', alt:'Fason ısıl gönderimde ve bitirirken seçilen türler — Maliyet Parametreleri içinde, kg fiyatıyla', deger:`${isilSay} tür`, onclick:"ayarGit('maliyet','Isıl işlem')", kw:'isil islem tur sertlestirme islah sementasyon nitrasyon induksiyon fason fii01 hrc' },
+    { g:'uretim', kosul:sa, etiket:'Tadilat Hazır Açıklama Şablonları', alt:'Tadilat açarken tek dokunuşla seçilen açıklamalar', hedef:'tadilatSablonlari', kw:'tadilat sablon aciklama' },
+    { g:'uretim', kosul:sa, etiket:'Bölüm → İş Merkezi Eşleştirme', alt:'Tadilatta bölümün hangi iş merkezine düştüğü', deger:`${bolumKuralSay} kural`, hedef:'bolumKurallari', kw:'bolum is merkezi tadilat kural' },
+    // MAKİNELER
+    { g:'makine', kosul:sa, etiket:'Makine Listesi', alt:'Ad, grup, atölye, fason ve gizleme işaretleri', deger:String(makineSay), hedef:'makineAyarlari', kw:'makine tezgah liste ad grup' },
+    { g:'makine', kosul:sa, etiket:'Makine Ekle', alt:'Yeni makine ya da gizlenmiş makineyi geri getir', hedef:'addMachine', kw:'makine ekle yeni' },
+    { g:'makine', kosul:sa, etiket:'Fason / Dışarı Gönderim İşaretleri', alt:'Bu makinelerde "makine meşgul" kısıtı uygulanmaz', deger:`${fasonSay} makine`, hedef:'makineAyarlari', kw:'fason disari gonderim mesgul' },
+    { g:'makine', kosul:sa, etiket:'Atölye Ataması', alt:'İmalat / Tadilat — Analiz ekranındaki atölye süzgecini besler', deger:`${tadilatAtolyeSay} tadilat`, hedef:'makineAyarlari', kw:'atolye imalat tadilat' },
+    { g:'makine', kosul:sa && gizliSay>0, etiket:'Gizlenmiş Makineler', alt:'Silinen dahili makineler — yeni seçimlerde çıkmaz', deger:`${gizliSay}`, hedef:'addMachine', kw:'gizli silinen makine' },
+    // STOK MODÜLLERİ
+    { g:'stok', kosul:sa, etiket:'Takım &amp; Sarf Stok Modülü', id:'sw-toolstok', toggle:'toggleToolStokEnabled()', ac:toolStokEnabled(), kw:'takim sarf stok modul ac kapa' },
+    { g:'stok', kosul:sa && toolStokEnabled(), etiket:'Takım Dolabı Erişimi', alt:'Kim hangi dolaptan çıkış yapabilir', onclick:"ayarGit('takimStok','Dolap Erişimi')", kw:'dolap erisim takim cikis cnc atolye' },
+    { g:'stok', kosul:sa, etiket:'Karbür Stok Modülü', id:'sw-karbur', toggle:'toggleKarburEnabled()', ac:karburEnabled(), kw:'karbur stok modul ac kapa' },
+    { g:'stok', kosul:sa, etiket:'Karbür Stok Ayarları', alt:'Hurda eşiği — bu boyun altındaki artıklar hiç kaydedilmez — ve katalog', deger:`${typeof karburHurdaEsigi==='function' ? karburHurdaEsigi() : '—'} mm eşik`, hedef:'karbur', kw:'karbur hurda esik katalog fire' },
+    { g:'stok', kosul:sa, etiket:'Hammadde Stok Takibi', id:'sw-malzeme', alt:'Kapalıyken operatör stoğu görmez; yönetim ekranı çalışmaya devam eder', toggle:'toggleStockTracking()', ac:stockEnabled(), kw:'hammadde malzeme stok modul ac kapa' },
+    { g:'stok', kosul:sa||sef, etiket:'Hammadde Stok Ayarları', alt:'Malzeme stoğu modülünün ayarları', hedef:'stok', kw:'hammadde malzeme stok ayar celik cubuk' },
+    // KİŞİLER VE YETKİLER
+    { g:'yetki', kosul:sa, etiket:'Kişi Bazlı Makine Erişimi', alt:'Operatörün "Çalışılan Makine" listesini belirler', hedef:'access', kw:'kisi operator makine erisim yetki' },
+    { g:'yetki', kosul:sa, etiket:'Sekme / Bölüm Erişimi', alt:"Kullanıcı bazlı — Canlı Panel'in üç sekmesi ayrı ayrı", deger:`${yoneticiSay} kişi`, hedef:'tabErisimi', kw:'sekme bolum erisim yetki kullanici canli panel' },
+    { g:'yetki', kosul:sa, etiket:'Takım Stok Görünürlük / Sayım İzinleri', alt:'Kalem Listesi, Konumlar, Sayım — kullanıcı bazlı', hedef:'takimStok', kw:'takim stok gorunurluk sayim izin yetki' },
+    { g:'yetki', kosul:sa && toolStokEnabled(), etiket:'Takım Dolabı Erişimi', alt:'Kim hangi dolaptan çıkış yapabilir', onclick:"ayarGit('takimStok','Dolap Erişimi')", kw:'dolap erisim yetki takim' },
+    { g:'yetki', kosul:sa, etiket:'Tadilat Oluşturma Yetkisi', alt:'Operatörler ekranında, kişi satırlarında', deger:`${tadilatYetkiliSay} kişi`, onclick:'gotoOperatorler()', kw:'tadilat olusturma yetki operator' },
+    // BİLDİRİMLER
+    { g:'bildirim', kosul:true, etiket:'Bildirimlerim', alt:'Sana gelen son bildirimler', hedef:'bildirimlerim', kw:'bildirim gelen' },
+    { g:'bildirim', kosul:sa, etiket:'Bildirim Gönder', alt:'Seçtiğin kişilere anlık bildirim', hedef:'bildirimGonder', kw:'bildirim gonder mesaj' },
+    { g:'bildirim', kosul:canManageBildirimAyarlari(), etiket:'Bildirim ve Uyarı Ayarları', alt:'Uzun duruş eşiği, sessiz saatler, gün başı ve mesai hatırlatıcıları', deger:`${esikDk} dk eşik`, hedef:'uyarilar', kw:'uzun durus esik uyari sessiz saat hatirlatici mesai gun basi bildirim' },
+    // MALİYET
+    { g:'maliyet', kosul:maliyetGor, etiket:'Maliyet Parametreleri', alt:'Dakika ücretleri, amortisman, çelik / karbür / ısıl işlem fiyatları, kur — şifreli', hedef:'maliyet', kw:'maliyet fiyat dakika ucret amortisman kur celik karbur isil sifre' },
+    // GENEL
+    { g:'genel', kosul:true, etiket:'Tema', alt:'Koyu · Açık · Sistem arasında geçer', deger: theme==='system' ? 'Sistem' : (resolvedTheme()==='dark'?'Koyu':'Açık'), onclick:'temaDongusu()', kw:'tema koyu acik gece' },
+    { g:'genel', kosul:sa, etiket:'Resim Bul — görsel arama', id:'sw-resimbul', alt:'Yerel ağdaki ayrı sunucuya bağımlı', toggle:'toggleResimBul()', ac:resimBulEnabled(), kw:'resim bul gorsel arama' },
+  ].filter(s => s.kosul);
 
-  const g2 = grup('Makineler', [
-    sa && ayarSatiri({ etiket:'Makine Listesi', alt:'Ad, grup, atölye, fason ve gizleme işaretleri', deger:String(makineSay), hedef:'makineAyarlari' }),
-    sa && ayarSatiri({ etiket:'Makine Ekle', hedef:'addMachine' }),
-    sa && ayarSatiri({ etiket:'Fason / Dışarı Gönderim İşaretleri', alt:'Bu makinelerde "makine meşgul" kısıtı uygulanmaz',
-      deger:`${fasonSay} makine`, hedef:'makineAyarlari' }),
-    sa && ayarSatiri({ etiket:'Atölye Ataması', alt:'İmalat / Tadilat — Analiz ekranındaki atölye süzgecini besler',
-      deger:`${tadilatAtolyeSay} tadilat`, hedef:'makineAyarlari' }),
-    sa && gizliSay>0 && ayarSatiri({ etiket:'Gizlenmiş Makineler', alt:'Silinen dahili makineler — yeni seçimlerde çıkmaz',
-      deger:`${gizliSay}`, hedef:'addMachine' }),
-    sa && ayarSatiri({ etiket:'Kişi Bazlı Makine Erişimi', alt:'Operatörün "Çalışılan Makine" listesini belirler', hedef:'access' }),
-  ]);
-
-  const g3 = grup('Üretim Kuralları', [
-    sa && ayarSatiri({ etiket:'Duruş Nedenleri', alt:'Planlı Mola ve Gün Sonu verimlilik paydasına girmez', hedef:'durusReasons' }),
-    sa && ayarSatiri({ etiket:'Kalite Red Nedenleri', alt:'Final Kalite Kontrol — şartlı kabul ve red nedenleri', deger:`${kaliteNedenleri().length} neden`, hedef:'kaliteNedenleri' }),
-    canManageBildirimAyarlari() && ayarSatiri({ etiket:'Uzun Duruş Uyarı Eşiği', alt:'Bildirim ayarlarının tamamı', deger:`${esikDk} dk`, hedef:'uyarilar' }),
-    sa && ayarSatiri({ etiket:'Tadilat Hazır Açıklama Şablonları', hedef:'tadilatSablonlari' }),
-    sa && ayarSatiri({ etiket:'Bölüm &rarr; İş Merkezi Eşleştirme', deger:`${bolumKuralSay} kural`, hedef:'bolumKurallari' }),
-    sa && ayarSatiri({ etiket:'Karbür Hurda Eşiği', alt:'Bu boyun altındaki artıklar hiç kaydedilmez',
-      deger:`${typeof karburHurdaEsigi==='function' ? karburHurdaEsigi() : '—'} mm`, hedef:'karbur' }),
-    sa && ayarSatiri({ etiket:'Karbür Stok Ayarları', alt:'Hurda eşiği ve katalog', hedef:'karbur' }),
-    (sa||sef) && ayarSatiri({ etiket:'Malzeme Stoğu', hedef:'stok' }),
-  ]);
-
-  /* Tahtadaki rol notu gerçeği yansıtıyor: rol atamaları RTDB Rules tarafından istemciye
-     kapalı, bu ekrandan yapılamıyor. */
+  const GRUPLAR = [['uretim','Üretim Listeleri'],['makine','Makineler'],['stok','Stok Modülleri'],['yetki','Kişiler ve Yetkiler'],['bildirim','Bildirimler'],['maliyet','Maliyet'],['genel','Genel']];
   const rolNotu = `<div class="notice" style="--nc:var(--warn);margin:10px 0 0;padding:11px 13px">
     <div class="notice-sub"><b style="color:var(--nc)">Rol yükseltme burada yok.</b> Admin / SuperAdmin / Şef atamaları yalnızca Firebase Console'dan yapılır — Rules bunu istemciye kapatıyor.</div></div>`;
-
-  /* Grup tek satirliktan uce cikti (28.09.2026): tahtada "Erisim & Yetkiler" uc satir
-     gosteriyordu ama ikisi baska yerlerdeydi. Takim gorunurluk/sayim izinleri "Uretim
-     Kurallari"ndan buraya TASINDI (icerigi yetki, uretim kurali degil); Tadilat olusturma
-     yetkisi ise A.12'de Operatorler ekranina tasindigi icin oraya yonlendiriyor. */
-  const g4 = grup('Erişim &amp; Yetkiler', [
-    sa && ayarSatiri({ etiket:'Sekme / Bölüm Erişimi', alt:"Kullanıcı bazlı — Canlı Panel'in üç sekmesi ayrı ayrı", deger:`${yoneticiSay} kişi`, hedef:'tabErisimi' }),
-    sa && ayarSatiri({ etiket:'Takım Stok Görünürlük / Sayım İzinleri', alt:'Kalem Listesi, Konumlar, Sayım — kullanıcı bazlı', hedef:'takimStok' }),
-    sa && ayarSatiri({ etiket:'Tadilat Oluşturma Yetkisi', alt:'Operatörler ekranında, kişi satırlarında',
-      deger:`${tadilatYetkiliSay} kişi`, onclick:'gotoOperatorler()' }),
-  ], sa ? rolNotu : '');
-
-  /* 28.09.2026: burasi "tasinacak" seridiydi — tahtada bu iki satir A.10 Bildirimler
-     ekranina gidiyordu. Kullanici Bildirimler'i sol bardan kaldirdigi ve A.10'u dusurdugu
-     icin serit kalkti; satirlar kendi grubuna donustu ve bir yere gitmeyen vaat bitti. */
-  const g5 = grup('Bildirimler', [
-    ayarSatiri({ etiket:'Bildirimlerim', alt:'Sana gelen son bildirimler', hedef:'bildirimlerim' }),
-    sa && ayarSatiri({ etiket:'Bildirim Gönder', alt:'Seçtiğin kişilere anlık bildirim', hedef:'bildirimGonder' }),
-  ]);
-
-  /* Maliyet (08.10.2026): yalnız adminler (Şef/Üretim Şefi hariç) görür, SuperAdmin düzenler */
-  const gM = (typeof canSeeMaliyet === 'function' && canSeeMaliyet()) ? grup('Maliyet', [
-    ayarSatiri({ etiket:'Maliyet Parametreleri', alt:'Dakika ücretleri, amortisman, çelik / karbür / ısıl işlem fiyatları, kur — şifreli', hedef:'maliyet' })
-  ]) : '';
-  return `<div class="ayar-menu">${g1}${g2}${gM}${g3}${g4}${g5}</div>`;
+  /* Türkçe harfler sadeleşir: "erişim" = "erisim", "ısıl" = "isil" */
+  const katla = s => trNorm(s).replace(/ş/g,'s').replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ö/g,'o').replace(/ü/g,'u').replace(/â/g,'a');
+  const q = katla(ayarAra.trim()), kelimeler = q ? q.split(/\s+/) : [];
+  /* kelime BAŞINDAN eşleşir — "ısıl" "çalışılan"ın içindeki "isil"e takılmasın */
+  const uyar = s => { if(!kelimeler.length) return true;
+    const w = katla([s.etiket, s.alt, s.kw].join(' ').replace(/&amp;/g, '&')).split(/[^a-z0-9]+/).filter(Boolean);
+    return kelimeler.every(k => w.some(x => x.startsWith(k))); };
+  const gorulen = new Set();
+  const grupHtml = ([g, baslik]) => {
+    /* aramada aynı satır iki grupta (dolap erişimi) çıkmasın */
+    const satirlar = S.filter(s => s.g === g && uyar(s) && !(q && gorulen.has(s.etiket)));
+    satirlar.forEach(s => gorulen.add(s.etiket));
+    if(!satirlar.length) return '';
+    return `<div class="set-card"><div class="set-sec" style="margin:0 0 10px">${baslik}</div>${satirlar.map(ayarSatiri).join('')}${g === 'yetki' && sa && !q ? rolNotu : ''}</div>`;
+  };
+  const govde = GRUPLAR.map(grupHtml).join('');
+  return `<div class="ayar-ara">
+      ${ico('search', 16)}
+      <input id="ayar-ara" type="search" placeholder="Ayar ara — ör. ısıl işlem, dolap, red nedeni, eşik, tema" value="${esc(ayarAra)}" oninput="ayarAra=this.value; render()" onkeydown="if(event.key==='Escape'){ ayarAra=''; render(); }" aria-label="Ayar ara">
+    </div>
+    <div class="ayar-menu">${govde || `<div class="set-card" style="color:var(--text-muted)">"${esc(ayarAra.trim())}" ile eşleşen ayar yok.</div>`}</div>`;
 }
 
 /* Üst bardaki ekran başlığı — tahtalarda (Admin-Tadilat, Admin-Matris, Admin-Ayarlar) üst bar
