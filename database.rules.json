@@ -126,6 +126,7 @@
     "uretimPersoneli": { ".read": true, ".write": true },
     "adminTabPermissions": { ".read": true, ".write": true },
     "pushNotified": { ".read": false, ".write": false },
+    "degisim": { ".read": true, ".write": false, "$yol": { ".indexOn": ["t"] } },
     "manualPushRequests": {
       ".read": true,
       ".write": false,

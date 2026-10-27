@@ -513,6 +513,21 @@ test('parçalı dinleme: haftalık dilimler boşluksuz ve çakışmasız', () =>
   ornekler.forEach(v => assert.equal(dilimler.filter(([a, b]) => v >= a && v <= b).length, 1, 'değer ' + v));
 });
 
+/* 27.10.2026 maliyet: eski haftalar tarayıcıda — saklanan bölge ile canlı sorgu (startAt(canliBas)) tam tümleyen olmalı */
+test('önbellek: saklanan / canlı bölge ayrımı ve değişiklik uygulama', () => {
+  const canliBas = ts('2026-10-19 00:00');
+  // RTDB: startAt(sayı) sayıları ≥ ve bütün metin/nesneleri alır; null/boolean/küçük sayılar saklanan bölgede kalır
+  [[canliBas, true], [canliBas - 1, false], [ts('2026-08-01 10:00'), false], [null, false], [undefined, false], [true, false], ['2026', true], [{ a: 1 }, true]]
+    .forEach(([v, beklenen]) => assert.equal(A.ctx.obCanliMi(v, canliBas), beklenen, 'değer ' + JSON.stringify(v)));
+  const kayit = { veri: { a: { startTs: ts('2026-09-01 08:00'), adet: '1' }, b: { startTs: ts('2026-09-02 08:00') } } };
+  A.ctx.obUygula(kayit, 'a', { startTs: ts('2026-09-01 08:00'), adet: '2' }, 'startTs', canliBas);   // eski kayıt düzeltildi
+  A.ctx.obUygula(kayit, 'b', null, 'startTs', canliBas);                                            // silindi
+  A.ctx.obUygula(kayit, 'c', { startTs: ts('2026-09-05 08:00') }, 'startTs', canliBas);             // tarihi geriye çekildi → saklanan bölgeye girdi
+  A.ctx.obUygula(kayit, 'a2', { startTs: canliBas + 1 }, 'startTs', canliBas);                      // canlı bölgeye geçti → saklanmaz
+  assert.deepEqual(Object.keys(kayit.veri).sort(), ['a', 'c']);
+  assert.equal(kayit.veri.a.adet, '2');
+});
+
 /* 19.10.2026: İş Yoğunluğu yer düzeltme — sahte operasyon yerine son kaydın bırakılan yeri değişir */
 test('yer düzeltme: son kaydın yeri değişir, FKK seçilince rota kapanır, not düşülür', () => {
   const fkk = A.ctx.allMachines().find(m => m.code === 'FKK'), diger = A.ctx.allMachines().find(m => m.code !== 'FKK');

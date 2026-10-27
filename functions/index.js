@@ -471,3 +471,30 @@ exports.yeniHammaddeBildirimi = onValueCreated(
     })));
   }
 );
+
+/* ===================== DEĞİŞİKLİK GÜNLÜĞÜ (27.10.2026 maliyet) =====================
+ * İstemci (js/firebase-push.js onbellekliDinle) entries ve tadilatlar'ın ESKİ haftalarını tarayıcıda
+ * (IndexedDB) saklıyor; her açılışta yalnız son iki hafta canlı iniyor. Saklanan kopyanın bayatlamaması için
+ * eski bir kayıt değişince/silinince burası degisim/{yol}/{id} = { t: sunucu zamanı } yazar; istemci açılışta
+ * "t, son baktığımdan büyük" olanları tek tek indirir. Tetikleyici sunucuda olduğu için her yazma yolu
+ * (rapor düzeltme, kısmi aktar, eski FII01 kapatma, yer düzeltme, silme, admin SDK) kendiliğinden kapsanır.
+ * Yalnız alanı (startTs / olusturmaTs) 3 günden eski kayıtlar yazılır — istemcinin sakladığı bölge en az
+ * 7 günlük kayıtlar, yeni kayıtlar zaten canlı dinleniyor. Anahtar kayıt id'si: düğüm kayıt sayısını aşmaz.
+ */
+const DEGISIM_YAKIN_MS = 3 * 864e5;
+function degisimGunlugu(yol, alan){
+  return async (event) => {
+    const sinir = Date.now() - DEGISIM_YAKIN_MS;
+    const eski = snap => snap.exists() && !(typeof snap.child(alan).val() === 'number' && snap.child(alan).val() >= sinir);
+    if(!eski(event.data.before) && !eski(event.data.after)) return;
+    await db.ref(`degisim/${yol}/${event.params.id}`).set({ t: admin.database.ServerValue.TIMESTAMP });
+  };
+}
+exports.entriesDegisim = onValueWritten(
+  { ref: 'entries/{id}', region: 'europe-west1', instance: 'ezel-kaliphane-default-rtdb' },
+  degisimGunlugu('entries', 'startTs')
+);
+exports.tadilatlarDegisim = onValueWritten(
+  { ref: 'tadilatlar/{id}', region: 'europe-west1', instance: 'ezel-kaliphane-default-rtdb' },
+  degisimGunlugu('tadilatlar', 'olusturmaTs')
+);

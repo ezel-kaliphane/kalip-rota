@@ -195,7 +195,9 @@ function initFirebase(){
       safeRender();
     });
     /* entries artık tarih dilimleriyle dinleniyor (19.10.2026 maliyet — bkz. parcaliDinle) */
-    parcaliDinle('entries', 'startTs', v => { STATE.entries = v; safeRender(); });
+    DB.ref('.info/serverTimeOffset').on('value', snap => { _sunucuFark = snap.val() || 0; });
+    /* entries: son iki hafta canlı, eskisi tarayıcıda saklı (27.10.2026 maliyet — bkz. onbellekliDinle) */
+    onbellekliDinle('entries', 'startTs', v => { STATE.entries = v; safeRender(); });
     // Maliyet optimizasyonu: aşağıdaki 6 düğüm nadiren değişen REFERANS listeleri — canlı
     // dinlemeye ihtiyaçları yok, tek seferlik okunuyor. Bir admin bunları düzenlerse (bkz.
     // js/catalog.js, js/operations.js) ilgili fonksiyon kendi yerel kopyasını da güncelleyip
@@ -267,7 +269,7 @@ function initFirebase(){
     // o yüzden o sekme açılınca (loadStockHareketleri, setSettingsSubTab'da) tek seferlik,
     // son-20'yle sınırlı bir sorgu yeterli. consumeStock() kendi yazdığı hareketi yerel
     // kopyaya da ekleyip render() çağırıyor, o yüzden hareketi yapan cihaz anında görür.
-    parcaliDinle('tadilatlar', 'olusturmaTs', v => { tadilatlar = v; safeRender(); });
+    onbellekliDinle('tadilatlar', 'olusturmaTs', v => { tadilatlar = v; safeRender(); });
     return true;
   }catch(e){ console.warn('Firebase init hatası', e); return false; }
 }
@@ -305,6 +307,93 @@ function parcaliDinle(yol, alan, ata){
     if(gelen < sorgular.length) return;   // ilk yüklemede yarım veriyle çizme — hepsi gelsin
     ata(Object.assign({}, ...parcalar));  // her seferinde YENİ nesne (entriesArray önbelleği referansa bakar)
   }, err => console.warn(yol + ' dilimi okunamadı:', err)));
+}
+/* ===================== MALİYET: ESKİ HAFTALAR TARAYICIDA (27.10.2026) =====================
+   Profil (27.10, 30 dk): indirmenin %98'i sayfanın BAŞTAN açılışı — her açılış ~4,85 MB (entries 3 MB +
+   tadilatlar 1,9 MB) ve her yeni hafta buna ~460 KB ekliyor; yeniden bağlanma artık ~0 (parcaliDinle).
+   Çözüm: canlı dinlenen yalnız SON İKİ HAFTA (önceki haftanın başından bugüne). Daha eski kayıtlar bir kez
+   indirilip IndexedDB'de saklanır; eski bir kayıt değişince/silinince sunucu fonksiyonu (functions/index.js
+   degisimGunlugu) degisim/{yol}/{id} = { t } yazar, burası t'si son baktığımızdan büyük olanları tek tek indirir.
+   Bellekteki veri yine düğümün TAMAMI — ekranlar fark etmez.
+   Neden bayatlamaz: fonksiyon alanı 3 günden eski her kaydın değişikliğini yazar; saklanan bölge en az 7 günlük
+   kayıtlar ve bölgeye yeni giren hafta (kapsam → canliBas) ancak o kayıtlar zaten 7 günlükken indirilir.
+   Bir şey ters giderse (IndexedDB yok / gizli sekme / degisim okunamıyor) eski yol: parcaliDinle.
+   GEREKLİ KURAL: "degisim": { ".read": true, ".write": false, "$yol": { ".indexOn": ["t"] } } */
+const OB_SURUM = 1, OB_PAY = 10 * 60e3, OB_OMUR = 45 * 864e5;
+let _sunucuFark = 0;
+function sunucuSimdi(){ return Date.now() + (_sunucuFark || 0); }
+/* RTDB sıralaması: null/boolean < sayı < metin < nesne — startAt(sayı) metin ve nesneleri de alır */
+function obCanliMi(v, canliBas){ return typeof v === 'string' || (typeof v === 'number' && v >= canliBas) || (v !== null && typeof v === 'object'); }
+function obUygula(kayit, id, v, alan, canliBas){
+  if(v && !obCanliMi(v[alan], canliBas)) kayit.veri[id] = v; else delete kayit.veri[id];
+}
+function obAc(){
+  return new Promise((res, rej) => {
+    if(!window.indexedDB) return rej(new Error('IndexedDB yok'));
+    const r = indexedDB.open('kaliphane-onbellek', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('dilim');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+function obOku(db, k){
+  return new Promise((res, rej) => { const r = db.transaction('dilim').objectStore('dilim').get(k); r.onsuccess = () => res(r.result || null); r.onerror = () => rej(r.error); });
+}
+function obYaz(db, k, v){
+  return new Promise((res, rej) => { const tx = db.transaction('dilim', 'readwrite'); tx.objectStore('dilim').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+}
+async function onbellekliDinle(yol, alan, ata){
+  const s = parcaSinirlari(Date.now());
+  const canliBas = s[Math.max(0, s.length - 2)];   // önceki haftanın başı
+  // canlı kısım hemen dinlenmeye başlar; ekrana veri saklanan kısım da hazır olunca verilir
+  const canliSorgular = [DB.ref(yol).orderByChild(alan).startAt(canliBas)];
+  if(s.length >= 2){ canliSorgular[0] = canliSorgular[0].endAt(s[s.length - 1] - 1); canliSorgular.push(DB.ref(yol).orderByChild(alan).startAt(s[s.length - 1])); }
+  const parcalar = canliSorgular.map(() => null);
+  let kayit = null, hazir = false, gecis = false, db = null, kayitZamani = 0;
+  const yayinla = () => { if(hazir && !gecis && parcalar.every(p => p !== null)) ata(Object.assign({}, kayit.veri, ...parcalar)); };
+  const kaydet = () => { clearTimeout(kayitZamani); kayitZamani = setTimeout(() => obYaz(db, yol, kayit).catch(e => console.warn(yol + ' önbelleğe yazılamadı:', e)), 3000); };
+  const vazgec = e => {
+    if(gecis) return; gecis = true;
+    console.warn(yol + ' önbellekli okuma kurulamadı, parçalı dinlemeye dönülüyor:', e);
+    canliSorgular.forEach(q => q.off());
+    parcaliDinle(yol, alan, ata);
+  };
+  canliSorgular.forEach((q, i) => q.on('value', snap => { parcalar[i] = snap.val() || {}; yayinla(); }, vazgec));
+  try{
+    db = await obAc();
+    kayit = await obOku(db, yol);
+    const simdi = sunucuSimdi();
+    if(!kayit || kayit.v !== OB_SURUM || !(kayit.kapsam <= canliBas) || simdi - (kayit.sonT || 0) > OB_OMUR || !kayit.veri) kayit = null;
+    const sonT = kayit ? kayit.sonT : simdi;
+    // önce günlük: okunamıyorsa (kural yayınlanmamış) 4 MB indirmeden eski yola dön
+    const dsnap = await DB.ref('degisim/' + yol).orderByChild('t').startAt(sonT - OB_PAY).get();
+    if(!kayit){
+      const snap = await DB.ref(yol).orderByChild(alan).endAt(canliBas - 1).get();
+      kayit = { v: OB_SURUM, kapsam: canliBas, sonT, veri: snap.val() || {} };
+    } else if(kayit.kapsam < canliBas){
+      const snap = await DB.ref(yol).orderByChild(alan).startAt(kayit.kapsam).endAt(canliBas - 1).get();
+      Object.assign(kayit.veri, snap.val() || {});
+      kayit.kapsam = canliBas;
+    }
+    const degisenler = Object.entries(dsnap.val() || {});
+    await Promise.all(degisenler.map(([id, d]) => DB.ref(yol + '/' + id).get().then(sn => {
+      obUygula(kayit, id, sn.val(), alan, canliBas);
+      if(d && d.t > kayit.sonT) kayit.sonT = d.t;
+    })));
+    if(gecis) return;
+    hazir = true; yayinla(); kaydet();
+    const izle = snap => {
+      const d = snap.val(), id = snap.key;
+      DB.ref(yol + '/' + id).get().then(sn => {
+        obUygula(kayit, id, sn.val(), alan, canliBas);
+        if(d && d.t > kayit.sonT) kayit.sonT = d.t;
+        yayinla(); kaydet();
+      }).catch(e => console.warn(yol + '/' + id + ' okunamadı:', e));
+    };
+    const canliGunluk = DB.ref('degisim/' + yol).orderByChild('t').startAt(kayit.sonT);
+    canliGunluk.on('child_added', izle);
+    canliGunluk.on('child_changed', izle);
+  }catch(e){ vazgec(e); }
 }
 /* Nadiren değişen büyük listeler (Excel'den yüklenir): settings/{ad}Version değişmedikçe tarayıcıdaki
    kopya kullanılır; yükleme/silme sürümü artırır (js/catalog.js). Güvenlik için kopya 12 saatten
