@@ -1849,3 +1849,5 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .fis-atla{width:auto;align-self:flex-start;margin:0;padding:6px 2px;border:0;background:transparent;color:var(--text-muted);font-size:12.5px;text-decoration:underline}
 .fis-govde .fis-sertlik{margin:4px 0 0}
 .fis-govde .fis-kalemler{max-height:none;overflow:visible}
+/* Makine matrisi — çalışan işin mamul adı (03.11.2026) */
+.matrix-aciklama{opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

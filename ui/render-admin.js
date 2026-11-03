@@ -2321,6 +2321,13 @@ function gotoAyarlar(){ settingsSubTab='menu'; setView('adminSettings'); }
    allMachines()/entriesArray()/buildTadilatSynthetic() üzerinden hesaplanıyor. Referans Tailwind+
    Material Symbols font kullanıyordu; bu uygulamada build adımı/Tailwind yok, mevcut ico()/ICONS
    SVG ikon sistemi ve düz CSS class'ları (.matrix-*) ile birebir görsel karşılığı üretildi. */
+/* 03.11.2026 (kullanıcı): kartta yalnız iş emri no vardı, hangi parça yapılıyor görünmüyordu — ERP listesindeki
+   mamul adı (validIsEmri talep no → malzemeAdi) bir satır, uzunsa kesilir (tamamı üzerine gelince) */
+function matrixAciklama(e){
+  const i = getTalepInfo(e.talepNo) || getTalepInfo(e.isEmriNo);
+  const a = (i && i.malzemeAdi) || '';
+  return a ? `<div class="matrix-sub matrix-aciklama" title="${esc(a)}">${esc(a)}</div>` : '';
+}
 function renderMakineMatrisi(){
   // Tadilat Atölye makineleri "entries" tablosunda hiç iz bırakmaz (orada sadece üretim işleri
   // var) — tadilat operasyonlarını da senkron kayıt gibi katmazsak bu makineler burada hep
@@ -2442,6 +2449,7 @@ function renderMakineMatrisi(){
       if(runningEntries.length===1){
         const info = runningEntries[0];
         out += `<div class="matrix-sub">${esc(info.talepNo || info.isEmriNo)} · ${esc(operatorGosterimAdi(info))}</div>
+          ${matrixAciklama(info)}
           <div class="matrix-sub">${live(()=> fmtElapsed(entryDurationBreakdown(info).netMs))} çalışıyor</div>`;
       } else {
         out += `<div class="matrix-sub" style="font-weight:700">${runningEntries.length} İş Emri Aktif</div>
@@ -2451,6 +2459,7 @@ function renderMakineMatrisi(){
       if(stoppedEntries.length===1){
         const info = stoppedEntries[0];
         out += `<div class="matrix-sub">${esc(info.talepNo || info.isEmriNo)} · ${esc(operatorGosterimAdi(info))}</div>
+          ${matrixAciklama(info)}
           <div class="matrix-sub">Duruş: "${esc(info.duruşNedeni)}"</div>`;
       } else {
         out += `<div class="matrix-sub" style="font-weight:700">${stoppedEntries.length} İş Duraklatıldı</div>
@@ -2458,7 +2467,7 @@ function renderMakineMatrisi(){
       }
     } else if(lastFinished){
       out += `<div class="matrix-sub">Son: ${esc(operatorGosterimAdi(lastFinished))} · ${fmtDT(lastFinished.startTs)}</div>
-        ${lastFinished._isTadilat && lastFinished.aciklama ? `<div class="matrix-sub" style="opacity:.8">${esc(lastFinished.aciklama)}</div>` : ''}`;
+        ${lastFinished._isTadilat ? (lastFinished.aciklama ? `<div class="matrix-sub" style="opacity:.8">${esc(lastFinished.aciklama)}</div>` : '') : matrixAciklama(lastFinished)}`;
     } else {
       out += `<div class="matrix-sub">Hiç kullanılmadı</div>`;
     }
