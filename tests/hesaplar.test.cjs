@@ -534,7 +534,7 @@ test('acil iş: makinenin sırasında bekleyen acil iş bulunur, başlanınca uy
   assert.equal(nolar('UT01 · Torna'), '');
   // pano: konum metni — tornada işleniyor / CNC sırasında bekliyor
   const durumlar = A.ctx.acilKayitlari().map(r => r.a.talepNo + ': ' + A.ctx.acilDurum(r).metin);
-  assert.deepEqual(durumlar.sort(), ['2611010001: UT01 · Torna — işleniyor', '2611010003: C01 · CNC sırasında bekliyor']);
+  assert.equal(JSON.stringify(durumlar.sort()), JSON.stringify(['2611010001: UT01 · Torna — işleniyor', '2611010003: C01 · CNC sırasında bekliyor']));
   A.ata('isEmriAcil', {});
 });
 
