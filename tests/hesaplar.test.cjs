@@ -677,3 +677,19 @@ test('fason ısıl excel: sabit sütunlar, ihtiyaç tarihi +7 gün, açıklama =
   assert.ok(s[1][5].split('\n')[2].startsWith('2609280017'));
   assert.equal(A.ctx.fpIhtiyacTarihi(ts('2026-12-28 09:00')), '04.01.2027');
 });
+
+/* 06.11.2026 (kullanıcı): Analiz → Operatör Günlüğü — kişi-gün işleri rota gibi */
+test('operatör günlüğü: iş sırası, ara, paralel, ertesi güne süren iş, biten adet', () => {
+  kayitlar([
+    { makine: 'UT04 · Torna', startTs: ts('2026-10-05 08:10'), endTs: ts('2026-10-05 10:00'), adet: '20' },
+    { makine: 'PT01 · Pres', startTs: ts('2026-10-05 10:30'), endTs: ts('2026-10-05 12:00'), adet: '5' },
+    { makine: 'UT04 · Torna', startTs: ts('2026-10-05 11:30'), endTs: ts('2026-10-06 10:00'), adet: '7' }
+  ]);
+  const o = op(analiz('2026-10-05', '2026-10-06'));
+  const pzt = A.ctx.ogGunOzeti(o.days.find(d => d.tarih === '2026-10-05'));
+  assert.equal(pzt.isSayisi, 3); assert.equal(pzt.bitenSayisi, 2); assert.equal(pzt.bitenAdet, 25); assert.equal(pzt.gecDk, 10); assert.equal(pzt.geceDevam, true);
+  assert.equal(pzt.adimlar[1].boslukMin, 30);
+  assert.equal(pzt.adimlar[2].paralel, true); assert.equal(pzt.adimlar[2].surdu, true); assert.equal(pzt.adimlar[2].bitti, false);
+  const sal = A.ctx.ogGunOzeti(o.days.find(d => d.tarih === '2026-10-06'));
+  assert.equal(sal.isSayisi, 1); assert.equal(sal.adimlar[0].dunden, true); assert.equal(sal.bitenAdet, 7); assert.equal(sal.geldi, null); assert.equal(sal.gitti, ts("2026-10-06 10:00"));
+});

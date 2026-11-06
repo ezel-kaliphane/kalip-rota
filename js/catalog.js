@@ -435,6 +435,7 @@ const ANALIZ_VIEW_DEFS = [
   { key:'sef', label:'Atölye Şefi' },
   { key:'kisi', label:'Kişi Bazlı' },
   { key:'operator', label:'Operatör Analizi' },
+  { key:'gunluk', label:'Operatör Günlüğü' }, // 06.11.2026: kişi-gün işleri rota gibi — ui/operator-gunluk.js
   { key:'saha', label:'Saha Ekranı' },
   { key:'veri', label:'Veri Kontrolü' }, // 13.10.2026: kapatılmamış kayıt, hammaddesiz iş, tutarsız miktar — ui/veri-kontrol.js
 ];
