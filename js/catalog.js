@@ -1076,7 +1076,7 @@ function buildTadilatSynthetic(){
         // Adet sadece İLK operasyona yazılıyor, sonrakiler aynı fiziksel parçanın devamı.
         adet: ilkOpYazildi ? null : (t.adet||null),
         aciklama: t.kisaAciklama || t.aciklama || '',
-        _isTadilat: true
+        _isTadilat: true, _tadilatId: t.id   // Operatör Günlüğü kutusundan tadilat akışını açmak için
       });
       ilkOpYazildi = true;
     });

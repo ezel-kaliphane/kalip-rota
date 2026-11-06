@@ -78,8 +78,10 @@ function ogAdimHtml(a){
     : a.acik ? `<span class="og-durum acik">${e.status === 'duruş' ? 'duruşta' : 'devam ediyor'}</span>`
     : a.surdu ? `<span class="og-durum surdu">ertesi güne sürdü</span>`
     : e.status === 'tamamlandi' ? '' : `<span class="og-durum surdu">açık</span>`;
-  const git = !e._isTadilat && no && typeof isAdminTabVisible === 'function' && isAdminTabVisible('isYogunlugu')
-    ? `onclick="iyAramaMetni='${escJs(e.talepNo || e.isEmriNo)}'; setView('isYogunlugu')" title="İş Yoğunluğu'nda bu işin rotasını aç"` : '';
+  /* Kutuya basınca detay (06.11.2026, kullanıcı): tadilatta mevcut akış penceresi (kim ne zaman açtı → kim ne zaman
+     başladı → bitti), üretimde İş Yoğunluğu'ndaki iş emri geçmişi penceresi — ikisi de hazır, aynısı açılıyor. */
+  const git = e._isTadilat ? (e._tadilatId ? `onclick="openTadilatAkis('${escJs(e._tadilatId)}')" title="Tadilat akışı: kim açtı, kim ne zaman başladı"` : '')
+    : (e.isEmriNo || e.talepNo) ? `onclick="openIyGecmisModal('${escJs(e.isEmriNo || '')}','${escJs(e.talepNo || '')}')" title="İş emrinin geçmişi: hangi makinede kim ne zaman"` : '';
   return `<div class="og-adim${a.bitti ? ' bitti' : ''}${a.acik ? ' acik' : ''}${a.tadilat ? ' tadilat' : ''}${git ? ' tik' : ''}" ${git}>
     <div class="og-adim-ust"><span class="mono">${a.dunden ? '<span title="önceki günden devam">↩</span> ' : ''}${a.calisti ? `${ogSaat(a.bas)}–${a.acik ? 'şimdi' : a.geceye ? 'gece' : ogSaat(a.bit)}` : 'çalışılmadı'}</span><span class="og-mak mono">${esc(kod)}</span></div>
     <div class="og-adim-no mono">${a.tadilat ? '<span class="og-tad">TADİLAT</span> ' : ''}${esc(no || '—')}</div>
@@ -177,5 +179,5 @@ function renderOperatorGunlugu(){
       ${gunler.map(g => ogSatirHtml(`<button type="button" class="og-kim" onclick="ogGunSec('${g.tarih}')" title="O gün herkesi gör"><b>${esc(ogTarihYazi(g.tarih))}</b></button>`, g)).join('')}`;
     }
   }
-  return `<div class="og-wrap">${h}</div>`;
+  return `<div class="og-wrap">${h}</div>` + (typeof iyGecmisModalIsEmriNo !== 'undefined' && iyGecmisModalIsEmriNo ? renderIyGecmisModal() : '');
 }
