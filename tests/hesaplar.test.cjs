@@ -664,3 +664,14 @@ test('aynı U kodlu iki iş emri: kuyrukta ikisi de, arama iş emri / U kodu ayr
   assert.equal(A.ctx.iyGecmisIcinKayitlar('UC13040009', '2609080005').length, 1);
   assert.equal(A.ctx.iyGecmisIcinKayitlar('UC13040009', '2609100004').length, 2);
 });
+
+/* 06.11.2026 (kullanıcı): fason ısıl istekleri CANIAS yükleme şablonuna (XLSTBL) yazılır */
+test('fason ısıl excel: sabit sütunlar, ihtiyaç tarihi +7 gün, açıklama = taslak metni', () => {
+  const p = { adet: 1, kg: 17.73, tur: ['2344'], sertlik: { min: 45, max: 47 }, uyeler: [{ talepNo: '2609280017', adet: '1', fasonKg: 17.73 }] };
+  const s = JSON.parse(JSON.stringify(A.ctx.fpExcelSatirlari([p], ts('2026-11-06 12:00'))));
+  assert.equal(JSON.stringify(s[0]), JSON.stringify(['MALZEME', 'ONCELIK', 'MIKTAR', 'IHTIYACTARIHI', 'SATINALMA', 'ACIKLAMA', 'BIRIM']));
+  assert.equal(JSON.stringify(s[1].slice(0, 5).concat(s[1][6])), JSON.stringify(['O0000007', 2, 1, '13.11.2026', 180, 'KG']));
+  assert.equal(s[1][5].split('\n')[0], '1 ADET 17,73 KG 2344 45-47 HRC');
+  assert.ok(s[1][5].split('\n')[1].startsWith('2609280017'));
+  assert.equal(A.ctx.fpIhtiyacTarihi(ts('2026-12-28 09:00')), '04.01.2027');
+});

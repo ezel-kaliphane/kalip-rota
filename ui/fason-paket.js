@@ -108,9 +108,96 @@ function renderFasonPaketleri(){
       acik.length ? `Fasonda <b>${acik.length}</b> ısıl işlem paketi var${istekYok ? `; <b style="color:var(--danger)">${istekYok}</b> tanesinin istek no'su girilmemiş` : ''}${bilgisiz ? `; ${bilgisiz} tanesi gönderilirken bilgisi girilmemiş (Bilgi gir)` : ''}.` : 'Fasonda bekleyen ısıl işlem paketi yok.',
       'Paket = FII01\'e bir başlatma. Tür, HRC ve KG gönderirken girilir; "Taslağı kopyala" satın alma isteğine yapıştırılacak metni verir.'
     ])}
+    ${fpExcelDugmeHtml()}
     ${acik.map(fpKartHtml).join('')}
     ${donen.length ? `<button type="button" class="ag-detay-dugme" onclick="fpDonenAcik=!fpDonenAcik; render()">${ico(fpDonenAcik ? 'chevronUp' : 'chevronDown', 14)} ${fpDonenAcik ? 'Dönenleri gizle' : 'Son 30 günde dönenler (' + donen.length + ')'}</button>
       ${fpDonenAcik ? donen.map(fpKartHtml).join('') : ''}` : ''}
   </div>`;
   return h + (typeof fasonIsilModal !== 'undefined' && fasonIsilModal && fasonIsilModal.mod === 'paket' ? renderFasonIsilModal() : '');
+}
+
+/* ==================== EXCEL OLUŞTUR → CANIAS SATIN ALMA YÜKLEMESİ (06.11.2026, kullanıcı isteği) ====================
+   "Masaüstündeki ŞABLON excele istek no yok olanları otomatik yapıştırsın." Şablon (sayfa XLSTBL):
+   MALZEME O0000007 · ONCELIK 2 · MIKTAR 1 · IHTIYACTARIHI bugün+7 gün (gg.aa.yyyy metin) · SATINALMA 180 ·
+   ACIKLAMA = "Taslağı kopyala" metni · BIRIM KG. Satırlar: fasonda olup istek no'su girilmemiş, bilgisi girilmiş
+   paketler. Chrome/Edge'de ilk seferde ŞABLON.xlsx seçilir; dosya tanıtıcısı bu tarayıcıda saklanır, sonraki
+   basışlarda aynı dosyanın üstüne yazılır. Destek yoksa ŞABLON.xlsx olarak indirilir. */
+const FP_EXCEL_SABIT = { malzeme: 'O0000007', oncelik: 2, miktar: 1, satinalma: 180, birim: 'KG', gun: 7 };
+function fpExcelPaketleri(){ return fasonPaketleri().filter(p => p.acik && !p.istekNo); }
+function fpIhtiyacTarihi(simdi){
+  const d = new Date((simdi || Date.now()) + FP_EXCEL_SABIT.gun * 864e5), iki = n => String(n).padStart(2, '0');
+  return `${iki(d.getDate())}.${iki(d.getMonth() + 1)}.${d.getFullYear()}`;
+}
+function fpExcelSatirlari(paketler, simdi){
+  const tarih = fpIhtiyacTarihi(simdi), s = FP_EXCEL_SABIT;
+  return [['MALZEME', 'ONCELIK', 'MIKTAR', 'IHTIYACTARIHI', 'SATINALMA', 'ACIKLAMA', 'BIRIM']]
+    .concat(paketler.map(p => [s.malzeme, s.oncelik, s.miktar, tarih, s.satinalma, fpTaslakMetni(p), s.birim]));
+}
+const FP_DOSYA_DB = 'kaliphane-dosya';
+function fpDosyaDb(){
+  return new Promise((ok, red) => {
+    const r = indexedDB.open(FP_DOSYA_DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('tanitici');
+    r.onsuccess = () => ok(r.result); r.onerror = () => red(r.error);
+  });
+}
+async function fpTaniticiOku(){
+  try{ const db = await fpDosyaDb(); return await new Promise(ok => { const q = db.transaction('tanitici').objectStore('tanitici').get('sablon'); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); }catch(e){ return null; }
+}
+async function fpTaniticiYaz(h){
+  try{ const db = await fpDosyaDb(); db.transaction('tanitici', 'readwrite').objectStore('tanitici').put(h, 'sablon'); }catch(e){}
+}
+/* Yazılacak dosyayı al: saklı tanıtıcı (izin isteyerek) ya da ilk seferde dosya seçtir. null = vazgeçti / destek yok */
+async function fpSablonDosyasi(yeniSec){
+  if(typeof window.showSaveFilePicker !== 'function') return null;
+  if(!yeniSec){
+    const h = await fpTaniticiOku();
+    if(h){
+      try{
+        if((await h.queryPermission({ mode: 'readwrite' })) === 'granted' || (await h.requestPermission({ mode: 'readwrite' })) === 'granted') return h;
+      }catch(e){}
+    }
+  }
+  const h = await window.showSaveFilePicker({ suggestedName: 'ŞABLON.xlsx', startIn: 'desktop', id: 'fason-sablon',
+    types: [{ description: 'Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] });
+  await fpTaniticiYaz(h);
+  return h;
+}
+async function fpExcelOlustur(yeniSec){
+  if(!(typeof malzemeIstekNoYetkisi === 'function' ? malzemeIstekNoYetkisi() : (session && session.isSuperAdmin))){ toast('Excel\'i SuperAdmin oluşturur'); return; }
+  const hepsi = fpExcelPaketleri(), paketler = hepsi.filter(p => p.bilgili), bilgisiz = hepsi.length - paketler.length;
+  if(!paketler.length){ toast(hepsi.length ? 'İstek no\'su olmayan paketlerin bilgisi girilmemiş (Bilgi gir)' : 'İstek no\'su girilmemiş paket yok'); return; }
+  let dosya = null, destek = typeof window.showSaveFilePicker === 'function';
+  if(destek){
+    try{ dosya = await fpSablonDosyasi(yeniSec); }
+    catch(e){ if(e && e.name === 'AbortError') return; destek = false; }
+  }
+  if(!(await ensureXLSX())) return;
+  const ws = XLSX.utils.aoa_to_sheet(fpExcelSatirlari(paketler));
+  ws['!cols'] = [{ wch: 10 }, { wch: 8 }, { wch: 7 }, { wch: 13 }, { wch: 10 }, { wch: 70 }, { wch: 6 }];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'XLSTBL');
+  const ek = bilgisiz ? ` (${bilgisiz} paket bilgisi girilmediği için alınmadı)` : '';
+  if(dosya){
+    try{
+      const w = await dosya.createWritable();
+      await w.write(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      await w.close();
+      toast(`${dosya.name} güncellendi — ${paketler.length} satır${ek}`);
+      return;
+    }catch(e){
+      toast('Dosyaya yazılamadı' + (e && e.name === 'NoModificationAllowedError' ? ' — Excel\'de açıksa kapatıp tekrar dene' : '') + ': ' + ((e && e.message) || 'hata'));
+      return;
+    }
+  }
+  XLSX.writeFile(wb, 'ŞABLON.xlsx');
+  toast(`ŞABLON.xlsx indirildi — ${paketler.length} satır${ek}`);
+}
+function fpExcelDugmeHtml(){
+  if(!(typeof malzemeIstekNoYetkisi === 'function' ? malzemeIstekNoYetkisi() : (session && session.isSuperAdmin))) return '';
+  const n = fpExcelPaketleri().filter(p => p.bilgili).length;
+  return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px">
+    <button class="btn-primary" ${n ? '' : 'disabled'} title="İstek no'su olmayan paketler CANIAS yükleme şablonuna yazılır" onclick="fpExcelOlustur(false)">${ico('file', 14)} Excel oluştur${n ? ` (${n})` : ''}</button>
+    ${typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function' ? `<button class="btn-ghost mb-mini" title="Yazılacak ŞABLON dosyasını yeniden seç" onclick="fpExcelOlustur(true)">Dosyayı değiştir</button>` : ''}
+    <span style="font-size:12px;color:var(--text-muted)">Malzeme ${FP_EXCEL_SABIT.malzeme} · öncelik ${FP_EXCEL_SABIT.oncelik} · miktar ${FP_EXCEL_SABIT.miktar} · ihtiyaç ${fpIhtiyacTarihi()} · satın alma ${FP_EXCEL_SABIT.satinalma} · ${FP_EXCEL_SABIT.birim}</span>
+  </div>`;
 }
