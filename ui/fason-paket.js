@@ -128,8 +128,14 @@ function fpIhtiyacTarihi(simdi){
   const d = new Date((simdi || Date.now()) + FP_EXCEL_SABIT.gun * 864e5), iki = n => String(n).padStart(2, '0');
   return `${iki(d.getDate())}.${iki(d.getMonth() + 1)}.${d.getFullYear()}`;
 }
+/* CANIAS tarihi METİN olarak okumuyor ("EXCEL 2 SATIRINDA HATA", 06.11.2026) — çalışan dosyada gerçek Excel tarihi
+   (seri sayı + tarih biçimi) var. Yerel gün → Excel seri sayısı (1899-12-30 tabanı). */
+function fpExcelTarih(simdi){
+  const d = new Date((simdi || Date.now()) + FP_EXCEL_SABIT.gun * 864e5);
+  return { t: 'n', v: Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(1899, 11, 30)) / 864e5), z: 'm/d/yy' }; // Excel yerleşik kısa tarih (numFmtId 14), çalışan dosyadaki gibi
+}
 function fpExcelSatirlari(paketler, simdi){
-  const tarih = fpIhtiyacTarihi(simdi), s = FP_EXCEL_SABIT;
+  const tarih = fpExcelTarih(simdi), s = FP_EXCEL_SABIT;
   return [['MALZEME', 'ONCELIK', 'MIKTAR', 'IHTIYACTARIHI', 'SATINALMA', 'ACIKLAMA', 'BIRIM']]
     .concat(paketler.map(p => [s.malzeme, s.oncelik, s.miktar, tarih, s.satinalma, fpTaslakMetni(p), s.birim]));
 }
@@ -180,7 +186,7 @@ async function fpExcelOlustur(yeniSec){
   if(dosya){
     try{
       const w = await dosya.createWritable();
-      await w.write(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      await w.write(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array', bookSST: true })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
       await w.close();
       toast(`${dosya.name} güncellendi — ${paketler.length} satır${ek}`);
       return;
@@ -189,7 +195,7 @@ async function fpExcelOlustur(yeniSec){
       return;
     }
   }
-  XLSX.writeFile(wb, 'ŞABLON.xlsx');
+  XLSX.writeFile(wb, 'ŞABLON.xlsx', { bookSST: true });
   toast(`ŞABLON.xlsx indirildi — ${paketler.length} satır${ek}`);
 }
 function fpExcelDugmeHtml(){
