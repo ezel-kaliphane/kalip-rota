@@ -95,6 +95,8 @@ function getTalepInfo(code){
   if(!v){ const base = baseIsEmriNo(upper); if(base!==upper) v = STATE.validIsEmri && STATE.validIsEmri[base]; }
   return (v && typeof v === 'object') ? v : null;
 }
+/* İş emrinin ne olduğu: ERP listesindeki mamul adı (ör. "M16X80-Ø14.54-TP-RONDELA KALIBI") — 06.11.2026 */
+function isEmriMamulAdi(talepNo, isEmriNo){ const i = getTalepInfo(talepNo) || getTalepInfo(isEmriNo); return (i && i.malzemeAdi) || ''; }
 let extraMachines = {}; // admin tarafından sonradan eklenen makineler (Firebase 'machines_extra')
 let hiddenMachines = {}; // silinen dahili makineler (Firebase 'machines_hidden')
 let fasonMachines = {}; // "Fason / Dışarı Gönderim" olarak işaretlenen makineler (Firebase 'machines_fason')

@@ -318,6 +318,7 @@ function renderOperator(){
           <button type="button" class="btn-ghost" style="border-color:var(--warn);color:var(--warn)" onclick="devralIs('${cand.id}')">↺ ${groupCount>1?'Tümünü Devral':'Bu İşi Devral'} (Kaldığı Yerden Devam Et)</button>
         </div>`;
       })()}
+      ${typeof acilUyariFormHtml==='function' ? acilUyariFormHtml(newForm.makine) : ''}
       ${twoStep ? `<button type="button" class="btn-start" onclick="goNewStep2()">Devam → Adet ve Başlat</button>` : ''}
       ` : ''}
       ${s2 ? `

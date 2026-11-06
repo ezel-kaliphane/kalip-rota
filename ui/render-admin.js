@@ -1895,7 +1895,12 @@ function iyVeri(){
     label: m.label, isPres:false,
     isEmriSayisi: m.isEmriler.length,
     toplamAdet: m.isEmriler.reduce((s,e)=>s+(Number(e.adet)||0), 0),
-    isEmriler: m.isEmriler.slice().sort((a,b)=>(a.endTs||0)-(b.endTs||0))
+    /* acil işaretli iş emirleri üstte (06.11.2026 — ui/acil.js) */
+    acilSayisi: m.isEmriler.filter(e=>typeof acilMi==='function' && acilMi(e.talepNo, e.isEmriNo)).length,
+    isEmriler: m.isEmriler.slice().sort((a,b)=>{
+      const aa = typeof acilMi==='function' && acilMi(a.talepNo, a.isEmriNo), ba = typeof acilMi==='function' && acilMi(b.talepNo, b.isEmriNo);
+      return aa!==ba ? (aa?-1:1) : (a.endTs||0)-(b.endTs||0);
+    })
   }));
   const presCiftleri = presBekleyenCiftleri();
   const presRow = presCiftleri.length>0
@@ -1982,12 +1987,15 @@ function iyAramaSonucKartHtml(grp){
       <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;cursor:pointer;text-decoration:underline dotted" onclick="openIyGecmisModal('${escJs(grp.isEmriNo)}','${escJs(grp.talepNo)}')">${esc(grp.talepNo || grp.isEmriNo)}</span>
       ${bilesen ? `<span class="chip" style="padding:3px 9px;font-size:11px">${BILESEN_LABEL[bilesen]} (_${bilesen})</span>` : ''}
       ${grp.talepNo ? `<span style="font-size:11px;color:var(--text-muted)">U kodu: ${esc(grp.isEmriNo)}</span>` : ''}
+      ${typeof acilRozet==='function' ? acilRozet(grp.talepNo, grp.isEmriNo) : ''}
     </div>
+    ${isEmriMamulAdi(grp.talepNo, grp.isEmriNo) ? `<div class="iy-mamul">${esc(isEmriMamulAdi(grp.talepNo, grp.isEmriNo))}</div>` : ''}
     <div style="margin-top:8px;font-size:13.5px;font-weight:600;color:${durum.renk}">${durum.metin}</div>
     ${durum.detay ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${durum.detay}</div>` : ''}
     <div class="route-chain" style="margin-top:10px">${chain.map((c,i)=>`<span class="route-chip">${esc(c)}</span>${i<chain.length-1?'<span class="route-arrow">→</span>':''}`).join('')}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
       ${grp.last.status==='tamamlandi' && typeof ydDugme==='function' ? ydDugme(grp.isEmriNo, false, grp.talepNo) : ''}
+      ${typeof acilDugme==='function' && !(grp.last.status==='tamamlandi' && grp.last.sonOperasyon && !grp.last.sonrakiMakine) ? acilDugme(grp.talepNo, grp.isEmriNo) : ''}
       ${canManageStock() && typeof uygModalAc==='function' ? `<button class="btn-ghost" style="width:auto;padding:7px 12px;color:var(--danger);border-color:var(--danger-border)" onclick="uygModalAc('${escJs(grp.last.id)}')">${ico('alert',13)} Uygunsuzluk bildir</button>` : ''}
     </div>
   </div>`;
@@ -2005,8 +2013,9 @@ function renderIyGecmisModal(){
     <div class="modal-box" style="max-width:640px">
       <div class="modal-header">
         <div>
-          <div class="modal-title">${esc(last.talepNo || isEmriNo)}</div>
+          <div class="modal-title">${esc(last.talepNo || isEmriNo)} ${typeof acilRozet==='function' ? acilRozet(last.talepNo, isEmriNo) : ''}</div>
           <div class="modal-sub">${last.talepNo ? `U kodu: ${esc(isEmriNo)}` : ''}${bilesen ? ` · ${BILESEN_LABEL[bilesen]} (_${bilesen})` : ''}</div>
+          ${isEmriMamulAdi(last.talepNo, isEmriNo) ? `<div class="iy-mamul" style="margin-top:2px">${esc(isEmriMamulAdi(last.talepNo, isEmriNo))}</div>` : ''}
         </div>
         <button class="icon-btn" onclick="closeIyGecmisModal()">${ico('x',14)}</button>
       </div>
@@ -2015,6 +2024,7 @@ function renderIyGecmisModal(){
         ${durum.detay ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;margin-bottom:16px">${durum.detay}</div>` : '<div style="margin-bottom:16px"></div>'}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px">
           ${last.status==='tamamlandi' && typeof ydDugme==='function' ? ydDugme(isEmriNo, false, last.talepNo) : ''}
+          ${typeof acilDugme==='function' && !(last.status==='tamamlandi' && last.sonOperasyon && !last.sonrakiMakine) ? acilDugme(last.talepNo, isEmriNo) : ''}
           ${canManageStock() ? `<button class="btn-ghost" style="width:auto;padding:8px 14px;color:var(--danger);border-color:var(--danger-border)" onclick="uygModalAc('${escJs(last.id)}')">${ico('alert',14)} Uygunsuzluk bildir</button>` : ''}
         </div>
         <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:10px">Geçmiş — ${kayitlar.length} adım</div>
@@ -2121,6 +2131,7 @@ function iyListeHtml(v){
               <span style="font-size:11.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(iyAd(r.label) || (belirsiz?'sıradaki makinesi işaretlenmemiş':r.isMalzeme?'stok yok, iş emri parkta':r.isKalite?'FKK red — Şef / SuperAdmin kararı':r.isHammadde?'ilk operasyon hammadde seçilmeden başladı — maliyet eksik':''))}</span>
               ${r.isMalzeme ? `<span class="matrix-tag" style="--sb:${r.istekYok>0?'var(--danger)':'var(--warn)'}">${r.istekYok>0 ? `${r.istekYok} istek no yok` : 'istek no’lar girildi'}</span>` : ''}
               ${r.isPres ? `<span class="matrix-tag" style="--sb:var(--tadilat-info)">Çift eşleşme</span>` : ''}
+              ${r.acilSayisi ? `<span class="matrix-tag" style="--sb:var(--danger)">${r.acilSayisi} acil</span>` : ''}
             </span>
             <span style="display:flex;align-items:baseline;gap:7px;white-space:nowrap;flex:none">
               <span class="mono" style="font-size:19px;font-weight:700">${r.isEmriSayisi}</span>
@@ -2132,8 +2143,8 @@ function iyListeHtml(v){
         </button>
         ${acik ? `<div class="iy-detay">
           ${r.isPres ? iyPresDetayHtml(r) : r.isMalzeme ? iyMalzemeDetayHtml(r) : r.isKalite ? kaliteKararDetayHtml(r) : r.isHammadde ? hammaddesizDetayHtml(r) : r.isEmriler.map(e=>`<div class="iy-detay-row">
-            <span><span class="mono" style="color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline dotted" onclick="${e._sira ? `ydSiraAc('${escJs(e.siraKey)}')` : `openIyGecmisModal('${escJs(e.isEmriNo)}','${escJs(e.talepNo||'')}')`}">${esc(e.talepNo||e.isEmriNo)}</span>${v.malzemeTalepSet.has(String(e.talepNo||'').trim().toUpperCase()) ? ` <span class="iy-mb-etiket" title="Bu iş emri Malzeme Bekleyenler'de">malzeme bekliyor</span>` : ''}${e._sira ? ` <span class="iy-mb-etiket yd-sira-etiket" title="Hiç operasyonu açılmadan sıraya kondu">sıraya kondu</span>` : ''}
-              ${typeof ydYetki==='function' && ydYetki() ? `<span class="yd-satir-dugme">${e._sira ? ydSiraDugmeleri(e.siraKey) : ydDugme(e.isEmriNo, true, e.talepNo)}</span>` : ''}</span>
+            <span><span class="mono" style="color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline dotted" onclick="${e._sira ? `ydSiraAc('${escJs(e.siraKey)}')` : `openIyGecmisModal('${escJs(e.isEmriNo)}','${escJs(e.talepNo||'')}')`}">${esc(e.talepNo||e.isEmriNo)}</span>${v.malzemeTalepSet.has(String(e.talepNo||'').trim().toUpperCase()) ? ` <span class="iy-mb-etiket" title="Bu iş emri Malzeme Bekleyenler'de">malzeme bekliyor</span>` : ''}${e._sira ? ` <span class="iy-mb-etiket yd-sira-etiket" title="Hiç operasyonu açılmadan sıraya kondu">sıraya kondu</span>` : ''}${typeof acilRozet==='function' ? acilRozet(e.talepNo, e.isEmriNo) : ''}
+              ${typeof ydYetki==='function' && ydYetki() ? `<span class="yd-satir-dugme">${e._sira ? ydSiraDugmeleri(e.siraKey) : ydDugme(e.isEmriNo, true, e.talepNo)}${typeof acilDugme==='function' ? acilDugme(e.talepNo, e.isEmriNo, true) : ''}</span>` : ''}</span>
             <span style="color:var(--text-muted)">${esc(e.makine||'—')}</span>
             <span class="mono sag">${esc(e.adet||'—')}</span>
             <span style="color:var(--text-muted)">${esc(e.operatorName||e.operatorUsername||'')}</span>
@@ -2324,8 +2335,7 @@ function gotoAyarlar(){ settingsSubTab='menu'; setView('adminSettings'); }
 /* 03.11.2026 (kullanıcı): kartta yalnız iş emri no vardı, hangi parça yapılıyor görünmüyordu — ERP listesindeki
    mamul adı (validIsEmri talep no → malzemeAdi) bir satır, uzunsa kesilir (tamamı üzerine gelince) */
 function matrixAciklama(e){
-  const i = getTalepInfo(e.talepNo) || getTalepInfo(e.isEmriNo);
-  const a = (i && i.malzemeAdi) || '';
+  const a = isEmriMamulAdi(e.talepNo, e.isEmriNo);
   return a ? `<div class="matrix-sub matrix-aciklama" title="${esc(a)}">${esc(a)}</div>` : '';
 }
 function renderMakineMatrisi(){

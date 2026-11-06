@@ -245,9 +245,10 @@ function ydAramaKartlari(q){
       <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px">${esc(x.talepNo)}</span>
       <span class="matrix-tag" style="--sb:var(--warn)">Sırada · ilk operasyon</span>
       <span style="font-size:11px;color:var(--text-muted)">U kodu: ${esc(x.isEmriNo)}</span>
+      ${typeof acilRozet === 'function' ? acilRozet(x.talepNo, x.isEmriNo) : ''}
     </div>
     <div style="margin-top:8px;font-size:13.5px;font-weight:600;color:var(--warn)">${esc(x.makine)} sırasında bekliyor</div>
     <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${esc(x.mamulAdi || '')}${x.mamulAdi ? ' · ' : ''}${esc(x.adet || '?')} adet · ${esc(x.kimAd || x.kim || '')} ${fmtDT(x.ts)}'de sıraya koydu</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${ydSiraDugmeleri(x.key)}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${ydSiraDugmeleri(x.key)}${typeof acilDugme === 'function' ? acilDugme(x.talepNo, x.isEmriNo, true) : ''}</div>
   </div>`).join('');
 }

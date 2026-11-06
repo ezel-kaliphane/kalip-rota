@@ -150,6 +150,11 @@
       ".write": false,
       "$sira": { ".write": true }
     },
+    "isEmriAcil": {
+      ".read": true,
+      ".write": false,
+      "$k": { ".write": true }
+    },
     "pushLog": { ".read": true, ".write": false, ".indexOn": ["toUsername", "sentAt"] },
 
     "toolLocations": {

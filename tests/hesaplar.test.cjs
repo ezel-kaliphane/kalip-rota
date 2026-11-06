@@ -513,6 +513,28 @@ test('parçalı dinleme: haftalık dilimler boşluksuz ve çakışmasız', () =>
   ornekler.forEach(v => assert.equal(dilimler.filter(([a, b]) => v >= a && v <= b).length, 1, 'değer ' + v));
 });
 
+/* 06.11.2026: acil iş emri — yalnız o makinenin sırasında bekliyorsa uyarır, başlayınca düşer */
+test('acil iş: makinenin sırasında bekleyen acil iş bulunur, başlanınca uyarı kalkar', () => {
+  kayitlar([
+    { makine: 'TES01 · Testere', talepNo: '2611010001', isEmriNo: 'UA1', startTs: ts('2026-10-30 09:00'), endTs: ts('2026-10-30 09:10'), sonrakiMakine: 'UT01 · Torna' },
+    { makine: 'TES01 · Testere', talepNo: '2611010002', isEmriNo: 'UA1', startTs: ts('2026-10-30 10:00'), endTs: ts('2026-10-30 10:10'), sonrakiMakine: 'UT01 · Torna' },   // aynı U kodu, acil değil
+    { makine: 'TES01 · Testere', talepNo: '2611010003', isEmriNo: 'UA3', startTs: ts('2026-10-30 11:00'), endTs: ts('2026-10-30 11:10'), sonrakiMakine: 'C01 · CNC' }
+  ]);
+  A.ata('_isEmriAcilDinleniyor', true);
+  A.ata('isEmriAcil', { a: { talepNo: '2611010001', isEmriNo: 'UA1' }, b: { talepNo: '2611010003', isEmriNo: 'UA3' } });
+  const nolar = m => A.ctx.acilBekleyenler(m).map(a => a.talepNo).join(',');
+  assert.equal(nolar('UT01 · Torna'), '2611010001');
+  assert.equal(nolar('UT01'), '2611010001');
+  assert.equal(nolar('C01 · CNC'), '2611010003');
+  assert.equal(nolar('UT02 · Torna'), '');
+  assert.equal(A.ctx.acilMi('2611010002', 'UA1'), false);
+  // tornada başlandı → artık sırada değil
+  const e = A.calistir('STATE.entries');
+  A.ata('STATE.entries', { ...e, k9: { status: 'devam', makine: 'UT01 · Torna', talepNo: '2611010001', isEmriNo: 'UA1', operatorUsername: 'OP1', startTs: ts('2026-10-31 08:00') } });
+  assert.equal(nolar('UT01 · Torna'), '');
+  A.ata('isEmriAcil', {});
+});
+
 /* 27.10.2026 maliyet: eski haftalar tarayıcıda — saklanan bölge ile canlı sorgu (startAt(canliBas)) tam tümleyen olmalı */
 test('önbellek: saklanan / canlı bölge ayrımı ve değişiklik uygulama', () => {
   const canliBas = ts('2026-10-19 00:00');
