@@ -2309,6 +2309,7 @@ function renderIsYogunlugu(){
     ${iyAramaHtml()}
     ${iyGorunumSecici()}
     ${iyKpiHtml(v)}
+    ${typeof acilPanoHtml==='function' ? acilPanoHtml('iy') : ''}
     ${govde}
   </div>${iyGecmisModalIsEmriNo && !uygModal ? renderIyGecmisModal() : ''}${typeof renderHmGirModal==='function' ? renderHmGirModal() : ''}${typeof ydModal!=='undefined' && ydModal ? renderYerDuzeltModal() : ''}`;
 }
@@ -2659,6 +2660,7 @@ function renderGenelBakis(){
       ${kpi('Bugün Tamamlanan', bugunTamamlanan.length, 'var(--accent)', bugunAdet>0 ? `${bugunAdet} adet · tamamlanan rota` : 'tamamlanan rota')}
       ${kpi('Vardiya Verimliliği', `%${todayTotals.verimlilik}`, verimRenk, `Çalışma / Kullanılabilirlik · ${fmtDur(todayTotals.workMin*60000)} / ${fmtDur(todayTotals.availMin*60000)}`)}
     </div>
+    ${typeof acilPanoHtml==='function' ? acilPanoHtml('gb') : ''}
     <div class="gb-grid">`;
 
   /* DİKKAT İSTEYENLER — duruştaki makineler, uzun duruş önce. Kartlar Makine Matrisi'nin

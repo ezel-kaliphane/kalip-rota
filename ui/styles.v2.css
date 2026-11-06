@@ -1863,3 +1863,19 @@ button.mb-istek-no{border-color:var(--warn-border)}
 .acil-uyari-ad{font-size:12px;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis}
 .acil-uyari-dugme{width:auto;flex:none;padding:8px 12px;color:var(--danger);border-color:var(--danger)}
 .acil-uyari-secili{flex:none;font-size:12.5px;font-weight:600;color:var(--success);display:inline-flex;align-items:center;gap:4px}
+/* Acil İşler kartı — İş Yoğunluğu + Canlı Panel Genel Bakış (07.11.2026) */
+.acil-pano{margin-bottom:16px;padding:14px 18px}
+.acil-pano.var{border-color:color-mix(in srgb, var(--danger) 55%, var(--border));box-shadow:inset 3px 0 0 var(--danger)}
+.acil-pano-baslik{display:inline-flex;align-items:center;gap:7px}
+.acil-pano.var .acil-pano-baslik{color:var(--danger)}
+.acil-pano.var .acil-pano-baslik b{color:var(--danger)}
+.acil-pano-alt{font-size:12px;color:var(--text-muted)}
+.acil-pano-satir{display:grid;grid-template-columns:minmax(170px,1fr) minmax(220px,1.5fr) auto;gap:14px;align-items:center;padding:9px 0;border-top:1px solid var(--border);font-size:13px}
+.acil-pano-satir.tik{cursor:pointer}
+.acil-pano-satir.tik:hover .acil-pano-no{text-decoration:underline}
+.acil-pano-is{display:flex;flex-direction:column;gap:2px;min-width:0}
+.acil-pano-no{font-weight:700;color:var(--accent);font-size:13.5px}
+.acil-pano-ad,.acil-pano-detay{font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acil-pano-yer{min-width:0}
+.acil-pano-dugme .acil-dugme.kucuk{margin-left:0}
+@media (max-width:700px){.acil-pano-satir{grid-template-columns:1fr auto;gap:4px 10px}.acil-pano-yer{grid-column:1/-1;grid-row:2}.acil-pano-dugme{grid-column:2;grid-row:1}}

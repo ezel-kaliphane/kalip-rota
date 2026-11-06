@@ -32,23 +32,56 @@ function acilDegistir(talepNo, isEmriNo){
     .then(() => toast(vardi ? etiket + ' artık acil değil' : etiket + ' acil — sırasındaki makinede yeni işe başlayan uyarılacak'))
     .catch(err => toast('Kaydedilemedi: ' + ((err && err.message) || 'hata') + ' — isEmriAcil kuralı yayınlandı mı?'));
 }
-/* Bir makinenin sırasında bekleyen acil iş emirleri (makine "KOD · Ad" ya da yalnız kod) */
-function acilBekleyenler(makine){
+/* Her acil iş emri + son kaydı (e) ya da hiç kaydı yoksa sıra kaydı (x) — tek geçiş, eskiden yeniye */
+function acilKayitlari(){
   ensureIsEmriAcilLoaded();
-  const kod = s => String(s || '').split(' · ')[0].trim().toUpperCase();
-  const hedef = kod(makine);
   const istenen = new Map(Object.values(isEmriAcil || {}).filter(a => a && a.isEmriNo).map(a => [isEmriAnahtari(a), a]));
-  if(!hedef || !istenen.size) return [];
+  if(!istenen.size) return [];
   const son = {};
   entriesArray().forEach(e => { const k = isEmriAnahtari(e); if(istenen.has(k) && (!son[k] || (e.startTs || 0) > (son[k].startTs || 0))) son[k] = e; });
   const sira = typeof isEmriSiraAktif === 'function' ? isEmriSiraAktif() : [];
-  const sonuc = [];
-  istenen.forEach((a, k) => {
-    const e = son[k], x = e ? null : sira.find(s => isEmriAnahtari(s) === k);
-    const yer = e ? (e.status === 'tamamlandi' ? e.sonrakiMakine || '' : '') : (x ? x.makine : '');
-    if(yer && kod(yer) === hedef) sonuc.push({ ...a, yer });
-  });
-  return sonuc.sort((p, q) => (p.ts || 0) - (q.ts || 0));
+  return [...istenen].map(([k, a]) => { const e = son[k] || null; return { a, e, x: e ? null : (sira.find(s => isEmriAnahtari(s) === k) || null) }; })
+    .sort((p, q) => (p.a.ts || 0) - (q.a.ts || 0));
+}
+const acilMakineKodu = s => String(s || '').split(' · ')[0].trim().toUpperCase();
+/* Bir makinenin sırasında bekleyen acil iş emirleri (makine "KOD · Ad" ya da yalnız kod) */
+function acilBekleyenler(makine){
+  const hedef = acilMakineKodu(makine); if(!hedef) return [];
+  return acilKayitlari().map(({ a, e, x }) => ({ ...a, yer: e ? (e.status === 'tamamlandi' ? e.sonrakiMakine || '' : '') : (x ? x.makine : '') }))
+    .filter(a => a.yer && acilMakineKodu(a.yer) === hedef);
+}
+/* Acil iş şu an nerede (07.11.2026, kullanıcı: "kaç acil iş var, altında nerede bekliyor, konumu ne") */
+function acilDurum({ a, e, x }){
+  const sure = ts => typeof mbBeklemeMetni === 'function' ? mbBeklemeMetni(ts).metin : '';
+  if(e && e.status === 'devam') return { renk: 'var(--success)', metin: `${e.makine} — işleniyor`, detay: `${operatorGosterimAdi(e)} · ${sure(e.startTs)} önce başladı` };
+  if(e && e.status === 'duruş') return { renk: 'var(--warn)', metin: `${e.makine} — duraklatılmış`, detay: `"${e.duruşNedeni || ''}" · ${operatorGosterimAdi(e)}` };
+  if(e && e.sonrakiMakine === 'Belirsiz') return { renk: 'var(--danger)', metin: 'Sıradaki makine belirsiz', detay: `${acilMakineKodu(e.makine)}'de bitti · ${sure(e.endTs)} önce` };
+  if(e && e.sonrakiMakine) return { renk: 'var(--danger)', metin: `${e.sonrakiMakine} sırasında bekliyor`, detay: `${acilMakineKodu(e.makine)}'den geldi · ${sure(e.endTs)} bekliyor` };
+  if(e && e.sonOperasyon) return { renk: 'var(--success)', metin: 'Rota tamamlandı', detay: `${acilMakineKodu(e.makine)}'de bitti · acil işareti kaldırılabilir` };
+  if(e) return { renk: 'var(--text-muted)', metin: `${e.makine}'de bitti`, detay: 'sıradaki makine işaretlenmemiş' };
+  if(x) return { renk: 'var(--danger)', metin: `${x.makine} sırasında bekliyor`, detay: `ilk operasyon · ${sure(x.ts)} önce sıraya kondu` };
+  const t = String(a.talepNo || '').toUpperCase();
+  const mb = t && typeof malzemeBekleyenAktif === 'function' ? malzemeBekleyenAktif().find(m => String(m.talepNo || '').toUpperCase() === t) : null;
+  if(mb) return { renk: 'var(--warn)', metin: 'Malzeme bekliyor', detay: `${mb.hammaddeKod || ''}${String(mb.caniasIstekNo || '').trim() ? ' · istek no ' + mb.caniasIstekNo : ' · istek no girilmedi'}` };
+  return { renk: 'var(--text-muted)', metin: 'Henüz başlamadı', detay: 'hiç kaydı yok, bir makinenin sırasına da konmamış' };
+}
+/* İş Yoğunluğu ('iy') ve Canlı Panel → Genel Bakış ('gb'): kaç acil iş var + her birinin yeri */
+function acilPanoHtml(baglam){
+  const liste = acilKayitlari();
+  const iyAcik = baglam === 'iy' || (typeof isAdminTabVisible === 'function' && isAdminTabVisible('isYogunlugu'));
+  const tik = ({ a, e }) => !iyAcik ? '' : baglam === 'iy' && e ? `openIyGecmisModal('${escJs(e.isEmriNo)}','${escJs(e.talepNo || '')}')`
+    : `iyAramaMetni='${escJs(a.talepNo || a.isEmriNo)}'; setView('isYogunlugu')`;
+  return `<div class="analiz-chart-box acil-pano${liste.length ? ' var' : ''}">
+    <div class="gb-panel-head" style="margin-bottom:${liste.length ? '10px' : '0'}">
+      <span class="gb-panel-title acil-pano-baslik">${ico('alert', 15)} Acil İşler <b class="mono">${liste.length}</b></span>
+      <span class="acil-pano-alt">${liste.length ? 'en eski işaretlenen üstte' : 'acil işaretli iş yok'}${acilYetki() ? ' · İş Yoğunluğu\'nda "Acil yap" ile işaretlenir' : ''}</span>
+    </div>
+    ${liste.map(r => { const d = acilDurum(r), ad = isEmriMamulAdi(r.a.talepNo, r.a.isEmriNo), t = tik(r); return `<div class="acil-pano-satir${t ? ' tik' : ''}" ${t ? `onclick="${t}"` : ''}>
+      <div class="acil-pano-is"><span class="mono acil-pano-no">${esc(r.a.talepNo || r.a.isEmriNo)}</span><span class="acil-pano-ad">${esc(ad || ('U kodu: ' + r.a.isEmriNo))}</span></div>
+      <div class="acil-pano-yer"><div style="color:${d.renk};font-weight:600">${esc(d.metin)}</div><div class="acil-pano-detay">${esc(d.detay)}</div></div>
+      <span class="acil-pano-dugme">${acilDugme(r.a.talepNo, r.a.isEmriNo, true)}</span>
+    </div>`; }).join('')}
+  </div>`;
 }
 /* Operatörün başlatma formu: makine seçilince */
 function acilUyariFormHtml(makine){
