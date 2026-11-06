@@ -170,37 +170,38 @@ async function fpSablonDosyasi(yeniSec){
   return h;
 }
 async function fpExcelOlustur(yeniSec){
-  if(!(typeof malzemeIstekNoYetkisi === 'function' ? malzemeIstekNoYetkisi() : (session && session.isSuperAdmin))){ toast('Excel\'i SuperAdmin oluşturur'); return; }
+  if(!(typeof malzemeIstekNoYetkisi === 'function' ? malzemeIstekNoYetkisi() : (session && session.isSuperAdmin))){ toast("Excel'i SuperAdmin oluşturur"); return; }
   const hepsi = fpExcelPaketleri(), paketler = hepsi.filter(p => p.bilgili), bilgisiz = hepsi.length - paketler.length;
-  if(!paketler.length){ toast(hepsi.length ? 'İstek no\'su olmayan paketlerin bilgisi girilmemiş (Bilgi gir)' : 'İstek no\'su girilmemiş paket yok'); return; }
-  let dosya = null, destek = typeof window.showSaveFilePicker === 'function';
-  if(destek){
-    try{ dosya = await fpSablonDosyasi(yeniSec); }
-    catch(e){ if(e && e.name === 'AbortError') return; destek = false; }
-  }
+  if(!paketler.length){ toast(hepsi.length ? "İstek no'su olmayan paketlerin bilgisi girilmemiş (Bilgi gir)" : "İstek no'su girilmemiş paket yok"); return; }
+  /* Kütüphane sayfada önceden yükleniyor (fpExcelDugmeHtml); burada bekleme olursa tıklamanın izni (user activation)
+     dosya penceresine kadar düşebiliyor — o yüzden ensureXLSX genelde anında döner. */
   if(!(await ensureXLSX())) return;
   const ws = XLSX.utils.aoa_to_sheet(fpExcelSatirlari(paketler));
   ws['!cols'] = [{ wch: 10 }, { wch: 8 }, { wch: 7 }, { wch: 13 }, { wch: 10 }, { wch: 70 }, { wch: 6 }];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'XLSTBL');
   const ek = bilgisiz ? ` (${bilgisiz} paket bilgisi girilmediği için alınmadı)` : '';
-  if(dosya){
-    try{
-      const w = await dosya.createWritable();
-      await w.write(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array', bookSST: true })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-      await w.close();
-      toast(`${dosya.name} güncellendi — ${paketler.length} satır${ek}`);
-      return;
-    }catch(e){
-      toast('Dosyaya yazılamadı' + (e && e.name === 'NoModificationAllowedError' ? ' — Excel\'de açıksa kapatıp tekrar dene' : '') + ': ' + ((e && e.message) || 'hata'));
-      return;
-    }
+  const indir = neden => { XLSX.writeFile(wb, 'ŞABLON.xlsx', { bookSST: true }); toast(`${neden ? neden + ' — ' : ''}ŞABLON.xlsx indirildi — ${paketler.length} satır${ek}`); };
+  if(typeof window.showSaveFilePicker !== 'function'){ indir(''); return; }
+  let dosya = null;
+  try{ dosya = await fpSablonDosyasi(yeniSec); }
+  catch(e){ if(e && e.name === 'AbortError') return; }
+  if(!dosya){ indir('Dosya seçilemedi'); return; }
+  try{
+    const w = await dosya.createWritable();
+    await w.write(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array', bookSST: true })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    await w.close();
+    toast(`${dosya.name} güncellendi — ${paketler.length} satır${ek}`);
+  }catch(e){
+    /* 06.11.2026: "createWritable ... not allowed by the user agent or the platform" — tarayıcı/kurum politikası yazmayı
+       reddediyor. Yarıda bırakma: indir. Excel'de açık dosyada (NoModificationAllowedError) da indir, ama söyle. */
+    if(e && e.name === 'NotAllowedError') fpTaniticiYaz(null);
+    indir(e && e.name === 'NoModificationAllowedError' ? `${dosya.name} Excel'de açık, üstüne yazılamadı` : 'Tarayıcı dosyaya yazmaya izin vermedi');
   }
-  XLSX.writeFile(wb, 'ŞABLON.xlsx', { bookSST: true });
-  toast(`ŞABLON.xlsx indirildi — ${paketler.length} satır${ek}`);
 }
 function fpExcelDugmeHtml(){
   if(!(typeof malzemeIstekNoYetkisi === 'function' ? malzemeIstekNoYetkisi() : (session && session.isSuperAdmin))) return '';
   const n = fpExcelPaketleri().filter(p => p.bilgili).length;
+  if(n && typeof XLSX === 'undefined' && typeof loadScriptOnce === 'function') loadScriptOnce(LAZY_LIB_URLS.xlsx).catch(() => {});
   return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px">
     <button class="btn-primary" ${n ? '' : 'disabled'} title="İstek no'su olmayan paketler CANIAS yükleme şablonuna yazılır" onclick="fpExcelOlustur(false)">${ico('file', 14)} Excel oluştur${n ? ` (${n})` : ''}</button>
     ${typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function' ? `<button class="btn-ghost mb-mini" title="Yazılacak ŞABLON dosyasını yeniden seç" onclick="fpExcelOlustur(true)">Dosyayı değiştir</button>` : ''}
