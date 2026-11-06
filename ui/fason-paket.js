@@ -42,7 +42,8 @@ function fpTaslakMetni(p){
     const mamul = fpMamul(e);
     return [e.talepNo || e.isEmriNo, mamul].filter(Boolean).join(' ') + ' - ' + (Number(e.adet) || 0) + ' ADET' + (Number(e.fasonKg) > 0 ? ' - ' + fpKg(Number(e.fasonKg)) + ' KG' : '');
   });
-  return [ozet].concat(satirlar).join('\n');
+  /* 06.11.2026 (kullanıcı): özetten sonra boş satır, iş emirleri alt alta (CANIAS açıklamasında böyle okunuyor) */
+  return ozet + '\n\n' + satirlar.join('\n');
 }
 function fpKopyala(id){
   const p = fasonPaketleri().find(x => x.id === id); if(!p) return;
