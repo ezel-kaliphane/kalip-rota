@@ -119,10 +119,11 @@ function mbSecenekMetni(it){ return hammaddeGosterimAdi(it); }
    iş emirlerini "talep no + mamul adı" olarak alt alta panoya kopyalar (ekrandaki sırayla). */
 /* 09.11.2026 (kullanıcı, CANIAS Excel'i ile): metin şu biçimde — iş emirleri alt alta, boş satır, TOPLAM GEREKLİ,
    boş satır, sipariş miktarı (toplam + 500 mm pay, tam metreye yukarı), boş satır, "… MM STOK KALACAKTIR".
-   Adetli kalemde (mm girilmeyen: parmak, kama…) pay yok, 50'lik dilime yukarı (09.11.2026: "671 → 700 adet"). */
-const MB_SIPARIS_PAY_MM = 500, MB_SIPARIS_YUVARLA_MM = 1000, MB_SIPARIS_YUVARLA_ADET = 50;
+   Adetli kalemde (mm girilmeyen: parmak, kama…) 50'lik dilime yukarı, ama en az 50 adet stok kalacak
+   (09.11.2026: "148 için 2 adet stok olmamış, min 50 stok — 148'i 200'e yuvarlasın"). */
+const MB_SIPARIS_PAY_MM = 500, MB_SIPARIS_YUVARLA_MM = 1000, MB_SIPARIS_YUVARLA_ADET = 50, MB_SIPARIS_MIN_STOK_ADET = 50;
 function mbSiparisMm(top){ return Math.ceil((Math.round(top) + MB_SIPARIS_PAY_MM) / MB_SIPARIS_YUVARLA_MM) * MB_SIPARIS_YUVARLA_MM; }
-function mbSiparisAdet(top){ return Math.ceil(Math.round(top) / MB_SIPARIS_YUVARLA_ADET) * MB_SIPARIS_YUVARLA_ADET; }
+function mbSiparisAdet(top){ return Math.ceil((Math.round(top) + MB_SIPARIS_MIN_STOK_ADET) / MB_SIPARIS_YUVARLA_ADET) * MB_SIPARIS_YUVARLA_ADET; }
 /* İstek no'suz iş emirlerinin toplamı ve sipariş miktarı — açıklama metni ve Excel MIKTAR'ı buradan */
 function mbSiparis(hid){
   const l = mbTaslakSatirlari(hid);
@@ -190,7 +191,7 @@ function mbExcelDugmeHtml(){
   return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px">
     <button class="btn-primary" style="width:auto;padding:9px 16px" ${n ? '' : 'disabled'} title="İstek no'su girilmemiş iş emri olan her hammadde CANIAS yükleme şablonuna bir satır yazılır" onclick="mbExcelOlustur(false)">${ico('file', 14)} Excel oluştur${n ? ` (${n})` : ''}</button>
     ${typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function' ? `<button class="btn-ghost mb-mini" title="Yazılacak ŞABLON dosyasını yeniden seç" onclick="mbExcelOlustur(true)">Dosyayı değiştir</button>` : ''}
-    <span style="font-size:12px;color:var(--text-muted)">Öncelik ${MB_EXCEL_SABIT.oncelik} · birim ${MB_EXCEL_SABIT.birim} · ihtiyaç ${fpIhtiyacTarihi()} · satın alma ${MB_EXCEL_SABIT.satinalma} · çubuk: miktar 1, sipariş = toplam + ${MB_SIPARIS_PAY_MM} mm, tam metreye · adetli: miktar = toplam ${MB_SIPARIS_YUVARLA_ADET}'lik dilime yukarı</span>
+    <span style="font-size:12px;color:var(--text-muted)">Öncelik ${MB_EXCEL_SABIT.oncelik} · birim ${MB_EXCEL_SABIT.birim} · ihtiyaç ${fpIhtiyacTarihi()} · satın alma ${MB_EXCEL_SABIT.satinalma} · çubuk: miktar 1, sipariş = toplam + ${MB_SIPARIS_PAY_MM} mm, tam metreye · adetli: miktar = toplam + en az ${MB_SIPARIS_MIN_STOK_ADET} stok, ${MB_SIPARIS_YUVARLA_ADET}'lik dilime yukarı</span>
     ${kodsuz.length ? `<span style="font-size:12px;color:var(--danger)" title="CANİAS kodu olmayan kalem Excel'e yazılamaz — Stok Takibi'nde kodunu girin">${ico('alert', 12)} Kodu yok, alınmayacak: ${kodsuz.map(g=>esc(g.it ? hammaddeEtiket(g.it) : '(kalem silinmiş)')).join(', ')}</span>` : ''}
   </div>`;
 }
