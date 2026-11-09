@@ -176,12 +176,17 @@ async function fpExcelOlustur(yeniSec){
   if(!paketler.length){ toast(hepsi.length ? "İstek no'su olmayan paketlerin bilgisi girilmemiş (Bilgi gir)" : "İstek no'su girilmemiş paket yok"); return; }
   /* Kütüphane sayfada önceden yükleniyor (fpExcelDugmeHtml); burada bekleme olursa tıklamanın izni (user activation)
      dosya penceresine kadar düşebiliyor — o yüzden ensureXLSX genelde anında döner. */
+  await caniasSablonaYaz(fpExcelSatirlari(paketler), paketler.length, bilgisiz ? ` (${bilgisiz} paket bilgisi girilmediği için alınmadı)` : '', yeniSec);
+}
+/* CANIAS satın alma yükleme şablonuna (sayfa XLSTBL) yaz — fason ısıl ve Malzeme Bekleyenler ortak (09.11.2026:
+   "aynı şablona yaz"). Aynı saklı dosya tanıtıcısı kullanılır; yazılamazsa ŞABLON.xlsx indirilir. */
+async function caniasSablonaYaz(satirlar, n, ek, yeniSec){
   if(!(await ensureXLSX())) return;
-  const ws = XLSX.utils.aoa_to_sheet(fpExcelSatirlari(paketler));
+  const ws = XLSX.utils.aoa_to_sheet(satirlar);
   ws['!cols'] = [{ wch: 10 }, { wch: 8 }, { wch: 7 }, { wch: 13 }, { wch: 10 }, { wch: 70 }, { wch: 6 }];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'XLSTBL');
-  const ek = bilgisiz ? ` (${bilgisiz} paket bilgisi girilmediği için alınmadı)` : '';
-  const indir = neden => { XLSX.writeFile(wb, 'ŞABLON.xlsx', { bookSST: true }); toast(`${neden ? neden + ' — ' : ''}ŞABLON.xlsx indirildi — ${paketler.length} satır${ek}`); };
+  ek = ek || '';
+  const indir = neden => { XLSX.writeFile(wb, 'ŞABLON.xlsx', { bookSST: true }); toast(`${neden ? neden + ' — ' : ''}ŞABLON.xlsx indirildi — ${n} satır${ek}`); };
   if(typeof window.showSaveFilePicker !== 'function'){ indir(''); return; }
   let dosya = null;
   try{ dosya = await fpSablonDosyasi(yeniSec); }
@@ -191,7 +196,7 @@ async function fpExcelOlustur(yeniSec){
     const w = await dosya.createWritable();
     await w.write(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array', bookSST: true })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     await w.close();
-    toast(`${dosya.name} güncellendi — ${paketler.length} satır${ek}`);
+    toast(`${dosya.name} güncellendi — ${n} satır${ek}`);
   }catch(e){
     /* 06.11.2026: "createWritable ... not allowed by the user agent or the platform" — tarayıcı/kurum politikası yazmayı
        reddediyor. Yarıda bırakma: indir. Excel'de açık dosyada (NoModificationAllowedError) da indir, ama söyle. */

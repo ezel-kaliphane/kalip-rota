@@ -117,13 +117,23 @@ function mbHammaddeQr(){
 function mbSecenekMetni(it){ return hammaddeGosterimAdi(it); }
 /* MALZEME TASLAĞI (13.10.2026, kullanıcı isteği): satın alma isteği açarken istek no girilmemiş
    iş emirlerini "talep no + mamul adı" olarak alt alta panoya kopyalar (ekrandaki sırayla). */
-function mbTaslakMetni(hid){
-  const l = malzemeBekleyenAktif().filter(x=>x.hammaddeId===hid && !malzemeIstekVar(x))
+/* 09.11.2026 (kullanıcı, CANIAS Excel'i ile): metin şu biçimde — iş emirleri alt alta, boş satır, TOPLAM GEREKLİ,
+   boş satır, sipariş miktarı (toplam + 500 mm pay, tam metreye yukarı), boş satır, "… MM STOK KALACAKTIR".
+   Pay/sipariş satırları yalnız mm kalemde; adet kalemde toplam satırında biter. */
+const MB_SIPARIS_PAY_MM = 500, MB_SIPARIS_YUVARLA_MM = 1000;
+function mbSiparisMm(top){ return Math.ceil((Math.round(top) + MB_SIPARIS_PAY_MM) / MB_SIPARIS_YUVARLA_MM) * MB_SIPARIS_YUVARLA_MM; }
+function mbTaslakSatirlari(hid){
+  return malzemeBekleyenAktif().filter(x=>x.hammaddeId===hid && !malzemeIstekVar(x))
     .sort((a,b)=>(Number(a.isaretTs)||0)-(Number(b.isaretTs)||0));
+}
+function mbTaslakMetni(hid){
+  const l = mbTaslakSatirlari(hid);
   if(!l.length) return '';
-  /* Son satır: toplam ihtiyaç (parça boyu × İ.E. + testere payı) — kullanıcı: "alt satırına MM yaz" */
+  /* Toplam ihtiyaç (parça boyu × İ.E. + testere payı) — kullanıcı: "alt satırına MM yaz" */
   const top = Math.round(l.reduce((t,x)=>t+malzemeIhtiyac(x), 0)), birim = String(l[0].birim||'').toLocaleUpperCase('tr');
-  return l.map(x=>[x.talepNo||x.isEmriNo, x.mamulAdi||''].filter(Boolean).join(' ')).join('\n') + '\nTOPLAM GEREKLİ: ' + top + ' ' + birim;
+  let m = l.map(x=>[x.talepNo||x.isEmriNo, x.mamulAdi||''].filter(Boolean).join(' ')).join('\n') + '\n\nTOPLAM GEREKLİ: ' + top + ' ' + birim;
+  if(birim === 'MM'){ const s = mbSiparisMm(top); m += '\n\n' + s + ' MM\n\n' + (s - top) + ' MM STOK KALACAKTIR'; }
+  return m;
 }
 function mbTaslakSatirSayisi(hid){ return malzemeBekleyenAktif().filter(x=>x.hammaddeId===hid && !malzemeIstekVar(x)).length; }
 function mbTaslakKopyala(hid){
@@ -138,6 +148,42 @@ function mbTaslakKopyala(hid){
     if(ok) tamam(); else window.prompt('Kopyalanamadı — buradan seçip kopyala:', metin);
   };
   if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(metin).then(tamam, yedek); else yedek();
+}
+/* ==================== EXCEL OLUŞTUR → CANIAS SATIN ALMA YÜKLEMESİ (09.11.2026, kullanıcı isteği) ====================
+   Fason ısıldakinin aynısı, aynı ŞABLON dosyasına: istek no'su girilmemiş iş emri olan her hammadde bir satır.
+   MALZEME = hammaddenin CANİAS kodu (kodu yoksa alınmaz, ekranda söylenir) · ONCELIK 2 · MIKTAR 1 · IHTIYACTARIHI
+   bugün+7 · SATINALMA 180 · ACIKLAMA = "Malzeme taslağı kopyala" metninin aynısı · BIRIM AD. */
+const MB_EXCEL_SABIT = { oncelik: 2, miktar: 1, satinalma: 180, birim: 'AD' };
+function mbExcelGruplari(){
+  const g = {};
+  malzemeBekleyenAktif().filter(x=>!malzemeIstekVar(x)).forEach(x=>{ (g[x.hammaddeId] = g[x.hammaddeId] || []).push(x); });
+  return Object.entries(g).map(([hid, l])=>{
+    const it = (stockItems||{})[hid];
+    return { hid, it, kod: it ? stokCanias(it) : '', ilkTs: Math.min(...l.map(x=>Number(x.isaretTs)||0)) };
+  }).sort((a,b)=>a.ilkTs-b.ilkTs);
+}
+function mbExcelSatirlari(gruplar, simdi){
+  const tarih = fpExcelTarih(simdi), s = MB_EXCEL_SABIT;
+  return [['MALZEME', 'ONCELIK', 'MIKTAR', 'IHTIYACTARIHI', 'SATINALMA', 'ACIKLAMA', 'BIRIM']]
+    .concat(gruplar.map(g=>[g.kod, s.oncelik, s.miktar, tarih, s.satinalma, mbTaslakMetni(g.hid), s.birim]));
+}
+async function mbExcelOlustur(yeniSec){
+  if(!malzemeIstekNoYetkisi()){ toast("Excel'i SuperAdmin oluşturur"); return; }
+  const hepsi = mbExcelGruplari(), gruplar = hepsi.filter(g=>g.kod), kodsuz = hepsi.length - gruplar.length;
+  if(!gruplar.length){ toast(hepsi.length ? "İstek no'su olmayan kalemlerin CANİAS kodu yok" : "İstek no'su girilmemiş iş emri yok"); return; }
+  await caniasSablonaYaz(mbExcelSatirlari(gruplar), gruplar.length, kodsuz ? ` (${kodsuz} kalemin CANİAS kodu yok, alınmadı)` : '', yeniSec);
+}
+function mbExcelDugmeHtml(){
+  if(!malzemeIstekNoYetkisi()) return '';
+  const hepsi = mbExcelGruplari(), n = hepsi.filter(g=>g.kod).length, kodsuz = hepsi.filter(g=>!g.kod);
+  if(!hepsi.length) return '';
+  if(n && typeof XLSX === 'undefined' && typeof loadScriptOnce === 'function') loadScriptOnce(LAZY_LIB_URLS.xlsx).catch(() => {});
+  return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px">
+    <button class="btn-primary" style="width:auto;padding:9px 16px" ${n ? '' : 'disabled'} title="İstek no'su girilmemiş iş emri olan her hammadde CANIAS yükleme şablonuna bir satır yazılır" onclick="mbExcelOlustur(false)">${ico('file', 14)} Excel oluştur${n ? ` (${n})` : ''}</button>
+    ${typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function' ? `<button class="btn-ghost mb-mini" title="Yazılacak ŞABLON dosyasını yeniden seç" onclick="mbExcelOlustur(true)">Dosyayı değiştir</button>` : ''}
+    <span style="font-size:12px;color:var(--text-muted)">Öncelik ${MB_EXCEL_SABIT.oncelik} · miktar ${MB_EXCEL_SABIT.miktar} ${MB_EXCEL_SABIT.birim} · ihtiyaç ${fpIhtiyacTarihi()} · satın alma ${MB_EXCEL_SABIT.satinalma} · sipariş = toplam + ${MB_SIPARIS_PAY_MM} mm, tam metreye</span>
+    ${kodsuz.length ? `<span style="font-size:12px;color:var(--danger)" title="CANİAS kodu olmayan kalem Excel'e yazılamaz — Stok Takibi'nde kodunu girin">${ico('alert', 12)} Kodu yok, alınmayacak: ${kodsuz.map(g=>esc(g.it ? hammaddeEtiket(g.it) : '(kalem silinmiş)')).join(', ')}</span>` : ''}
+  </div>`;
 }
 function mbBoySecili(){
   const it = mbForm.hammaddeId && (stockItems||{})[mbForm.hammaddeId];
@@ -322,6 +368,7 @@ function renderMalzemeBekleyen(){
         return `<button class="btn-ghost" style="width:auto;padding:7px 12px;margin-left:auto;font-size:12.5px" onclick="mbTumGruplar(${!hepsi}, ${esc(JSON.stringify(grupListesi.map(g=>g.hid)))})">${ico(hepsi?'chevronUp':'chevronDown',14)} ${hepsi?'Hepsini kapat':'Hepsini aç'}</button>`; })() : ''}
     </div>
 
+    ${mbGecmisAcik ? '' : mbExcelDugmeHtml()}
     ${mbGecmisAcik ? '' : aktif.length===0
       ? `<div class="notice" style="--nc:var(--success)"><div class="notice-title">Malzeme bekleyen iş emri yok</div>
          <div class="notice-sub">Şef malzemeliğe gidip aradığını bulamazsa buraya işaretler; iş emri o andan itibaren burada görünür.</div></div>`

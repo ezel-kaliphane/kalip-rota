@@ -146,7 +146,26 @@ test('rezerve yalnız aynı hammaddenin AKTİF kayıtları; taslak toplamı iste
     d: { hammaddeId: 'H2', birim: 'mm', gerekenMiktar: 99, ieMiktar: 1, durum: 'bekliyor', talepNo: 'Y', isaretTs: 4 }
   });
   assert.equal(A.ctx.malzemeRezerve('H1'), 126 + 204);
-  assert.equal(A.ctx.mbTaslakMetni('H1'), '2609180021 M12X35 KALIP\nTOPLAM GEREKLİ: 126 MM');
+  assert.equal(A.ctx.mbTaslakMetni('H1'), '2609180021 M12X35 KALIP\n\nTOPLAM GEREKLİ: 126 MM\n\n1000 MM\n\n874 MM STOK KALACAKTIR');
+});
+
+test('malzeme siparişi: +500 mm pay, tam metreye yukarı; Excel satırı', () => {
+  assert.equal(A.ctx.mbSiparisMm(2950), 4000);
+  assert.equal(A.ctx.mbSiparisMm(3500), 4000);
+  assert.equal(A.ctx.mbSiparisMm(3501), 5000);
+  A.ata('stockItems', { H1: { kod: '4140', cap: 'Ø65', canias: 'KLPHM000221', birim: 'mm' }, H2: { kod: 'X', birim: 'mm' } });
+  A.ata('malzemeBekleyen', {
+    a: { hammaddeId: 'H1', birim: 'mm', gerekenMiktar: 2950, ieMiktar: 1, durum: 'bekliyor', talepNo: '2611060036', mamulAdi: 'YPB37003 B37 SABIT KALIP KONTRA SAPLAMASI', isaretTs: 5 },
+    b: { hammaddeId: 'H2', birim: 'mm', gerekenMiktar: 10, ieMiktar: 1, durum: 'bekliyor', talepNo: 'Y', isaretTs: 1 }
+  });
+  const g = A.ctx.mbExcelGruplari();
+  assert.equal(JSON.stringify(g.map(x => [x.hid, x.kod])), JSON.stringify([['H2', ''], ['H1', 'KLPHM000221']]));
+  const s = JSON.parse(JSON.stringify(A.ctx.mbExcelSatirlari(g.filter(x => x.kod), new Date(2026, 10, 9, 12).getTime())));
+  assert.equal(s.length, 2);
+  assert.equal(JSON.stringify([s[1][0], s[1][1], s[1][2], s[1][4], s[1][6]]), JSON.stringify(['KLPHM000221', 2, 1, 180, 'AD']));
+  assert.equal(s[1][3].t, 'n');
+  // 2950 + 3 mm testere payı = 2953 → +500 → 4000
+  assert.equal(s[1][5], '2611060036 YPB37003 B37 SABIT KALIP KONTRA SAPLAMASI\n\nTOPLAM GEREKLİ: 2953 MM\n\n4000 MM\n\n1047 MM STOK KALACAKTIR');
 });
 
 /* ==================== MALİYET ==================== */
