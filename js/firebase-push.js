@@ -197,7 +197,7 @@ function initFirebase(){
     /* entries artık tarih dilimleriyle dinleniyor (19.10.2026 maliyet — bkz. parcaliDinle) */
     DB.ref('.info/serverTimeOffset').on('value', snap => { _sunucuFark = snap.val() || 0; });
     /* entries: son iki hafta canlı, eskisi tarayıcıda saklı (27.10.2026 maliyet — bkz. onbellekliDinle) */
-    onbellekliDinle('entries', 'startTs', v => { STATE.entries = v; safeRender(); }, obEntryAcikMi);
+    onbellekliDinle('entries', 'startTs', v => { STATE.entries = v; safeRender(); });
     // Maliyet optimizasyonu: aşağıdaki 6 düğüm nadiren değişen REFERANS listeleri — canlı
     // dinlemeye ihtiyaçları yok, tek seferlik okunuyor. Bir admin bunları düzenlerse (bkz.
     // js/catalog.js, js/operations.js) ilgili fonksiyon kendi yerel kopyasını da güncelleyip
@@ -269,7 +269,7 @@ function initFirebase(){
     // o yüzden o sekme açılınca (loadStockHareketleri, setSettingsSubTab'da) tek seferlik,
     // son-20'yle sınırlı bir sorgu yeterli. consumeStock() kendi yazdığı hareketi yerel
     // kopyaya da ekleyip render() çağırıyor, o yüzden hareketi yapan cihaz anında görür.
-    onbellekliDinle('tadilatlar', 'olusturmaTs', v => { tadilatlar = v; safeRender(); }, obTadilatAcikMi);
+    onbellekliDinle('tadilatlar', 'olusturmaTs', v => { tadilatlar = v; safeRender(); });
     return true;
   }catch(e){ console.warn('Firebase init hatası', e); return false; }
 }
@@ -342,7 +342,7 @@ function obOku(db, k){
 function obYaz(db, k, v){
   return new Promise((res, rej) => { const tx = db.transaction('dilim', 'readwrite'); tx.objectStore('dilim').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
 }
-async function onbellekliDinle(yol, alan, ata, acikMi){
+async function onbellekliDinle(yol, alan, ata){
   const s = parcaSinirlari(Date.now());
   const canliBas = s[Math.max(0, s.length - 2)];   // önceki haftanın başı
   // canlı kısım hemen dinlenmeye başlar; ekrana veri saklanan kısım da hazır olunca verilir
@@ -393,31 +393,7 @@ async function onbellekliDinle(yol, alan, ata, acikMi){
     const canliGunluk = DB.ref('degisim/' + yol).orderByChild('t').startAt(kayit.sonT);
     canliGunluk.on('child_added', izle);
     canliGunluk.on('child_changed', izle);
-    if(acikMi) obAcikKayitlariIzle(yol, kayit, alan, canliBas, acikMi, () => { if(!gecis){ yayinla(); kaydet(); } });
   }catch(e){ vazgec(e); }
-}
-/* SAKLANAN KISIMDA HÂLÂ AÇIK KAYITLAR TEK TEK CANLI (09.11.2026 HATA): eski kayıt değişikliğini cihazlara
-   yalnız sunucu fonksiyonunun yazdığı degisim/ günlüğü taşıyordu. Faturalandırma hesabı kapanınca (06.11)
-   fonksiyonlar durdu: 21.10'da fasona giden iki iş emri bitirildi, kayıtta "tamamlandi" yazdı ama hem
-   bitiren telefonda hem masaüstünde FII01'de açık kaldı. Artık saklanan kısımda devam/duruştaki işler
-   (ve bitmemiş eski tadilatlar) kendi yollarından dinleniyor — on('value') bağlanır bağlanmaz güncel değeri
-   getirdiği için takılı kalmış eski kopya da açılışta düzelir. Sayı küçük (o gün ~30 iş + 19 tadilat). */
-function obAcikKayitlariIzle(yol, kayit, alan, canliBas, acikMi, guncelle){
-  const izlenen = new Set();
-  let bekleyen = 0;
-  const topla = () => { clearTimeout(bekleyen); bekleyen = setTimeout(guncelle, 60); };
-  Object.entries(kayit.veri).forEach(([id, v]) => {
-    if(izlenen.has(id) || !acikMi(v)) return;
-    izlenen.add(id);
-    DB.ref(yol + '/' + id).on('value', sn => { obUygula(kayit, id, sn.val(), alan, canliBas); topla(); },
-      e => console.warn(yol + '/' + id + ' dinlenemedi:', e));
-  });
-}
-function obEntryAcikMi(v){ return !!v && (v.status === 'devam' || v.status === 'duruş'); }
-function obTadilatAcikMi(v){
-  if(!v || v.testKaydi) return false;
-  const ops = v.operasyonlar ? Object.values(v.operasyonlar).filter(Boolean) : [];
-  return !ops.some(o => o.status === 'tamamlandi' && o.sonOperasyon);
 }
 /* Nadiren değişen büyük listeler (Excel'den yüklenir): settings/{ad}Version değişmedikçe tarayıcıdaki
    kopya kullanılır; yükleme/silme sürümü artırır (js/catalog.js). Güvenlik için kopya 12 saatten
