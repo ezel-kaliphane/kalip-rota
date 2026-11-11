@@ -178,7 +178,7 @@ test('malzeme siparişi: +500 mm pay, tam metreye yukarı; Excel satırı', () =
   });
   const k = JSON.parse(JSON.stringify(A.ctx.mbExcelSatirlari(A.ctx.mbExcelGruplari(), new Date(2026, 10, 9, 12).getTime())));
   assert.equal(k[1][2], 750);
-  assert.equal(k[1][5], '2611060039 C-PARMAK\n\nTOPLAM GEREKLİ: 671 ADET\n\n750 ADET\n\n79 ADET STOK KALACAKTIR');
+  assert.equal(k[1][5], '2611060039 C-PARMAK (671 adet)\n\nTOPLAM GEREKLİ: 671 ADET\n\n750 ADET\n\n79 ADET STOK KALACAKTIR');
 });
 
 /* ==================== MALİYET ==================== */

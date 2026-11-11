@@ -140,7 +140,9 @@ function mbTaslakMetni(hid){
   const s = mbSiparis(hid);
   if(!s) return '';
   /* Toplam ihtiyaç (parça boyu × İ.E. + testere payı) — kullanıcı: "alt satırına MM yaz" */
-  return s.l.map(x=>[x.talepNo||x.isEmriNo, x.mamulAdi||''].filter(Boolean).join(' ')).join('\n')
+  /* Adetli kalemde (parmak/kama) her iş emrinin yanına kaç adet istendiği (11.11.2026: "… M5-R-L-8 (30 adet)");
+     çubukta (mm) yazılmaz. */
+  return s.l.map(x=>[x.talepNo||x.isEmriNo, x.mamulAdi||''].filter(Boolean).join(' ') + (s.mm ? '' : ' (' + Math.round(malzemeIhtiyac(x)) + ' adet)')).join('\n')
     + '\n\nTOPLAM GEREKLİ: ' + s.top + ' ' + s.birim + '\n\n' + s.siparis + ' ' + s.birim + '\n\n' + (s.siparis - s.top) + ' ' + s.birim + ' STOK KALACAKTIR';
 }
 function mbTaslakSatirSayisi(hid){ return malzemeBekleyenAktif().filter(x=>x.hammaddeId===hid && !malzemeIstekVar(x)).length; }
