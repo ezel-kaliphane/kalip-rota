@@ -34,12 +34,14 @@ function mmMetin(liste){
   const blok = (s, i) => {
     const mik = s.miktar ? ` ${mmSayi(s.miktar)} ${s.birim}` : '';
     const kalan = s.miktar && s.gelen > 0 ? ` (${mmSayi(s.gelen)} ${s.birim} GELDİ, ${mmSayi(Math.max(0, s.miktar - s.gelen))} ${s.birim} BEKLENİYOR)` : '';
+    /* aynı talep no'nun iki bileşeni (ayrı kayıt) mailde tek satır */
+    const isler = [...new Set(s.kayitlar.map(x => `   - ${[x.talepNo || x.isEmriNo, x.mamulAdi || ''].filter(Boolean).join(' ')}`))];
     return [
       `${i + 1}) ${s.ad.toLocaleUpperCase('tr-TR')}${mik} OLAN SİPARİŞ ${s.gun} GÜNDÜR BEKLEMEDEDİR.${kalan}`,
       `   İSTEK NO : ${s.no}`,
       s.istekTs ? `   İSTEK TARİHİ : ${mmGunTarih(s.istekTs)}` : '',
-      `   BEKLEYEN İŞ EMİRLERİ (${s.kayitlar.length}):`,
-      ...s.kayitlar.map(x => `   - ${[x.talepNo || x.isEmriNo, x.mamulAdi || ''].filter(Boolean).join(' ')}`)
+      `   BEKLEYEN İŞ EMİRLERİ (${isler.length}):`,
+      ...isler
     ].filter(Boolean).join('\n');
   };
   const giris = liste.length === 1
