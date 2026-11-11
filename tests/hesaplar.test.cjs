@@ -181,7 +181,30 @@ test('malzeme siparişi: +500 mm pay, tam metreye yukarı; Excel satırı', () =
   assert.equal(k[1][5], '2611060039 C-PARMAK (671 adet)\n\nTOPLAM GEREKLİ: 671 ADET\n\n750 ADET\n\n79 ADET STOK KALACAKTIR');
 });
 
-test('takım otomatik sipariş: alt limitte olan, istek no\'suz, işaretli kalem Excel\'e girer', () => {
+test('satın almaya mail: 15 günden uzun bekleyen siparişler, istek no + hammadde başına bir blok', () => {
+  const gun = 864e5, simdi = new Date(2026, 10, 11, 9).getTime();
+  A.ata('stockItems', { H1: { kod: '3343', cap: 'Ø26', isim: '3343 Ø26 HSS CELIK', birim: 'mm', tur: 'boy' }, H2: { kod: '2344', cap: 'Ø51', isim: '2344 Ø51 CELIK', birim: 'mm', tur: 'boy' } });
+  A.ata('malzemeIstek', {
+    '26100287_H1': { istekNo: '26100287', hammaddeId: 'H1', miktar: 2000, birim: 'mm', durum: 'acik', acilisTs: simdi - 30 * gun },
+    '26090535_H2': { istekNo: '26090535', hammaddeId: 'H2', miktar: 8000, gelen: 3600, birim: 'mm', durum: 'acik', acilisTs: simdi - 30 * gun }
+  });
+  A.ata('malzemeBekleyen', {
+    a: { hammaddeId: 'H1', birim: 'mm', gerekenMiktar: 25, ieMiktar: 5, durum: 'bekliyor', talepNo: '2609280018', mamulAdi: 'ADPT-M8', isaretTs: simdi - 36 * gun - 3600e3, caniasIstekNo: '26100287' },
+    b: { hammaddeId: 'H2', birim: 'mm', gerekenMiktar: 55, ieMiktar: 6, durum: 'bekliyor', talepNo: '2609280008', mamulAdi: 'M8 KALIP', isaretTs: simdi - 20 * gun, caniasIstekNo: '26090535' },
+    c: { hammaddeId: 'H2', birim: 'mm', gerekenMiktar: 50, ieMiktar: 2, durum: 'bekliyor', talepNo: '2609280007', mamulAdi: 'M6 KALIP', isaretTs: simdi - 10 * gun, caniasIstekNo: '26090535' },
+    d: { hammaddeId: 'H2', birim: 'mm', gerekenMiktar: 50, ieMiktar: 2, durum: 'bekliyor', talepNo: 'YENI', isaretTs: simdi - 40 * gun },           // istek no yok → mail değil
+    e: { hammaddeId: 'H1', birim: 'mm', gerekenMiktar: 50, ieMiktar: 2, durum: 'bekliyor', talepNo: 'TAZE', isaretTs: simdi - 5 * gun, caniasIstekNo: '26999999' } // 5 gün → değil
+  });
+  const l = A.ctx.mmGecikenSiparisler(simdi);
+  assert.equal(JSON.stringify(l.map(s => [s.no, s.gun, s.kayitlar.length])), JSON.stringify([['26100287', 36, 1], ['26090535', 20, 2]]));
+  const m = A.ctx.mmMetin(l);
+  assert.ok(m.includes('1) 3343 Ø26 HSS CELIK 2000 MM OLAN SİPARİŞ 36 GÜNDÜR BEKLEMEDEDİR.\n   İSTEK NO : 26100287\n   İSTEK TARİHİ : 12.10.2026'), m);
+  assert.ok(m.includes('2) 2344 Ø51 CELIK 8000 MM OLAN SİPARİŞ 20 GÜNDÜR BEKLEMEDEDİR. (3600 MM GELDİ, 4400 MM BEKLENİYOR)'), m);
+  assert.ok(m.includes('   - 2609280008 M8 KALIP\n   - 2609280007 M6 KALIP'), m);
+  assert.ok(m.startsWith('Merhabalar,\n\nAşağıdaki 2 satın alma isteğimiz 15 günden uzun'), m);
+});
+
+test('takım otomatik sipariş:alt limitte olan, istek no\'suz, işaretli kalem Excel\'e girer', () => {
   A.ata('toolCatalog', {
     T1: { ad: '0.2 PARMAK FREZE MİCRO', canias: 'U0003644', altLimit: 3, siparisMiktari: 10, otoSiparis: true },
     T2: { ad: 'MATKAP', canias: 'U0003192', altLimit: 2, otoSiparis: true },                 // sipariş miktarı yok → alt limit
