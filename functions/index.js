@@ -95,12 +95,10 @@ function sessizSaattemi(settings){
   }
 }
 
-exports.uzunDurusUyarisi = onSchedule({ schedule: 'every 1 minutes', region: 'europe-west1', timeZone: 'Europe/Istanbul' }, async () => {
-  // ÖNEMLİ (maliyet optimizasyonu): settings, ağır veri çekimlerinden ÖNCE tek başına okunuyor —
-  // uzunDurusUyariEnabled kapalıysa ya da Sessiz Saatler'e denk geliyorsa entries/tadilat
+async function uzunDurusKontrol(settings){
+  // ÖNEMLİ (maliyet optimizasyonu): settings, ağır veri çekimlerinden ÖNCE okunuyor (dakikalikKontroller'de
+  // bir kez) — uzunDurusUyariEnabled kapalıysa ya da Sessiz Saatler'e denk geliyorsa entries/tadilat
   // sorgularına hiç gidilmeden çıkılıyor, o dakikanın indirme maliyeti sıfırlanıyor.
-  const settingsSnap = await db.ref('settings').get();
-  const settings = settingsSnap.val() || {};
   if(settings.uzunDurusUyariEnabled === false) return; // varsayılan: açık
   if(sessizSaattemi(settings)) return; // gece vardiyası yok, bu saatte hiç kontrol yapma
 
@@ -167,7 +165,7 @@ exports.uzunDurusUyarisi = onSchedule({ schedule: 'every 1 minutes', region: 'eu
     tadilatUpdates['pushNotified/tadilat/'+key] = { duruşTs: op.duruşTs, notifiedAt: now };
   }
   if(Object.keys(tadilatUpdates).length>0){ await db.ref().update(tadilatUpdates); }
-});
+}
 
 /* ===================== TADİLAT TAMAMLANDI BİLDİRİMİ (anlık) =====================
  * Periyodik taramadan farklı: bu bir "database trigger" — tadilatlar/{id}/operasyonlar/{opId}
@@ -272,9 +270,7 @@ exports.manuelBildirimGonder = onValueCreated(
  * kapatılmadan biriktiği görüldü, bu kontrol olmadan her sabah o operatöre onlarca yanlış
  * alarm giderdi).
  */
-exports.gunBasiDurusHatirlatici = onSchedule({ schedule: 'every 1 minutes', region: 'europe-west1', timeZone: 'Europe/Istanbul' }, async () => {
-  const settingsSnap = await db.ref('settings').get();
-  const settings = settingsSnap.val() || {};
+async function gunBasiKontrol(settings){
   if(settings.gunBasiHatirlaticiEnabled === false) return;
 
   const nowIst = new Date(Date.now() + 3*60*60*1000); // UTC+3 (Türkiye sabit, DST yok)
@@ -352,7 +348,7 @@ exports.gunBasiDurusHatirlatici = onSchedule({ schedule: 'every 1 minutes', regi
       }
     }
   }
-});
+}
 
 /* ===================== MESAİ BİTİŞİ / MESAİ SONU HATIRLATICILARI =====================
  * Gün Başı Hatırlatıcısı ile AYNI desen (her dakika kontrol, ayarlanan saate denk gelince
@@ -366,9 +362,7 @@ exports.gunBasiDurusHatirlatici = onSchedule({ schedule: 'every 1 minutes', regi
  * mesaiBitisHatirlaticiEnabled ve settings/mesaiSonuHatirlaticiEnabled ile ayrı ayrı
  * kapatılabilir (varsayılan: açık — Gün Başı Hatırlatıcısı ile aynı varsayılan mantık).
  */
-async function mesaiHatirlaticiCalistir({ enabledKey, saatKey, varsayilanSaat, claimNode, title, bodySuffix, tag }){
-  const settingsSnap = await db.ref('settings').get();
-  const settings = settingsSnap.val() || {};
+async function mesaiHatirlaticiCalistir(settings, { enabledKey, saatKey, varsayilanSaat, claimNode, title, bodySuffix, tag }){
   if(settings[enabledKey] === false) return;
 
   const hedefSaat = settings[saatKey] || varsayilanSaat;
@@ -416,28 +410,41 @@ async function mesaiHatirlaticiCalistir({ enabledKey, saatKey, varsayilanSaat, c
   }
 }
 
-exports.mesaiBitisiHatirlatici = onSchedule({ schedule: 'every 1 minutes', region: 'europe-west1', timeZone: 'Europe/Istanbul' }, async () => {
-  await mesaiHatirlaticiCalistir({
-    enabledKey: 'mesaiBitisHatirlaticiEnabled',
-    saatKey: 'mesaiBitisSaat',
-    varsayilanSaat: '17:30',
-    claimNode: 'mesaiBitis',
-    title: '🕠 Mesai saati bitti',
-    bodySuffix: 'Fazla mesai yapmayacaksanız üretimi durdurup çıkış yapınız.',
-    tag: 'mesai-bitis-hatirlatici'
-  });
-});
+const MESAI_BITIS = {
+  enabledKey: 'mesaiBitisHatirlaticiEnabled',
+  saatKey: 'mesaiBitisSaat',
+  varsayilanSaat: '17:30',
+  claimNode: 'mesaiBitis',
+  title: '🕠 Mesai saati bitti',
+  bodySuffix: 'Fazla mesai yapmayacaksanız üretimi durdurup çıkış yapınız.',
+  tag: 'mesai-bitis-hatirlatici'
+};
+const MESAI_SONU = {
+  enabledKey: 'mesaiSonuHatirlaticiEnabled',
+  saatKey: 'mesaiSonuSaat',
+  varsayilanSaat: '21:30',
+  claimNode: 'mesaiSonu',
+  title: '🌙 Mesai sonu',
+  bodySuffix: 'Daha fazla kalmayacaksanız üretimi durdurup çıkış yapınız.',
+  tag: 'mesai-sonu-hatirlatici'
+};
 
-exports.mesaiSonuHatirlatici = onSchedule({ schedule: 'every 1 minutes', region: 'europe-west1', timeZone: 'Europe/Istanbul' }, async () => {
-  await mesaiHatirlaticiCalistir({
-    enabledKey: 'mesaiSonuHatirlaticiEnabled',
-    saatKey: 'mesaiSonuSaat',
-    varsayilanSaat: '21:30',
-    claimNode: 'mesaiSonu',
-    title: '🌙 Mesai sonu',
-    bodySuffix: 'Daha fazla kalmayacaksanız üretimi durdurup çıkış yapınız.',
-    tag: 'mesai-sonu-hatirlatici'
-  });
+/* ===================== DAKİKALIK KONTROLLER — TEK ZAMANLAYICI (11.11.2026, maliyet) =====================
+ * Eskiden uzunDurusUyarisi, gunBasiDurusHatirlatici, mesaiBitisiHatirlatici ve mesaiSonuHatirlatici
+ * dört ayrı fonksiyondu ve dördü de dakikada bir çalışıyordu: ayda ~173 bin çağrı (Cloud Run ücretsiz
+ * işlemci kotası doluyordu, Blaze'de küçük ama sürekli fatura) + 4 zamanlayıcı işi (ücretsiz 3) +
+ * dakikada 4 kez settings okuması. Şimdi tek fonksiyon, settings bir kez okunur, dört kontrol aynı
+ * çağrıda yan yana çalışır; biri hata verse diğerleri etkilenmez. Davranış aynı. */
+exports.dakikalikKontroller = onSchedule({ schedule: 'every 1 minutes', region: 'europe-west1', timeZone: 'Europe/Istanbul' }, async () => {
+  const settings = (await db.ref('settings').get()).val() || {};
+  const isler = [
+    ['uzunDurus', () => uzunDurusKontrol(settings)],
+    ['gunBasi', () => gunBasiKontrol(settings)],
+    ['mesaiBitis', () => mesaiHatirlaticiCalistir(settings, MESAI_BITIS)],
+    ['mesaiSonu', () => mesaiHatirlaticiCalistir(settings, MESAI_SONU)]
+  ];
+  const sonuc = await Promise.allSettled(isler.map(([, f]) => f()));
+  sonuc.forEach((r, i) => { if(r.status === 'rejected') console.error('dakikalikKontroller/' + isler[i][0], r.reason); });
 });
 
 /* ===================== YENİ HAMMADDE — CANİAS KODU BEKLİYOR (01.10.2026) =====================
