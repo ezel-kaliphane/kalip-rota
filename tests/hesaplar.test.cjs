@@ -437,12 +437,12 @@ test('ısıl işlem paketi: kopyalanan taslak kullanıcının ERP biçiminde', (
   const p1 = l.find(p => p.id === 'g1'), p4 = l.find(p => p.id === 'k4');
   assert.equal(p1.adet, 8);
   const metin = A.ctx.fpTaslakMetni(p1).split('\n');
-  assert.equal(metin[0], '8 ADET 9,27 KG 2344 45-47 HRC');
+  assert.equal(metin[0], '8 ADET (9,27 KG) 2344 45-47 HRC');
   assert.equal(metin[1], '');
   assert.equal(metin[2], '2610020008 M12X35 KALIP - 2 ADET');
   assert.equal(metin[3], '2610020010 B33 KONIK KVN - 2 ADET');
   assert.equal(metin.length, 6);
-  assert.equal(A.ctx.fpTaslakMetni(p4).split('\n')[0], '42 ADET 3 KG 3343 61-63 HRC');
+  assert.equal(A.ctx.fpTaslakMetni(p4).split('\n')[0], '42 ADET (3 KG) 3343 61-63 HRC');
 });
 
 test('ısıl işlem paketi: iş emri başına kg kayda gider, 1 adet kg hesaplanır, önceki tartım bulunur', () => {
@@ -704,7 +704,7 @@ test('fason ısıl excel: sabit sütunlar, ihtiyaç tarihi +7 gün, açıklama =
   const s = JSON.parse(JSON.stringify(A.ctx.fpExcelSatirlari([p], ts('2026-11-06 12:00'))));
   assert.equal(JSON.stringify(s[0]), JSON.stringify(['MALZEME', 'ONCELIK', 'MIKTAR', 'IHTIYACTARIHI', 'SATINALMA', 'ACIKLAMA', 'BIRIM']));
   assert.equal(JSON.stringify(s[1].slice(0, 5).concat(s[1][6])), JSON.stringify(['O0000007', 2, 1, { t: 'n', v: 46339, z: 'm/d/yy' }, 180, 'KG']));
-  assert.equal(s[1][5].split('\n')[0], '1 ADET 17,73 KG 2344 45-47 HRC');
+  assert.equal(s[1][5].split('\n')[0], '1 ADET (17,73 KG) 2344 45-47 HRC');
   assert.equal(s[1][5].split('\n')[1], '');
   assert.ok(s[1][5].split('\n')[2].startsWith('2609280017'));
   assert.equal(A.ctx.fpIhtiyacTarihi(ts('2026-12-28 09:00')), '04.01.2027');

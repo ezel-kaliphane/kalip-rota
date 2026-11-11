@@ -37,7 +37,7 @@ function fpKg(kg){ return kg == null ? '?' : String(Math.round(kg * 100) / 100).
 function fpSertlik(s){ return s && s.min != null ? (Number(s.max) > Number(s.min) ? s.min + '-' + s.max : String(s.min)) + ' HRC' : ''; }
 /* ERP isteğine yapıştırılacak metin: ilk satır özet, altında iş emirleri */
 function fpTaslakMetni(p){
-  const ozet = `${p.adet} ADET ${fpKg(p.kg)} KG ${fpTurKisa(p.tur)} ${fpSertlik(p.sertlik)}`.replace(/\s+/g, ' ').trim();
+  const ozet = `${p.adet} ADET (${fpKg(p.kg)} KG) ${fpTurKisa(p.tur)} ${fpSertlik(p.sertlik)}`.replace(/\s+/g, ' ').trim();
   const satirlar = p.uyeler.map(e => {
     const mamul = fpMamul(e);
     return [e.talepNo || e.isEmriNo, mamul].filter(Boolean).join(' ') + ' - ' + (Number(e.adet) || 0) + ' ADET' + (Number(e.fasonKg) > 0 ? ' - ' + fpKg(Number(e.fasonKg)) + ' KG' : '');
