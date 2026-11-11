@@ -1,5 +1,6 @@
 /* ==================== MALZEME BEKLEYEN → SATIN ALMAYA MAİL (11.11.2026, kullanıcı isteği) ====================
-   İş Yoğunluğu → Malzeme Bekliyor (yalnız SuperAdmin): 15 günden uzun bekleyen siparişler için satın almaya
+   Stok → Malzeme Bekleyenler üst satırı (yalnız SuperAdmin; 11.11.2026'da İş Yoğunluğu'ndan taşındı — "listenin
+   en altına iniyorsun"): 15 günden uzun bekleyen siparişler için satın almaya
    bilgi isteği maili. Bir sipariş = bir istek no + bir hammadde (malzemeIstek anahtarı gibi). Bekleme günü ekrandaki
    "N gün bekliyor" ile aynı: o siparişe bağlı en eski işaretleme (isaretTs). Mail önce pencerede gösterilir
    (düzenlenebilir), "Mail uygulamasında aç" mailto ile Outlook'u açar; uzun metinde mailto kısalabildiği için

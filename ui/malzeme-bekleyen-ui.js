@@ -372,6 +372,7 @@ function renderMalzemeBekleyen(){
 
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
       ${canManageStock()?`<button class="btn-primary" style="width:auto;padding:9px 16px" onclick="mbYeniAc()">+ Malzeme Bekliyor</button>`:''}
+      ${typeof mmDugmeHtml==='function' ? mmDugmeHtml() : ''}
       <span class="mb-sekmeler" role="tablist">
         <button role="tab" aria-selected="${!mbGecmisAcik}" class="chip ${!mbGecmisAcik?'active':''}" onclick="mbGecmisAcik=false; render()">Bekleyenler <b>${aktif.length}</b></button>
         <button role="tab" aria-selected="${mbGecmisAcik}" class="chip ${mbGecmisAcik?'active':''}" onclick="mbGecmisAcik=true; render()">Karşılananlar</button>
@@ -405,7 +406,7 @@ function renderMalzemeBekleyen(){
       <div class="notice-sub">Şef bir mamul için hangi hammaddeyi seçtiyse kaydediliyor. Aynı mamul ikinci kez geldiğinde
       hammadde ve miktar hazır geliyor — ayrı bir reçete ekranı yok. Şu an <b>${Object.values(hammaddeRecete||{}).filter(r=>r && r.hammaddeId).length}</b> mamulün reçetesi var.</div>
     </div>
-  </div>${renderMbYeniModal()}${renderMbIstekModal()}${renderMbTopluModal()}`;
+  </div>${renderMbYeniModal()}${renderMbIstekModal()}${renderMbTopluModal()}${typeof renderMmMailModal==='function' ? renderMmMailModal() : ''}`;
 }
 
 function renderMbYeniModal(){

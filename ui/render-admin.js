@@ -2167,7 +2167,7 @@ function iyMalzemeDetayHtml(r){
       <span class="iy-mb-istek">${istek ? (malzemeIstekDurumu(x)==='geldi' ? `Geldi · istek ${esc(istek)}` : `İstek ${esc(istek)}`) : 'İstek no yok'}</span>
       <span class="mono sag" style="color:${bek.renk}">${bek.metin} bekliyor</span>
     </div>`; }).join('')}
-  ${canManageStock() || (typeof mmYetki==='function' && mmYetki()) ? `<div style="padding-top:10px;display:flex;gap:8px;flex-wrap:wrap">${canManageStock() ? `<button class="btn-ghost" style="width:auto;padding:7px 12px" onclick="stokSubView='bekleyen'; setView('stokYonetim')">Malzeme Bekleyenler'de aç</button>` : ''}${typeof mmDugmeHtml==='function' ? mmDugmeHtml() : ''}</div>` : ''}${typeof renderMmMailModal==='function' ? renderMmMailModal() : ''}`;
+  ${canManageStock() ? `<div style="padding-top:10px"><button class="btn-ghost" style="width:auto;padding:7px 12px" onclick="stokSubView='bekleyen'; setView('stokYonetim')">Malzeme Bekleyenler'de aç</button></div>` : ''}`;
 }
 
 /* --- GÖRÜNÜM: ÖZET — atölye ustası, az bilgi ----------------------- */
