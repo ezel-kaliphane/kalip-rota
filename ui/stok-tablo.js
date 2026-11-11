@@ -65,7 +65,7 @@ function renderTakimTablo(){
     const d = takimDurum(it), s = takimStokSayi(it), dl = toolDolaplari(toolStock[it.id], it);
     return `<tr class="st-tr ${takimSeciliId === it.id ? (yon ? 'sec yon' : 'sec') : ''}" onclick="takimSec('${escJs(it.id)}')">
       ${yon ? `<td class="st-cb" onclick="event.stopPropagation()"><input type="checkbox" aria-label="Seç" ${toolBulkSelected[it.id] ? 'checked' : ''} onchange="toggleToolBulkSelect('${escJs(it.id)}',this.checked)"></td>` : ''}
-      <td><div class="st-ad">${esc(it.ad || '—')}</div><div class="st-alt"><span class="mono">${esc(it.canias || '')}</span>${it.marka ? ' · ' + esc(it.marka) : ''}${it.aktif === false ? ' · <span style="color:var(--warn)">pasif</span>' : ''}</div></td>
+      <td><div class="st-ad">${esc(it.ad || '—')}</div><div class="st-alt"><span class="mono">${esc(it.canias || '')}</span>${it.marka ? ' · ' + esc(it.marka) : ''}${it.aktif === false ? ' · <span style="color:var(--warn)">pasif</span>' : ''}${it.otoSiparis ? ` · <span style="color:var(--accent)" title="Otomatik siparişte">oto sipariş${(toolStock[it.id] || {}).otoIstekNo ? ' · istek ' + esc(toolStock[it.id].otoIstekNo) : ''}</span>` : ''}</div></td>
       <td class="st-kat">${esc(takimKategoriAdi(it.kategori))}</td>
       <td class="st-sag">${stPill(d, s, d === 'yok' ? 'yok' : d === 'kritik' ? 'kritik' : (it.birim || 'adet'))}</td>
       <td class="st-dolap">${locs.map(l => { const x = dl.find(y => y.locId === l.id); return `${esc(l.ad)} <b class="mono">${x && x.miktar ? x.miktar : '—'}</b>`; }).join('<span class="st-ayr"> · </span>')}</td>
@@ -146,6 +146,7 @@ function renderTakimTablo(){
           <label><input type="checkbox" ${st.siparisAcik ? 'checked' : ''} onchange="toggleToolStokSiparisAcik('${escJs(sec.id)}')"> Sipariş açık</label>
           <label><input type="checkbox" ${sec.demirbas ? 'checked' : ''} onchange="updateToolCatalogField('${escJs(sec.id)}','demirbas',this.checked)"> Demirbaş</label>
           <label><input type="checkbox" ${sec.aktif !== false ? 'checked' : ''} onchange="updateToolCatalogField('${escJs(sec.id)}','aktif',this.checked)"> Aktif</label>
+          <label title="Stok alt limite inince Otomatik Sipariş bölümünde 'sipariş gerekli' olur ve CANIAS Excel'ine girer (miktar = Sipariş miktarı)"><input type="checkbox" ${sec.otoSiparis ? 'checked' : ''} onchange="updateToolCatalogField('${escJs(sec.id)}','otoSiparis',this.checked)"> Otomatik sipariş</label>
         </div>
         ${hareket}
         <div class="st-not">Değişiklikler alandan çıkınca hemen kaydedilir.</div></div></aside>`;

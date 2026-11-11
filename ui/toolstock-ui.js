@@ -81,6 +81,7 @@ function renderToolStokManagementScreen(){
   else if(toolAdminSubView==='excel') html += renderToolExcelUploadAdmin();
   else if(toolAdminSubView==='giris') html += renderToolGirisAdmin();
   else if(toolAdminSubView==='gecmis') html += renderToolHistoryAdmin();
+  else if(toolAdminSubView==='siparis') html += renderTakimOtoSiparis();   // ui/takim-siparis.js (11.11.2026)
   html += `</div>` + (typeof renderToolTasiModal === 'function' ? renderToolTasiModal() : '');
   return html;
 }

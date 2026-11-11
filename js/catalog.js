@@ -472,6 +472,7 @@ const TAKIM_STOK_SUBTAB_DEFS = [
   { key:'excel', label:'Excel Yükleme ekranı' },
   { key:'giris', label:'Stok Girişi' },
   { key:'gecmis', label:'Geçmiş' },
+  { key:'siparis', label:'Otomatik Sipariş' },
 ];
 function isTakimStokSubTabVisible(key){
   if(!session) return false;

@@ -987,7 +987,8 @@ const STOK_BOLUM_TANIM = {
       { key:'liste',    label:'Durum' },
       { key:'giris',    label:'Giriş' },
       { key:'gecmis',   label:'Hareketler' },
-      { key:'konumlar', label:'Konumlar' }
+      { key:'konumlar', label:'Konumlar' },
+      { key:'siparis',  label:'Otomatik Sipariş' }   // 11.11.2026 — ui/takim-siparis.js
     ],
     ayarla: k => { toolAdminSubView = k; }
   },

@@ -181,6 +181,27 @@ test('malzeme siparişi: +500 mm pay, tam metreye yukarı; Excel satırı', () =
   assert.equal(k[1][5], '2611060039 C-PARMAK (671 adet)\n\nTOPLAM GEREKLİ: 671 ADET\n\n750 ADET\n\n79 ADET STOK KALACAKTIR');
 });
 
+test('takım otomatik sipariş: alt limitte olan, istek no\'suz, işaretli kalem Excel\'e girer', () => {
+  A.ata('toolCatalog', {
+    T1: { ad: '0.2 PARMAK FREZE MİCRO', canias: 'U0003644', altLimit: 3, siparisMiktari: 10, otoSiparis: true },
+    T2: { ad: 'MATKAP', canias: 'U0003192', altLimit: 2, otoSiparis: true },                 // sipariş miktarı yok → alt limit
+    T3: { ad: 'YETERLİ', canias: 'U1', altLimit: 2, siparisMiktari: 5, otoSiparis: true },
+    T4: { ad: 'SİPARİŞTE', canias: 'U2', altLimit: 2, siparisMiktari: 5, otoSiparis: true },
+    T5: { ad: 'İŞARETSİZ', canias: 'U3', altLimit: 9, siparisMiktari: 5 },
+    T6: { ad: 'KODSUZ', altLimit: 2, siparisMiktari: 5, otoSiparis: true }
+  });
+  A.ata('toolStock', { T1: { miktar: 3 }, T2: { miktar: 0 }, T3: { miktar: 7 }, T4: { miktar: 1, otoIstekNo: '26110400' }, T5: { miktar: 0 }, T6: { miktar: 0 } });
+  const l = A.ctx.takimOtoListe();
+  assert.equal(JSON.stringify(l.map(x => [x.it.id, x.durum])), JSON.stringify([['T6', 'gerekli'], ['T2', 'gerekli'], ['T1', 'gerekli'], ['T4', 'sipariste'], ['T3', 'yeterli']]));
+  const e = A.ctx.takimOtoExcelListesi();
+  assert.equal(JSON.stringify(e.uygun.map(x => x.it.id)), JSON.stringify(['T2', 'T1']));
+  assert.equal(JSON.stringify(e.kodsuz.map(x => x.it.id)), JSON.stringify(['T6']));
+  const s = JSON.parse(JSON.stringify(A.ctx.takimOtoExcelSatirlari(e.uygun, new Date(2026, 10, 11, 12).getTime())));
+  assert.equal(JSON.stringify([s[2][0], s[2][1], s[2][2], s[2][4], s[2][6]]), JSON.stringify(['U0003644', 2, 10, 180, 'AD']));
+  assert.equal(s[1][2], 2);
+  assert.equal(s[2][5], '0.2 PARMAK FREZE MİCRO\n\nSTOK: 3 ADET\nALT LİMİT: 3 ADET\nSİPARİŞ: 10 ADET');
+});
+
 /* ==================== MALİYET ==================== */
 function maliyetKur(P){
   A.ata('maliyetDurum.veri', { surumler: [{ ts: 0, p: A.ctx.maliyetVarsayilan() }, { ts: 1, p: P }] });

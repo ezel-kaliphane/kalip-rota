@@ -292,7 +292,7 @@ function updateToolCatalogField(itemId, field, val){
   const it = toolCatalog[itemId]; if(!it) return;
   let v = val;
   if(field==='altLimit' || field==='siparisMiktari') v = Number(val)||0;
-  if(field==='demirbas' || field==='aktif') v = !!val;
+  if(field==='demirbas' || field==='aktif' || field==='otoSiparis') v = !!val;
   const updates = {};
   updates['toolCatalog/'+itemId+'/'+field] = v;
   updates['toolCatalog/'+itemId+'/updatedTs'] = Date.now();
@@ -662,11 +662,16 @@ function doToolGiris(){
       updates['toolStock/'+itemId+'/sonHareketTs'] = now;
       updates['toolStock/'+itemId+'/sonHareketAciklama'] = 'Stok girişi · '+toolDolapAdi(locId);
       updates['toolStock/'+itemId+'/siparisAcik'] = siparisAcik;
+      /* Otomatik sipariş (ui/takim-siparis.js): stok girişi = sipariş geldi, istek no kalkar (11.11.2026) */
+      updates['toolStock/'+itemId+'/otoIstekNo'] = null;
+      updates['toolStock/'+itemId+'/otoIstekTs'] = null;
+      updates['toolStock/'+itemId+'/otoIstekGiren'] = null;
       // Stok alt limitin üzerine çıktıysa uyarı bayrağını da sıfırla — Aşama 4'te bir düşüşte
       // tekrar uyarabilsin diye (bkz. görev talimatı §9).
       if(it.altLimit>0 && r.sonrakiToplam>it.altLimit){ updates['toolStock/'+itemId+'/uyariGonderildi'] = false; }
       DB.ref().update(updates).then(()=>{
         toolStock[itemId] = { ...(r.node||{}), sonHareketTs: now, siparisAcik };
+        delete toolStock[itemId].otoIstekNo; delete toolStock[itemId].otoIstekTs; delete toolStock[itemId].otoIstekGiren;
         toast(`Giriş kaydedildi: ${it.ad} (+${qty}) · ${toolDolapAdi(locId)}`);
         toolGirisClear();
       });
