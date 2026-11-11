@@ -198,8 +198,8 @@ test('satın almaya mail: 15 günden uzun bekleyen siparişler, istek no + hamma
   const l = A.ctx.mmGecikenSiparisler(simdi);
   assert.equal(JSON.stringify(l.map(s => [s.no, s.gun, s.kayitlar.length])), JSON.stringify([['26100287', 36, 1], ['26090535', 20, 2]]));
   const m = A.ctx.mmMetin(l);
-  assert.ok(m.includes('1) 3343 Ø26 HSS CELIK 2000 MM OLAN SİPARİŞ 36 GÜNDÜR BEKLEMEDEDİR.\n   İSTEK NO : 26100287\n   İSTEK TARİHİ : 12.10.2026'), m);
-  assert.ok(m.includes('2) 2344 Ø51 CELIK 8000 MM OLAN SİPARİŞ 20 GÜNDÜR BEKLEMEDEDİR. (3600 MM GELDİ, 4400 MM BEKLENİYOR)'), m);
+  assert.ok(m.includes('1) 3343 Ø26 HSS CELIK – 2000 mm\n   36 gündür bekliyor\n   İstek no: 26100287\n   İstek tarihi: 12.10.2026\n   Bekleyen iş emirleri (1):'), m);
+  assert.ok(m.includes('2) 2344 Ø51 CELIK – 8000 mm\n   20 gündür bekliyor (3600 mm geldi, 4400 mm bekleniyor)'), m);
   assert.ok(m.includes('   - 2609280008 M8 KALIP\n   - 2609280007 M6 KALIP'), m);
   assert.ok(m.startsWith('Merhabalar,\n\nAşağıdaki 2 satın alma isteğimiz 15 günden uzun'), m);
 });

@@ -27,20 +27,22 @@ function mmGecikenSiparisler(simdi){
     const it = (stockItems || {})[s.hid];
     const ad = (it && (stokAciklama(it) || hammaddeEtiket(it))) || s.kayitlar[0].hammaddeKod || '';
     return { ...s, gun: Math.floor((simdi - ilk) / 864e5), istekTs: isFinite(istekTs) ? istekTs : null, ad,
-      miktar: Number(k.miktar) > 0 ? Number(k.miktar) : null, gelen: Number(k.gelen) || 0, birim: String(k.birim || s.kayitlar[0].birim || '').toLocaleUpperCase('tr-TR') };
+      miktar: Number(k.miktar) > 0 ? Number(k.miktar) : null, gelen: Number(k.gelen) || 0, birim: String(k.birim || s.kayitlar[0].birim || '').toLocaleLowerCase('tr-TR') };
   }).filter(s => s.gun > MM_ESIK_GUN).sort((a, b) => b.gun - a.gun);
 }
 function mmMetin(liste){
   const blok = (s, i) => {
-    const mik = s.miktar ? ` ${mmSayi(s.miktar)} ${s.birim}` : '';
-    const kalan = s.miktar && s.gelen > 0 ? ` (${mmSayi(s.gelen)} ${s.birim} GELDİ, ${mmSayi(Math.max(0, s.miktar - s.gelen))} ${s.birim} BEKLENİYOR)` : '';
+    /* 11.11.2026 kullanıcı: "hepsinin büyük harf olması iyi değil" — normal yazım; malzeme/mamul adları kayıttaki gibi */
+    const mik = s.miktar ? ` – ${mmSayi(s.miktar)} ${s.birim}` : '';
+    const kalan = s.miktar && s.gelen > 0 ? ` (${mmSayi(s.gelen)} ${s.birim} geldi, ${mmSayi(Math.max(0, s.miktar - s.gelen))} ${s.birim} bekleniyor)` : '';
     /* aynı talep no'nun iki bileşeni (ayrı kayıt) mailde tek satır */
     const isler = [...new Set(s.kayitlar.map(x => `   - ${[x.talepNo || x.isEmriNo, x.mamulAdi || ''].filter(Boolean).join(' ')}`))];
     return [
-      `${i + 1}) ${s.ad.toLocaleUpperCase('tr-TR')}${mik} OLAN SİPARİŞ ${s.gun} GÜNDÜR BEKLEMEDEDİR.${kalan}`,
-      `   İSTEK NO : ${s.no}`,
-      s.istekTs ? `   İSTEK TARİHİ : ${mmGunTarih(s.istekTs)}` : '',
-      `   BEKLEYEN İŞ EMİRLERİ (${isler.length}):`,
+      `${i + 1}) ${s.ad}${mik}`,
+      `   ${s.gun} gündür bekliyor${kalan}`,
+      `   İstek no: ${s.no}`,
+      s.istekTs ? `   İstek tarihi: ${mmGunTarih(s.istekTs)}` : '',
+      `   Bekleyen iş emirleri (${isler.length}):`,
       ...isler
     ].filter(Boolean).join('\n');
   };
