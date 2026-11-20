@@ -769,3 +769,26 @@ test('operatör günlüğü: iş sırası, ara, paralel, ertesi güne süren iş
   const sal = A.ctx.ogGunOzeti(o.days.find(d => d.tarih === '2026-10-06'));
   assert.equal(sal.isSayisi, 1); assert.equal(sal.adimlar[0].dunden, true); assert.equal(sal.bitenAdet, 7); assert.equal(sal.geldi, null); assert.equal(sal.gitti, ts("2026-10-06 10:00"));
 });
+
+/* 20.11.2026 (kullanıcı): CANIAS istek no'ları Excel satır sırasıyla ardışık veriyor — toplu yapıştır / ardışık doldur */
+test('fason toplu istek no: CANIAS satırı yapıştırılır, "-" boş satır, ardışık doldurma', () => {
+  const nos = A.ctx.fpTopluNumaralar('I2\t26110398\tO0000007\tFASON ISIL ISLEM ISLERI\nI2\t26110399\tO0000007\tFASON\n\n-\n26110401 26110402');
+  assert.equal(JSON.stringify(nos), JSON.stringify(['26110398', '26110399', null, '26110401', '26110402']));
+  assert.equal(A.ctx.fpTopluArdisikMetin('26110398', 3), '26110398\n26110399\n26110400');
+  assert.equal(A.ctx.fpTopluArdisikMetin('2611039x', 3), null);
+});
+test('fason toplu istek no: numaralar kayıtlı Excel sırasıyla dağılır, girilmiş paket atlanır, tutmayan sayı / tekrar engellenir', () => {
+  const paket = (id, startTs, sira, ek) => ({ status: 'devam', makine: 'FII01 · Fason Isıl İşlem', isEmriNo: 'U' + id, talepNo: 'T' + id, adet: '2', startTs,
+    operatorUsername: 'OP1', fasonPaket: { id, kg: 2 }, fasonIsilTur: ['2344'], fasonIsilSertlik: { min: 45, max: 47 }, fasonExcelParti: { id: 'X1', ts: 5, sira }, ...ek });
+  A.ata('nowTick', Date.now());
+  /* Ekran sırası (yeni → eski) A, B, C; Excel'e yazıldığı sıra C, A, B — B'ye istek no elle girilmiş */
+  A.ata('STATE.entries', { a: paket('pA', Date.now() - 1e3, 1), b: paket('pB', Date.now() - 2e3, 2, { fasonIstekNo: '26110400' }), c: paket('pC', Date.now() - 3e3, 0) });
+  const t = A.ctx.fpTopluListe();
+  assert.equal(t.kayitli, true);
+  assert.equal(t.paketler.map(p => p.id).join(','), 'pC,pA,pB');
+  const e = A.ctx.fpTopluEslesme(t, 'I2\t26110398\nI2\t26110399\nI2\t26110400');
+  assert.equal(e.uyusuyor, true); assert.equal(e.hata, false); assert.equal(e.yazilacak, 2);
+  assert.equal(e.satirlar.map(x => x.p.id + '=' + (x.durum === 'yaz' ? x.no : x.durum)).join(','), 'pC=26110398,pA=26110399,pB=var');
+  assert.equal(A.ctx.fpTopluEslesme(t, '26110398\n26110399').uyusuyor, false);
+  assert.equal(A.ctx.fpTopluEslesme(t, '26110398\n26110398\n26110400').hata, true);
+});
