@@ -1570,10 +1570,10 @@ async function exportTadilatExcel(list){
       rows.push({
         _bitisTsRaw: o.bitisTs||0, // sıralama için — sadece burada, aşağıda satırdan çıkarılıyor
         "Atölye": (t.atolye||'imalat')==='tadilat'?'Tadilat Atölye':'İmalat Atölye',
-        "U Kodu": t.uKodu, "Malzeme Adı": getTalepInfo(t.uKodu)?.malzemeAdi||'', "Adet": t.adet||'', "Talep Eden Kişi": t.talepEdenKisi||'', "Talep Eden Bölüm": t.bolum||'', "Yapılan İşlem": t.aciklama||'',
+        "U Kodu": t.uKodu, "Malzeme Adı": uKoduMalzemeAdi(t.uKodu), "Adet": t.adet||'', "Talep Eden Kişi": t.talepEdenKisi||'', "Talep Eden Bölüm": t.bolum||'', "Talep Edilen Makine": String(t.talepMakine||'').trim().toUpperCase(), "Yapılan İşlem": t.aciklama||'',
         "Talebi Açan": t.olusturanName||'', "Talep Tarihi": new Date(t.olusturmaTs),
         "Bekleme (dk)": beklemeMin,
-        "Operasyon No": i+1, "Son Operasyon Mu": o.sonOperasyon?'Evet':'Hayır', "Makine": o.makine||'',
+        "Operasyon No": i+1, "Son Operasyon Mu": o.sonOperasyon?'Evet':'Hayır', "Tadilat Makinesi": o.makine||'',
         "Yapan": o.operatorName||'', "Başlangıç": new Date(o.baslamaTs), "Bitiş": o.bitisTs?new Date(o.bitisTs):'',
         "Süre (dk, brüt)": o.bitisTs?Math.round(d.wallMs/60000):'',
         "Duruş (dk)": Math.round(d.durusMs/60000),

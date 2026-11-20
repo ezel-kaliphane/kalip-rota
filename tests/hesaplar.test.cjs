@@ -812,3 +812,13 @@ test('malzeme toplu istek no: satır = hammadde, kayıtlı Excel sırası, kapan
   A.ata('malzemeIstek', { a: { istekNo: '26110501' } });
   assert.equal(A.ctx.caniasTopluEslesme(t.satirlar, '26110500\n26110501\n26110502').hata, true);
 });
+test('tadilat malzeme adı: U kodu Malzeme Listesinden, sonra iş emri listesinden (malzeme kodu olarak); serbest yazı boş', () => {
+  A.ata('malzemeListesi', { UC13050225: 'M14 6921 TIRTIL KALIBI' });
+  A.ata('STATE.validIsEmri', { '2611130042': { malzemeKodu: 'UV14000026', malzemeAdi: 'V-ÇİZİK KALIBI' } });
+  assert.equal(A.ctx.uKoduMalzemeAdi(' uc13050225 '), 'M14 6921 TIRTIL KALIBI');
+  assert.equal(A.ctx.uKoduMalzemeAdi('uv14000026'), 'V-ÇİZİK KALIBI');
+  /* talep no ile arama getTalepInfo üzerinden; satır 478'deki test onu sahte fonksiyonla değiştiriyor */
+  assert.equal(A.ctx.uKoduMalzemeAdi('2610020010'), 'B33 KONIK KVN');
+  assert.equal(A.ctx.uKoduMalzemeAdi('kalıp'), '');
+  A.ata('malzemeListesi', {}); A.ata('STATE.validIsEmri', {});
+});

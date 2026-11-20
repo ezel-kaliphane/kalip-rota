@@ -97,6 +97,22 @@ function getTalepInfo(code){
 }
 /* İş emrinin ne olduğu: ERP listesindeki mamul adı (ör. "M16X80-Ø14.54-TP-RONDELA KALIBI") — 06.11.2026 */
 function isEmriMamulAdi(talepNo, isEmriNo){ const i = getTalepInfo(talepNo) || getTalepInfo(isEmriNo); return (i && i.malzemeAdi) || ''; }
+/* U kodu (CANIAS malzeme kodu, ör. UC13050225) → malzeme adı. Tadilat talebinde iş talep no değil U kodu
+   giriliyor; getTalepInfo yalnız talep no ile arıyor, bu yüzden tadilat ekranı ve Excel'inde ad hep boş
+   kalıyordu (2026-11-20). Önce Malzeme Listesi (tüm kodlar), sonra iş emri listesi (talep no ya da
+   malzeme kodu olarak). Serbest yazılmış ("KALIP", "PARMAK") kayıtta boş döner. */
+function uKoduMalzemeAdi(uKodu){
+  const k = String(uKodu||'').trim().toUpperCase().replace(/_(ZARF|ELMAS)$/,'');
+  if(!k) return '';
+  const ml = (typeof malzemeListesi!=='undefined' && malzemeListesi) || {};
+  if(ml[k]) return String(ml[k]);
+  const i = getTalepInfo(k);
+  if(i && i.malzemeAdi) return i.malzemeAdi;
+  for(const v of Object.values((STATE && STATE.validIsEmri) || {})){
+    if(v && typeof v==='object' && String(v.malzemeKodu||'').trim().toUpperCase()===k && v.malzemeAdi) return v.malzemeAdi;
+  }
+  return '';
+}
 let extraMachines = {}; // admin tarafından sonradan eklenen makineler (Firebase 'machines_extra')
 let hiddenMachines = {}; // silinen dahili makineler (Firebase 'machines_hidden')
 let fasonMachines = {}; // "Fason / Dışarı Gönderim" olarak işaretlenen makineler (Firebase 'machines_fason')

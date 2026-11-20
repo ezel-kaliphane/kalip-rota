@@ -2,8 +2,8 @@
 // U kodunun altına, listede eşleşen malzeme adını (varsa) küçük gri yazıyla ekler — hem
 // "Tamamlanan Talepler" hem "Bekleyen/Aktif" tablolarında ve akış şeması modalında ortak kullanılıyor.
 function uKoduHücresi(uKodu, color){
-  const info = getTalepInfo(uKodu);
-  return `<div class="mono" style="color:${color||'var(--accent)'};font-weight:600">${esc(uKodu)}</div>${info?.malzemeAdi?`<div style="font-size:10.5px;color:var(--text-muted);font-family:'Inter',sans-serif;font-weight:400">${esc(info.malzemeAdi)}</div>`:''}`;
+  const ad = uKoduMalzemeAdi(uKodu);
+  return `<div class="mono" style="color:${color||'var(--accent)'};font-weight:600">${esc(uKodu)}</div>${ad?`<div style="font-size:10.5px;color:var(--text-muted);font-family:'Inter',sans-serif;font-weight:400">${esc(ad)}</div>`:''}`;
 }
 // "Tamamlanan Talepler" tablosu birden fazla yerde (renderAnalizTadilat — hem Analiz sekmesindeki
 // "Tadilat" görünümü hem Tadilat sekmesinin kendi "Analiz" alt sekmesi buradan besleniyor) aynı
@@ -135,7 +135,7 @@ function renderTadilatAkisModal(){
   const sonBitis = ops[ops.length-1]?.bitisTs;
   const toplamSureMs = (t.olusturmaTs && sonBitis) ? Math.max(0, sonBitis - t.olusturmaTs) : null;
 
-  const malzemeAdi = getTalepInfo(t.uKodu)?.malzemeAdi;
+  const malzemeAdi = uKoduMalzemeAdi(t.uKodu);
   return `<div class="modal-overlay" onclick="if(event.target===this) closeTadilatAkis()">
     <div class="modal-box" style="max-width:min(98vw,1600px);width:98vw">
       <div class="modal-header">
@@ -583,7 +583,7 @@ function renderAnalizTadilat(){
   const matchesFilter = (t) => {
     if(tadilatAnalizAtolyeFilter!=='tumu' && (t.atolye||'imalat')!==tadilatAnalizAtolyeFilter) return false;
     if(!q) return true;
-    const malzemeAdi = getTalepInfo(t.uKodu)?.malzemeAdi || '';
+    const malzemeAdi = uKoduMalzemeAdi(t.uKodu);
     return `${t.uKodu} ${t.aciklama} ${malzemeAdi} ${t.talepEdenKisi||''}`.toLowerCase().includes(q);
   };
   const all = tadilatArray().filter(matchesFilter);
