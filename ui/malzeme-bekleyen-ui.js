@@ -9,6 +9,7 @@ let mbYeniAcik = false;
 let mbForm = { girilen:'', talepNo:'', mamulKodu:'', mamulAdi:'', ieMiktar:'', hammaddeId:'', gerekenMiktar:'', busy:false, bulundu:null };
 let mbIstekDuzenId = null, mbIstekDeger = '', mbIstekMiktar = '';
 let mbToplu = null;   // { hid, secili:{id:true}, no, miktar } — hammadde başlığından toplu istek no (12.10.2026)
+let mbExcelTopluAcik = false, mbExcelTopluMetin = '', mbExcelTopluIlk = '';   // Excel satırlarına toplu istek no (20.11.2026)
 function mbTopluAc(hid){
   if(!malzemeIstekNoYetkisi()){ toast('İstek numarasını yalnızca SuperAdmin girebilir'); return; }
   const bos = malzemeBosBekleyenler(hid); const secili = {}; bos.forEach(x=>{ secili[x.id] = true; });
@@ -183,7 +184,71 @@ async function mbExcelOlustur(yeniSec){
   if(!malzemeIstekNoYetkisi()){ toast("Excel'i SuperAdmin oluşturur"); return; }
   const hepsi = mbExcelGruplari(), gruplar = hepsi.filter(g=>g.kod), kodsuz = hepsi.length - gruplar.length;
   if(!gruplar.length){ toast(hepsi.length ? "İstek no'su olmayan kalemlerin CANİAS kodu yok" : "İstek no'su girilmemiş iş emri yok"); return; }
-  await caniasSablonaYaz(mbExcelSatirlari(gruplar), gruplar.length, kodsuz ? ` (${kodsuz} kalemin CANİAS kodu yok, alınmadı)` : '', yeniSec);
+  const yazildi = await caniasSablonaYaz(mbExcelSatirlari(gruplar), gruplar.length, kodsuz ? ` (${kodsuz} kalemin CANİAS kodu yok, alınmadı)` : '', yeniSec);
+  /* Toplu istek no için Excel satır sırası + o satırın sipariş miktarı saklanır (ısıl işlemdekinin aynısı). Satır =
+     hammadde; satırın iş emirleri ve siparişi Excel'e yazıldığı andaki hâliyle — sonra eklenen iş emri bu satıra girmez. */
+  if(yazildi){
+    const parti = { id: uid(), ts: Date.now(), n: gruplar.length }, upd = {};
+    gruplar.forEach((g, i) => {
+      const sip = mbSiparis(g.hid);
+      mbTaslakSatirlari(g.hid).forEach(x => { upd['malzemeBekleyen/' + x.id + '/excelParti'] = { ...parti, sira: i, hid: g.hid, siparis: sip ? sip.siparis : null }; });
+    });
+    DB.ref().update(upd).catch(err => console.warn('Excel sırası kaydedilemedi', err));
+  }
+}
+/* ---- Excel satırlarına toplu istek no (20.11.2026) — ortak mantık ui/fason-paket.js caniasToplu* ---- */
+function mbExcelTopluSatir(uyeler, hid, siparis){
+  const it = (stockItems || {})[hid], numarali = uyeler.filter(x => malzemeIstekVar(x));
+  const kendi = [...new Set(numarali.map(x => String(x.caniasIstekNo).trim()))];
+  const kod = it ? stokCanias(it) : '', ad = it ? hammaddeEtiket(it) : ((uyeler[0] || {}).hammaddeKod || '(kalem silinmiş)');
+  const birim = String((it && it.birim) || (uyeler[0] || {}).birim || '');
+  return { hid, uyeler, siparis, kendi,
+    istekNo: uyeler.length && numarali.length === uyeler.length ? kendi[0] : '',
+    ozet: [kod, ad].filter(Boolean).join(' · '),
+    alt: `${uyeler.length} iş emri${siparis ? ` · sipariş ${siparis} ${birim}` : ''}` };
+}
+function mbExcelTopluListe(){
+  const kayitli = caniasPartiSatirlari(malzemeBekleyenAktif(), x => x.excelParti && x.excelParti.id ? x.excelParti : null,
+    (l, p) => mbExcelTopluSatir(l, p.hid, p.siparis));
+  if(kayitli) return kayitli.satirlar.some(x => !x.atla && !x.istekNo) ? { ...kayitli, kayitli: true } : null;
+  /* Sıra kaydından önce oluşturulmuş Excel: o anki Excel sırası (ilk bekleyen önce) varsayılır */
+  const g = mbExcelGruplari().filter(x => x.kod);
+  return g.length ? { satirlar: g.map(x => mbExcelTopluSatir(mbTaslakSatirlari(x.hid), x.hid, (mbSiparis(x.hid) || {}).siparis || null)), ts: null, kayitli: false } : null;
+}
+function mbExcelTopluArdisik(){
+  const t = mbExcelTopluListe(); if(!t) return;
+  const m = caniasTopluArdisik(t, mbExcelTopluIlk); if(m == null) return;
+  mbExcelTopluMetin = m; render();
+}
+function mbExcelTopluKaydet(){
+  if(!malzemeIstekNoYetkisi()){ toast('İstek numarasını yalnızca SuperAdmin girebilir'); return; }
+  const t = mbExcelTopluListe(); if(!t) return;
+  const e = caniasTopluKontrol(t, mbExcelTopluMetin); if(!e) return;
+  const now = Date.now(), upd = {};
+  e.satirlar.filter(x => x.durum === 'yaz').forEach(x => {
+    x.uyeler.filter(u => !malzemeIstekVar(u)).forEach(u => {
+      upd['malzemeBekleyen/' + u.id + '/caniasIstekNo'] = x.no;
+      upd['malzemeBekleyen/' + u.id + '/istekOtomatik'] = null;
+      upd['malzemeBekleyen/' + u.id + '/istekTs'] = now;
+      upd['malzemeBekleyen/' + u.id + '/istekGirenUsername'] = session.username;
+    });
+    /* Sipariş kaydı (miktar = Excel'e yazılan sipariş) — malzemeTopluIstekKaydet ile aynı biçim */
+    const key = malzemeIstekAnahtar(x.no, x.hid), it = (stockItems || {})[x.hid], ilk = x.uyeler[0] || {};
+    if(!(malzemeIstek || {})[key]) upd['malzemeIstek/' + key] = { istekNo: x.no, hammaddeId: x.hid, hammaddeKod: it ? hammaddeEtiket(it) : (ilk.hammaddeKod || ''),
+      miktar: x.siparis > 0 ? x.siparis : null, birim: (it && it.birim) || ilk.birim || '', durum: 'acik',
+      acanUsername: session.username, acanName: session.displayName || session.username, acilisTs: now };
+  });
+  DB.ref().update(upd).then(() => { toast(`${e.yazilacak} hammadde satırına istek no yazıldı`); mbExcelTopluAcik = false; mbExcelTopluMetin = ''; mbExcelTopluIlk = ''; render(); })
+    .catch(err => toast('Kaydedilemedi: ' + ((err && err.message) || 'hata')));
+}
+function mbExcelTopluHtml(){
+  if(!malzemeIstekNoYetkisi()) return '';
+  const t = mbExcelTopluListe(); if(!t) return '';
+  return caniasTopluPanelHtml({ id: 'mb-toplu', acik: mbExcelTopluAcik, metin: mbExcelTopluMetin, ilk: mbExcelTopluIlk, birim: 'satır',
+    bos: t.satirlar.filter(x => !x.atla && !x.istekNo).length, satirSayisi: t.satirlar.length,
+    kaynak: t.kayitli ? `Son Excel: ${fmtDT(t.ts)} · ${t.satirlar.length} satır` : 'Excel sırası kayıtlı değil (bu özellikten önce oluşturuldu) — ekrandaki Excel sırası kullanılıyor, önizlemede CANİAS koduyla karşılaştırın',
+    e: mbExcelTopluAcik ? caniasTopluEslesme(t.satirlar, mbExcelTopluMetin) : null,
+    v: { acik: 'mbExcelTopluAcik', metin: 'mbExcelTopluMetin', ilk: 'mbExcelTopluIlk' }, f: { ardisik: 'mbExcelTopluArdisik', kaydet: 'mbExcelTopluKaydet' } });
 }
 function mbExcelDugmeHtml(){
   if(!malzemeIstekNoYetkisi()) return '';
@@ -381,7 +446,7 @@ function renderMalzemeBekleyen(){
         return `<button class="btn-ghost" style="width:auto;padding:7px 12px;margin-left:auto;font-size:12.5px" onclick="mbTumGruplar(${!hepsi}, ${esc(JSON.stringify(grupListesi.map(g=>g.hid)))})">${ico(hepsi?'chevronUp':'chevronDown',14)} ${hepsi?'Hepsini kapat':'Hepsini aç'}</button>`; })() : ''}
     </div>
 
-    ${mbGecmisAcik ? '' : mbExcelDugmeHtml()}
+    ${mbGecmisAcik ? '' : mbExcelDugmeHtml() + mbExcelTopluHtml()}
     ${mbGecmisAcik ? '' : aktif.length===0
       ? `<div class="notice" style="--nc:var(--success)"><div class="notice-title">Malzeme bekleyen iş emri yok</div>
          <div class="notice-sub">Şef malzemeliğe gidip aradığını bulamazsa buraya işaretler; iş emri o andan itibaren burada görünür.</div></div>`

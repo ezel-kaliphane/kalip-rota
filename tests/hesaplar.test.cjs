@@ -792,3 +792,23 @@ test('fason toplu istek no: numaralar kayıtlı Excel sırasıyla dağılır, gi
   assert.equal(A.ctx.fpTopluEslesme(t, '26110398\n26110399').uyusuyor, false);
   assert.equal(A.ctx.fpTopluEslesme(t, '26110398\n26110398\n26110400').hata, true);
 });
+test('malzeme toplu istek no: satır = hammadde, kayıtlı Excel sırası, kapanmış satır numarasını atlar, satırın kendi numarası çakışma sayılmaz', () => {
+  const p = (sira, hid) => ({ id: 'X9', ts: 7, n: 3, sira, hid, siparis: sira === 0 ? 2000 : 100 });
+  A.ata('STATE.entries', {}); A.ata('malzemeIstek', {});
+  A.ata('stockItems', { H1: { kod: 'K1', ad: 'Parmak', birim: 'adet', canias: 'KLPHM1' }, H2: { kod: 'K2', ad: '2344 Ø66', birim: 'mm', canias: 'KLPHM2' } });
+  A.ata('malzemeBekleyen', {
+    m1: { hammaddeId: 'H1', talepNo: 'T1', birim: 'adet', gerekenMiktar: 30, isaretTs: 1, excelParti: p(1, 'H1') },
+    m2: { hammaddeId: 'H2', talepNo: 'T2', birim: 'mm', gerekenMiktar: 60, ieMiktar: 2, isaretTs: 2, excelParti: p(0, 'H2') },
+    m3: { hammaddeId: 'H2', talepNo: 'T3', birim: 'mm', gerekenMiktar: 65, ieMiktar: 3, isaretTs: 3, caniasIstekNo: '26110500', excelParti: p(0, 'H2') },
+    m4: { hammaddeId: 'H3', talepNo: 'T4', birim: 'mm', gerekenMiktar: 50, isaretTs: 4, durum: 'karsilandi', excelParti: p(2, 'H3') }
+  });
+  const t = A.ctx.mbExcelTopluListe();
+  assert.equal(t.kayitli, true); assert.equal(t.satirlar.length, 3);
+  assert.equal(t.satirlar[0].hid, 'H2'); assert.equal(t.satirlar[0].siparis, 2000); assert.equal(t.satirlar[1].hid, 'H1'); assert.ok(t.satirlar[2].atla);
+  const e = A.ctx.caniasTopluEslesme(t.satirlar, '26110500\n26110501\n26110502');
+  assert.equal(e.uyusuyor, true); assert.equal(e.hata, false); assert.equal(e.yazilacak, 2);
+  assert.equal(e.satirlar.map(x => x.durum + (x.no ? ':' + x.no : '')).join(','), 'yaz:26110500,yaz:26110501,atla:26110502');
+  /* Uygulamada başka bir istekte kayıtlı numara → engel */
+  A.ata('malzemeIstek', { a: { istekNo: '26110501' } });
+  assert.equal(A.ctx.caniasTopluEslesme(t.satirlar, '26110500\n26110501\n26110502').hata, true);
+});

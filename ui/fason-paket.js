@@ -78,19 +78,9 @@ function fpIstekKaydet(id){
    "Excel'i CANIAS'a yükleyince istek no'ları ardışık veriyor, tek tek girmek zor." CANIAS'taki istek no sütunu
    kopyalanıp yapıştırılır (esas yol — CANIAS'ın gerçekten verdiği numaralar) ya da ilk numara yazılıp ardışık
    doldurulur (kısayol — bir satır reddedilirse / araya başka istek girerse kayar, önizlemede görülür).
-   Eşleşme Excel'deki satır sırasıyla: "Excel oluştur" o partinin sırasını üyelere yazar (fasonExcelParti). */
-function fpTopluListe(){
-  const l = fasonPaketleri();
-  const partili = l.filter(p => p.parti);
-  if(partili.length){
-    const son = partili.reduce((a, p) => (p.parti.ts > a.ts ? p.parti : a), partili[0].parti);
-    const parti = partili.filter(p => p.parti.id === son.id).sort((a, b) => a.parti.sira - b.parti.sira);
-    if(parti.some(p => !p.istekNo)) return { paketler: parti, ts: son.ts, kayitli: true };
-  }
-  /* Sıra kaydından önce oluşturulmuş Excel: o anki Excel sırası (yeni → eski) varsayılır, önizlemede kontrol edilir */
-  const p = fpExcelPaketleri().filter(x => x.bilgili);
-  return p.length ? { paketler: p, ts: null, kayitli: false } : null;
-}
+   Eşleşme Excel'deki satır sırasıyla: "Excel oluştur" o partinin sırasını kayıtlara yazar (fason: entries/…/
+   fasonExcelParti, malzeme: malzemeBekleyen/…/excelParti). Ayrıştırma, eşleşme ve panel iki ekranda ortak (caniasToplu*). */
+
 /* Yapıştırılan metinden istek no'ları satır sırasıyla: CANIAS satırı (I2 ⇥ 26110398 ⇥ O0000007 …) da olur, düz liste
    de. 6–10 haneli sayılar alınır (O0000007 harfle başladığı için alınmaz). Tek başına "-" o satır için numara yok. */
 function fpTopluNumaralar(metin){
@@ -107,37 +97,115 @@ function fpTopluArdisikMetin(ilk, n){
   if(!/^\d{6,10}$/.test(s)) return null;
   return Array.from({ length: n }, (_, i) => String(Number(s) + i).padStart(s.length, '0')).join('\n');
 }
-function fpTopluArdisik(){
-  const t = fpTopluListe(); if(!t) return;
-  const m = fpTopluArdisikMetin(fpTopluIlk, t.paketler.length);
-  if(m == null){ toast('İlk istek no 6–10 haneli bir sayı olmalı'); return; }
-  fpTopluMetin = m; render();
+/* Kayıtlı Excel partisi → satır listesi. Kayıtlar sıra numarasıyla gelir; kaydı kapanmış (karşılanmış, 30 günü
+   geçmiş) satır boşluk olarak kalır ki sonraki satırlar kaymasın — CANIAS o satıra da numara vermişti. */
+function caniasPartiSatirlari(ogeler, partiOku, satirKur){
+  const partili = ogeler.filter(o => partiOku(o));
+  if(!partili.length) return null;
+  const son = partili.map(partiOku).reduce((a, p) => (p.ts > a.ts ? p : a));
+  const grup = {};
+  partili.filter(o => partiOku(o).id === son.id).forEach(o => { (grup[partiOku(o).sira] ||= []).push(o); });
+  const n = son.n || Math.max(...Object.keys(grup).map(Number)) + 1;
+  return { ts: son.ts, satirlar: Array.from({ length: n }, (_, i) => grup[i] ? satirKur(grup[i], partiOku(grup[i][0])) : { atla: 'kaydı kapanmış — bu satırın numarası atlanır' }) };
 }
-/* Önizleme ve kayıt aynı hesabı kullanır: her paket için atanacak numara + engel varsa nedeni */
-function fpTopluEslesme(t, metin){
-  const nos = fpTopluNumaralar(metin);
-  const ids = new Set(t.paketler.map(p => p.id));
-  const baska = new Set(fasonPaketleri().filter(p => p.istekNo && !ids.has(p.id)).map(p => String(p.istekNo)));
+/* Uygulamada kayıtlı her istek no (ısıl + malzeme) — yanlış sütunu yapıştırmayı yakalamak için */
+function caniasKayitliIstekNolar(){
+  const s = new Set(), ekle = v => { const t = String(v || '').trim(); if(t) s.add(t); };
+  fasonPaketleri().forEach(p => ekle(p.istekNo));
+  Object.values((typeof malzemeIstek !== 'undefined' && malzemeIstek) || {}).forEach(x => x && ekle(x.istekNo));
+  Object.values((typeof malzemeBekleyen !== 'undefined' && malzemeBekleyen) || {}).forEach(x => x && ekle(x.caniasIstekNo));
+  return s;
+}
+/* satirlar: [{ istekNo?, atla?, kendi? (satırın kendi kayıtlarında zaten olan numaralar), ozet, alt, … }] → her satıra atanacak numara + durum. Önizleme ve kayıt aynı hesap. */
+function caniasTopluEslesme(satirlar, metin){
+  const nos = fpTopluNumaralar(metin), kayitli = caniasKayitliIstekNolar();
   const sayac = {}; nos.forEach(n => { if(n) sayac[n] = (sayac[n] || 0) + 1; });
-  const satirlar = t.paketler.map((p, i) => {
+  const out = satirlar.map((x, i) => {
     const no = nos[i] || null;
     let durum = 'yaz', not = '';
-    if(p.istekNo){ durum = 'var'; not = no && no !== String(p.istekNo) ? `zaten ${p.istekNo} girilmiş — değiştirilmez (yapıştırılan ${no})` : `zaten ${p.istekNo} girilmiş`; }
+    if(x.atla){ durum = 'atla'; not = x.atla; }
+    else if(x.istekNo){ durum = 'var'; not = no && no !== String(x.istekNo) ? `zaten ${x.istekNo} girilmiş — değiştirilmez (yapıştırılan ${no})` : `zaten ${x.istekNo} girilmiş`; }
     else if(!no){ durum = 'bos'; not = 'numara yok'; }
     else if(sayac[no] > 1){ durum = 'hata'; not = 'bu numara listede iki kez var'; }
-    else if(baska.has(no)){ durum = 'hata'; not = 'bu numara başka bir pakette kayıtlı'; }
-    return { p, no, durum, not };
+    else if(kayitli.has(no) && !(x.kendi || []).includes(no)){ durum = 'hata'; not = 'bu numara başka bir istekte kayıtlı'; }
+    return { ...x, no, durum, not };
   });
-  const uyusuyor = nos.length === t.paketler.length;
-  return { satirlar, nos, uyusuyor, yazilacak: satirlar.filter(x => x.durum === 'yaz').length, hata: satirlar.some(x => x.durum === 'hata') };
+  return { satirlar: out, nos, uyusuyor: nos.length === satirlar.length, yazilacak: out.filter(x => x.durum === 'yaz').length, hata: out.some(x => x.durum === 'hata') };
+}
+/* Ortak panel. o = { id, acik, metin, ilk, kaynak, bos, satirSayisi, birim, e (açıkken eşleşme), v: {acik, metin, ilk} global
+   değişken adları, f: {ardisik, kaydet} global fonksiyon adları } */
+function caniasTopluPanelHtml(o){
+  if(!o.acik) return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px">
+    <button class="btn-ghost" onclick="${o.v.acik}=true; render(); setTimeout(()=>{ const el=document.getElementById('${o.id}-metin'); if(el) el.focus(); },30)">${ico('list', 14)} İstek no'ları toplu gir (${o.bos} ${o.birim})</button>
+    <span style="font-size:12px;color:var(--text-muted)">${esc(o.kaynak)}</span></div>`;
+  const e = o.e;
+  const renk = { yaz: 'var(--success)', var: 'var(--text-muted)', atla: 'var(--text-muted)', bos: 'var(--warn)', hata: 'var(--danger)' };
+  const sayiSatiri = !e.nos.length ? ''
+    : e.uyusuyor ? `<span style="color:var(--success)">${o.satirSayisi} satır · ${e.nos.length} numara ✓</span>`
+    : `<span style="color:var(--danger)">${o.satirSayisi} satır ama ${e.nos.length} numara — tutmuyor. CANIAS bir satıra numara vermediyse o satırın yerine tek başına "-" yazın.</span>`;
+  return `<div class="mb-grup acik" style="border-left:3px solid var(--accent);margin-bottom:14px">
+    <div class="mb-grup-ust" style="cursor:default;flex-wrap:wrap">
+      <span class="mb-kod">İstek no'ları toplu gir</span>
+      <span class="mb-olcu">${esc(o.kaynak)}</span>
+      <span style="margin-left:auto"><button class="btn-ghost mb-mini" onclick="${o.v.acik}=false; render()">Kapat</button></span>
+    </div>
+    <div style="padding:12px 16px;display:flex;flex-wrap:wrap;gap:16px">
+      <div style="flex:1 1 280px;min-width:0;display:flex;flex-direction:column;gap:8px">
+        <label for="${o.id}-metin" style="font-size:12px;color:var(--text-muted)">CANIAS'ta istek no sütununu seçip kopyalayın, buraya yapıştırın (satırın tamamı da olur)</label>
+        <textarea id="${o.id}-metin" class="mono" rows="${Math.min(16, Math.max(6, o.satirSayisi + 1))}" placeholder="26110398&#10;26110399&#10;…" oninput="${o.v.metin}=this.value; render()">${esc(o.metin)}</textarea>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--text-muted)">ya da ilk numara:</span>
+          <input id="${o.id}-ilk" class="mono" style="width:130px" placeholder="26110398" value="${esc(o.ilk)}" oninput="${o.v.ilk}=this.value" onkeydown="if(event.key==='Enter') ${o.f.ardisik}()">
+          <button class="btn-ghost mb-mini" onclick="${o.f.ardisik}()">Ardışık doldur</button>
+        </div>
+        <div style="font-size:12px">${sayiSatiri}</div>
+        <button class="btn-primary" ${e.uyusuyor && !e.hata && e.yazilacak ? '' : 'disabled'} onclick="${o.f.kaydet}()">${ico('check', 14)} Kaydet (${e.yazilacak} ${o.birim})</button>
+      </div>
+      <div style="flex:1.6 1 360px;min-width:0;font-size:12.5px">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:6px">Önizleme — Excel satır sırasıyla</div>
+        ${e.satirlar.map((x, i) => `<div style="display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span class="mono" style="color:var(--text-muted)">${i + 1}</span>
+          <span>${x.atla ? '<span style="color:var(--text-muted)">—</span>' : `<span class="mono">${esc(x.ozet)}</span>${x.alt ? ` <span style="color:var(--text-muted)">· ${esc(x.alt)}</span>` : ''}`}${x.not ? `<span style="display:block;font-size:11.5px;color:${renk[x.durum]}">${esc(x.not)}</span>` : ''}</span>
+          <span class="mono" style="font-weight:700;color:${renk[x.durum]}">${esc(x.no || (x.istekNo ? String(x.istekNo) : '—'))}</span>
+        </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+function caniasTopluArdisik(t, ilk){
+  const m = fpTopluArdisikMetin(ilk, t.satirlar.length);
+  if(m == null){ toast('İlk istek no 6–10 haneli bir sayı olmalı'); return null; }
+  return m;
+}
+/* Kaydetmeden önceki ortak kontrol: tutarsa eşleşmeyi, tutmazsa null döner (nedeni toast ile söylenir) */
+function caniasTopluKontrol(t, metin){
+  const e = caniasTopluEslesme(t.satirlar, metin);
+  if(!e.uyusuyor){ toast(`${t.satirlar.length} satır var, ${e.nos.length} numara yapıştırıldı — sayılar tutmalı`); return null; }
+  if(e.hata){ toast('Önizlemedeki kırmızı satırları düzeltin'); return null; }
+  if(!e.yazilacak){ toast('Yazılacak yeni istek no yok'); return null; }
+  return e;
+}
+
+/* ---- Isıl işlem paketleri ---- */
+function fpTopluListe(){
+  const kayitli = caniasPartiSatirlari(fasonPaketleri(), p => p.parti, (l) => fpTopluSatir(l[0]));
+  /* Kayıtlı parti varsa yalnız o: tamamı girilmişse panel yok (yeni paketler için önce Excel oluşturulur) */
+  if(kayitli) return kayitli.satirlar.some(x => !x.atla && !x.istekNo) ? { ...kayitli, kayitli: true, paketler: kayitli.satirlar.map(x => x.p).filter(Boolean) } : null;
+  /* Sıra kaydından önce oluşturulmuş Excel: o anki Excel sırası (yeni → eski) varsayılır, önizlemede kontrol edilir */
+  const p = fpExcelPaketleri().filter(x => x.bilgili);
+  return p.length ? { satirlar: p.map(fpTopluSatir), paketler: p, ts: null, kayitli: false } : null;
+}
+function fpTopluSatir(p){ return { p, istekNo: p.istekNo, ozet: fpTaslakMetni(p).split('\n')[0], alt: p.uyeler.length + ' iş emri' }; }
+function fpTopluEslesme(t, metin){ return caniasTopluEslesme(t.satirlar, metin); }
+function fpTopluArdisik(){
+  const t = fpTopluListe(); if(!t) return;
+  const m = caniasTopluArdisik(t, fpTopluIlk); if(m == null) return;
+  fpTopluMetin = m; render();
 }
 function fpTopluKaydet(){
   if(!(typeof malzemeIstekNoYetkisi === 'function' ? malzemeIstekNoYetkisi() : (session && session.isSuperAdmin))){ toast('İstek no\'yu SuperAdmin girer'); return; }
   const t = fpTopluListe(); if(!t) return;
-  const e = fpTopluEslesme(t, fpTopluMetin);
-  if(!e.uyusuyor){ toast(`${t.paketler.length} paket var, ${e.nos.length} numara yapıştırıldı — sayılar tutmalı`); return; }
-  if(e.hata){ toast('Önizlemedeki kırmızı satırları düzeltin'); return; }
-  if(!e.yazilacak){ toast('Yazılacak yeni istek no yok'); return; }
+  const e = caniasTopluKontrol(t, fpTopluMetin); if(!e) return;
   const upd = {};
   e.satirlar.filter(x => x.durum === 'yaz').forEach(x => x.p.uyeler.forEach(u => { upd['entries/' + u.id + '/fasonIstekNo'] = x.no; }));
   DB.ref().update(upd).then(() => { toast(`${e.yazilacak} pakete istek no yazıldı`); fpTopluAcik = false; fpTopluMetin = ''; fpTopluIlk = ''; render(); })
@@ -146,44 +214,11 @@ function fpTopluKaydet(){
 function fpTopluHtml(){
   if(!(typeof malzemeIstekNoYetkisi === 'function' ? malzemeIstekNoYetkisi() : (session && session.isSuperAdmin))) return '';
   const t = fpTopluListe(); if(!t) return '';
-  const bos = t.paketler.filter(p => !p.istekNo).length;
-  const kaynak = t.kayitli ? `Son Excel: ${fmtDT(t.ts)} · ${t.paketler.length} satır` : 'Excel sırası kayıtlı değil (bu özellikten önce oluşturuldu) — ekrandaki sıra kullanılıyor, önizlemede açıklamayla karşılaştırın';
-  if(!fpTopluAcik) return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px">
-    <button class="btn-ghost" onclick="fpTopluAcik=true; render(); setTimeout(()=>{ const el=document.getElementById('fp-toplu-metin'); if(el) el.focus(); },30)">${ico('list', 14)} İstek no'ları toplu gir (${bos} paket)</button>
-    <span style="font-size:12px;color:var(--text-muted)">${esc(kaynak)}</span></div>`;
-  const e = fpTopluEslesme(t, fpTopluMetin);
-  const renk = { yaz: 'var(--success)', var: 'var(--text-muted)', bos: 'var(--warn)', hata: 'var(--danger)' };
-  const sayiSatiri = !e.nos.length ? ''
-    : e.uyusuyor ? `<span style="color:var(--success)">${t.paketler.length} paket · ${e.nos.length} numara ✓</span>`
-    : `<span style="color:var(--danger)">${t.paketler.length} paket ama ${e.nos.length} numara — tutmuyor. CANIAS bir satıra numara vermediyse o satırın yerine tek başına "-" yazın.</span>`;
-  return `<div class="mb-grup acik" style="border-left:3px solid var(--accent);margin-bottom:14px">
-    <div class="mb-grup-ust" style="cursor:default;flex-wrap:wrap">
-      <span class="mb-kod">İstek no'ları toplu gir</span>
-      <span class="mb-olcu">${esc(kaynak)}</span>
-      <span style="margin-left:auto"><button class="btn-ghost mb-mini" onclick="fpTopluAcik=false; render()">Kapat</button></span>
-    </div>
-    <div style="padding:12px 16px;display:flex;flex-wrap:wrap;gap:16px">
-      <div style="flex:1 1 280px;min-width:0;display:flex;flex-direction:column;gap:8px">
-        <label for="fp-toplu-metin" style="font-size:12px;color:var(--text-muted)">CANIAS'ta istek no sütununu seçip kopyalayın, buraya yapıştırın (satırın tamamı da olur)</label>
-        <textarea id="fp-toplu-metin" class="mono" rows="${Math.min(16, Math.max(6, t.paketler.length + 1))}" placeholder="26110398&#10;26110399&#10;…" oninput="fpTopluMetin=this.value; render()">${esc(fpTopluMetin)}</textarea>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <span style="font-size:12px;color:var(--text-muted)">ya da ilk numara:</span>
-          <input id="fp-toplu-ilk" class="mono" style="width:130px" placeholder="26110398" value="${esc(fpTopluIlk)}" oninput="fpTopluIlk=this.value" onkeydown="if(event.key==='Enter') fpTopluArdisik()">
-          <button class="btn-ghost mb-mini" onclick="fpTopluArdisik()">Ardışık doldur</button>
-        </div>
-        <div style="font-size:12px">${sayiSatiri}</div>
-        <button class="btn-primary" ${e.uyusuyor && !e.hata && e.yazilacak ? '' : 'disabled'} onclick="fpTopluKaydet()">${ico('check', 14)} Kaydet (${e.yazilacak} paket)</button>
-      </div>
-      <div style="flex:1.6 1 360px;min-width:0;font-size:12.5px">
-        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:6px">Önizleme — Excel satır sırasıyla</div>
-        ${e.satirlar.map((x, i) => `<div style="display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--border)">
-          <span class="mono" style="color:var(--text-muted)">${i + 1}</span>
-          <span><span class="mono">${esc(fpTaslakMetni(x.p).split('\n')[0])}</span> <span style="color:var(--text-muted)">· ${x.p.uyeler.length} iş emri</span>${x.not ? `<span style="display:block;font-size:11.5px;color:${renk[x.durum]}">${esc(x.not)}</span>` : ''}</span>
-          <span class="mono" style="font-weight:700;color:${renk[x.durum]}">${esc(x.no || (x.p.istekNo ? String(x.p.istekNo) : '—'))}</span>
-        </div>`).join('')}
-      </div>
-    </div>
-  </div>`;
+  return caniasTopluPanelHtml({ id: 'fp-toplu', acik: fpTopluAcik, metin: fpTopluMetin, ilk: fpTopluIlk, birim: 'paket',
+    bos: t.satirlar.filter(x => !x.atla && !x.istekNo).length, satirSayisi: t.satirlar.length,
+    kaynak: t.kayitli ? `Son Excel: ${fmtDT(t.ts)} · ${t.satirlar.length} satır` : 'Excel sırası kayıtlı değil (bu özellikten önce oluşturuldu) — ekrandaki sıra kullanılıyor, önizlemede açıklamayla karşılaştırın',
+    e: fpTopluAcik ? fpTopluEslesme(t, fpTopluMetin) : null,
+    v: { acik: 'fpTopluAcik', metin: 'fpTopluMetin', ilk: 'fpTopluIlk' }, f: { ardisik: 'fpTopluArdisik', kaydet: 'fpTopluKaydet' } });
 }
 function fpKartHtml(p){
   const durum = !p.acik ? { r: 'var(--success)', t: 'DÖNDÜ' } : p.istekNo ? { r: 'var(--warn)', t: 'İSTEK AÇIK' } : { r: 'var(--danger)', t: 'İSTEK NO YOK' };
@@ -294,7 +329,7 @@ async function fpExcelOlustur(yeniSec){
   /* CANIAS istek no'ları satır sırasıyla ardışık veriyor — toplu girişte numaraların hangi pakete gideceği bu
      sıradan bilinir (fpTopluListe). Ekrandaki sıra sonradan kayabilir (yeni paket, "Bilgi gir"), o yüzden saklanır. */
   if(yazildi){
-    const parti = { id: uid(), ts: Date.now() }, upd = {};
+    const parti = { id: uid(), ts: Date.now(), n: paketler.length }, upd = {};
     paketler.forEach((p, i) => p.uyeler.forEach(e => { upd['entries/' + e.id + '/fasonExcelParti'] = { ...parti, sira: i }; }));
     DB.ref().update(upd).catch(err => console.warn('Excel sırası kaydedilemedi', err));
   }
