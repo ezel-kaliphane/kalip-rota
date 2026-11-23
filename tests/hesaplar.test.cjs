@@ -612,6 +612,18 @@ test('acil iş: makinenin sırasında bekleyen acil iş bulunur, başlanınca uy
   // pano: konum metni — tornada işleniyor / CNC sırasında bekliyor
   const durumlar = A.ctx.acilKayitlari().map(r => r.a.talepNo + ': ' + A.ctx.acilDurum(r).metin);
   assert.equal(JSON.stringify(durumlar.sort()), JSON.stringify(['2611010001: UT01 · Torna — işleniyor', '2611010003: C01 · CNC sırasında bekliyor']));
+  // 23.11.2026: rota tamamlandı (son operasyon, sonraki makine yok) → listeden düşer, işaret silinir
+  const silinen = [];
+  A.ata('DB', { ref: yol => ({ on: () => {}, remove: () => { silinen.push(yol); return Promise.resolve(); } }) });
+  const e2 = A.calistir('STATE.entries');
+  A.ata('STATE.entries', { ...e2, k10: { status: 'tamamlandi', makine: 'C01 · CNC', talepNo: '2611010003', isEmriNo: 'UA3', startTs: ts('2026-10-31 09:00'), endTs: ts('2026-10-31 10:00'), sonOperasyon: true, sonrakiMakine: '' } });
+  assert.equal(A.ctx.acilKayitlari().map(r => r.a.talepNo).join(','), '2611010001');
+  assert.equal(silinen.join(','), 'isEmriAcil/b');
+  A.ctx.acilKayitlari(); assert.equal(silinen.length, 1, 'aynı işaret bir kez silinir');
+  // son operasyon ama başka makineye bırakılmış (ör. dal prese gidiyor) → hâlâ acil
+  A.ata('STATE.entries', { ...e2, k10: { status: 'tamamlandi', makine: 'C01 · CNC', talepNo: '2611010003', isEmriNo: 'UA3', startTs: ts('2026-10-31 09:00'), endTs: ts('2026-10-31 10:00'), sonOperasyon: true, sonrakiMakine: 'PR01 · Pres' } });
+  assert.equal(A.ctx.acilKayitlari().length, 2);
+  A.ata('DB', undefined);
   A.ata('isEmriAcil', {});
 });
 

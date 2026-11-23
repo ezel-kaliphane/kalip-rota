@@ -6,8 +6,8 @@
    - İşaretleme İş Yoğunluğu'nda (arama kartı, geçmiş penceresi, makine sıraları) — yalnız Şef / SuperAdmin.
    - Acil iş nerede bekliyor: son kaydı bitmiş ve bırakılan yeri (sonrakiMakine) o makine olan, ya da hiç
      kaydı açılmadan o makinenin sırasına konmuş (isEmriSira) iş emri — İş Yoğunluğu kuyruğunun aynı kuralı.
-     Makinede Başla'ya basılınca sıradan düşer, uyarı kendiliğinden kalkar; işaret Şef kaldırana kadar durur
-     (iş bir sonraki makinenin sırasına geçince orada da acil sayılır).
+     Makinede Başla'ya basılınca sıradan düşer, uyarı kendiliğinden kalkar; işaret iş bir sonraki makinenin
+     sırasına geçince orada da acil sayılır. Şef kaldırır ya da rota tamamlanınca kendiliğinden kalkar (23.11.2026).
    - Operatör: başlatma formunda makine seçilince kırmızı uyarı + "Bu işi seç"; başka bir işe Başla derse
      onay sorar — engel değil (operatör o anki işi bitirmek zorunda olabilir).
    KURAL: isEmriAcil { ".read": true, ".write": false, "$k": { ".write": true } } (Console'dan). */
@@ -32,16 +32,35 @@ function acilDegistir(talepNo, isEmriNo){
     .then(() => toast(vardi ? etiket + ' artık acil değil' : etiket + ' acil — sırasındaki makinede yeni işe başlayan uyarılacak'))
     .catch(err => toast('Kaydedilemedi: ' + ((err && err.message) || 'hata') + ' — isEmriAcil kuralı yayınlandı mı?'));
 }
-/* Her acil iş emri + son kaydı (e) ya da hiç kaydı yoksa sıra kaydı (x) — tek geçiş, eskiden yeniye */
+/* Rota tamamlandı = son kaydı bitmiş, son operasyon işaretli ve bırakıldığı bir sonraki makine yok (23.11.2026,
+   kullanıcı: "acil iş bittikten sonra acil olamaz, rota tamamlandığında otomatik kalksın"). */
+function acilRotaBitti(e){ return !!(e && e.status === 'tamamlandi' && e.sonOperasyon && !e.sonrakiMakine); }
+/* Rotası biten işin acil işareti veritabanından da silinir — ekranı açan ilk cihaz yapar, aynı anahtar bir kez */
+const _acilSiliniyor = new Set();
+function acilBitenleriKaldir(anahtarlar){
+  if(typeof DB === 'undefined' || !DB) return;
+  anahtarlar.filter(k => !_acilSiliniyor.has(k)).forEach(k => {
+    _acilSiliniyor.add(k);
+    DB.ref('isEmriAcil/' + k).remove().catch(err => { _acilSiliniyor.delete(k); console.warn('acil işareti kaldırılamadı:', k, err && err.message); });
+  });
+}
+/* Her acil iş emri + son kaydı (e) ya da hiç kaydı yoksa sıra kaydı (x) — tek geçiş, eskiden yeniye.
+   Rotası tamamlanmış olanlar listeye girmez (uyarı, pano, sayı) ve işaretleri silinir. */
 function acilKayitlari(){
   ensureIsEmriAcilLoaded();
-  const istenen = new Map(Object.values(isEmriAcil || {}).filter(a => a && a.isEmriNo).map(a => [isEmriAnahtari(a), a]));
+  const istenen = new Map(Object.entries(isEmriAcil || {}).filter(([, a]) => a && a.isEmriNo).map(([key, a]) => [isEmriAnahtari(a), { key, a }]));
   if(!istenen.size) return [];
   const son = {};
   entriesArray().forEach(e => { const k = isEmriAnahtari(e); if(istenen.has(k) && (!son[k] || (e.startTs || 0) > (son[k].startTs || 0))) son[k] = e; });
   const sira = typeof isEmriSiraAktif === 'function' ? isEmriSiraAktif() : [];
-  return [...istenen].map(([k, a]) => { const e = son[k] || null; return { a, e, x: e ? null : (sira.find(s => isEmriAnahtari(s) === k) || null) }; })
-    .sort((p, q) => (p.a.ts || 0) - (q.a.ts || 0));
+  const biten = [], liste = [];
+  [...istenen].forEach(([k, { key, a }]) => {
+    const e = son[k] || null;
+    if(acilRotaBitti(e)){ biten.push(key); return; }
+    liste.push({ a, e, x: e ? null : (sira.find(s => isEmriAnahtari(s) === k) || null) });
+  });
+  if(biten.length) acilBitenleriKaldir(biten);
+  return liste.sort((p, q) => (p.a.ts || 0) - (q.a.ts || 0));
 }
 const acilMakineKodu = s => String(s || '').split(' · ')[0].trim().toUpperCase();
 /* Bir makinenin sırasında bekleyen acil iş emirleri (makine "KOD · Ad" ya da yalnız kod) */
