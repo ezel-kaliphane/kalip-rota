@@ -694,7 +694,7 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .mb-sekmeler .chip b{margin-left:4px}
 .mb-olcu{font-size:12px;color:var(--text-muted)}
 .mb-olcu b{color:var(--text)}
-.mb-bas,.mb-satir{display:grid;grid-template-columns:128px minmax(0,1fr) 74px 104px 110px 74px 86px 96px;
+.mb-bas,.mb-satir{display:grid;grid-template-columns:128px minmax(0,1fr) 74px 104px 110px 74px 86px 200px;
   gap:10px;align-items:center;padding:11px 16px}
 .mb-bas{padding:8px 16px;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
   color:var(--text-subtle);font-weight:700}
@@ -705,7 +705,7 @@ td{padding:11px 14px;color:var(--text);vertical-align:top;border-bottom:1px soli
 .mb-talep{font-family:var(--ff-mono);font-size:10.5px;color:var(--text-subtle);display:block;margin-top:2px}
 .mb-mamul{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mb-sag{text-align:right;font-family:var(--ff-mono)}
-.mb-eylem{display:flex;align-items:center;gap:4px;justify-content:flex-end}
+.mb-eylem{display:flex;align-items:center;gap:4px;justify-content:flex-end;white-space:nowrap}
 .mb-mini{width:auto;padding:4px 9px;font-size:11px;font-weight:600}
 @media (max-width:1100px){
   .mb-bas{display:none}
