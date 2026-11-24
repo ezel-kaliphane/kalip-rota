@@ -834,3 +834,18 @@ test('tadilat malzeme adı: U kodu Malzeme Listesinden, sonra iş emri listesind
   assert.equal(A.ctx.uKoduMalzemeAdi('kalıp'), '');
   A.ata('malzemeListesi', {}); A.ata('STATE.validIsEmri', {});
 });
+test('malzeme düzelt: parça boyu + İ.E. yazılır, eski değer saklanır, reçete yalnız aynı hammadde ve standart değilse', () => {
+  const k = { id: 'm1', birim: 'mm', gerekenMiktar: 1000, ieMiktar: 40, mamulKodu: 'uc18000128', hammaddeId: 'H1' };
+  const u = A.ctx.malzemeDuzeltmeYazimi(k, 25, 40, { hammaddeId: 'H1', birimBasina: 1000 }, 'SEF', 5);
+  assert.equal(u['malzemeBekleyen/m1/gerekenMiktar'], 25);
+  assert.equal(u['malzemeBekleyen/m1/ieMiktar'], 40);
+  assert.equal(JSON.stringify(u['malzemeBekleyen/m1/duzeltme']), JSON.stringify({ ts: 5, kim: 'SEF', eskiGereken: 1000, eskiIeMiktar: 40 }));
+  assert.equal(u['hammaddeRecete/UC18000128/birimBasina'], 25);   // çubukta birimBasina = parça boyu
+  // adetli: birimBasina = gereken / İ.E.
+  assert.equal(A.ctx.malzemeDuzeltmeYazimi({ ...k, birim: 'adet' }, 60, 30, { hammaddeId: 'H1' }, 'SEF', 5)['hammaddeRecete/UC18000128/birimBasina'], 2);
+  // standart reçete ya da başka hammadde → reçeteye dokunulmaz
+  assert.equal(A.ctx.malzemeDuzeltmeYazimi(k, 25, 40, { hammaddeId: 'H1', standart: true }, 'SEF', 5)['hammaddeRecete/UC18000128/birimBasina'], undefined);
+  assert.equal(A.ctx.malzemeDuzeltmeYazimi(k, 25, 40, { hammaddeId: 'H2' }, 'SEF', 5)['hammaddeRecete/UC18000128/birimBasina'], undefined);
+  // geçersiz
+  assert.equal(A.ctx.malzemeDuzeltmeYazimi(k, 0, 40, null, 'SEF', 5), null);
+});

@@ -8,6 +8,7 @@
 let mbYeniAcik = false;
 let mbForm = { girilen:'', talepNo:'', mamulKodu:'', mamulAdi:'', ieMiktar:'', hammaddeId:'', gerekenMiktar:'', busy:false, bulundu:null };
 let mbIstekDuzenId = null, mbIstekDeger = '', mbIstekMiktar = '';
+let mbDuzen = null;   // { id, gereken, ie } — açık kaydın parça boyu / İ.E. miktarını düzelt (24.11.2026)
 let mbToplu = null;   // { hid, secili:{id:true}, no, miktar } — hammadde başlığından toplu istek no (12.10.2026)
 let mbExcelTopluAcik = false, mbExcelTopluMetin = '', mbExcelTopluIlk = '';   // Excel satırlarına toplu istek no (20.11.2026)
 function mbTopluAc(hid){
@@ -305,6 +306,17 @@ function mbIstekAc(id, mevcut){
   render();
 }
 function mbIstekKapat(){ mbIstekDuzenId = null; render(); }
+function mbDuzenAc(id){
+  if(!canManageStock()){ toast('Bu işlem için Şef ya da SuperAdmin yetkisi gerekli'); return; }
+  const k = malzemeBekleyen[id]; if(!k) return;
+  mbDuzen = { id, gereken: String(Number(k.gerekenMiktar) || ''), ie: String(Math.round(Number(k.ieMiktar) || 0) || '') }; render();
+}
+function mbDuzenKapat(){ mbDuzen = null; render(); }
+function mbDuzenKaydet(){
+  if(!mbDuzen) return;
+  const { id, gereken, ie } = mbDuzen;
+  malzemeBekleyenDuzelt(id, String(gereken).replace(',', '.'), ie, () => { mbDuzen = null; render(); });
+}
 function mbIstekKaydet(){
   const id = mbIstekDuzenId; if(!id) return;
   mbIstekDuzenId = null;
@@ -416,7 +428,8 @@ function renderMalzemeBekleyen(){
                 ? `<button class="btn-ghost mb-mini mb-istek-gir" onclick="mbIstekAc('${escJs(s.id)}','')">no gir</button>`
                 : `<span class="mb-istek-gir-yazi">istek yok</span>`)}</span>
           <span class="mb-eylem">
-            ${canManageStock()?`<button class="btn-ghost mb-mini" title="Malzemesi geldi, bekleme bitti" onclick="malzemeBekleyenKarsila('${escJs(s.id)}')">Karşılandı</button>
+            ${canManageStock()?`<button class="btn-ghost mb-mini" title="${malzemeBoyMu(s) ? 'Parça boyunu' : 'Gereken miktarı'} ve İ.E. miktarını düzelt" onclick="mbDuzenAc('${escJs(s.id)}')">${ico('edit',12)} Düzenle</button>
+            <button class="btn-ghost mb-mini" title="Malzemesi geldi, bekleme bitti" onclick="malzemeBekleyenKarsila('${escJs(s.id)}')">Karşılandı</button>
             <button class="del-btn" title="Kaydı sil" onclick="malzemeBekleyenSil('${escJs(s.id)}')">${ico('trash',13)}</button>`:''}
           </span>
         </div>`;
@@ -471,7 +484,7 @@ function renderMalzemeBekleyen(){
       <div class="notice-sub">Şef bir mamul için hangi hammaddeyi seçtiyse kaydediliyor. Aynı mamul ikinci kez geldiğinde
       hammadde ve miktar hazır geliyor — ayrı bir reçete ekranı yok. Şu an <b>${Object.values(hammaddeRecete||{}).filter(r=>r && r.hammaddeId).length}</b> mamulün reçetesi var.</div>
     </div>
-  </div>${renderMbYeniModal()}${renderMbIstekModal()}${renderMbTopluModal()}${typeof renderMmMailModal==='function' ? renderMmMailModal() : ''}`;
+  </div>${renderMbYeniModal()}${renderMbIstekModal()}${renderMbDuzenModal()}${renderMbTopluModal()}${typeof renderMmMailModal==='function' ? renderMmMailModal() : ''}`;
 }
 
 function renderMbYeniModal(){
@@ -548,6 +561,48 @@ function renderMbYeniModal(){
     </div></div>`;
 }
 
+function renderMbDuzenModal(){
+  if(!mbDuzen) return '';
+  const k = malzemeBekleyen[mbDuzen.id]; if(!k){ mbDuzen = null; return ''; }
+  const boy = malzemeBoyMu(k), birim = k.birim || '';
+  const yeni = { birim, gerekenMiktar: Number(String(mbDuzen.gereken).replace(',', '.')) || 0, ieMiktar: Number(mbDuzen.ie) || 0 };
+  const mamul = String(k.mamulKodu || '').trim().toUpperCase(), r = mamul ? (hammaddeRecete[mamul] || {}) : {};
+  const receteNot = !mamul ? '' : r.standart ? 'Bu ürünün standardı BOM + Rota\'da tanımlı; reçeteye dokunulmaz.'
+    : r.hammaddeId === k.hammaddeId ? `Ürün reçetesi de düzelir: ${esc(mamul)} için bir sonraki işte bu değer önerilir.` : '';
+  const istek = String(k.caniasIstekNo || '').trim();
+  return `<div class="modal-overlay" onclick="if(event.target===this)mbDuzenKapat()">
+    <div class="modal-box" style="max-width:420px;padding:20px">
+      <div class="sec-h" style="margin-top:0">Malzeme kaydını düzelt</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:3px">${esc(k.mamulAdi || k.isEmriNo || '—')}</div>
+      <div class="mono" style="font-size:12px;color:var(--text-muted);margin-bottom:14px">${esc(k.isEmriNo || '')} · ${esc(k.talepNo || '')} · ${esc(k.hammaddeKod || '')}</div>
+      <div style="display:flex;gap:10px">
+        <div class="field" style="flex:1">
+          <label for="mb-duz-gereken">${boy ? 'Parça boyu (mm)' : 'Gereken (' + esc(birim) + ')'}</label>
+          <input id="mb-duz-gereken" inputmode="decimal" value="${esc(mbDuzen.gereken)}" oninput="this.value=this.value.replace(/[^0-9.,]/g,''); mbDuzen.gereken=this.value; mbDuzenOnizle()">
+        </div>
+        <div class="field" style="flex:1">
+          <label for="mb-duz-ie">İ.E. miktarı</label>
+          <input id="mb-duz-ie" inputmode="numeric" value="${esc(mbDuzen.ie)}" oninput="this.value=this.value.replace(/[^0-9]/g,''); mbDuzen.ie=this.value; mbDuzenOnizle()">
+        </div>
+      </div>
+      <div id="mb-duz-onizle" style="font-size:12.5px;padding:8px 10px;border-radius:8px;background:var(--panel-alt);margin-bottom:10px">${mbDuzenOnizleMetni(k, yeni)}</div>
+      <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">${receteNot}${receteNot ? '<br>' : ''}Bekleme süresi${istek ? ' ve istek no (' + esc(istek) + ')' : ''} korunur.${istek ? ' Açık siparişin miktarı değişmez.' : ''}</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-primary" style="flex:1" onclick="mbDuzenKaydet()">Kaydet</button>
+        <button class="btn-ghost" onclick="mbDuzenKapat()">Vazgeç</button>
+      </div>
+    </div></div>`;
+}
+function mbDuzenOnizleMetni(k, yeni){
+  const yaz = x => malzemeBoyMu(x) ? malzemeGerekenYazi(x) + (malzemeKesimPayi(x) ? ' + ' + malzemeKesimPayi(x) + ' mm testere payı' : '') : malzemeGerekenYazi(x);
+  return `Şu an: <b>${esc(yaz(k))}</b><br>Yeni: <b>${yeni.gerekenMiktar > 0 ? esc(yaz(yeni)) : '—'}</b>`;
+}
+/* Yazarken yalnız önizleme kutusu güncellenir — tüm ekranı yeniden çizmek imleci kaçırırdı */
+function mbDuzenOnizle(){
+  const el = document.getElementById('mb-duz-onizle'), k = mbDuzen && malzemeBekleyen[mbDuzen.id];
+  if(!el || !k) return;
+  el.innerHTML = mbDuzenOnizleMetni(k, { birim: k.birim || '', gerekenMiktar: Number(String(mbDuzen.gereken).replace(',', '.')) || 0, ieMiktar: Number(mbDuzen.ie) || 0 });
+}
 function renderMbIstekModal(){
   if(!mbIstekDuzenId) return '';
   const k = malzemeBekleyen[mbIstekDuzenId]; if(!k) return '';

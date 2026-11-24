@@ -379,6 +379,39 @@ function malzemeBekleyenGeriAc(id){
   DB.ref().update(updates).then(()=>{ toast((kayit.isEmriNo||kayit.talepNo)+' yeniden bekliyor'); render(); })
     .catch(err=>toast('Kaydedilemedi: '+((err&&err.message)||'hata')));
 }
+/* Açık kaydın parça boyu / gereken miktarı ve İ.E. miktarını düzelt (24.11.2026, kullanıcı: "şef yanlış girmiş,
+   malzeme boylarını düzeltmem gerek"). Silip yeniden eklemek bekleme süresini ve istek no'yu kaybettiriyordu.
+   Reçete de düzelir: kaydı açarken yazılan birimBasina (ör. 1000 mm) bir sonraki işte yine öneriliyordu.
+   Reçeteye yalnız aynı hammaddeyi gösteriyorsa ve standart (BOM + Rota) değilse dokunulur; gözlem sayısı artmaz.
+   Saf fonksiyon: yazılacak yolları döndürür (test edilebilir). */
+function malzemeDuzeltmeYazimi(kayit, gereken, ieMiktar, recete, kim, ts){
+  const g = Number(gereken), n = Math.round(Number(ieMiktar)) || 0;
+  if(!kayit || !(g > 0) || n < 0) return null;
+  const u = {}, yol = 'malzemeBekleyen/' + kayit.id + '/';
+  u[yol + 'gerekenMiktar'] = g;
+  u[yol + 'ieMiktar'] = n;
+  u[yol + 'duzeltme'] = { ts, kim, eskiGereken: Number(kayit.gerekenMiktar) || 0, eskiIeMiktar: Number(kayit.ieMiktar) || 0 };
+  const mamul = String(kayit.mamulKodu || '').trim().toUpperCase();
+  const r = recete || {};
+  if(mamul && kayit.hammaddeId && !r.standart && r.hammaddeId === kayit.hammaddeId){
+    const birimBasina = malzemeBoyMu(kayit) ? g : n > 0 ? g / n : 0;
+    if(birimBasina > 0){ u['hammaddeRecete/' + mamul + '/birimBasina'] = birimBasina; u['hammaddeRecete/' + mamul + '/sonTs'] = ts; u['hammaddeRecete/' + mamul + '/sonKullanan'] = kim; }
+  }
+  return u;
+}
+function malzemeBekleyenDuzelt(id, gereken, ieMiktar, bitti){
+  if(!canManageStock()){ toast('Bu işlem için Şef ya da SuperAdmin yetkisi gerekli'); return; }
+  const kayit = malzemeBekleyen[id]; if(!kayit) return;
+  const mamul = String(kayit.mamulKodu || '').trim().toUpperCase();
+  const u = malzemeDuzeltmeYazimi({ ...kayit, id }, gereken, ieMiktar, mamul ? hammaddeRecete[mamul] : null, session.username, Date.now());
+  if(!u){ toast(malzemeBoyMu(kayit) ? 'Parça boyu 0\'dan büyük olmalı' : 'Gereken miktar 0\'dan büyük olmalı'); return; }
+  DB.ref().update(u).then(() => {
+    const rb = mamul && u['hammaddeRecete/' + mamul + '/birimBasina'];
+    if(rb) hammaddeRecete[mamul] = { ...(hammaddeRecete[mamul] || {}), birimBasina: rb };
+    toast((kayit.talepNo || kayit.isEmriNo) + ' düzeltildi' + (rb ? ' — reçete de güncellendi' : ''));
+    bitti && bitti();
+  }).catch(err => toast('Kaydedilemedi: ' + ((err && err.message) || 'hata')));
+}
 function malzemeBekleyenSil(id){
   if(!canManageStock()){ toast('Bu işlem için Şef ya da SuperAdmin yetkisi gerekli'); return; }
   const kayit = malzemeBekleyen[id]; if(!kayit) return;
