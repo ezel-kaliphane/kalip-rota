@@ -6,7 +6,7 @@
    rozetler .matrix-tag, uyarı .notice, modal .modal-overlay/.modal-box. */
 
 let mbYeniAcik = false;
-let mbForm = { girilen:'', talepNo:'', mamulKodu:'', mamulAdi:'', ieMiktar:'', hammaddeId:'', gerekenMiktar:'', busy:false, bulundu:null };
+let mbForm = { girilen:'', talepNo:'', mamulKodu:'', mamulAdi:'', ieMiktar:'', ieListe:0, hammaddeId:'', gerekenMiktar:'', busy:false, bulundu:null };
 let mbIstekDuzenId = null, mbIstekDeger = '', mbIstekMiktar = '';
 let mbDuzen = null;   // { id, gereken, ie } — açık kaydın parça boyu / İ.E. miktarını düzelt (24.11.2026)
 let mbToplu = null;   // { hid, secili:{id:true}, no, miktar } — hammadde başlığından toplu istek no (12.10.2026)
@@ -59,7 +59,7 @@ let mbHamAra = '';
    açıyor; eskiden pencere kapanıp yeniden açılınca her şeyi baştan yazıyordu. Artık form yalnızca
    kayıt başarılı olunca ya da "Vazgeç"e basılınca sıfırlanıyor; boşluğa basıp kapatmak taslağı
    silmiyor, tekrar açınca kaldığı yerden devam ediyor. */
-function mbFormBos(){ return { girilen:'', talepNo:'', mamulKodu:'', mamulAdi:'', ieMiktar:'', hammaddeId:'', gerekenMiktar:'', busy:false, bulundu:null }; }
+function mbFormBos(){ return { girilen:'', talepNo:'', mamulKodu:'', mamulAdi:'', ieMiktar:'', ieListe:0, hammaddeId:'', gerekenMiktar:'', busy:false, bulundu:null }; }
 function mbTaslakVar(){ return !!(mbForm && (String(mbForm.girilen||'').trim() || mbForm.hammaddeId || String(mbForm.ieMiktar||'').trim() || String(mbForm.gerekenMiktar||'').trim())); }
 function mbYeniAc(){
   if(!canManageStock()){ toast('Bu işlem için Şef ya da SuperAdmin yetkisi gerekli'); return; }
@@ -83,6 +83,7 @@ function mbKodAra(){
   mbForm.bulundu = !!b;
   if(b){
     mbForm.talepNo = b.talepNo; mbForm.mamulKodu = b.mamulKodu; mbForm.mamulAdi = b.mamulAdi;
+    mbForm.ieListe = b.ieMiktar>0 ? b.ieMiktar : 0;
     if(b.ieMiktar>0 && !mbForm.ieMiktar) mbForm.ieMiktar = String(b.ieMiktar);
     const r = receteOku(b.mamulKodu);
     if(r){
@@ -93,7 +94,7 @@ function mbKodAra(){
       }
     }
   } else {
-    mbForm.talepNo=''; mbForm.mamulKodu=''; mbForm.mamulAdi='';
+    mbForm.talepNo=''; mbForm.mamulKodu=''; mbForm.mamulAdi=''; mbForm.ieListe=0;
   }
   render();
 }
@@ -263,11 +264,18 @@ function mbExcelDugmeHtml(){
     ${kodsuz.length ? `<span style="font-size:12px;color:var(--danger)" title="CANİAS kodu olmayan kalem Excel'e yazılamaz — Stok Takibi'nde kodunu girin">${ico('alert', 12)} Kodu yok, alınmayacak: ${kodsuz.map(g=>esc(g.it ? hammaddeEtiket(g.it) : '(kalem silinmiş)')).join(', ')}</span>` : ''}
   </div>`;
 }
+/* 24.11.2026 (kullanıcı): hammadde seçilmeden önce etiket "Gereken Miktar"dı, şef toplamı yazdı (1000 mm × 40).
+   Artık varsayılan PARÇA BOYU — adetli kalem (kama, parmak…) seçilince "Toplam adet"e döner. */
 function mbBoySecili(){
   const it = mbForm.hammaddeId && (stockItems||{})[mbForm.hammaddeId];
   if(it) return (it.birim||'')==='mm';
   const r = mbForm.mamulKodu && receteOku(mbForm.mamulKodu);
-  return !!(r && r.birim==='mm');
+  return r && r.birim ? r.birim==='mm' : true;
+}
+function mbGerekenEtiket(){
+  if(mbBoySecili()) return 'Parça Boyu (mm)';
+  const it = mbForm.hammaddeId && (stockItems||{})[mbForm.hammaddeId];
+  return 'Toplam (' + ((it && it.birim) || 'adet') + ')';
 }
 function mbHamSec(id){ mbHamAra = ''; mbFormYaz('hammaddeId', id); }
 function mbFormYaz(alan, deger){
@@ -293,7 +301,7 @@ function mbKaydet(){
   malzemeBekleyenEkle({
     isEmriNo: mbForm.mamulKodu || kod, talepNo: mbForm.talepNo || kod,
     mamulKodu: mbForm.mamulKodu, mamulAdi: mbForm.mamulAdi,
-    ieMiktar: Number(mbForm.ieMiktar)||0,
+    ieMiktar: Number(mbForm.ieMiktar)||0, ieListeMiktar: Number(mbForm.ieListe)||0,
     hammaddeId: mbForm.hammaddeId, hammaddeKod: hammaddeEtiket(it),
     gerekenMiktar: gereken, birim: (it && it.birim) || 'adet'
   }, ()=>{ mbYeniAcik = false; mbForm = mbFormBos(); mbHamAra = ''; });
@@ -527,13 +535,15 @@ function renderMbYeniModal(){
         ${receteVar?` <span style="color:var(--success)">· reçete bulundu (${receteVar.gozlemSayisi||1} gözlem)</span>`:''}</div></div>` : ''}
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="field"><label for="mb-ie">İ.E. Miktarı</label>
+        <div class="field"><label for="mb-ie">İ.E. Miktarı${mbForm.ieListe>0 ? ` <span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-muted)">· listede ${mbForm.ieListe}</span>` : ''}</label>
           <input id="mb-ie" inputmode="numeric" placeholder="0" value="${esc(mbForm.ieMiktar)}"
             oninput="this.value=this.value.replace(/[^0-9.]/g,'')" onchange="mbFormYaz('ieMiktar',this.value)"></div>
-        <div class="field"><label for="mb-gereken">${mbBoySecili() ? 'Parça Boyu (mm)' : 'Gereken Miktar'}</label>
-          <input id="mb-gereken" inputmode="numeric" placeholder="${mbBoySecili() ? 'bir parçanın boyu' : '0'}" value="${esc(mbForm.gerekenMiktar)}"
+        <div class="field"><label for="mb-gereken">${esc(mbGerekenEtiket())}</label>
+          <input id="mb-gereken" inputmode="numeric" placeholder="${mbBoySecili() ? '1 parçanın boyu' : '0'}" value="${esc(mbForm.gerekenMiktar)}"
             oninput="this.value=this.value.replace(/[^0-9.]/g,''); mbForm.gerekenMiktar=this.value" onchange="mbFormYaz('gerekenMiktar',this.value)"></div>
       </div>
+      ${malzemeIeFarkYazi(mbForm.ieListe, mbForm.ieMiktar) ? `<div style="font-size:12px;color:var(--warn-text, var(--warn));font-weight:600;margin:-6px 0 12px">${ico('alert',12)} ${esc(malzemeIeFarkYazi(mbForm.ieListe, mbForm.ieMiktar))}</div>` : ''}
+      ${mbBoySecili() && !(Number(mbForm.gerekenMiktar)>0) ? `<div style="font-size:12px;color:var(--text-muted);margin:-6px 0 12px">Parça boyu: <b style="color:var(--text)">1 parça</b> için kesilecek boy. Toplamı uygulama İ.E. miktarıyla çarpar.</div>` : ''}
       ${mbBoySecili() && Number(mbForm.gerekenMiktar)>0 ? (() => { const t = { gerekenMiktar:Number(mbForm.gerekenMiktar), ieMiktar:Number(mbForm.ieMiktar)||0, birim:'mm' };
         return `<div style="font-size:12px;color:var(--text-muted);margin:-6px 0 12px">Toplam ihtiyaç: <b style="color:var(--text)">${esc(malzemeGerekenYazi(t))}</b> + ${malzemeKesimPayi(t)} mm testere payı = <b style="color:var(--text)">${Math.round(malzemeIhtiyac(t))} mm</b></div>`; })() : ''}
 
@@ -593,9 +603,15 @@ function renderMbDuzenModal(){
       </div>
     </div></div>`;
 }
+function mbDuzenIeListe(k){
+  if(Number(k && k.ieListeMiktar) > 0) return Number(k.ieListeMiktar);
+  const b = k && (isEmriBilgisiBul(k.talepNo) || isEmriBilgisiBul(k.isEmriNo));
+  return b && b.ieMiktar > 0 ? b.ieMiktar : 0;
+}
 function mbDuzenOnizleMetni(k, yeni){
+  const fark = malzemeIeFarkYazi(mbDuzenIeListe(k), yeni.ieMiktar);
   const yaz = x => malzemeBoyMu(x) ? malzemeGerekenYazi(x) + (malzemeKesimPayi(x) ? ' + ' + malzemeKesimPayi(x) + ' mm testere payı' : '') : malzemeGerekenYazi(x);
-  return `Şu an: <b>${esc(yaz(k))}</b><br>Yeni: <b>${yeni.gerekenMiktar > 0 ? esc(yaz(yeni)) : '—'}</b>`;
+  return `Şu an: <b>${esc(yaz(k))}</b><br>Yeni: <b>${yeni.gerekenMiktar > 0 ? esc(yaz(yeni)) : '—'}</b>${fark ? `<div style="margin-top:6px;color:var(--warn-text, var(--warn));font-weight:600">${ico('alert',12)} ${esc(fark)}</div>` : ''}`;
 }
 /* Yazarken yalnız önizleme kutusu güncellenir — tüm ekranı yeniden çizmek imleci kaçırırdı */
 function mbDuzenOnizle(){

@@ -716,7 +716,9 @@ function isEmriSutunlariBul(header, colName){
   let kod = ilk('malzeme kod');
   if(kod===-1) kod = header.findIndex(h => h===trNorm('malzeme')); // yeni dışa aktarımda başlık yalnızca "Malzeme"
   const ad = ilk('malzeme ad', 'malzeme açıklama');
-  const miktar = ilk('i.e. miktar', 'ie miktar', 'is emri miktar', 'miktar');
+  /* 24.11.2026: yüklenen dosya "GÜNCEL ÜRETİM İŞ EMRİ TAKİP.xlsx" — miktar sütunu "İ.E. TALEP" (yanında "İ.E. BİTEN").
+     Eskiden yalnız "miktar" aranıyordu; 8 407 iş emrinin hiçbirinde miktar yoktu, şef elle giriyordu. */
+  const miktar = ilk('i.e. miktar', 'ie miktar', 'is emri miktar', 'i.e. talep', 'ie talep', 'miktar');
   return { anahtar, kod, ad, miktar };
 }
 

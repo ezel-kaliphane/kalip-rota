@@ -195,6 +195,13 @@ function receteOku(mamulKodu){
   return (r && r.hammaddeId) ? r : null; // yalnız karbür reçetesi olan mamul çelik reçetesi sayılmaz
 }
 
+/* İ.E. miktarı iş emri listesinden (CANIAS) gelir; şef değiştirebilir (fazla yapılacak / malzeme yetmiyor).
+   Değiştirince onay SORULMAZ, yalnız uyarı görünür (24.11.2026, kullanıcı). */
+function malzemeIeFarkYazi(liste, girilen){
+  const l = Math.round(Number(liste) || 0), g = Math.round(Number(girilen) || 0);
+  if(!(l > 0) || !(g > 0) || l === g) return '';
+  return 'İş emri adedi ' + l + ' olan işin adedi ' + g + ' olarak değiştirilecek' + (g > l ? ' (fazla yapılacak)' : ' (eksik yapılacak)');
+}
 function malzemeBekleyenEkle(veri, bitti){
   if(!canManageStock()){ toast('Bu işlem için Şef ya da SuperAdmin yetkisi gerekli'); return; }
   const now = Date.now();
@@ -209,6 +216,7 @@ function malzemeBekleyenEkle(veri, bitti){
     isaretleyenUsername: session.username, isaretleyenName: session.displayName,
     isaretTs: now, caniasIstekNo: ''
   };
+  if(Number(veri.ieListeMiktar) > 0) kayit.ieListeMiktar = Number(veri.ieListeMiktar);   // CANIAS'taki iş emri miktarı (şef değiştirdiyse farkı görünsün)
   const uygun = malzemeUygunIstek(kayit.hammaddeId, malzemeIhtiyac(kayit));
   if(uygun){ kayit.caniasIstekNo = uygun.istekNo; kayit.istekOtomatik = true; kayit.istekTs = now; }
   const updates = {};

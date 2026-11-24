@@ -849,3 +849,15 @@ test('malzeme düzelt: parça boyu + İ.E. yazılır, eski değer saklanır, re�
   // geçersiz
   assert.equal(A.ctx.malzemeDuzeltmeYazimi(k, 0, 40, null, 'SEF', 5), null);
 });
+
+test('iş emri listesi: "GÜNCEL ÜRETİM İŞ EMRİ TAKİP.xlsx" başlıklarında miktar = İ.E. TALEP; şef değiştirirse uyarı metni', () => {
+  const bas = ['BELGE NUMARASI', 'Malzeme kodu', 'MALZEME ADI', 'MAKİNE', 'DURUMU', 'İŞ TALEP NO', 'İ.E. TALEP', 'İ.E. BİTEN'].map(h => A.ctx.trNorm(h));
+  assert.deepEqual({ ...A.ctx.isEmriSutunlariBul(bas, A.ctx.trNorm('İş Talep No')) }, { anahtar: 5, kod: 1, ad: 2, miktar: 6 });
+  const eski = ['Malzeme', 'İş Emri Num.', 'Malzeme Açıklaması', 'İ.E. Miktarı', 'İş Emri Durumu'].map(h => A.ctx.trNorm(h));
+  assert.deepEqual({ ...A.ctx.isEmriSutunlariBul(eski, A.ctx.trNorm('İş Talep No')) }, { anahtar: 1, kod: 0, ad: 2, miktar: 3 });
+  assert.equal(A.ctx.malzemeIeFarkYazi(5, 4), 'İş emri adedi 5 olan işin adedi 4 olarak değiştirilecek (eksik yapılacak)');
+  assert.equal(A.ctx.malzemeIeFarkYazi(5, 7), 'İş emri adedi 5 olan işin adedi 7 olarak değiştirilecek (fazla yapılacak)');
+  assert.equal(A.ctx.malzemeIeFarkYazi(5, 5), '');
+  assert.equal(A.ctx.malzemeIeFarkYazi(0, 4), '');   // listede miktar yok → uyarı yok
+  assert.equal(A.ctx.malzemeIeFarkYazi(5, ''), '');
+});
