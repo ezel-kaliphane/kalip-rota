@@ -168,6 +168,14 @@ function mbTaslakKopyala(hid){
    sipariş adedi, örn. 700 — 09.11.2026) · IHTIYACTARIHI
    bugün+7 · SATINALMA 180 · ACIKLAMA = "Malzeme taslağı kopyala" metninin aynısı · BIRIM AD. */
 const MB_EXCEL_SABIT = { oncelik: 2, miktar: 1, satinalma: 180, birim: 'AD' };
+/* Grup sırası EXCEL İLE AYNI (24.11.2026, kullanıcı: "düzeltme yaptıktan sonra sıra değişti, Excel doğru kaldı").
+   Eskiden gruplar "kullanılabilir"e göre sıralanıyordu; Düzenle ile ihtiyaç değişince grup yer değiştiriyor,
+   istek no'ları Excel sırasıyla yapıştırırken ekran tutmuyordu. Şimdi: istek no'suz iş emri olan gruplar önce
+   (Excel'e girenler), en eski işaretlenme sırasıyla — mbExcelGruplari ile aynı anahtar; kalanlar ardından. */
+function mbGrupSirasi(satirlar){
+  const bos = satirlar.filter(x=>!malzemeIstekVar(x)), l = bos.length ? bos : satirlar;
+  return { excelde: bos.length ? 0 : 1, siraTs: Math.min(...l.map(x=>Number(x.isaretTs)||0)) };
+}
 function mbExcelGruplari(){
   const g = {};
   malzemeBekleyenAktif().filter(x=>!malzemeIstekVar(x)).forEach(x=>{ (g[x.hammaddeId] = g[x.hammaddeId] || []).push(x); });
@@ -370,8 +378,8 @@ function renderMalzemeBekleyen(){
        sipariş sayılmaz. Sipariş "Geldi" olunca yoldan düşer, stoğa girişle stokta görünür. */
     const yolda = malzemeAcikIstekler(hid).reduce((t,s)=>t+(s.kalan||0), 0);   // kısmi teslimde yalnız gelmeyen kısım
     return { hid, it, stok, rezerve, yolda, kullanilabilir: stok+yolda-rezerve,
-      satirlar: satirlar.sort((a,b)=>(Number(a.isaretTs)||0)-(Number(b.isaretTs)||0)) };
-  }).sort((a,b)=> a.kullanilabilir - b.kullanilabilir);
+      satirlar: satirlar.sort((a,b)=>(Number(a.isaretTs)||0)-(Number(b.isaretTs)||0)), ...mbGrupSirasi(satirlar) };
+  }).sort((a,b)=> a.excelde - b.excelde || a.siraTs - b.siraTs);
 
   /* "Eksik Kalem" (29.09.2026): eskiden burada "Rezerveli Kalem" vardı ve yalnızca grup
      sayısını (kaç farklı hammadde bekleniyor) gösteriyordu; adı da stoktan ayrılmış bir
