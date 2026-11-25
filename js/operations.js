@@ -144,9 +144,11 @@ function resolveTrackingCode(talepNoRaw, bilesenSel){
 }
 function baslat(){
   const makine = (document.getElementById('nf-makine')?.value) || newForm.makine || '';
-  const malzemeCinsi = (document.getElementById('nf-malzeme-cinsi').value||'').trim();
-  const capBoy = (document.getElementById('nf-cap-boy').value||'').trim();
-  const not = (document.getElementById('nf-not').value||'').trim();
+  /* 25.11.2026 ACİL: Malzeme Cinsi / Çap ve Boy artık çoğu zaman ekranda yok (hammadde seçilince sorulmuyor) —
+     .value doğrudan okununca TypeError atıp BAŞLAT hiç çalışmıyordu. Kutu yoksa newForm'daki değer. */
+  const malzemeCinsi = (document.getElementById('nf-malzeme-cinsi')?.value ?? newForm.malzemeCinsi ?? '').trim();
+  const capBoy = (document.getElementById('nf-cap-boy')?.value ?? newForm.capBoy ?? '').trim();
+  const not = (document.getElementById('nf-not')?.value ?? newForm.not ?? '').trim();
   const sonOperasyon = !!document.getElementById('nf-son-operasyon')?.checked;
   const canCoklu = !!(STATE.operators[session.username]||{}).cokluIsEmri;
 
@@ -241,7 +243,7 @@ function baslat(){
   // Tekli mod (varsayılan)
   const isEmriNoRaw = (document.getElementById('nf-isemri')?.value ?? newForm.isEmriNo ?? '').trim();
   const bilesenSel = document.getElementById('nf-bilesen')?.value ?? newForm.bilesen ?? '';
-  const adet = (document.getElementById('nf-adet').value||'').trim();
+  const adet = (document.getElementById('nf-adet')?.value ?? newForm.adet ?? '').trim();
   const allowMulti = !!(STATE.operators[session.username]||{}).multiJob;
   if(!allowMulti && myActiveEntries().length>0){ toast('Bu hesap aynı anda tek iş açabilir. Önce mevcut işi bitirmelisin.'); return; }
   if(!isEmriNoRaw){ toast('İş Emri No girin'); return; }
