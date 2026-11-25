@@ -3857,6 +3857,8 @@ function renderAdmin(){
       body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizOperator()}</div>`;
     } else if(analizRole==='gunluk'){
       body = `<div class="analiz-wrap">${analizRoleBar}${renderOperatorGunlugu()}</div>`;
+    } else if(analizRole==='makineBazli'){
+      body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizMakineBazli()}</div>`;
     } else if(analizRole==='tadilat'){
       body = `<div class="analiz-wrap">${analizRoleBar}${renderAnalizTadilat()}</div>`;
     } else if(analizRole==='saha'){

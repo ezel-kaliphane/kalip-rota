@@ -1002,3 +1002,11 @@ test('BAŞLAT: Malzeme Cinsi / Çap-Boy kutuları ekranda yokken de iş başlar 
     A.ata('DB', eskiDB); A.ctx.getAllowedMachines = eskiGAM; A.ctx.getTalepInfo = eskiGTI; A.ata('__e', eskiE); A.calistir('STATE.entries = __e');
   }
 });
+
+test('Makine Bazlı: aynı iş emrinin yeniden başlatılan kayıtları toplanmaz (son kayıt), kısmi aktar parçaları toplanır', () => {
+  const k = (adet, ts, ekstra) => ({ adet, e: { startTs: ts, ...(ekstra || {}) } });
+  assert.equal(A.ctx.mbaGrupAdet([k(3, 1), k(3, 2)]), 3);
+  assert.equal(A.ctx.mbaGrupAdet([k(5, 1), k(4, 2)]), 4, 'son kayıt');
+  assert.equal(A.ctx.mbaGrupAdet([k(7, 1, { partiRootId: 'x' }), k(5, 2, { partiRootId: 'x', parentEntryId: 'x' })]), 12, 'kısmi aktar: 7 + 5');
+  assert.equal(A.ctx.mbaGrupAdet([k(1, 1, { _kismi: true }), k(1, 2, { _kismi: true })]), 2, 'tadilat kısmi aktar');
+});

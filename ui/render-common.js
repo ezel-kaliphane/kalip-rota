@@ -181,10 +181,12 @@ function machineDetailTadilatRows(code){
         startTs: o.baslamaTs, endTs: o.bitisTs || null,
         status: o.status==='tamamlandi' ? 'tamamlandi' : (o.status==='duruş' ? 'duruş' : 'devam'),
         malzemeCinsi: t.kisaAciklama || t.aciklama || '',
-        adet: t.adet || '',
+        aciklama: t.kisaAciklama || t.aciklama || '',
+        adet: typeof tadilatOpAdet === 'function' ? tadilatOpAdet(t, o) : (t.adet || ''),   // kısmi aktarda operasyonun kendi adedi (25.11.2026)
         duruşToplamMs: o.duruşToplamMs||0, excludedMs: o.excludedMs||0,
         duruşNedeni: o.duruşNedeni||null, duruşTs: o.duruşTs||null,
-        _isTadilat: true, _sonOperasyon: !!o.sonOperasyon
+        durusLog: o.durusLog||null, excludedLog: o.excludedLog||null,
+        _isTadilat: true, _sonOperasyon: !!o.sonOperasyon, _tadilatId: t.id, _kismi: !!t.kismiAktarlar
       });
     });
   });
@@ -633,15 +635,15 @@ function renderMachineModal(){
           ${detayRows.length>MODAL_SAYFA_BOYUT ? `<span class="modal-pager-bilgi" style="margin-left:8px">${(detaySayfa-1)*MODAL_SAYFA_BOYUT+1}–${Math.min(detaySayfa*MODAL_SAYFA_BOYUT, detayRows.length)} / ${detayRows.length}</span>` : ''}</div>
         <table><thead><tr>
           ${canDeleteReport() ? `<th style="width:26px"><input type="checkbox" ${modalVisibleIds.length>0 && modalVisibleIds.every(id=>modalSelectedIds.has(id))?'checked':''} onchange="toggleModalSelectAll()"></th>` : ''}
-          <th>Tarih</th><th>İş Emri No</th><th>Malzeme</th><th>Operatör</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th>Durum</th>${session.isSuperAdmin ? `<th style="width:36px"></th>` : ''}${canDeleteReport() ? `<th style="width:36px"></th>` : ''}
+          <th>Tarih</th><th>İş Emri No</th><th>Malzeme</th><th style="text-align:right">Adet</th><th>Operatör</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th>Durum</th>${session.isSuperAdmin ? `<th style="width:36px"></th>` : ''}${canDeleteReport() ? `<th style="width:36px"></th>` : ''}
         </tr></thead><tbody>
-        ${(() => { const completedIdsForModal = computeCompletedRouteIds(); return detaySayfaSatirlari.length===0 ? `<tr><td colspan="${8 + (canDeleteReport()?2:0) + (session.isSuperAdmin?1:0)}" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : detaySayfaSatirlari.map(e=>{
+        ${(() => { const completedIdsForModal = computeCompletedRouteIds(); return detaySayfaSatirlari.length===0 ? `<tr><td colspan="${9 + (canDeleteReport()?2:0) + (session.isSuperAdmin?1:0)}" style="text-align:center;color:var(--text-muted);padding:20px">Kayıt yok.</td></tr>` : detaySayfaSatirlari.map(e=>{
           if(e._isTadilat){
             const dur = e.endTs ? fmtDur(e.endTs-e.startTs) : fmtElapsed(entryDurationBreakdown(e).netMs)+' (sürüyor)';
             const statusLabel = e.status==='tamamlandi' ? (e._sonOperasyon?'Tadilat Tamamlandı':'Operasyon Bitti (Devamı Var)') : 'Tadilat — Devam Ediyor';
             return `<tr>
               ${canDeleteReport() ? `<td><input type="checkbox" ${modalSelectedIds.has(e.id)?'checked':''} onchange="toggleModalSelect('${e.id}')"></td>` : ''}
-              <td>${dateKey(e.startTs)}</td><td class="mono" style="color:var(--tadilat-info)">${ico('wrench',14)} ${esc(e.isEmriNo)}</td><td style="font-size:12.5px">${esc(e.malzemeCinsi||'—')}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td>${fmtDT(e.startTs)}</td><td>${e.endTs?fmtDT(e.endTs):'—'}</td><td>${dur}</td><td><span style="color:var(--tadilat-info);font-weight:600">${statusLabel}</span></td>
+              <td>${dateKey(e.startTs)}</td><td class="mono" style="color:var(--tadilat-info)">${ico('wrench',14)} ${esc(e.isEmriNo)}</td><td style="font-size:12.5px">${esc(e.malzemeCinsi||'—')}</td><td class="mono" style="text-align:right">${esc(e.adet||'—')}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td>${fmtDT(e.startTs)}</td><td>${e.endTs?fmtDT(e.endTs):'—'}</td><td>${dur}</td><td><span style="color:var(--tadilat-info);font-weight:600">${statusLabel}</span></td>
               ${session.isSuperAdmin ? `<td><button class="del-btn" onclick="openTadilatRowEdit('${e.id}')" title="Düzelt">${ico('edit',14)}</button></td>` : ''}
               ${canDeleteReport() ? `<td>${session.isSuperAdmin ? `<button class="del-btn" onclick="deleteMachineModalTadilatRow('${e.id}')" title="Sil">${ico('trash',14)}</button>` : ''}</td>` : ''}
             </tr>`;
@@ -653,7 +655,7 @@ function renderMachineModal(){
           const malzAdi = e.malzemeCinsi || getTalepInfo(e.talepNo)?.malzemeAdi || '—';
           return `<tr style="${isDone?'background:var(--success-row)':''}">
             ${canDeleteReport() ? `<td><input type="checkbox" ${modalSelectedIds.has(e.id)?'checked':''} onchange="toggleModalSelect('${e.id}')"></td>` : ''}
-            <td>${dateKey(e.startTs)}</td><td class="mono" style="color:var(--accent)">${esc(e.talepNo || e.isEmriNo)} ${isDone?ico('check',12):''}</td><td style="font-size:12.5px">${esc(malzAdi)}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td>${fmtDT(e.startTs)}</td><td>${e.endTs?fmtDT(e.endTs):'—'}</td><td>${dur}</td><td><span style="color:${statusColor};font-weight:600">${isDone?'Rota Tamamlandı':statusLabel}</span></td>
+            <td>${dateKey(e.startTs)}</td><td class="mono" style="color:var(--accent)">${esc(e.talepNo || e.isEmriNo)} ${isDone?ico('check',12):''}</td><td style="font-size:12.5px">${esc(malzAdi)}</td><td class="mono" style="text-align:right">${esc(e.adet||'—')}</td><td>${esc(e.operatorUsername)} · ${esc(e.operatorName)}</td><td>${fmtDT(e.startTs)}</td><td>${e.endTs?fmtDT(e.endTs):'—'}</td><td>${dur}</td><td><span style="color:${statusColor};font-weight:600">${isDone?'Rota Tamamlandı':statusLabel}</span></td>
             ${session.isSuperAdmin ? `<td><button class="del-btn" onclick="openReportEdit('${e.id}')" title="Düzelt">${ico('edit',14)}</button></td>` : ''}
             ${canDeleteReport() ? `<td><button class="del-btn" onclick="deleteModalRecord('${e.id}')" title="Sil">${ico('trash',14)}</button></td>` : ''}
           </tr>`;
