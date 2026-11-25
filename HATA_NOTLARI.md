@@ -5,6 +5,21 @@ hatayı ikinci kez yazmamak. En yeni üstte.
 
 ---
 
+## 2026-11-25 — BAŞLAT hiç çalışmıyordu (kimse iş başlatamadı)
+
+**Belirti.** 7b405fc canlıya çıktıktan ~30 dk sonra: telefonda "Başla (saat otomatik)"a basınca hiçbir şey olmuyor,
+hiçbir operatör iş başlatamıyor.
+
+**Sebep.** Aynı commit'te Malzeme Cinsi / Çap ve Boy kutuları, hammadde seçilince ya da sonraki operasyonda artık
+çizilmiyordu. `baslat()` (js/operations.js) ise `document.getElementById('nf-malzeme-cinsi').value` ile DOĞRUDAN
+okuyordu → kutu yokken TypeError, fonksiyon ilk satırlarda düşüyor, ekranda hata da görünmüyor.
+
+**Düzeltme (60141ec).** `?.value ?? newForm.x` — kutu yoksa formdaki değer. `nf-not`, `nf-adet` de aynı biçime alındı.
+
+**Ders.** **Bir alanı ekrandan kaldırırken, o alanı okuyan HER yeri ara** (`grep nf-malzeme-cinsi`). Görünüm
+koşullu hale gelen her `id`, okunduğu yerde `?.` ile okunmalı. Testler render'ı denedi ama `baslat()`'ı
+kutu yokken hiç çağırmadı — davranış değiştiren UI değişikliğinde asıl eylemi (Başlat/Kaydet) de çalıştır.
+
 ## 2026-10-26 — Aynı U kodlu iş emirleri karışıyordu: arama, geçmiş, kuyruk, yer düzeltme
 
 **Belirti.** Kullanıcı İş Yoğunluğu'nda 2609080005'i aradı; kart doğru, tıklayınca 2609100004'ün geçmişi açıldı.

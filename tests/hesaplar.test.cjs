@@ -984,3 +984,21 @@ test('tadilatta kısmi aktar: 2 adetten 1i sıradaki operasyona; iki operasyon a
   eski.operasyonlar.x.sonOperasyon = true; assert.equal(C.tadilatTamamlandiMi(eski), true); assert.equal(C.tadilatBekliyorMu(eski), false);
   A.ata('tadilatlar', {});
 });
+
+test('BAŞLAT: Malzeme Cinsi / Çap-Boy kutuları ekranda yokken de iş başlar (25.11.2026 canlı hatası)', () => {
+  const eskiDB = A.calistir('DB'), eskiE = A.calistir('STATE.entries');
+  const yaz = [];
+  A.ata('DB', { ref: y => ({ set: () => { yaz.push(y); return Promise.resolve(); }, update: () => Promise.resolve(), on(){}, once: () => Promise.resolve({ val: () => null }) }) });
+  A.ata('session', { username: 'OPRT7', displayName: 'Serkan' });
+  const eskiGAM = A.ctx.getAllowedMachines, eskiGTI = A.ctx.getTalepInfo;
+  A.ctx.getAllowedMachines = () => ['C01 · CNC Torna'];
+  A.ctx.getTalepInfo = k => k === '2610130011' ? { malzemeKodu: 'UC02000036' } : null;
+  try{
+    A.calistir("STATE.operators = Object.assign(STATE.operators || {}, { OPRT7: { name:'Serkan' } }); STATE.entries = { x: { isEmriNo:'UC02000036', talepNo:'2610130011', makine:'UF01', adet:'3', status:'tamamlandi', startTs:1, endTs:2 } }");
+    A.calistir("newForm = { isEmriNo:'2610130011', bilesen:'', makine:'C01 · CNC Torna', adet:'3', not:'', malzemeCinsi:'', capBoy:'', cokluMode:false, cokluItems:[] }");
+    A.calistir('baslat()');
+    assert.equal(yaz.filter(y => y.startsWith('entries/')).length, 1, 'kayıt açılmalı');
+  } finally {
+    A.ata('DB', eskiDB); A.ctx.getAllowedMachines = eskiGAM; A.ctx.getTalepInfo = eskiGTI; A.ata('__e', eskiE); A.calistir('STATE.entries = __e');
+  }
+});
