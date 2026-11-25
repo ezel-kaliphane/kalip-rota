@@ -204,8 +204,11 @@ function baslat(){
       });
       if(eksik.length && !confirm('İlk operasyon — hammadde seçilmedi: ' + eksik.map(it=>it.talepNoRaw).join(', ') + '\n\nHammadde kullanılmıyorsa Tamam ile başlat; kullanılıyorsa İptal deyip listeden seç.')) return;
     }
+    /* Çubukta girilen 1 parçanın boyu → adet × boy + testere payı (kesimToplami, js/state.js) */
+    const cokluMiktar = it => { const [sid, lid] = String(it.stockItemId||'').split('::'); const st = stockItems[sid];
+      return (lid || (st && st.tur==='boy')) ? kesimToplami(it.stockMiktar, it.adet).toplam : (st && st.mode==='oto' ? Number(it.adet)||0 : Number(it.stockMiktar)||0); };
     if(stockEnabled() && !stoksuzTuketimOnay(items.filter(it=>{ if(!it.stockItemId || it.bilesen==='ELMAS') return false; const r = resolveTrackingCode(it.talepNoRaw, it.bilesen); return isFirstOperationFor(r.isEmriNo, r.talepNo); }).map(it=>{
-      const [sid, lid] = it.stockItemId.split('::'); return { itemId: sid, lotId: lid||null, miktar: Number(it.stockMiktar)||0, etiket: it.talepNoRaw };
+      const [sid, lid] = it.stockItemId.split('::'); return { itemId: sid, lotId: lid||null, miktar: cokluMiktar(it), etiket: it.talepNoRaw };
     }))) return;
     const groupId = uid();
     items.forEach(it=>{
@@ -220,8 +223,9 @@ function baslat(){
       if(stockEnabled() && wasFirst && it.stockItemId){
         const [selItemId, selLotId] = it.stockItemId.split('::');
         const stItem = stockItems[selItemId];
-        const miktar = (selLotId || (stItem && stItem.tur==='boy')) ? (Number(it.stockMiktar)||0) : (stItem && stItem.mode==='oto' ? Number(it.adet)||0 : Number(it.stockMiktar)||0);
-        if(miktar>0) consumeStock(selItemId, selLotId||null, miktar, { isEmriNo, talepNo });
+        const boyMu = !!(selLotId || (stItem && stItem.tur==='boy')), k = kesimToplami(it.stockMiktar, it.adet);
+        const miktar = cokluMiktar(it);
+        if(miktar>0) consumeStock(selItemId, selLotId||null, miktar, boyMu ? { isEmriNo, talepNo, parcaBoy: k.parcaBoy, adet: k.adet, kesimPayi: k.kesimPayi } : { isEmriNo, talepNo, adet: it.adet });
       }
     });
     toast(`${items.length} iş emri birlikte başlatıldı`);
@@ -259,7 +263,7 @@ function baslat(){
   if(typeof fasonIsilGerekli==='function' && fasonIsilGerekli(makine, [{ talepNo, isEmriNo, adet, kg: (document.getElementById('nf-fason-kg')?.value ?? newForm.fasonKg ?? '').trim() }])) return;
   if(typeof acilBaslatOnayi==='function' && !acilBaslatOnayi(makine, [{ talepNo, isEmriNo }])) return;
   const wasFirst = isFirstOperationFor(isEmriNo, talepNo);
-  let stockItemIdSel = '', stockLotIdSel = null, stockMiktarSel = 0;
+  let stockItemIdSel = '', stockLotIdSel = null, stockMiktarSel = 0, stockKesim = null;
   if(stockEnabled() && wasFirst){
     /* Telefonda form iki adımlı: hammadde 1. adımda seçiliyor, BAŞLAT 2. adımda — kutu artık DOM'da
        yok. Önceden burada boş okunuyor ve seçilen hammadde stoktan HİÇ düşülmüyordu (07.10.2026). */
@@ -271,8 +275,10 @@ function baslat(){
       const boyMu = !!(stItem && stItem.tur==='boy');   // stoksuz çubukta da kesilen boy elle girilir
       const isManual = stockLotIdSel || boyMu || (stItem && stItem.mode==='manuel');
       if(isManual){
-        stockMiktarSel = Number(document.getElementById('nf-stok-miktar')?.value ?? newForm.stockMiktar ?? 0) || 0;
-        if(stockMiktarSel<=0){ toast((stockLotIdSel || boyMu) ? 'Kesilen boyu girin' : 'Kullanılan hammadde miktarını girin'); return; }
+        const girilen = document.getElementById('nf-stok-miktar')?.value ?? newForm.stockMiktar ?? 0;
+        if(stockLotIdSel || boyMu){ stockKesim = kesimToplami(girilen, adet); stockMiktarSel = stockKesim.toplam; }   // 1 parça boyu × adet + testere payı
+        else stockMiktarSel = Number(girilen) || 0;
+        if(stockMiktarSel<=0){ toast((stockLotIdSel || boyMu) ? '1 parçanın boyunu girin' : 'Kullanılan hammadde miktarını girin'); return; }
         if(!stoksuzTuketimOnay([{ itemId: stockItemIdSel, lotId: stockLotIdSel, miktar: stockMiktarSel }])) return;
       } else {
         stockMiktarSel = Number(adet)||0;
@@ -292,7 +298,7 @@ function baslat(){
   if(fasonGonderim && typeof fasonGonderimAlanlari==='function') Object.assign(entry, fasonGonderimAlanlari(id, talepNo, isEmriNo));
   fasonGonderim = null;
   DB.ref('entries/'+id).set(entry);
-  if(stockItemIdSel && stockMiktarSel>0) consumeStock(stockItemIdSel, stockLotIdSel, stockMiktarSel, { isEmriNo, talepNo });
+  if(stockItemIdSel && stockMiktarSel>0) consumeStock(stockItemIdSel, stockLotIdSel, stockMiktarSel, stockKesim ? { isEmriNo, talepNo, parcaBoy: stockKesim.parcaBoy, adet: stockKesim.adet, kesimPayi: stockKesim.kesimPayi } : { isEmriNo, talepNo, adet });
   toast(pendingParti ? `Operasyon başlatıldı — bekleyen ${pendingParti.adet} adetlik partiye bağlandı` : 'Operasyon başlatıldı');
   newForm = { isEmriNo:'', bilesen:'', makine: (STATE.operators[session.username]||{}).defaultMachine || '', malzemeCinsi:'', capBoy:'', adet:'', not:'', sonOperasyon:false, stockItemId:'', stockMiktar:'', cokluMode:false, cokluItems:[{isEmriNo:'',bilesen:'',adet:'',stockItemId:'',stockMiktar:''},{isEmriNo:'',bilesen:'',adet:'',stockItemId:'',stockMiktar:''}] };
   activeDetailId = id;

@@ -861,3 +861,126 @@ test('iş emri listesi: "GÜNCEL ÜRETİM İŞ EMRİ TAKİP.xlsx" başlıkların
   assert.equal(A.ctx.malzemeIeFarkYazi(0, 4), '');   // listede miktar yok → uyarı yok
   assert.equal(A.ctx.malzemeIeFarkYazi(5, ''), '');
 });
+
+test('kesim: 1 parça boyu × adet + testere payı; hareket toplamı yazar, ürün reçetesi parça boyuyla güncellenir', () => {
+  // hesap
+  const k = A.ctx.kesimToplami('25', 40);
+  assert.equal(k.toplam, 25 * 40 + 3 * 40); assert.equal(k.kesimPayi, 120); assert.equal(k.parcaBoy, 25);
+  assert.equal(A.ctx.kesimToplami('12,5', 2).toplam, 31);
+  assert.equal(A.ctx.kesimToplami('', 5).toplam, 0);
+  assert.match(A.ctx.kesimOzetYazi(25, 40, true), /25 mm × 40 adet \+ 120 mm testere payı = 1120 mm iş emrine yazılacak/);
+  assert.match(A.ctx.kesimOzetYazi(25, '', false), /adet girilince/);
+  // reçete kuralları
+  const cubuk = { tur: 'boy', birim: 'mm', kod: '2344', cap: 'Ø41' }, kama = { tur: 'adet', birim: 'adet', kod: 'B25' };
+  const R = (...a) => A.ctx.kesimReceteAlanlari(...a);
+  const f = R('UC18000128', '2611130042', cubuk, 'H1', 1120, { parcaBoy: 25, adet: 40 }, null, 'OP1', 9);
+  assert.equal(f.hammaddeId, 'H1'); assert.equal(f.birimBasina, 25); assert.equal(f.birim, 'mm'); assert.equal(f.gozlemSayisi, 1); assert.equal(f.kaynak, 'kesim'); assert.equal(f.sonIsEmri, '2611130042');
+  assert.equal(R('UC18000128', 'T', cubuk, 'H1', 1120, { parcaBoy: 25, adet: 40 }, { hammaddeId: 'H1', gozlemSayisi: 2 }, 'OP1', 9).gozlemSayisi, 3);
+  assert.equal(R('UC18000128', 'T', cubuk, 'H1', 1120, { parcaBoy: 25, adet: 40 }, { hammaddeId: 'H9', gozlemSayisi: 4 }, 'OP1', 9).gozlemSayisi, 1, 'hammadde değişti → baştan');
+  assert.equal(R('UC18000128', 'T', cubuk, 'H1', 1120, { parcaBoy: 25, adet: 40 }, { hammaddeId: 'H9', standart: { by: 'SEF' } }, 'OP1', 9), null, 'standart ezilmez');
+  assert.equal(R('UC18000094_ZARF', 'T', cubuk, 'H1', 100, { parcaBoy: 25, adet: 4 }, null, 'OP1', 9), null, 'zarf dalı ana reçeteyi ezmez');
+  assert.equal(R('DENEME', 'T', cubuk, 'H1', 100, { parcaBoy: 25, adet: 4 }, null, 'OP1', 9), null);
+  assert.equal(R('UC1', 'T', cubuk, 'H1', 126, {}, null, 'OP1', 9), null, 'parça boyu bilinmeyen eski çağrı reçeteye yazmaz');
+  assert.equal(R('UC1', 'T', kama, 'K1', 8, { adet: 4 }, null, 'OP1', 9).birimBasina, 2, 'adetli kalem: miktar / adet');
+  // consumeStock uçtan uca
+  A.ata('stockItems', { c1: cubuk, c2: { ...cubuk, lots: { L1: { boy: 3000 } } } });
+  A.ata('session', { username: 'OP1', displayName: 'Op Bir' });
+  A.ata('hammaddeRecete', { UC5: { karbur: { satirlar: [] } } }); A.ata('hammaddeReceteReady', true);
+  let yazilan = null; const eskiDB = A.calistir('DB');
+  A.ata('DB', { ref: () => ({ update: o => { yazilan = o; return Promise.resolve(); } }) });
+  try{
+    const kk = A.ctx.kesimToplami(25, 40);
+    A.ctx.consumeStock('c2', 'L1', kk.toplam, { isEmriNo: 'UC5', talepNo: 'T5', parcaBoy: kk.parcaBoy, adet: kk.adet, kesimPayi: kk.kesimPayi });
+  } finally { A.ata('DB', eskiDB); }
+  const h = Object.keys(yazilan).filter(y => y.startsWith('stockHareketleri/')).map(y => yazilan[y])[0];
+  assert.equal(h.miktar, -1120); assert.equal(h.parcaBoy, 25); assert.equal(h.adet, 40); assert.equal(h.kesimPayi, 120);
+  assert.equal(yazilan['stockItems/c2/lots/L1/boy'] != null, true);
+  assert.equal(yazilan['hammaddeRecete/UC5/birimBasina'], 25); assert.equal(yazilan['hammaddeRecete/UC5/hammaddeId'], 'c2');
+  assert.equal(Object.keys(yazilan).some(y => y === 'hammaddeRecete/UC5' || y.startsWith('hammaddeRecete/UC5/karbur')), false, 'karbür dalı silinmez');
+  assert.deepEqual(A.calistir('hammaddeRecete.UC5.karbur'), { satirlar: [] });
+  A.ata('hammaddeRecete', {}); A.ata('hammaddeReceteReady', false);
+});
+
+test('yeni kayıt: adet iş emri listesinden (ilk operasyonda, elle yazılan ezilmez); hammadde seçilince malzeme cinsi / çap-boy sorulmaz', () => {
+  const eskiVI = A.calistir('STATE.validIsEmri'), eskiE = A.calistir('STATE.entries'), eskiAyar = A.calistir('appSettings.stockTrackingEnabled');
+  A.calistir("STATE.validIsEmri = { '2611250001': { malzemeKodu:'U0001', ieMiktar:40 }, '2611250002': { malzemeKodu:'U0002', ieMiktar:12 }, '2611250003': { malzemeKodu:'U0003' } }");
+  A.calistir("STATE.entries = { x: { isEmriNo:'U0002', talepNo:'2611250002', adet:'12', status:'tamamlandi', startTs:1 } }");   // 2611250002'de ilk operasyon geçti
+  A.ata('stockItems', { c1: { tur: 'boy', birim: 'mm', kod: '2344', cap: 'Ø41' } }); A.calistir('appSettings.stockTrackingEnabled = true');
+  const eskiGTI = A.ctx.getTalepInfo;   // satır 478'deki test sahte fonksiyon bırakıyor
+  A.ctx.getTalepInfo = k => (A.calistir('STATE.validIsEmri') || {})[String(k || '').trim().toUpperCase()] || null;
+  try{
+    const f = { adet: '' };
+    A.ctx.nfAdetDoldur(f, '2611250001', ''); assert.equal(f.adet, '40');
+    A.ctx.nfAdetDoldur(f, '2611250003', ''); assert.equal(f.adet, '', 'listede miktar yoksa otomatik değer temizlenir');
+    const g = { adet: '' }; A.ctx.nfAdetDoldur(g, '2611250001', ''); g.adet = '30';
+    A.ctx.nfAdetDoldur(g, '2611250001', ''); assert.equal(g.adet, '30', 'aynı iş emrinde elle yazılan ezilmez');
+    A.ctx.nfAdetDoldur(g, '2611250003', ''); assert.equal(g.adet, '30', 'yeni iş emrinin adedi bilinmiyorsa elle yazılan kalır');
+    A.ctx.nfAdetDoldur(g, '2611250001', ''); assert.equal(g.adet, '40', 'iş emri değişince yeni iş emrinin adedi gelir');
+    const h = { adet: '' }; A.ctx.nfAdetDoldur(h, '2611250002', ''); assert.equal(h.adet, '12', 'sonraki operasyon: önceki kaydın adedi');
+    A.calistir("STATE.entries = { x: { isEmriNo:'U0002', talepNo:'2611250002', makine:'C01', adet:'3', status:'tamamlandi', startTs:1 }, y: { isEmriNo:'U0002', talepNo:'2611250002', makine:'C01', adet:'3', status:'tamamlandi', startTs:2 } }");
+    assert.equal(A.ctx.nfOncekiAdet('2611250002', ''), 3, 'aynı işin yeniden başlatılması toplanmaz (3+3 → 3)');
+    A.calistir("STATE.entries = { x: { isEmriNo:'U0002', talepNo:'2611250002', makine:'C01', adet:'7', status:'devam', startTs:1, partiRootId:'x' }, c: { isEmriNo:'U0002', talepNo:'2611250002', makine:'C01', adet:'5', status:'tamamlandi', startTs:1, partiRootId:'x', parentEntryId:'x' } }");
+    assert.equal(A.ctx.nfOncekiAdet('2611250002', ''), 5, 'kısmi aktarılmış parti bekliyorsa onun adedi');
+    assert.equal(A.ctx.nfAdetFarkYazi({ n: 5, kaynak: 'onceki' }, 6), 'Önceki operasyon adedi 5 olan işin adedi 6 olarak değiştirilecek (önceki operasyondan fazla)');
+    A.calistir("STATE.entries = { x: { isEmriNo:'U0002', talepNo:'2611250002', adet:'12', status:'tamamlandi', startTs:1 } }");
+    A.ata('newForm', { isEmriNo: '2611250001', bilesen: '', stockItemId: 'c1', cokluMode: false, cokluItems: [] });
+    assert.equal(A.ctx.nfSerbestMalzemeGoster(), false, 'hammadde seçili → sorulmaz');
+    A.ata('newForm', { isEmriNo: '2611250001', bilesen: '', stockItemId: '', cokluMode: false, cokluItems: [] });
+    assert.equal(A.ctx.nfSerbestMalzemeGoster(), true, 'ilk op + hammadde yok → listede yoksa yazsın');
+    A.ata('newForm', { isEmriNo: '2611250002', bilesen: '', stockItemId: '', cokluMode: false, cokluItems: [] });
+    assert.equal(A.ctx.nfSerbestMalzemeGoster(), false, 'sonraki operasyon → sorulmaz');
+    A.ata('newForm', { isEmriNo: '2611250001', bilesen: '', adet: '30', cokluMode: false, cokluItems: [] });
+    assert.match(A.ctx.nfAdetFarkHtml(), /İş emri adedi 40 olan işin adedi 30 olarak değiştirilecek/);
+  } finally {
+    A.ctx.getTalepInfo = eskiGTI;
+    A.ata('__vi', eskiVI); A.calistir('STATE.validIsEmri = __vi'); A.ata('__e', eskiE); A.calistir('STATE.entries = __e');
+    A.ata('__a', eskiAyar); A.calistir('appSettings.stockTrackingEnabled = __a');
+  }
+});
+
+test('tadilatta kısmi aktar: 2 adetten 1i sıradaki operasyona; iki operasyon aynı anda; talep son parça bitince kapanır', async () => {
+  const C = A.ctx;
+  const t = { adet: '2', uKodu: 'U1', operasyonlar: {} };
+  assert.equal(C.tadilatBekleyenAdet(t), 2); assert.equal(C.tadilatBekliyorMu(t), true);
+  t.operasyonlar.a = { makine: 'UT02 · Torna', status: 'devam', baslamaTs: 1, adet: 2 };
+  assert.equal(C.tadilatBekliyorMu(t), false, 'tornada 2 adet → bekleyen yok');
+  // kısmi aktar 1
+  const kim = { username: 'OP1', displayName: 'Op' };
+  const op = { id: 'a', ...t.operasyonlar.a };
+  assert.match(C.tadilatKismiAktarYazimi(t, 'T1', op, '2', kim, 5, 'k1').hata, /tamamını \(2\)/);
+  assert.match(C.tadilatKismiAktarYazimi(t, 'T1', op, '', kim, 5, 'k1').hata, /Geçerli/);
+  const r = C.tadilatKismiAktarYazimi(t, 'T1', op, '1', kim, 5, 'k1');
+  assert.equal(r.u['tadilatlar/T1/operasyonlar/a/adet'], 1); assert.equal(r.u['tadilatlar/T1/kismiAktarlar/k1'].adet, 1);
+  t.operasyonlar.a.adet = 1;
+  assert.equal(C.tadilatBekleyenAdet(t), 1); assert.equal(C.tadilatBekliyorMu(t), true, 'aktarılan 1 adet Bekleyenler\'e döner');
+  // delik taşlama 1 adetle başlar
+  t.operasyonlar.b = { makine: 'DT01 · Delik Taşlama', status: 'devam', baslamaTs: 6, adet: 1 };
+  assert.equal(C.tadilatBekliyorMu(t), false);
+  assert.equal(C.tadilatAktifOperasyonlar(t).map(o => o.id).sort().join(','), 'a,b', 'iki operasyon aynı anda açık');
+  // delik taşlama "Tamamen Bitir" → yalnız parça biter, talep kapanmaz, sonOperasyon yazılmaz
+  let yazilan = {}; const eskiDB = A.calistir('DB');
+  A.ata('DB', { ref: yol => ({ update: o => { yazilan[yol] = o; return Promise.resolve(); }, set: () => Promise.resolve(), on: () => {}, remove: () => Promise.resolve() }) });
+  A.ata('tadilatlar', { T1: t });
+  C.tadilatBitir('T1', 'b', true); await new Promise(r => setTimeout(r, 0)); A.ata('DB', eskiDB);   // .then içindeki yazımlar da sahte DB'ye gitsin
+  const yb = yazilan['tadilatlar/T1/operasyonlar/b'];
+  assert.equal(yb.sonOperasyon, false); assert.equal(yb.parcaBitti, true);
+  Object.assign(t.operasyonlar.b, yb);
+  assert.equal(C.tadilatTamamlandiMi(t), false); assert.equal(C.tadilatBekliyorMu(t), false, 'kalan 1 adet tornada');
+  // torna kalan adedi "Bu Operasyonu Bitir (devamı var)" → 1 adet bekleyenlere
+  Object.assign(t.operasyonlar.a, { status: 'tamamlandi', sonOperasyon: false });
+  assert.equal(C.tadilatBekleyenAdet(t), 1);
+  // son parça delik taşlamada "Tamamen Bitir" → artık sonOperasyon (bildirim ve kapanış)
+  t.operasyonlar.c = { makine: 'DT01 · Delik Taşlama', status: 'devam', baslamaTs: 9, adet: 1 };
+  yazilan = {};
+  A.ata('DB', { ref: yol => ({ update: o => { yazilan[yol] = o; return Promise.resolve(); }, set: () => Promise.resolve(), on: () => {}, remove: () => Promise.resolve() }) });
+  C.tadilatBitir('T1', 'c', true); await new Promise(r => setTimeout(r, 0)); A.ata('DB', eskiDB);   // .then içindeki yazımlar da sahte DB'ye gitsin
+  assert.equal(yazilan['tadilatlar/T1/operasyonlar/c'].sonOperasyon, true);
+  Object.assign(t.operasyonlar.c, yazilan['tadilatlar/T1/operasyonlar/c']);
+  assert.equal(C.tadilatTamamlandiMi(t), true);
+  // eski kayıtlar (op.adet yok) eskisi gibi
+  const eski = { adet: '3', operasyonlar: { x: { status: 'devam', baslamaTs: 1 } } };
+  assert.equal(C.tadilatBekliyorMu(eski), false);
+  eski.operasyonlar.x.status = 'tamamlandi'; assert.equal(C.tadilatBekliyorMu(eski), true);
+  eski.operasyonlar.x.sonOperasyon = true; assert.equal(C.tadilatTamamlandiMi(eski), true); assert.equal(C.tadilatBekliyorMu(eski), false);
+  A.ata('tadilatlar', {});
+});

@@ -76,6 +76,18 @@ function urunHammaddeOnSecim(hedef, isEmriNo, anahtar){
   const r = urunStandartHammadde(isEmriNo);
   if(r && stockConsumableOptions().some(o => o.value === r.hammaddeId)) hedef.stockItemId = r.hammaddeId;
 }
+/* Seçilen çubuk reçetedeki kalemse 1 parçanın boyu reçeteden dolar (25.11.2026) — bir kez; operatör silerse yeniden doldurulmaz */
+function urunParcaBoyuDoldur(hedef, isEmriNo){
+  const sec = String(hedef.stockItemId || ''); if(!sec) return;
+  const r = urunStandartHammadde(isEmriNo);
+  if(!r || !(Number(r.birimBasina) > 0) || r.hammaddeId !== sec.split('::')[0]) return;
+  const it = (typeof stockItems !== 'undefined' && stockItems) ? stockItems[r.hammaddeId] : null;
+  if(!it || it.tur !== 'boy') return;
+  const anahtar = String(isEmriNo || '') + '|' + sec;
+  if(hedef.parcaBoyOto === anahtar) return;
+  hedef.parcaBoyOto = anahtar;
+  if(!String(hedef.stockMiktar || '').trim()) hedef.stockMiktar = String(Math.round(r.birimBasina * 100) / 100);
+}
 function urunHammaddeIpucuHtml(isEmriNo){
   const r = urunStandartHammadde(isEmriNo);
   if(!r) return '';

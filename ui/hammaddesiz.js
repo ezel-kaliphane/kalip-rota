@@ -60,7 +60,8 @@ function hmGirAc(id){
   const r = typeof urunStandartHammadde === 'function' ? urunStandartHammadde(e.isEmriNo) : null;
   if(r && opts.some(o => o.value === r.hammaddeId)){
     hmGir.secim = r.hammaddeId;
-    if(Number(r.birimBasina) > 0 && hmGir.adet) hmGir.miktar = String(Math.round(r.birimBasina * hmGir.adet * 100) / 100);
+    const boy = (stockItems[r.hammaddeId] || {}).tur === 'boy';   // çubukta reçete = 1 parçanın boyu, alan da onu soruyor (25.11.2026)
+    if(Number(r.birimBasina) > 0 && (boy || hmGir.adet)) hmGir.miktar = String(Math.round(r.birimBasina * (boy ? 1 : hmGir.adet) * 100) / 100);
   }
   render();
 }
@@ -78,11 +79,12 @@ function hmGirKaydet(){
   const [itemId, lotId] = String(g.secim).split('::');
   const it = stockItems[itemId]; if(!it){ toast('Kalem bulunamadı'); return; }
   const manuel = !!lotId || it.mode === 'manuel' || it.tur === 'boy';
-  const miktar = manuel ? Number(String(g.miktar || '').replace(',', '.')) : (Number(String(g.miktar || '').replace(',', '.')) || g.adet);
-  if(!(miktar > 0)){ toast(lotId ? 'Kesilen boyu girin' : 'Kullanılan miktarı girin'); return; }
+  const boy = !!lotId || it.tur === 'boy', k = boy ? kesimToplami(g.miktar, g.adet) : null;   // çubukta 1 parça boyu × adet + testere payı
+  const miktar = boy ? k.toplam : manuel ? Number(String(g.miktar || '').replace(',', '.')) : (Number(String(g.miktar || '').replace(',', '.')) || g.adet);
+  if(!(miktar > 0)){ toast(boy ? '1 parçanın boyunu girin' : 'Kullanılan miktarı girin'); return; }
   if(!stoksuzTuketimOnay([{ itemId, lotId: lotId || null, miktar, etiket: g.talep || g.isEmriNo }])) return;
   const onceki = new Set(Object.keys(stockHareketleri || {}));
-  consumeStock(itemId, lotId || null, miktar, { isEmriNo: g.isEmriNo, talepNo: g.talep });
+  consumeStock(itemId, lotId || null, miktar, boy ? { isEmriNo: g.isEmriNo, talepNo: g.talep, parcaBoy: k.parcaBoy, adet: k.adet, kesimPayi: k.kesimPayi } : { isEmriNo: g.isEmriNo, talepNo: g.talep, adet: g.adet });
   /* BOM + Rota / maliyet hareketleri ekran açılışında bir kez okuyor — yeni hareketi oraya da ekle */
   if(bomRotaVeri.stok){ Object.keys(stockHareketleri || {}).filter(k => !onceki.has(k)).forEach(k => { bomRotaVeri.stok[k] = stockHareketleri[k]; }); bomRotaVeri.ts = Date.now(); }
   DB.ref().update({ ['entries/' + g.entryId + '/hammaddeGirildiTs']: Date.now(), ['entries/' + g.entryId + '/hammaddeGirenUsername']: session.username })
@@ -109,8 +111,12 @@ function renderHmGirModal(){
           <option value="">Hammadde seç…</option>
           ${opts.map(o => `<option value="${esc(o.value)}" ${g.secim === o.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
         </select>${sec && typeof favYildizHtml === 'function' ? favYildizHtml('hammadde', sec.itemId, true) : ''}</div>
-        ${sec ? `<div class="field" style="margin:0"><label>${lot ? 'Kesilen boy (' + esc(sec.birim || 'mm') + ')' : 'Kullanılan miktar (' + esc(sec.birim || '') + ')'}</label>
-          <input inputmode="decimal" value="${esc(g.miktar)}" placeholder="${manuel ? '' : 'boşsa adet kadar: ' + (g.adet || '?')}" oninput="hmGir.miktar=this.value.replace(/[^0-9.,]/g,'')"></div>` : ''}
+        ${sec ? (lot || sec.tur === 'boy'
+          ? `<div class="field" style="margin:0"><label>1 parçanın boyu (${esc(sec.birim || 'mm')})</label>
+          <input inputmode="decimal" value="${esc(g.miktar)}" placeholder="ör. 25" oninput="this.value=this.value.replace(/[^0-9.,]/g,''); hmGir.miktar=this.value; kesimOzetGuncelle('hm-kesim-ozet', this.value, hmGir.adet, ${lot ? 'false' : 'true'})"></div>
+          <div id="hm-kesim-ozet" style="font-size:12px;color:var(--text-muted);margin-top:4px">${esc(kesimOzetYazi(g.miktar, g.adet, !lot))}</div>`
+          : `<div class="field" style="margin:0"><label>Kullanılan miktar (${esc(sec.birim || '')})</label>
+          <input inputmode="decimal" value="${esc(g.miktar)}" placeholder="${manuel ? '' : 'boşsa adet kadar: ' + (g.adet || '?')}" oninput="hmGir.miktar=this.value.replace(/[^0-9.,]/g,'')"></div>`) : ''}
         <div style="font-size:11.5px;color:var(--text-muted);margin-top:8px">Seçilen miktar stoktan düşülür, hareket bu iş emrine yazılır; maliyet de bundan hesaplanır.</div>
       </div>
       <div class="kal-modal-alt"><button class="btn-primary" style="flex:1" onclick="hmGirKaydet()">Stoktan düş</button><button class="btn-ghost" onclick="hmGirKapat()">Vazgeç</button></div>

@@ -79,25 +79,28 @@ function renderOperator(){
           <div class="lock-machine">${esc(op.makine||'—')}</div>
           <div class="lock-timer">${live(()=> fmtElapsed(tadilatOpDurationBreakdown(op).netMs))}</div>
           <div class="lock-meta">${fmtDT(op.baslamaTs)} itibarıyla devam ediyor${opsGecmis.length>0?` · Bu, ${opsGecmis.length+1}. operasyon`:''}</div>
-          <div class="lock-meta">${mine.bolum?`${esc(mine.bolum)} · `:''}${mine.adet?`Adet: ${esc(mine.adet)}`:''}</div>
+          <div class="lock-meta">${mine.bolum?`${esc(mine.bolum)} · `:''}${mine.adet?(tadilatOpAdet(mine, op) < tadilatToplamAdet(mine) ? `Bu operasyonda: <b>${tadilatOpAdet(mine, op)} adet</b> (talep ${esc(mine.adet)} adet)` : `Adet: ${esc(mine.adet)}`):''}</div>
           ${mine.aciklama ? `<div class="lock-note">"${esc(mine.aciklama)}"</div>` : ''}
           <div style="font-size:12px;color:var(--text-muted);margin-top:16px;max-width:320px;text-align:center">Bitirirken seç: bu iş tamamen bitti mi, yoksa devamı gelecek mi?</div>
           <div class="lock-actions lock-actions-col lock-actions-nav-clear" style="display:flex;flex-direction:column;gap:10px;margin-top:14px;width:100%;max-width:340px">
             <button class="btn-primary" style="padding:14px" onclick="tadilatBitir('${mine.id}','${op.id}',true)">${ico('stop',14)} Tamamen Bitir <span style="font-weight:400;opacity:.85">(Son Operasyon)</span></button>
             <button style="padding:14px;font-size:14px;border-radius:10px;border:2px solid var(--gunsonu);background:var(--gunsonu-med);color:var(--gunsonu);font-weight:700;cursor:pointer" onclick="tadilatBitir('${mine.id}','${op.id}',false)">${ico('pause',14)} Bu Operasyonu Bitir <span style="opacity:.85;font-weight:600">(Devamı Var)</span></button>
+            ${tadilatOpAdet(mine, op) > 1 ? `<button class="btn-ghost" onclick="openTadilatKismiAktar('${mine.id}','${op.id}')" title="Hazır olan bir kısmını bir sonraki operasyona aktar">${ico('shuffle',14)} Kısmi Aktar <span style="opacity:.7;font-weight:400">(hazır olanı sıradaki operasyona ver)</span></button>` : ''}
             <button class="btn-ghost" onclick="openTadilatDurusPicker()">${ico('clock',14)} Duraklat <span style="opacity:.7;font-weight:400">(daha acil bir iş çıktıysa)</span></button>
           </div>
           ${op.kaynakEntryId ? `<div style="font-size:11.5px;color:var(--text-muted);margin-top:18px;max-width:320px;text-align:center">Hangisini seçersen seç, duraklattığın üretim işi otomatik olarak "${TADILAT_SONRASI_REASON}" duruşuna geçecek — kaldığın yerden devam edebileceksin.</div>` : ''}
           ${op.kaynakTadilatRef ? `<div style="font-size:11.5px;color:var(--tadilat-info);margin-top:18px;max-width:320px;text-align:center">Bunu bitirince, daha önce duraklattığın diğer tadilata otomatik döneceksin.</div>` : ''}
-        </div>`;
+        </div>${renderTadilatKismiAktarModal()}`;
       }
     } else {
       const renderCard = (t) => {
         const expanded = tadilatExpandedIds.has(t.id);
         const gecmis = tadilatOperasyonlarArray(t).filter(o=>o.status==='tamamlandi');
         const secimAcik = tadilatMakineSecimId===t.id;
+        const bekAdet = tadilatBekleyenAdet(t), digerAcik = tadilatAktifOperasyonlar(t);   // kısmi aktar: bir kısmı başka operasyonda
         return `<div class="card">
           <div class="card-header" style="cursor:pointer" onclick="toggleTadilatExpand('${t.id}')"><span class="card-id" style="color:var(--warn)">${ico('hourglass',13)} ${esc(t.uKodu)}${tadilatKisaLabel(t)?` <span style="color:var(--text-muted);font-weight:400;font-size:.75em">${esc(tadilatKisaLabel(t))}</span>`:''}</span><span class="card-meta">${expanded?`${ico('chevronUp',12)} gizle`:`${ico('chevronDown',12)} detay`}</span></div>
+          ${bekAdet < tadilatToplamAdet(t) ? `<div style="font-size:12px;color:var(--tadilat-info);font-weight:600;margin:2px 0 8px">${ico('shuffle',13)} ${bekAdet} adet sıradaki operasyonu bekliyor${digerAcik.length ? ` · diğer ${digerAcik.reduce((s,o)=>s+tadilatOpAdet(t,o),0)} adet ${digerAcik.map(o=>esc(String(o.makine||'').split(' · ')[0])).join(', ')}'de devam ediyor` : ''}</div>` : ''}
           ${expanded ? `
             <div style="font-size:12.5px;color:var(--text-muted);margin:6px 0 8px">${t.talepEdenKisi?`${esc(t.talepEdenKisi)} · `:''}${t.bolum?`${esc(t.bolum)} · `:''}${t.adet?`Adet: ${esc(t.adet)}`:''}</div>
             <div style="font-size:13px;margin-bottom:8px">${esc(t.aciklama)}</div>
@@ -191,6 +194,7 @@ function renderOperator(){
         <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px">Her iş için ayrı İş Emri No (Talep No) ve Adet gir. İstediğin kadar ekleyebilirsin.</div>
         ${newForm.cokluItems.map((it,i)=>{
           const cInfo = getTalepInfo(it.isEmriNo);
+          nfAdetDoldur(it, it.isEmriNo, it.bilesen);
           /* Fason ısılda satıra Kg (toplam) da giriyor — telefonda sığmıyordu (iş emri kutusu ezildi): satır iki sıraya iner */
           const kgli = typeof fasonIsilMakinesiMi==='function' && fasonIsilMakinesiMi(newForm.makine);
           return `
@@ -214,6 +218,7 @@ function renderOperator(){
             const opts = stockConsumableOptions();
             if(opts.length===0) return '';
             if(typeof urunHammaddeOnSecim === 'function') urunHammaddeOnSecim(it, prevCode, prevTalep + '|' + prevCode);
+            if(typeof urunParcaBoyuDoldur === 'function') urunParcaBoyuDoldur(it, prevCode);
             const selOpt = stockOptionByValue(it.stockItemId);
             const isManualInput = selOpt && (selOpt.tur==='boy' || selOpt.mode==='manuel');
             return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:6px">
@@ -230,7 +235,10 @@ function renderOperator(){
                 <button type="button" class="btn-ghost" style="padding:8px 10px;flex-shrink:0" title="QR Okut" onclick="stockScanUygula(function(v){ newForm.cokluItems[${i}].stockItemId=v; })">${ico('camera',14)}</button>
               </div>
               ${selOpt ? (isManualInput
-                ? `<input id="nf-coklu-stok-miktar-${i}" type="number" placeholder="${selOpt.tur==='boy'?`Kesilen boy (${esc(selOpt.birim||'mm')})`:'Kullanılan miktar'}" value="${esc(it.stockMiktar)}" oninput="newForm.cokluItems[${i}].stockMiktar=this.value">`
+                ? (selOpt.tur==='boy'
+                  ? `<input id="nf-coklu-stok-miktar-${i}" type="number" inputmode="decimal" placeholder="1 parçanın boyu (${esc(selOpt.birim||'mm')})" value="${esc(it.stockMiktar)}" oninput="newForm.cokluItems[${i}].stockMiktar=this.value; kesimOzetGuncelle('nf-coklu-kesim-${i}', this.value, newForm.cokluItems[${i}].adet, ${String(it.stockItemId||'').includes('::')?'false':'true'})">
+                     <div id="nf-coklu-kesim-${i}" style="font-size:11px;color:var(--text-muted);margin-top:4px">${esc(kesimOzetYazi(it.stockMiktar, it.adet, !String(it.stockItemId||'').includes('::')))}</div>`
+                  : `<input id="nf-coklu-stok-miktar-${i}" type="number" placeholder="Kullanılan miktar" value="${esc(it.stockMiktar)}" oninput="newForm.cokluItems[${i}].stockMiktar=this.value">`)
                 : `<div style="font-size:11px;color:var(--text-muted)">Otomatik: Adet kadar (${esc(it.adet||'?')} ${esc(selOpt.birim||'')}) düşülecek</div>`) : ''}
             </div>`;
           })()}
@@ -248,6 +256,7 @@ function renderOperator(){
         </div>
         ${(() => {
           const info = getTalepInfo(newForm.isEmriNo);
+          nfAdetDoldur(newForm, newForm.isEmriNo, newForm.bilesen);
           const lines = [];
           if(newForm.isEmriNo){
             if(info) lines.push(`<div style="font-size:11.5px;color:var(--success)">${ico('check',14)} ${esc(info.malzemeKodu||'')}${info.malzemeKodu&&info.malzemeAdi?' · ':''}${esc(info.malzemeAdi||'')}</div>`);
@@ -276,6 +285,7 @@ function renderOperator(){
           const opts = stockConsumableOptions();
           if(opts.length===0) return '';
           if(typeof urunHammaddeOnSecim === 'function') urunHammaddeOnSecim(newForm, previewCode, previewTalep + '|' + previewCode);
+          if(typeof urunParcaBoyuDoldur === 'function') urunParcaBoyuDoldur(newForm, previewCode);
           const selOpt = stockOptionByValue(newForm.stockItemId);
           const isManualInput = selOpt && (selOpt.tur==='boy' || selOpt.mode==='manuel');
           return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
@@ -292,7 +302,11 @@ function renderOperator(){
               <button type="button" class="btn-ghost" style="padding:8px 10px;flex-shrink:0" title="QR Okut" onclick="stockScanUygula(function(v){ newForm.stockItemId=v; })">${ico('camera',14)}</button>
             </div>
             ${selOpt ? (isManualInput
-              ? `<input id="nf-stok-miktar" type="number" placeholder="${selOpt.tur==='boy'?`Kesilen boy (${esc(selOpt.birim||'mm')})`:`Kullanılan miktar (${esc(selOpt.birim||'')})`}" value="${esc(newForm.stockMiktar)}" oninput="newForm.stockMiktar=this.value">`
+              ? (selOpt.tur==='boy'
+                ? `<label for="nf-stok-miktar" style="font-size:11.5px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">1 parçanın boyu (${esc(selOpt.birim||'mm')})</label>
+                   <input id="nf-stok-miktar" type="number" inputmode="decimal" placeholder="ör. 25" value="${esc(newForm.stockMiktar)}" oninput="newForm.stockMiktar=this.value; kesimOzetGuncelle('nf-kesim-ozet', this.value, document.getElementById('nf-adet')?.value ?? newForm.adet, ${String(newForm.stockItemId||'').includes('::')?'false':'true'})">
+                   <div id="nf-kesim-ozet" style="font-size:11.5px;color:var(--text-muted);margin-top:4px">${esc(kesimOzetYazi(newForm.stockMiktar, newForm.adet, !String(newForm.stockItemId||'').includes('::')))}</div>`
+                : `<input id="nf-stok-miktar" type="number" placeholder="Kullanılan miktar (${esc(selOpt.birim||'')})" value="${esc(newForm.stockMiktar)}" oninput="newForm.stockMiktar=this.value">`)
               : `<div style="font-size:11.5px;color:var(--text-muted)">Otomatik: Adet kadar (${esc(newForm.adet||'?')} ${esc(selOpt.birim||'')}) düşülecek</div>`) : ''}
           </div>`;
         })()}
@@ -323,9 +337,12 @@ function renderOperator(){
       ` : ''}
       ${s2 ? `
       ${twoStep ? `<button type="button" class="btn-ghost" style="margin-bottom:16px" onclick="setNewStep(1)">← Geri · iş emri ve makine</button>` : ''}
+      ${nfSerbestMalzemeGoster() ? `
+      ${stockEnabled() ? `<div style="font-size:11.5px;color:var(--text-muted);margin:-4px 0 8px">Hammadde listede yoksa buraya yaz — şef sonra listeden bağlar.</div>` : ''}
       <div class="field"><label>Malzeme Cinsi (opsiyonel)</label><input id="nf-malzeme-cinsi" placeholder="ör. 4Mo1 ıslahlı" value="${esc(newForm.malzemeCinsi)}" oninput="newForm.malzemeCinsi=this.value"></div>
-      <div class="field"><label>Çap ve Boy (opsiyonel)</label><input id="nf-cap-boy" placeholder="ör. Ø26 x 200" value="${esc(newForm.capBoy)}" oninput="newForm.capBoy=this.value"></div>
-      ${!newForm.cokluMode ? `<div class="field"><label>Adet</label><input id="nf-adet" inputmode="numeric" placeholder="ör. 120" value="${esc(newForm.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newForm.adet=this.value" onblur="render()"></div>
+      <div class="field"><label>Çap ve Boy (opsiyonel)</label><input id="nf-cap-boy" placeholder="ör. Ø26 x 200" value="${esc(newForm.capBoy)}" oninput="newForm.capBoy=this.value"></div>` : ''}
+      ${!newForm.cokluMode ? `<div class="field"><label>Adet${nfAdetEtiket()}</label><input id="nf-adet" inputmode="numeric" placeholder="ör. 120" value="${esc(newForm.adet)}" oninput="this.value=this.value.replace(/\\D/g,''); newForm.adet=this.value" onblur="render()"></div>
+      ${nfAdetFarkHtml()}
       ${typeof fasonIsilMakinesiMi==='function' && fasonIsilMakinesiMi(newForm.makine) ? `<div class="field"><label>Kg (toplam) <span style="text-transform:none;font-weight:500;letter-spacing:0;color:var(--text-muted)">— parçaların hepsi birlikte</span></label><input id="nf-fason-kg" inputmode="decimal" placeholder="tart, ör. 4,1" value="${esc(newForm.fasonKg||'')}" oninput="this.value=this.value.replace(/[^0-9.,]/g,''); newForm.fasonKg=this.value"></div>` : ''}` : ''}
       ${(twoStep && !newForm.cokluMode) ? `<div style="display:flex;gap:8px;margin:-6px 0 16px">${[10,50,100,250,500].map(n=>`<button type="button" class="chip" style="flex:1;text-align:center;padding:11px 4px" onclick="setAdetQuick(${n})">${n}</button>`).join('')}</div>` : ''}
       <div class="field"><label>Not (opsiyonel)</label><textarea id="nf-not" style="min-height:60px" placeholder="Serbest not" oninput="newForm.not=this.value">${esc(newForm.not)}</textarea></div>
@@ -538,4 +555,69 @@ function opHammaddeAramaHtml(deger, opts, inputId, yazJs, secJs, hedef){
     liste = hammaddeSonucListesiHtml(s.slice(0,6).map(x=>({ metin: x._o.label, alt:'', onclick: secJs(x._o.value) })), s.length, { metin: q, hedef });
   }
   return `<input id="${inputId}" placeholder="Yaz: 4140 25 · b13 kalın" value="${esc(q)}" oninput="${yazJs}" style="margin-bottom:6px">${liste}`;
+}
+
+/* ==================== YENİ KAYIT SADELEŞTİ (25.11.2026, kullanıcı) ====================
+   "Hammaddeyi zaten en başta seçiyoruz; malzeme cinsi, çap ve boy tekrar sorulmasın. Adam bir parçanın boyunu
+   yazacak, adedi yazacak, geçecek. Adet de Malzeme Bekleyenler gibi otomatik gelsin. Adetle tüketilen hammaddede
+   çap-boy hiç çıkmasın." → Malzeme Cinsi / Çap ve Boy yalnız ilk operasyonda hammadde SEÇİLMEDİYSE (listede yoksa)
+   görünür — şefin Hammaddesiz listesinde "Operatör yazdı" olarak çıkar. Stok takibi kapalıysa eskisi gibi. */
+function nfIlkOpMu(raw, bilesen){
+  if(!String(raw || '').trim()) return false;
+  const t = resolveTrackingCode(raw, bilesen);
+  return isFirstOperationFor(t.isEmriNo, t.talepNo);
+}
+function nfSerbestMalzemeGoster(){
+  if(!stockEnabled() || !stockConsumableOptions().length) return true;
+  const satirlar = newForm.cokluMode ? (newForm.cokluItems || []) : [newForm];
+  return satirlar.some(x => String(x.isEmriNo || '').trim() && x.bilesen !== 'ELMAS' && !x.stockItemId && nfIlkOpMu(x.isEmriNo, x.bilesen));
+}
+/* ADET KENDİLİĞİNDEN GELİR. İlk operasyonda iş emri listesinden (CANIAS "İ.E. TALEP"); sonraki operasyonlarda
+   ÖNCEKİ operasyondan (25.11.2026, kullanıcı: "sonraki operasyondaki adet bir öncekiyle aynı olmalı, ondan
+   fazlasını çıkaramaz"). Önceki = kısmi aktarılmış bekleyen parti varsa onun adedi, yoksa aynı iş emrinin (dalın)
+   EN SON kaydının adedi. Toplanmıyor: canlı veride önceki makinede birden çok kayıt olan 245 geçişin 206'sında
+   sonraki operasyon son kaydın adediyle başlamış (aynı işi yeniden başlatma, ör. 3+3 → 3), toplamla yalnız 11'i.
+   Operatörün elle yazdığı adet, iş emri değişse de ezilmez (yalnız boşsa ya da önceki otomatik değer duruyorsa). */
+function nfIeListe(raw){ const i = getTalepInfo(raw); return Math.round(Number(i && i.ieMiktar) || 0); }
+function nfOncekiAdet(raw, bilesen){
+  if(!String(raw || '').trim()) return 0;
+  const t = resolveTrackingCode(raw, bilesen); if(!t.isEmriNo) return 0;
+  const p = findPendingParti(t.isEmriNo); if(p) return Math.round(Number(p.adet) || 0);
+  const tal = String(t.talepNo || '').trim().toUpperCase(), ie = String(t.isEmriNo).toUpperCase(), base = baseIsEmriNo(ie), anaMi = base === ie;
+  let son = null;
+  for(const e of entriesArray()){   // eşleşme isFirstOperationFor ile aynı: ana kod dalların kayıtlarını da görür (birleşme)
+    const es = tal ? (String(e.talepNo || '').trim().toUpperCase() === tal && (e.isEmriNo === t.isEmriNo || (anaMi && baseIsEmriNo(e.isEmriNo) === base)))
+                   : e.isEmriNo === t.isEmriNo;
+    if(es && (!son || (Number(e.startTs) || 0) > (Number(son.startTs) || 0))) son = e;
+  }
+  return son ? Math.round(Number(son.adet) || 0) : 0;
+}
+function nfAdetKaynagi(raw, bilesen){
+  return nfIlkOpMu(raw, bilesen) ? { n: nfIeListe(raw), kaynak: 'liste' } : { n: nfOncekiAdet(raw, bilesen), kaynak: 'onceki' };
+}
+function nfAdetDoldur(hedef, raw, bilesen){
+  const anahtar = String(raw || '').trim().toUpperCase() + '|' + (bilesen || '');
+  if(!String(raw || '').trim() || hedef.adetOto === anahtar) return;
+  hedef.adetOto = anahtar;   // aynı iş emrinde yeniden çizimde elle yazılan adede dokunulmaz; iş emri değişince yeni adet gelir
+  const elle = String(hedef.adet || '').trim() && String(hedef.adet) !== String(hedef.adetOtoDeger || '');
+  const n = nfAdetKaynagi(raw, bilesen).n;
+  if(n > 0) hedef.adet = String(n);
+  else if(!elle) hedef.adet = '';   // adet bilinmiyorsa elle yazılan kalır
+  hedef.adetOtoDeger = n > 0 ? String(n) : '';
+}
+function nfAdetEtiket(){
+  const k = nfAdetKaynagi(newForm.isEmriNo, newForm.bilesen);
+  return k.n > 0 ? ` <span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-muted)">· ${k.kaynak === 'liste' ? 'listede' : 'önceki operasyon'} ${k.n}</span>` : '';
+}
+/* Değiştirildiyse onay sorulmaz, yalnız uyarı (Malzeme Bekleyenler'deki metnin aynısı) */
+function nfAdetFarkYazi(k, girilen){
+  const l = k.n, g = Math.round(Number(girilen) || 0);
+  if(!(l > 0) || !(g > 0) || l === g) return '';
+  if(k.kaynak === 'liste') return typeof malzemeIeFarkYazi === 'function' ? malzemeIeFarkYazi(l, g) : '';
+  return 'Önceki operasyon adedi ' + l + ' olan işin adedi ' + g + ' olarak değiştirilecek' + (g > l ? ' (önceki operasyondan fazla)' : ' (eksik yapılacak)');
+}
+function nfAdetFarkHtml(){
+  if(newForm.cokluMode || !String(newForm.isEmriNo || '').trim()) return '';
+  const y = nfAdetFarkYazi(nfAdetKaynagi(newForm.isEmriNo, newForm.bilesen), newForm.adet);
+  return y ? `<div style="font-size:12px;color:var(--warn-text, var(--warn));font-weight:600;margin:-6px 0 12px">${ico('alert',12)} ${esc(y)}</div>` : '';
 }

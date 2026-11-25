@@ -454,7 +454,7 @@ function stockConsumableOptions(){
       if(!lotsArray(it).length){
         opts.push({
           value: it.id, itemId: it.id, lotId: null, tur:'boy', stoksuz: true,
-          label: `${it.kod}${it.cap?' '+it.cap:''} · kesilen boyu yaz (çubuk stoğu tutulmuyor)${it.caniasBekliyor && !stokCanias(it) ? ' · KOD YOK' : ''}`,
+          label: `${it.kod}${it.cap?' '+it.cap:''} · parça boyunu yaz (çubuk stoğu tutulmuyor)${it.caniasBekliyor && !stokCanias(it) ? ' · KOD YOK' : ''}`,
           remaining: null, birim: it.birim||'mm'
         });
         return;
@@ -518,6 +518,58 @@ function stoksuzTuketimOnay(satirlar){
     + l.map(s => { const it = stockItems[s.itemId]; return '• ' + [it.kod, it.cap].filter(Boolean).join(' ') + ' — ' + s.miktar + ' ' + (it.birim || 'mm') + (s.etiket ? ' (' + s.etiket + ')' : ''); }).join(nl)
     + nl + nl + 'Bu malzemenin çubuk stoğu tutulmuyor: kesim iş emrine yazılacak ama stoktan düşülmeyecek.' + nl + 'Devam edilsin mi?');
 }
+/* KESİM = 1 PARÇA BOYU × ADET (25.11.2026, kullanıcı — MRP hazırlığı). "Kesilen boy" sorulunca kimi 1 parçanın
+   boyunu, kimi toplamı yazıyordu (İ.E.≥2 çıkışların 133'ü parça, 111'i toplam gibi): stoklu çubukta stok eksik
+   düşüyor, tüketimden reçete öğrenilemiyordu. Artık çubukta 1 parçanın boyu soruluyor; uygulama adetle çarpıp
+   testere payını (parça başı MALZEME_KESIM_PAYI_MM — Malzeme Bekleyenler'deki hesapla aynı) ekliyor. Hareketin
+   miktarı TOPLAM kalır (stok, maliyet, BOM ekranı aynen okur); parcaBoy/adet/kesimPayi ayrıca yazılır. */
+function kesimToplami(parcaBoy, adet){
+  const p = Number(String(parcaBoy == null ? '' : parcaBoy).replace(',', '.')) || 0;
+  const n = Math.max(1, Math.round(Number(adet) || 0) || 1);
+  const pay = (typeof MALZEME_KESIM_PAYI_MM !== 'undefined' ? MALZEME_KESIM_PAYI_MM : 3) * n;
+  return { parcaBoy: p, adet: n, kesimPayi: pay, toplam: p > 0 ? Math.round((p * n + pay) * 100) / 100 : 0 };
+}
+function kesimOzetYazi(parcaBoy, adet, stoksuz){
+  const k = kesimToplami(parcaBoy, adet);
+  if(!(k.parcaBoy > 0)) return '1 parçanın boyunu yaz — uygulama adetle çarpar, testere payını ekler';
+  if(!(Math.round(Number(adet) || 0) > 0)) return k.parcaBoy + ' mm × ? adet — adet girilince toplam hesaplanır';
+  return k.parcaBoy + ' mm × ' + k.adet + ' adet + ' + k.kesimPayi + ' mm testere payı = ' + k.toplam + ' mm ' + (stoksuz ? 'iş emrine yazılacak' : 'stoktan düşülecek');
+}
+/* Yazarken yalnız özet satırı güncellenir — formu yeniden çizmek telefonda klavyeyi kapatıyordu */
+function kesimOzetGuncelle(elId, parcaBoy, adet, stoksuz){
+  const el = typeof document !== 'undefined' && document.getElementById(elId);
+  if(el) el.textContent = kesimOzetYazi(parcaBoy, adet, stoksuz);
+}
+/* ÇIKIŞ → REÇETE (25.11.2026, kullanıcı): her kesim o ürünün (U kodu) reçetesini günceller — tekrar eden işte
+   hammadde ve parça boyu kendiliğinden gelir, MRP bu reçeteyle hesaplar. Önceden reçete yalnız Malzeme
+   Bekleyenler'den doluyordu (195 mamul), 336 mamulde çıkış vardı. Kurallar: standart (BOM + Rota) varsa
+   dokunulmaz; _ZARF/_ELMAS dalı ana ürünün reçetesini ezmez; çubukta birimBasina = parça boyu, adetli
+   kalemde = miktar / adet; hammadde değiştiyse gözlem sayısı baştan. Saf fonksiyon — alanları döndürür. */
+function kesimReceteAlanlari(isEmriNo, talepNo, item, itemId, miktar, meta, eski, kim, ts){
+  const kod = String(isEmriNo || '').trim().toUpperCase();
+  if(!kod || !item || !itemId || /_(ZARF|ELMAS)$/.test(kod) || kod === TEST_ISEMRI_NO) return null;
+  const r = eski || {};
+  if(r.standart) return null;
+  const boy = item.tur === 'boy', n = Math.round(Number(meta && meta.adet) || 0);
+  const birimBasina = boy ? (Number(meta && meta.parcaBoy) || 0) : (n > 0 ? Math.round(Number(miktar) / n * 10000) / 10000 : 0);
+  if(!(birimBasina > 0)) return null;
+  return {
+    hammaddeId: itemId, hammaddeKod: typeof hammaddeEtiket === 'function' ? hammaddeEtiket(item) : (item.kod || ''),
+    birim: boy ? (item.birim || 'mm') : (item.birim || 'adet'), birimBasina,
+    gozlemSayisi: (r.hammaddeId === itemId ? Number(r.gozlemSayisi) || 0 : 0) + 1,
+    sonTs: ts, sonKullanan: kim, sonIsEmri: talepNo || '', kaynak: 'kesim'
+  };
+}
+function kesimEkleri(hareket, yazma, item, itemId, miktar, meta, ts){
+  if(Number(meta.parcaBoy) > 0){ hareket.parcaBoy = Number(meta.parcaBoy); hareket.kesimPayi = Number(meta.kesimPayi) || 0; }
+  if(Math.round(Number(meta.adet) || 0) > 0) hareket.adet = Math.round(Number(meta.adet));
+  if(typeof hammaddeRecete === 'undefined' || (typeof hammaddeReceteReady !== 'undefined' && !hammaddeReceteReady)) return;   // reçete yüklenmeden yazılmaz — standardı göremezdi
+  const mamul = String(meta.isEmriNo || '').trim().toUpperCase();
+  const f = kesimReceteAlanlari(meta.isEmriNo, meta.talepNo, item, itemId, miktar, meta, hammaddeRecete[mamul], session.username, ts);
+  if(!f) return;
+  Object.entries(f).forEach(([k, v]) => { yazma['hammaddeRecete/' + mamul + '/' + k] = v; });   // alan alan: karbür / rota dalları silinmez
+  hammaddeRecete[mamul] = { ...(hammaddeRecete[mamul] || {}), ...f };
+}
 function consumeStock(itemId, lotId, miktar, meta){
   if(!itemId || !miktar) return;
   const item = stockItems[itemId]; if(!item) return;
@@ -532,6 +584,7 @@ function consumeStock(itemId, lotId, miktar, meta){
     };
     yazma['stockItems/'+itemId+'/sonHareketTs'] = now;
     yazma['stockItems/'+itemId+'/sonHareketAciklama'] = 'Kesim (stoksuz)'+(meta.isEmriNo?' · '+meta.isEmriNo:'');
+    kesimEkleri(hareket, yazma, item, itemId, miktar, meta, now);
     yazma['stockHareketleri/'+hid] = hareket;
     DB.ref().update(yazma).catch(err=>toast('Tüketim yazılamadı: '+((err && err.message)||'hata')));
     stockHareketleri[hid] = hareket;
@@ -555,6 +608,7 @@ function consumeStock(itemId, lotId, miktar, meta){
   }
   yazma['stockItems/'+itemId+'/sonHareketTs'] = now;   // Genel Bakış "Son Hareket" sütunu için denormalize alan
   yazma['stockItems/'+itemId+'/sonHareketAciklama'] = 'Üretim tüketimi'+(meta.isEmriNo?' · '+meta.isEmriNo:'');
+  kesimEkleri(hareket, yazma, item, itemId, miktar, meta, now);
   yazma['stockHareketleri/'+hid] = hareket;
   DB.ref().update(yazma).catch(err=>toast('Stok düşülemedi: '+((err && err.message)||'hata')));
   stockHareketleri[hid] = hareket; // artık canlı dinlenmiyor (bkz. loadStockHareketleri), yerel kopyayı biz güncelliyoruz

@@ -454,7 +454,7 @@ function renderAnalizOperator(){
   // Canlı durum: şu an devam/duruşta bir üretim kaydı ya da aktif bir tadilat operasyonu var mı —
   // ayrı bir "presence" alanı yok, mevcut entries/tadilat verisinden aynı anda türetiliyor.
   const liveEntry = entriesArray().find(e=>e.operatorUsername===op.operatorUsername && (e.status==='devam'||e.status==='duruş'));
-  const liveTadilat = !liveEntry ? tadilatArray().map(t=>({t,o:tadilatAktifOperasyon(t)})).find(x=>x.o && x.o.operatorUsername===op.operatorUsername) : null;
+  const liveTadilat = !liveEntry ? tadilatArray().map(t=>({t,o:tadilatAktifOperasyonlar(t).find(o=>o.status==='devam' && o.operatorUsername===op.operatorUsername)})).find(x=>x.o) : null;
   let statusHtml;
   if(liveEntry){
     const label = liveEntry.status==='duruş' ? `Duruşta · ${esc(liveEntry.duruşNedeni||'')}` : 'Çalışıyor';
@@ -4263,7 +4263,7 @@ function renderAdmin(){
     if(tadilatSubTab==='canli' && (session.isSuperAdmin || session.isSef || session.isUretimSef)){
       const myAtolyelerCanli = getUserAtolyeler(session.username);
       const aktifler = tadilatArray()
-        .map(t=>({ t, op: tadilatAktifOperasyon(t) }))
+        .flatMap(t=>tadilatAktifOperasyonlar(t).filter(o=>o.status==='devam').map(op=>({ t, op })))   // kısmi aktarda aynı talepte birden çok
         .filter(x=>x.op && myAtolyelerCanli.includes(x.t.atolye||'imalat'))
         .sort((a,b)=>a.op.baslamaTs-b.op.baslamaTs);
       body += `

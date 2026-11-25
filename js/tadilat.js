@@ -150,18 +150,34 @@ function tadilatOpUpdate(t, op, opId, deltaFields){
   });
 }
 function tadilatAktifOperasyon(t){ return tadilatOperasyonlarArray(t).find(o=>o.status==='devam') || null; }
+/* ==================== TADİLATTA KISMİ AKTAR (25.11.2026, kullanıcı) ====================
+   "Üretimdeki Kısmi Aktar'ın aynısı: 2 adetlik bir işte 1 adet tornada 2. operasyonu bitince hemen delik
+   taşlamaya verilir, kalan 1 adet tornada devam ederken o 1 adet delik taşlamaya başlar." Bu yüzden bir tadilatın
+   AYNI ANDA birden çok operasyonu açık olabilir. Muhasebe ADETLE: her operasyon kaç parçayla çalışıyor (op.adet,
+   yoksa talebin tamamı — eski kayıtlar), "Tamamen Bitir"le biten parçalar (parcaBitti / sonOperasyon).
+   Bekleyen adet = toplam − açık operasyonlardaki − bitmiş; >0 ise talep Bekleyenler'de görünür.
+   sonOperasyon YALNIZ son parça bitince yazılır — "Tadilat tamamlandı" bildirimi (functions/index.js) ve
+   tadilatTamamlandiMi bunu okuyor; erken parça bitişi parcaBitti olarak kalır. */
+function tadilatToplamAdet(t){ return Math.max(1, Math.round(Number(t && t.adet) || 0) || 1); }
+function tadilatOpAdet(t, o){ const n = Math.round(Number(o && o.adet) || 0); return n > 0 ? n : tadilatToplamAdet(t); }
+function tadilatAktifOperasyonlar(t){ return tadilatOperasyonlarArray(t).filter(o=>o.status==='devam'||o.status==='duruş'); }
+function tadilatBitenAdet(t){ return tadilatOperasyonlarArray(t).filter(o=>o.status==='tamamlandi' && (o.sonOperasyon || o.parcaBitti)).reduce((s,o)=>s+tadilatOpAdet(t,o), 0); }
+function tadilatBekleyenAdet(t){
+  const acik = tadilatAktifOperasyonlar(t).reduce((s,o)=>s+tadilatOpAdet(t,o), 0);
+  return Math.max(0, tadilatToplamAdet(t) - acik - tadilatBitenAdet(t));
+}
 // Bir makinede şu an aktif bir tadilat operasyonu var mı? Makine Matrisi'nde ayrı bir renk/durum
 // olarak göstermek için (üretim "entries" tablosunda hiç izi olmasa bile).
 function tadilatAktifOnMachine(makineLabel){
   if(!makineLabel) return null;
   for(const t of tadilatArray()){
-    const op = tadilatAktifOperasyon(t);
-    if(op && op.makine===makineLabel) return { tadilat:t, operasyon:op };
+    const op = tadilatAktifOperasyonlar(t).find(o=>o.status==='devam' && o.makine===makineLabel);   // kısmi aktarda birden çok açık operasyon olabilir
+    if(op) return { tadilat:t, operasyon:op };
   }
   return null;
 }
 function tadilatTamamlandiMi(t){ return tadilatOperasyonlarArray(t).some(o=>o.status==='tamamlandi' && o.sonOperasyon); }
-function tadilatBekliyorMu(t){ return !tadilatTamamlandiMi(t) && !tadilatOperasyonlarArray(t).some(o=>o.status==='devam'||o.status==='duruş'); }
+function tadilatBekliyorMu(t){ return !tadilatTamamlandiMi(t) && tadilatBekleyenAdet(t) > 0; }
 function tadilatBekleyenler(atolye){
   const list = tadilatArray().filter(t=>tadilatBekliyorMu(t)).sort((a,b)=>a.olusturmaTs-b.olusturmaTs);
   return atolye ? list.filter(t=>(t.atolye||'imalat')===atolye) : list;
@@ -446,6 +462,7 @@ function tadilatAl(tadilatId, makine){
   const kaynak = !kaynakTadGecerli ? entriesArray().find(e => e.operatorUsername===session.username && e.status==='duruş' && isTadilatReason(e.duruşNedeni)) : null;
   const opId = uid();
   const now = Date.now();
+  const opAdet = tadilatBekleyenAdet(t);   // kısmi aktarda yalnız bekleyen parçalar; normalde talebin tamamı
   // Duraklattığı tadilat (kaynakTad) için gerçek duruş sayacı ŞİMDİ başlıyor — o ana kadar (hangi
   // işi alacağına karar verirken) geçen süre duruşa hiç sayılmıyor, ayrı bir alanda toplanıyor.
   if(kaynakTadGecerli){
@@ -458,7 +475,7 @@ function tadilatAl(tadilatId, makine){
   }
   DB.ref(`tadilatlar/${tadilatId}/operasyonlar/${opId}`).set({
     operatorUsername: session.username, operatorName: session.displayName, makine,
-    baslamaTs: now, bitisTs: null, status:'devam', sonOperasyon: false,
+    baslamaTs: now, bitisTs: null, status:'devam', sonOperasyon: false, adet: opAdet,
     kaynakEntryId: kaynak ? kaynak.id : null,
     kaynakTadilatRef: kaynakTadGecerli ? { tadilatId: kaynakTad.tadilat.id, opId: kaynakTad.operasyon.id } : null
   }).then(()=>{
@@ -466,6 +483,7 @@ function tadilatAl(tadilatId, makine){
     activeTadilatOpId = opId;
     tadilatMakineSecimId = null;
     tadilatForceBekleyen = false;
+    if(opAdet < tadilatToplamAdet(t)) bigToast(`${opAdet} adetle başladın — talebin diğer ${tadilatToplamAdet(t) - opAdet} adedi başka operasyonda.`);
     render();
   }).catch(err=>{ console.error(err); toast('Tadilat alınamadı: '+(err&&err.message||'hata')); });
 }
@@ -481,9 +499,14 @@ function tadilatBitir(tadilatId, opId, sonOperasyon){
   const op = tadilatOperasyonlarArray(t).find(o=>o.id===opId);
   if(!op){ toast('Operasyon bulunamadı'); return; }
   const bitisTs = Date.now();
+  /* Kısmi aktarda "Tamamen Bitir": başka parçalar hâlâ işlemdeyse yalnız bu operasyonun parçaları biter
+     (parcaBitti) — talep kapanmaz, "tamamlandı" bildirimi gitmez; son parça bitince sonOperasyon yazılır. */
+  const kalanParca = sonOperasyon && !isLegacy ? tadilatToplamAdet(t) - tadilatBitenAdet(t) - tadilatOpAdet(t, op) : 0;
+  const parcaBitti = !!sonOperasyon && kalanParca > 0;
+  if(parcaBitti) sonOperasyon = false;
   const writeP = isLegacy
     ? DB.ref('tadilatlar/'+tadilatId).update({ status:'tamamlandi', bitisTs }) // eski kayıt formatı
-    : tadilatOpUpdate({ ...t, id: tadilatId }, op, opId, { status:'tamamlandi', bitisTs, sonOperasyon: !!sonOperasyon });
+    : tadilatOpUpdate({ ...t, id: tadilatId }, op, opId, { status:'tamamlandi', bitisTs, sonOperasyon: !!sonOperasyon, ...(parcaBitti ? { parcaBitti: true } : {}) });
   writeP.then(()=>{
     let kaynakVarMi = false, kaynakTadilatVarMi = false;
     // Önce iç içe kesinti zinciri: duraklatılmış başka bir tadilat varsa ona dön.
@@ -514,7 +537,9 @@ function tadilatBitir(tadilatId, opId, sonOperasyon){
       }
     }
     if(!kaynakTadilatVarMi) { activeTadilatId = null; activeTadilatOpId = null; }
-    if(sonOperasyon){
+    if(parcaBitti){
+      bigToast(`${tadilatOpAdet(t, op)} adet tamamlandı — talebin kalan ${kalanParca} adedi diğer operasyonda devam ediyor.`);
+    } else if(sonOperasyon){
       bigToast(kaynakTadilatVarMi
         ? 'Tadilat tamamlandı. Duraklattığın önceki tadilata dönüyorsun.'
         : kaynakVarMi
@@ -531,6 +556,53 @@ function tadilatBitir(tadilatId, opId, sonOperasyon){
     view = kaynakTadilatVarMi ? 'tadilat' : 'list';
     render();
   }).catch(err=>{ console.error(err); toast('Tadilat bitirilemedi: '+(err&&err.message||'hata')); });
+}
+let tadilatKismiAktar = null;   // { tadilatId, opId } — açık pencere
+function openTadilatKismiAktar(tadilatId, opId){ tadilatKismiAktar = { tadilatId, opId }; render(); setTimeout(()=>{ const el = document.getElementById('tad-kismi-adet'); if(el) el.focus(); }, 30); }
+function cancelTadilatKismiAktar(){ tadilatKismiAktar = null; render(); }
+/* Saf: yazılacak yollar ya da hata metni (test edilebilir) */
+function tadilatKismiAktarYazimi(t, tadilatId, op, miktarRaw, kim, ts, kayitId){
+  const mevcut = tadilatOpAdet(t, op), miktar = Number(String(miktarRaw || '').trim());
+  if(!String(miktarRaw || '').trim() || !Number.isFinite(miktar) || miktar <= 0) return { hata: 'Geçerli bir adet girin' };
+  if(!Number.isInteger(miktar)) return { hata: 'Adet tam sayı olmalı' };
+  if(miktar >= mevcut) return { hata: `Kalan adedin tamamını (${mevcut}) aktaracaksan "Bu Operasyonu Bitir" kullan — Kısmi Aktar sadece BİR KISMINI ayırmak içindir.` };
+  const u = {};
+  u[`tadilatlar/${tadilatId}/operasyonlar/${op.id}/adet`] = mevcut - miktar;
+  u[`tadilatlar/${tadilatId}/kismiAktarlar/${kayitId}`] = { opId: op.id, adet: miktar, makine: op.makine || '', ts, kim: kim.username, kimAdi: kim.displayName || '' };
+  return { u, miktar, kalan: mevcut - miktar };
+}
+function confirmTadilatKismiAktar(){
+  const k = tadilatKismiAktar; if(!k) return;
+  const t = tadilatlar[k.tadilatId]; const op = t && tadilatOperasyonlarArray({ ...t, id: k.tadilatId }).find(o=>o.id===k.opId);
+  if(!op || !(op.status==='devam' || op.status==='duruş')){ toast('Operasyon bulunamadı'); tadilatKismiAktar = null; render(); return; }
+  const r = tadilatKismiAktarYazimi(t, k.tadilatId, op, document.getElementById('tad-kismi-adet')?.value, session, Date.now(), uid());
+  if(r.hata){ toast(r.hata); return; }
+  DB.ref().update(r.u).then(()=>{
+    tadilatKismiAktar = null;
+    bigToast(`${r.miktar} adet bir sonraki operasyona aktarıldı — ${r.kalan} adet ile burada devam ediyorsun.`);
+    render();
+  }).catch(err=>{ console.error(err); toast('Aktarılamadı: '+(err&&err.message||'hata')); });
+}
+function renderTadilatKismiAktarModal(){
+  const k = tadilatKismiAktar; if(!k) return '';
+  const t = tadilatlar[k.tadilatId]; const op = t && tadilatOperasyonlarArray({ ...t, id: k.tadilatId }).find(o=>o.id===k.opId);
+  if(!op){ tadilatKismiAktar = null; return ''; }
+  return `<div class="modal-overlay" onclick="if(event.target===this) cancelTadilatKismiAktar()">
+    <div class="modal-box" style="max-width:400px">
+      <div class="modal-header">
+        <div><div class="modal-title" style="font-size:18px">${ico('shuffle',14)} Kısmi Aktar</div><div class="modal-sub">${esc(t.uKodu||'')} · ${esc(op.makine||'')} · Mevcut adet: ${tadilatOpAdet(t, op)}</div></div>
+        <button class="icon-btn" onclick="cancelTadilatKismiAktar()">${ico('x',14)}</button>
+      </div>
+      <div class="modal-body">
+        <div class="field"><label>Kaç adet hazır, bir sonraki operasyona aktarılsın?</label><input id="tad-kismi-adet" inputmode="numeric" placeholder="ör. 1" oninput="this.value=this.value.replace(/\\D/g,'')"></div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:14px">Bu miktar senin operasyonundan düşülür ve Bekleyen Tadilat İşleri listesine döner — bir sonraki operasyonu yapacak kişi "Bu İşi Al" deyince o adetle başlar. Sen kalan adetle burada çalışmaya devam edersin.</div>
+        <div style="display:flex;gap:10px">
+          <button class="btn-primary" onclick="confirmTadilatKismiAktar()">${ico('check',14)} Aktar</button>
+          <button class="btn-ghost" onclick="cancelTadilatKismiAktar()">${ico('x',14)} Vazgeç</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
 }
 function fasonBekleyenCount(){
   return entriesArray().filter(e => (e.status==='devam'||e.status==='duruş') && isFasonMachine(e.makine)).length;
